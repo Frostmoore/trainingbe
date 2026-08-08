@@ -1,7 +1,17 @@
+*.log
+/.fleet
+/.idea
+/.nova
 /.phpunit.cache
+/.vscode
+/.zed
+/.codex
+/.cursor/
+/auth.json
 /bootstrap/ssr
 /node_modules
 /public/build
+/public/fonts-manifest.dev.json
 /public/hot
 /public/storage
 /storage/*.key
@@ -14,20 +24,16 @@
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
+_ide_helper.php
 npm-debug.log
 yarn-error.log
-/auth.json
-/.fleet
-/.idea
-/.nova
-/.vscode
-/.zed
 
 # Windows / macOS
 Thumbs.db
 desktop.ini
 .DS_Store
 
-# Artefatti locali
-/storage/app/private/_routes.json
+# Artefatti locali del progetto
 /_tmp
+/storage/app/private/_routes.json
+/database/database.sqlite

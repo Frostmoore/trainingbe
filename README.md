@@ -7,18 +7,22 @@ per palestre (allenamento + alimentazione con AI).
 - **Pannello palestra** (`/admin`) — gym admin e trainer: branding, iscritti, schede, piani alimentari, chat.
 - **API** (`/api/v1`) — consumata dall'app Flutter degli iscritti (repo [`trainingfe`](https://github.com/Frostmoore/trainingfe)).
 
-## 📘 Documentazione
+## 📘 Documentazione — vive nel repo documentale
 
-| Documento | Dove | Cos'è |
-|---|---|---|
-| [`plan_trainingbe.md`](./plan_trainingbe.md) | qui | **La specsheet operativa del backend.** Fasi B0–B10, classi da creare con firme e percorsi reali, ADR con le motivazioni, matrice modelli AI e costi |
-| `plan_trainingfe.md` | [`trainingfe`](https://github.com/Frostmoore/trainingfe) | La specsheet operativa dell'app (fasi A0–A8) |
-| `codebase_reference.md` | qui | Atlante del codice backend. *Non esiste ancora: nasce a fine **B1*** |
-| `codebase_reference.md` | `trainingfe` | Atlante del codice app. *Nasce a fine **A1*** |
-| `codebase_reference.md` generale | *da decidere* | Atlante di piattaforma: contratto API, flusso dati end-to-end. Vedi [`plan_trainingbe.md` §16](./plan_trainingbe.md) |
-
-Ogni piano è **self-contained**: chi riprende il progetto su un'altra macchina non deve avere
-entrambi i repo per poter lavorare su uno dei due.
+> **In questo repository non c'è documentazione, di proposito.**
+>
+> Piani e atlanti stanno tutti in **`TrainingCompanionAI`** (Gitea), cartella `memory/`:
+>
+> | File | Cosa |
+> |---|---|
+> | `memory/plan_trainingbe.md` | **La specsheet di questo backend** — fasi B0–B10, classi con firme e percorsi reali, ADR motivati, matrice modelli AI e costi |
+> | `memory/plan_trainingfe.md` | La specsheet dell'app (fasi A0–A8) |
+> | `memory/codebase_reference.md` | Atlante di piattaforma — *nasce a fine B1* |
+> | `memory/codebase_reference_be.md` | Atlante di questo codice — *nasce a fine B1* |
+>
+> **Perché non qui:** il projects-tracker importa i documenti **solo dal repo principale** del
+> progetto; i sottoprogetti (questo) li traccia soltanto. Un `plan_*.md` messo qui non verrebbe
+> mai risincronizzato e diventerebbe una copia stantia.
 
 ## Stack
 
