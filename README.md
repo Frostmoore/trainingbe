@@ -9,10 +9,16 @@ per palestre (allenamento + alimentazione con AI).
 
 ## 📘 Documentazione
 
-| Documento | Cos'è |
-|---|---|
-| [`plan_training_companion.md`](./plan_training_companion.md) | **La specsheet operativa di sviluppo.** Fasi, sottofasi, classi da creare con firme e percorsi reali, decisioni architetturali con le motivazioni. È la fonte di verità per lo sviluppo — vale anche per `trainingfe`. |
-| `codebase_reference.md` | L'atlante del codice prodotto. *Non esiste ancora: nasce alla fine della fase F1.* |
+| Documento | Dove | Cos'è |
+|---|---|---|
+| [`plan_trainingbe.md`](./plan_trainingbe.md) | qui | **La specsheet operativa del backend.** Fasi B0–B10, classi da creare con firme e percorsi reali, ADR con le motivazioni, matrice modelli AI e costi |
+| `plan_trainingfe.md` | [`trainingfe`](https://github.com/Frostmoore/trainingfe) | La specsheet operativa dell'app (fasi A0–A8) |
+| `codebase_reference.md` | qui | Atlante del codice backend. *Non esiste ancora: nasce a fine **B1*** |
+| `codebase_reference.md` | `trainingfe` | Atlante del codice app. *Nasce a fine **A1*** |
+| `codebase_reference.md` generale | *da decidere* | Atlante di piattaforma: contratto API, flusso dati end-to-end. Vedi [`plan_trainingbe.md` §16](./plan_trainingbe.md) |
+
+Ogni piano è **self-contained**: chi riprende il progetto su un'altra macchina non deve avere
+entrambi i repo per poter lavorare su uno dei due.
 
 ## Stack
 
@@ -21,16 +27,19 @@ Laravel 13 · PHP 8.3 · MariaDB · Filament 5 · Sanctum · spatie/laravel-perm
 
 ## Avvio in locale
 
-> ⚠️ Il progetto richiede **PHP ≥ 8.3**. Su questa macchina il `php` in PATH è
-> `E:\coding\php83\php.exe` (8.3.21) — **non** quello di XAMPP (8.2.12).
-> In sviluppo si usa `php artisan serve`, non Apache.
+> ⚠️ Il progetto richiede **PHP ≥ 8.3**. Il PHP di XAMPP è 8.2.12 e **non basta**, e Apache di
+> XAMPP gira su quello: in sviluppo si usa `artisan serve`, non Apache.
+>
+> L'interprete corretto è dichiarato in [`.php-version`](./.php-version) e invocato da
+> [`bin/php.cmd`](./bin/php.cmd) — **usa sempre quello**, così il PATH della sessione non conta.
+> Nessun toolchain viene aggiornato a livello di macchina (ADR-11).
 
 ```bash
 composer install
 cp .env.example .env
-php artisan key:generate
-php artisan migrate --seed
-php artisan serve
+bin\php.cmd artisan key:generate
+bin\php.cmd artisan migrate --seed
+bin\php.cmd artisan serve
 ```
 
 ## Versionamento
