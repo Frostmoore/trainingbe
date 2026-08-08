@@ -22,6 +22,25 @@ class Tenant extends Model
     use HasFactory;
     use SoftDeletes;
 
+    /**
+     * Devono rispecchiare i `->default()` della migrazione.
+     *
+     * Non è una ridondanza: i default del DB si applicano all'INSERT, non
+     * all'oggetto in memoria. Senza questi, subito dopo `Tenant::create()` lo
+     * stato sarebbe `null` e `isActive()` andrebbe in fatale sull'enum, mentre
+     * dopo un `fresh()` funzionerebbe — il tipo di bug che passa i test e cade
+     * in produzione.
+     */
+    protected $attributes = [
+        'status' => 'trial',
+        'plan' => 'starter',
+        'color_primary' => '#111827',
+        'color_secondary' => '#6B7280',
+        'color_accent' => '#F59E0B',
+        'locale' => 'it',
+        'timezone' => 'Europe/Rome',
+    ];
+
     protected $fillable = [
         'name', 'slug', 'join_code', 'status', 'plan',
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
