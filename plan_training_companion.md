@@ -258,9 +258,9 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto e verificato.
 - `[x]` **F0.1** — Ricognizione ambiente (PHP, Composer, Flutter, DB, git, remote)
 - `[x]` **F0.2** — Decisioni architetturali fissate (§2) e stack verificato (§3)
 - `[x]` **F0.3** — Stesura di `plan_training_companion.md`
-- `[ ]` **F0.4** — Aggiornamento Flutter `3.27.1` → `3.44.x` + Dart `3.12.x`
-- `[ ]` **F0.5** — `git init`, `.gitignore`, README, remote (Gitea + GitHub) su entrambi i repo
-- `[ ]` **F0.6** — Primo push `v1.0.0` su entrambe le remote di entrambi i repo
+- `[ ]` **F0.4** — Aggiornamento Flutter `3.27.1` → `3.44.x` + Dart `3.12.x` ⚠️ *unico punto aperto di F0: modifica l'SDK Flutter globale della macchina, in attesa di conferma*
+- `[x]` **F0.5** — `git init`, `.gitignore`, README, remote (Gitea + GitHub) su entrambi i repo
+- `[x]` **F0.6** — Primo push `v1.0.0` su entrambe le remote di entrambi i repo
 
 ### `[ ]` F1 — Fondamenta multi-tenant e autenticazione
 - `[ ]` **F1.1** — Installazione Laravel 13 e configurazione base (`.env`, timezone, locale, DB)
