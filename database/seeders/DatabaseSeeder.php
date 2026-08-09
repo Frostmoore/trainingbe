@@ -22,6 +22,11 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(SuperAdminSeeder::class);
 
+        // 🚨 La libreria esercizi gira SEMPRE, produzione compresa: non contiene
+        // dati finti, e senza di lei l'onboarding di ogni palestra comincia con
+        // due ore di data entry che nessuno fa. E' idempotente.
+        $this->call(ExerciseLibrarySeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->warn('Ambiente di produzione: DemoGymSeeder saltato.');
 

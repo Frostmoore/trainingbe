@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -195,6 +196,27 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->belongsToMany(self::class, 'trainer_member', 'trainer_id', 'member_id')
             ->withPivot(['tenant_id', 'assigned_at', 'assigned_by'])
             ->withTimestamps();
+    }
+
+    /** Le schede assegnate a questa persona (non i modelli della palestra). */
+    public function workoutPlans(): HasMany
+    {
+        return $this->hasMany(WorkoutPlan::class, 'member_id');
+    }
+
+    public function workoutSessions(): HasMany
+    {
+        return $this->hasMany(WorkoutSession::class);
+    }
+
+    public function nutritionPlans(): HasMany
+    {
+        return $this->hasMany(NutritionPlan::class, 'member_id');
+    }
+
+    public function bodyMetrics(): HasMany
+    {
+        return $this->hasMany(BodyMetric::class);
     }
 
     /** I trainer che seguono questo iscritto. */

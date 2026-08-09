@@ -1,0 +1,94 @@
+# ---------------------------------------------------------------------------
+# Ambiente di sviluppo/collaudo completo — B10.4.
+#
+# 🚨 **Perche' esiste anche se lo staging gira su Virtualmin.**
+# In sviluppo il database e' MariaDB 10.4 (XAMPP), su staging e' 10.11: le
+# differenze fra le due — collation `utf8mb4`, funzioni JSON, CTE — vanno
+# verificate PRIMA del deploy, non dopo. Questo file serve a girare la suite di
+# test su un motore vicino a quello di produzione senza toccare la macchina di
+# nessuno.
+#
+# ⚠️ NON e' il modo in cui il progetto viene servito su `test-server`: li' c'e'
+# Virtualmin con Apache e php-fpm 8.4, e non si tocca (vedi il vincolo assoluto
+# sul server condiviso in plan_trainingbe.md §B10.5).
+#
+# Uso:
+#   docker compose up -d db redis
+#   docker compose run --rm app php artisan test
+# ---------------------------------------------------------------------------
+
+services:
+
+  db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DOCKER_DB_ROOT_PASSWORD:-root}
+      MARIADB_DATABASE: ${DB_DATABASE:-training_companion}
+      MARIADB_USER: ${DB_USERNAME:-training}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-training}
+    # utf8mb4 esplicito: il default di MariaDB cambia fra le versioni, e una
+    # collation diversa fra sviluppo e produzione si manifesta come ordinamenti
+    # e confronti di stringhe che si comportano in modo diverso sugli accenti.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${DOCKER_DB_PORT:-3307}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${DOCKER_REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    image: php:8.4-cli
+    working_dir: /app
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      REDIS_HOST: redis
+    # L'immagine ufficiale non ha pdo_mysql, intl, zip e gd: si installano
+    # all'avvio invece di mantenere un Dockerfile. Il container serve a girare i
+    # test, non a servire traffico: qualche secondo in piu' all'avvio e' meglio
+    # di un'immagine in piu' da tenere allineata.
+    command: >
+      sh -c "docker-php-ext-install pdo_mysql >/dev/null 2>&1;
+             tail -f /dev/null"
+
+  # Il WebSocket della chat (B8.2). Porta 8081, come dichiarato in ADR-12: la
+  # 8080 su test-server e' gia' occupata dal reverb di lepatenti.it, e quel
+  # server non si tocca.
+  reverb:
+    image: php:8.4-cli
+    working_dir: /app
+    volumes:
+      - .:/app
+    depends_on:
+      - app
+    ports:
+      - "${REVERB_PORT:-8081}:8081"
+    command: >
+      sh -c "php artisan reverb:start --host=0.0.0.0 --port=8081"
+
+volumes:
+  db-data:

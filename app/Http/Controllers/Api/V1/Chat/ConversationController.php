@@ -1,0 +1,189 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api\V1\Chat;
+
+use App\Events\MessageSent;
+use App\Http\Controllers\Controller;
+use App\Models\Conversation;
+use App\Models\Message;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * La chat vista dall'app — B8.4.
+ *
+ * 🚨 **Il contratto deve reggere anche il polling.**
+ * L'app ricade su polling a 15 secondi se il socket non si apre — su rete mobile
+ * capita spesso — e una chat che «non arriva» distrugge la fiducia nel prodotto
+ * piu' di quasi ogni altro guasto. Per questo `messages` accetta `after` e
+ * `before`: con `after` il polling chiede solo il nuovo, senza riscaricare il
+ * thread ogni quindici secondi.
+ */
+class ConversationController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        $conversazioni = Conversation::query()
+            ->forUser($utente)
+            ->with(['trainer', 'member'])
+            ->recentFirst()
+            ->get();
+
+        return response()->json([
+            'data' => $conversazioni->map(function (Conversation $c) use ($utente): array {
+                $altro = $c->otherParty($utente);
+
+                return [
+                    'id' => $c->id,
+                    'with' => [
+                        'id' => $altro?->id,
+                        'name' => $altro?->name,
+                        'avatar_url' => $altro?->avatarUrl(),
+                    ],
+                    'last_message_at' => $c->last_message_at?->toIso8601String(),
+                    'unread' => $c->unreadFor($utente),
+                ];
+            })->all(),
+        ]);
+    }
+
+    public function messages(Request $request, int $conversation): JsonResponse
+    {
+        $c = $this->conversazioneDi($request, $conversation);
+
+        if ($c === null) {
+            return $this->nonTrovata();
+        }
+
+        $query = $c->messages()->orderByDesc('id');
+
+        // `after` e' la strada del polling: solo cio' che e' arrivato dopo.
+        if (($after = $request->integer('after')) > 0) {
+            $query->where('id', '>', $after)->reorder('id');
+        } elseif (($before = $request->integer('before')) > 0) {
+            $query->where('id', '<', $before);
+        }
+
+        $messaggi = $query->limit(min(100, (int) $request->integer('limit', 50)))->get();
+
+        return response()->json([
+            'data' => $messaggi->sortBy('id')->values()
+                ->map(fn (Message $m): array => $m->toApiArray())->all(),
+        ]);
+    }
+
+    public function store(Request $request, int $conversation): JsonResponse
+    {
+        $c = $this->conversazioneDi($request, $conversation);
+
+        if ($c === null) {
+            return $this->nonTrovata();
+        }
+
+        $dati = $request->validate([
+            'body' => ['required', 'string', 'min:1', 'max:4000'],
+        ]);
+
+        $messaggio = $c->messages()->create([
+            'sender_id' => $request->user()->getKey(),
+            'body' => $dati['body'],
+        ]);
+
+        // 🚨 Dopo il salvataggio, non prima: se il broadcast fallisse — broker
+        // giu', configurazione sbagliata — il messaggio deve comunque esistere.
+        // L'app che fa polling lo troverebbe lo stesso.
+        MessageSent::announce($messaggio);
+
+        return response()->json(['data' => $messaggio->toApiArray()], 201);
+    }
+
+    /** Segna come letto tutto quello che ha scritto l'altro. */
+    public function read(Request $request, int $conversation): JsonResponse
+    {
+        $c = $this->conversazioneDi($request, $conversation);
+
+        if ($c === null) {
+            return $this->nonTrovata();
+        }
+
+        $c->messages()
+            ->where('sender_id', '!=', $request->user()->getKey())
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['data' => ['unread' => 0]]);
+    }
+
+    /**
+     * Apre (o riapre) la conversazione con una persona.
+     *
+     * L'iscritto scrive al proprio trainer, il trainer a un proprio assegnato:
+     * fuori da quel legame non si apre niente. Una chat aperta verso chiunque
+     * della palestra sarebbe, per un iscritto, il modo per scrivere a tutti gli
+     * altri iscritti.
+     */
+    public function open(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            'user_id' => ['required', 'integer'],
+        ]);
+
+        $io = $request->user();
+        $altro = User::find($dati['user_id']);
+
+        if ($altro === null || $altro->tenant_id !== $io->tenant_id) {
+            return response()->json(['message' => __('Persona non trovata.')], 404);
+        }
+
+        [$trainer, $membro] = $this->coppia($io, $altro);
+
+        if ($trainer === null) {
+            return response()->json(['message' => __('Non c\'e\' un collegamento fra voi due.')], 403);
+        }
+
+        $c = Conversation::between($trainer, $membro);
+
+        return response()->json(['data' => ['id' => $c->id]], 201);
+    }
+
+    // ───────────────────────── interni ─────────────────────────
+
+    /**
+     * Chi dei due e' il trainer, e solo se sono davvero collegati.
+     *
+     * @return array{0: ?User, 1: User}
+     */
+    private function coppia(User $io, User $altro): array
+    {
+        if ($io->assignedMembers()->where('users.id', $altro->getKey())->exists()) {
+            return [$io, $altro];
+        }
+
+        if ($io->assignedTrainers()->where('users.id', $altro->getKey())->exists()) {
+            return [$altro, $io];
+        }
+
+        return [null, $altro];
+    }
+
+    /**
+     * 🚨 `forUser()` e non `find()`: il global scope limita alla palestra, ma
+     * dentro una palestra ci sono decine di conversazioni altrui.
+     */
+    private function conversazioneDi(Request $request, int $id): ?Conversation
+    {
+        return Conversation::query()
+            ->forUser($request->user())
+            ->find($id);
+    }
+
+    private function nonTrovata(): JsonResponse
+    {
+        return response()->json(['message' => __('Conversazione non trovata.')], 404);
+    }
+}

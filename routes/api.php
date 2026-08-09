@@ -5,6 +5,9 @@ declare(strict_types=1);
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
+use App\Http\Controllers\Api\V1\Chat\ConversationController;
+use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
+use App\Http\Controllers\Api\V1\Health\HealthIngestController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\Training\BodyMetricController;
@@ -12,6 +15,8 @@ use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\PhotoController;
 use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
 use App\Http\Controllers\Api\V1\Training\WorkoutSessionController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -138,6 +143,53 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::get('ai/usage', [AiController::class, 'usage']);
+
+        // ── Chat (B8.4) ──────────────────────────────────────────────────
+        //
+        // Il contratto regge anche il polling: `messages?after=` restituisce
+        // solo il nuovo. L'app ricade su polling a 15s quando il socket non si
+        // apre, e su rete mobile capita.
+        Route::get('conversations', [ConversationController::class, 'index']);
+        Route::post('conversations', [ConversationController::class, 'open']);
+        Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
+        Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
+        Route::post('conversations/{conversation}/read', [ConversationController::class, 'read'])->whereNumber('conversation');
+
+        Route::post('device-tokens', [DeviceTokenController::class, 'store']);
+        Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);
+
+        // ── Sonno (B9.2) ─────────────────────────────────────────────────
+        Route::get('health/sleep', [HealthIngestController::class, 'sleep']);
+        Route::post('health/ingest-token', [HealthIngestController::class, 'rotateToken']);
+
+        /*
+        | Autorizzazione dei canali privati per l'APP (B8.2).
+        |
+        | 🚨 Serve una rotta a parte. Quella di serie — `POST /broadcasting/auth`
+        | — sta nel gruppo `web`, cioe' sessione con cookie e protezione CSRF:
+        | un client che si autentica con un **token bearer** non la supera, e la
+        | chat via socket non si aprirebbe mai. Non darebbe un errore chiaro,
+        | darebbe un 419 che sembra un problema di rete.
+        |
+        | Il gruppo qui e' gia' `auth:sanctum`, quindi l'utente c'e'; le callback
+        | in `routes/channels.php` sono le stesse, e restano l'unico controllo
+        | vero su chi ascolta cosa.
+        */
+        Route::post('broadcasting/auth', fn (Request $request) => Broadcast::auth($request));
     });
+
+    /*
+    | ── Ingest dall'orologio (B9.1) ───────────────────────────────────────
+    |
+    | 🚨 **Fuori da `auth:sanctum`, ed e' l'unico endpoint scrivente che lo e'.**
+    | Chi manda i dati e' un'automazione sul telefono che non ha una sessione:
+    | autentica il solo token, che e' **per utente** (`users.health_ingest_token`)
+    | e non globale come nell'app storica. Revocarlo per una persona non tocca
+    | nessun altro.
+    |
+    | Rate-limited perche' non c'e' nient'altro a proteggerlo.
+    */
+    Route::post('health/ingest', [HealthIngestController::class, 'store'])
+        ->middleware('throttle:health-ingest');
 
 });

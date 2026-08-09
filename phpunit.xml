@@ -21,7 +21,20 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
+        <!-- 🚨 `reverb`, NON `log` né `null`.
+             Il broadcaster `log` non implementa `auth()`: con quello,
+             /broadcasting/auth risponde 200 a chiunque e un test
+             sull'autorizzazione dei canali passerebbe senza verificare niente.
+             Reverb è compatibile Pusher e valuta davvero le callback di
+             routes/channels.php — che è ciò che gira in produzione.
+             Le chiavi sono finte: nessun test apre una connessione. -->
+        <env name="BROADCAST_CONNECTION" value="reverb"/>
+        <env name="REVERB_APP_ID" value="test-app"/>
+        <env name="REVERB_APP_KEY" value="test-key"/>
+        <env name="REVERB_APP_SECRET" value="test-secret"/>
+        <env name="REVERB_HOST" value="127.0.0.1"/>
+        <env name="REVERB_PORT" value="8081"/>
+        <env name="REVERB_SCHEME" value="http"/>
         <env name="CACHE_STORE" value="array"/>
         <!-- I test girano su MariaDB, non su SQLite: quasi tutto cio che verifichiamo
              (UNIQUE(tenant_id,email), chiavi esterne, il dropUnique sulla migration di

@@ -11,6 +11,10 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         apiPrefix: 'api',
         commands: __DIR__.'/../routes/console.php',
+        // I canali privati della chat (B8.2). L'autorizzazione e' in
+        // routes/channels.php ed e' l'ultimo controllo che esiste: una volta
+        // iscritto a un canale, il client riceve tutto cio' che ci passa.
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {

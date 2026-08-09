@@ -7,6 +7,8 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\Login;
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\ResolveTenant;
+use App\Support\Tenancy\PanelBranding;
+use App\Support\Tenancy\TenantContext;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -14,7 +16,6 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -44,14 +45,20 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(Login::class)
-            ->brandName('TrainingCompanion')
-            ->colors([
-                'primary' => Color::Teal,
-            ])
-            ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\Filament\Admin\Resources')
-            ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\Filament\Admin\Pages')
+            // 🚨 Nome e colori si risolvono a **ogni richiesta** (closure), non
+            // alla registrazione del pannello. `panel()` gira una volta sola,
+            // quando non c'e' ancora nessun utente autenticato: leggere il
+            // tenant li' applicherebbe il marchio della prima palestra che apre
+            // il pannello a tutte le altre.
+            ->brandName(fn (): string => app(TenantContext::class)->get()?->name ?? 'TrainingCompanion')
+            ->brandLogo(fn (): ?string => ($logo = app(TenantContext::class)->get()?->logo_path) !== null
+                ? url($logo)
+                : null)
+            ->colors(fn (): array => PanelBranding::colorsFor(app(TenantContext::class)->get()))
+            ->discoverResources(in: app_path('Filament/Gym/Resources'), for: 'App\Filament\Gym\Resources')
+            ->discoverPages(in: app_path('Filament/Gym/Pages'), for: 'App\Filament\Gym\Pages')
             ->pages([Dashboard::class])
-            ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\Filament\Admin\Widgets')
+            ->discoverWidgets(in: app_path('Filament/Gym/Widgets'), for: 'App\Filament\Gym\Widgets')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
