@@ -105,6 +105,7 @@ class AuthApiTest extends TestCase
             'join_code' => 'alfa2345',
             'name' => 'Anna',
             'email' => ' Anna@Esempio.IT ',
+            'username' => ' Anna.Nuova ',
             'password' => self::FAKE_PASSWORD,
             'password_confirmation' => self::FAKE_PASSWORD,
         ]);
@@ -115,6 +116,65 @@ class AuthApiTest extends TestCase
             ->assertJsonPath('branding.name', 'Alfa');
 
         $this->assertIsString($r->json('token'));
+
+        // 🚨 La forma della risposta è `{token, data, branding}`, **non** un
+        // inviluppo `{data: …}`. Il client dell'app srotolava `data` per ogni
+        // risposta e qui perdeva il token: il login non funzionava per nessuno
+        // e il messaggio dava la colpa all'utente. Questo controllo esiste
+        // perché la forma non cambi senza che qualcuno se ne accorga.
+        $this->assertArrayHasKey('token', $r->json());
+        $this->assertArrayHasKey('data', $r->json());
+        $this->assertArrayHasKey('branding', $r->json());
+
+        // Il nome utente si normalizza: minuscolo e senza spazi.
+        $this->assertSame(
+            'anna.nuova',
+            User::withoutGlobalScopes()->where('email', 'anna@esempio.it')->value('username'),
+        );
+    }
+
+    /**
+     * 🚨 Il nome utente è unico su **tutta la piattaforma**, non per palestra.
+     *
+     * È voluto: serve a essere un identificativo che non ha bisogno del codice
+     * palestra per essere disambiguato — è quello che permette il login dai
+     * pannelli, dove un `join_code` non c'è.
+     */
+    #[Test]
+    public function it_refuses_a_username_already_taken_in_another_gym(): void
+    {
+        // Nella palestra sospesa, che è l'altra che questo test ha a
+        // disposizione: quello che conta è che sia **un'altra**.
+        app(TenantContext::class)->runAs($this->sospesa, fn () => User::create([
+            'name' => 'Altro', 'email' => 'altro@sospesa.test',
+            'username' => 'gia.preso', 'password' => self::FAKE_PASSWORD,
+        ]));
+
+        $this->postJson('/api/v1/auth/register', [
+            'join_code' => 'ALFA2345', 'name' => 'Anna', 'email' => 'anna2@esempio.it',
+            'username' => 'gia.preso',
+            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
+        ])->assertStatus(422)->assertJsonValidationErrors('username');
+    }
+
+    /**
+     * ⚠️ Senza `withoutMiddleware` il limitatore taglia il test al terzo giro:
+     * `auth-register` consente 3 registrazioni al minuto, ed è giusto che sia
+     * così. Qui si sta provando la **validazione**, non il limite — quello ha
+     * il suo test altrove.
+     */
+    #[Test]
+    public function it_refuses_a_malformed_username(): void
+    {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+
+        foreach (['ab', 'con spazi', 'con@chiocciola', '.punto', 'punto.'] as $sbagliato) {
+            $this->postJson('/api/v1/auth/register', [
+                'join_code' => 'ALFA2345', 'name' => 'X', 'email' => 'x'.md5($sbagliato).'@esempio.it',
+                'username' => $sbagliato,
+                'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
+            ])->assertStatus(422)->assertJsonValidationErrors('username');
+        }
     }
 
     /** Il ruolo non è un dato in ingresso: altrimenti bastava chiederlo. */
@@ -123,6 +183,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Furbo', 'email' => 'furbo@esempio.it',
+            'username' => 'furbo',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             'role' => 'gym_admin', 'is_super_admin' => true, 'tenant_id' => 999,
         ])->assertCreated()->assertJsonPath('data.roles', ['member']);
@@ -138,6 +199,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'SOSP2345', 'name' => 'X', 'email' => 'x@esempio.it',
+            'username' => 'xxx',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
         ])->assertStatus(422)->assertJsonValidationErrors('join_code');
     }
@@ -150,8 +212,54 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+            'join_code' => 'ALFA2345', 'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertOk()->assertJsonPath('branding.slug', 'alfa');
+    }
+
+    /**
+     * 🚨 **La forma della risposta è `{token, data, branding}`, non un
+     * inviluppo `{data: …}`.**
+     *
+     * Questo test esiste per un difetto costato un pomeriggio: il client
+     * dell'app srotolava `data` su **ogni** risposta, quindi qui riceveva il
+     * solo utente e perdeva il token. Il login non funzionava per nessuno, e il
+     * messaggio mostrato all'utente diceva «email o password non corretti» —
+     * cioè dava la colpa a lui di un difetto nostro.
+     *
+     * Fissare la forma qui non impedisce a un client di sbagliare, ma se un
+     * giorno qualcuno la cambia questo test lo dice subito invece di lasciarlo
+     * scoprire dall'app.
+     */
+    #[Test]
+    public function the_login_response_is_not_an_envelope(): void
+    {
+        $this->iscritto('anna@alfa.test');
+
+        $r = $this->postJson('/api/v1/auth/login', [
+            'join_code' => 'ALFA2345', 'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+        ])->assertOk();
+
+        $corpo = $r->json();
+
+        $this->assertSame(['token', 'data', 'branding'], array_keys($corpo));
+        $this->assertIsString($corpo['token']);
+        $this->assertArrayHasKey('email', $corpo['data']);
+    }
+
+    /**
+     * Il campo si chiama `login`, ma `email` resta accettato.
+     *
+     * Le versioni dell'app già installate sui telefoni lo mandano ancora così:
+     * un rilascio del backend non deve buttarle fuori.
+     */
+    #[Test]
+    public function it_still_accepts_the_old_email_field(): void
+    {
+        $this->iscritto('anna@alfa.test');
+
+        $this->postJson('/api/v1/auth/login', [
+            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+        ])->assertOk();
     }
 
     #[Test]

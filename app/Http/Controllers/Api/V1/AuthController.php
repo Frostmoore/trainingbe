@@ -62,6 +62,7 @@ class AuthController extends Controller
                     'tenant_id' => $tenant->id,
                     'name' => $request->string('name')->toString(),
                     'email' => $request->string('email')->toString(),
+                    'username' => $request->string('username')->toString(),
                     'password' => $request->string('password')->toString(),
                     'phone' => $request->input('phone'),
                     'locale' => $tenant->locale,
@@ -91,7 +92,7 @@ class AuthController extends Controller
             // Email **o** nome utente. Qui siamo già dentro il contesto della
             // palestra risolta dal `join_code`, quindi il global scope limita
             // la ricerca e non c'è l'ambiguità che ha il login dei pannelli.
-            $identificativo = $request->string('email')->toString();
+            $identificativo = $request->identifier();
 
             $user = User::where(fn ($q) => $q
                 ->where('email', $identificativo)
@@ -105,13 +106,13 @@ class AuthController extends Controller
 
             if (! Hash::check($request->string('password')->toString(), $hash) || $user === null) {
                 throw ValidationException::withMessages([
-                    'email' => __('Credenziali non valide.'),
+                    'login' => __('Credenziali non valide.'),
                 ]);
             }
 
             if (! $user->is_active) {
                 throw ValidationException::withMessages([
-                    'email' => __('Questo account non è attivo. Contatta la tua palestra.'),
+                    'login' => __('Questo account non è attivo. Contatta la tua palestra.'),
                 ]);
             }
 
