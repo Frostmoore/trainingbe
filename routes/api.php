@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BrandingController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,6 +20,13 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function (): void {
+
+    // ── Pubblica, senza autenticazione ───────────────────────────────────
+    // L'app la chiama PRIMA del login per vestirsi dei colori della palestra.
+    // Throttle stretto: senza credenziali da indovinare, è il modo più comodo
+    // per provare codici palestra a tappeto.
+    Route::get('branding/lookup', [BrandingController::class, 'lookup'])
+        ->middleware('throttle:branding-lookup');
 
     Route::prefix('auth')->group(function (): void {
 

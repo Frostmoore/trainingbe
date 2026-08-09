@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * Autenticazione degli iscritti dall'app.
@@ -112,10 +113,22 @@ class AuthController extends Controller
         });
     }
 
-    /** Revoca il solo token con cui è stata fatta questa richiesta. */
+    /**
+     * Revoca il solo token con cui è stata fatta questa richiesta.
+     *
+     * ⚠️ `currentAccessToken()` **non restituisce sempre un token vero**: con
+     * l'autenticazione di sessione (e con `actingAs()` nei test) Sanctum
+     * fornisce un `TransientToken`, che non ha un id e non si può cancellare.
+     * Darlo per scontato faceva rispondere 500. In quel caso non c'è nulla da
+     * revocare, e il logout è comunque riuscito dal punto di vista di chi chiama.
+     */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
 
         return response()->json(['message' => __('Sessione chiusa.')]);
     }
@@ -138,7 +151,10 @@ class AuthController extends Controller
      */
     public function devices(Request $request): JsonResponse
     {
-        $currentId = $request->user()->currentAccessToken()->id;
+        // Vedi la nota in `logout()`: può non esserci un token vero. In quel
+        // caso nessun dispositivo risulta «corrente», che è la risposta onesta.
+        $token = $request->user()->currentAccessToken();
+        $currentId = $token instanceof PersonalAccessToken ? $token->getKey() : null;
 
         $devices = $request->user()->tokens()
             ->orderByDesc('last_used_at')
