@@ -27,12 +27,19 @@ class LoginRequest extends FormRequest
         return true;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @return array<string, mixed>
+     *
+     * ⚠️ `email` accetta anche il **nome utente**, quindi non ha la regola
+     * `email`: metterla rifiuterebbe `marco.rossi` prima ancora di provare ad
+     * autenticarlo. Il nome del campo resta `email` per non rompere l'app, che
+     * lo invia già così.
+     */
     public function rules(): array
     {
         return [
             'join_code' => ['required', 'string', 'size:8'],
-            'email' => ['required', 'string', 'email'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:100'],
         ];

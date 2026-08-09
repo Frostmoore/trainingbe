@@ -10,6 +10,8 @@ use App\Support\Dev\QuickLogin;
 use Filament\Actions\Action;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Component;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -77,6 +79,53 @@ class Login extends BaseLogin
 
         return $user->canAccessPanel(filament()->getPanel('god'))
             || $user->canAccessPanel(filament()->getPanel('admin'));
+    }
+
+    /**
+     * Il campo dell'identificativo: email **o** nome utente.
+     *
+     * Si riusa il componente di serie cambiandogli etichetta e validazione:
+     * togliere `email()` è indispensabile, altrimenti un nome utente viene
+     * rifiutato dalla validazione prima ancora di arrivare all'autenticazione.
+     */
+    protected function getEmailFormComponent(): Component
+    {
+        return TextInput::make('email')
+            ->label(__('Email o nome utente'))
+            ->required()
+            ->autocomplete('username')
+            ->autofocus();
+    }
+
+    /**
+     * Traduce l'identificativo in credenziali senza ambiguità.
+     *
+     * 🚨 Si passa a Laravel l'**id** dell'utente, non l'email.
+     *
+     * Il provider di Laravel costruisce una `where` per ogni chiave ricevuta:
+     * con `['email' => …]` e un'email presente in due palestre — cosa
+     * possibile, visto che è unica solo per palestra — prenderebbe la prima
+     * riga che capita. Se quella fosse un iscritto, l'amministratore si
+     * vedrebbe «credenziali non valide» pur avendole giuste, e non avrebbe modo
+     * di capire perché.
+     *
+     * Risolvendo prima noi (preferendo chi ha accesso a un pannello) e passando
+     * l'id, la `where` è esatta e la password viene verificata sull'utente
+     * giusto.
+     *
+     * ⚠️ Se l'identificativo non esiste si passa un id impossibile invece di
+     * fermarsi: così il percorso resta identico — stessa verifica di password,
+     * stessi tempi — e non si può distinguere «non esiste» da «password
+     * sbagliata» cronometrando la risposta.
+     */
+    protected function getCredentialsFromFormData(array $data): array
+    {
+        $utente = User::findByIdentifier((string) ($data['email'] ?? ''), perPannello: true);
+
+        return [
+            'id' => $utente?->getKey() ?? 0,
+            'password' => $data['password'],
+        ];
     }
 
     /**

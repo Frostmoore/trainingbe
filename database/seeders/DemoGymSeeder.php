@@ -95,11 +95,17 @@ class DemoGymSeeder extends Seeder
     /** Crea l'utente se manca e gli assegna il ruolo, senza duplicare nulla. */
     private function utente(Tenant $tenant, string $email, string $nome, UserRole $ruolo): User
     {
+        // Nome utente derivato dall'indirizzo: `admin@palestra-demo.test`
+        // diventa `admin.palestra-demo`. Deve essere unico su tutta la
+        // piattaforma, quindi ci va dentro anche la palestra.
+        $username = str_replace('@', '.', str_replace('.test', '', $email));
+
         $user = User::firstOrCreate(
             ['email' => $email],
             [
                 'tenant_id' => $tenant->id,
                 'name' => $nome,
+                'username' => $username,
                 // Dall'ambiente, cosi' nel repository non c'e' nessuna stringa
                 // che assomigli a una credenziale. Serve nota perche' il
                 // quick-access di sviluppo (B2.1) possa usarla.

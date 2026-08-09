@@ -88,7 +88,15 @@ class AuthController extends Controller
         $tenant = $this->resolveActiveTenant($request->string('join_code')->toString());
 
         return $this->context->runAs($tenant, function () use ($request, $tenant): JsonResponse {
-            $user = User::where('email', $request->string('email'))->first();
+            // Email **o** nome utente. Qui siamo già dentro il contesto della
+            // palestra risolta dal `join_code`, quindi il global scope limita
+            // la ricerca e non c'è l'ambiguità che ha il login dei pannelli.
+            $identificativo = $request->string('email')->toString();
+
+            $user = User::where(fn ($q) => $q
+                ->where('email', $identificativo)
+                ->orWhere('username', $identificativo)
+            )->first();
 
             // `Hash::check` su un hash finto quando l'utente non esiste: senza,
             // la risposta tornerebbe molto più in fretta per le email

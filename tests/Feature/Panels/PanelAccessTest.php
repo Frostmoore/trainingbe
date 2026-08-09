@@ -326,6 +326,101 @@ class PanelAccessTest extends TestCase
             ->assertRedirect(filament()->getPanel('god')->getUrl());
     }
 
+    // ───────────────────── email o nome utente ─────────────────────
+
+    #[Test]
+    public function it_accepts_a_username_instead_of_an_email(): void
+    {
+        $this->gymAdmin->forceFill(['username' => 'anna.demo'])->save();
+
+        Livewire::test(Login::class)
+            ->fillForm(['email' => 'anna.demo', 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(filament()->getPanel('admin')->getUrl());
+    }
+
+    #[Test]
+    public function the_username_is_case_insensitive(): void
+    {
+        $this->gymAdmin->forceFill(['username' => 'anna.demo'])->save();
+
+        Livewire::test(Login::class)
+            ->fillForm(['email' => '  ANNA.Demo ', 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(filament()->getPanel('admin')->getUrl());
+    }
+
+    #[Test]
+    public function the_username_is_stored_lowercase(): void
+    {
+        $u = app(TenantContext::class)->runAs($this->palestra, fn () => User::create([
+            'name' => 'Tizio', 'email' => 'TIZIO@Demo.TEST', 'username' => '  MarcoRossi  ',
+            'password' => self::FAKE_PASSWORD,
+        ]));
+
+        $this->assertSame('marcorossi', $u->fresh()->username);
+        $this->assertSame('tizio@demo.test', $u->fresh()->email);
+    }
+
+    /**
+     * L'ambiguità dell'email al login dei pannelli.
+     *
+     * L'email è unica **per palestra**: lo stesso indirizzo può appartenere a
+     * un iscritto in una palestra e a un amministratore in un'altra. Senza
+     * risolverla noi, `attempt()` prenderebbe la prima riga che capita — e se
+     * fosse quella dell'iscritto, l'amministratore vedrebbe «credenziali non
+     * valide» pur avendole giuste.
+     */
+    #[Test]
+    public function it_prefers_the_account_that_can_actually_use_a_panel(): void
+    {
+        $altra = Tenant::create(['name' => 'Altra', 'slug' => 'altra',
+            'join_code' => 'ALTR2345', 'contact_email' => 'x@x.test',
+            'status' => TenantStatus::Active]);
+
+        $ctx = app(TenantContext::class);
+        $ctx->runAs($altra, fn () => Role::create([
+            'name' => UserRole::Member->value, 'guard_name' => 'web', 'tenant_id' => $altra->id,
+        ]));
+
+        // Stesso indirizzo dell'amministratore, ma è un iscritto di un'altra
+        // palestra — e viene creato PRIMA, così sarebbe lui «la prima riga».
+        $condiviso = 'condiviso@esempio.test';
+        $ctx->runAs($altra, function () use ($condiviso): void {
+            User::create([
+                'name' => 'Iscritto altrove', 'email' => $condiviso, 'password' => self::FAKE_PASSWORD,
+            ])->assignRole(UserRole::Member->value);
+        });
+
+        $this->gymAdmin->forceFill(['email' => $condiviso])->save();
+
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $condiviso, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(filament()->getPanel('admin')->getUrl());
+
+        $this->assertSame($this->gymAdmin->id, Auth::id());
+    }
+
+    #[Test]
+    public function an_unknown_identifier_is_rejected_like_a_wrong_password(): void
+    {
+        $sconosciuto = Livewire::test(Login::class)
+            ->fillForm(['email' => 'non-esiste', 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate');
+
+        $passwordErrata = Livewire::test(Login::class)
+            ->fillForm(['email' => $this->gymAdmin->email, 'password' => 'valore-sbagliato'])
+            ->call('authenticate');
+
+        $sconosciuto->assertHasFormErrors(['email']);
+        $passwordErrata->assertHasFormErrors(['email']);
+        $this->assertFalse(Auth::check());
+    }
+
     // ───────────────────── accesso rapido di sviluppo ─────────────────────
 
     #[Test]

@@ -177,6 +177,41 @@ class AuthApiTest extends TestCase
     }
 
     #[Test]
+    public function it_logs_in_with_a_username(): void
+    {
+        $u = $this->iscritto('anna@alfa.test');
+        $u->forceFill(['username' => 'anna.alfa'])->save();
+
+        $this->postJson('/api/v1/auth/login', [
+            'join_code' => 'ALFA2345', 'email' => ' Anna.Alfa ', 'password' => self::FAKE_PASSWORD,
+        ])->assertOk()->assertJsonPath('data.email', 'anna@alfa.test');
+    }
+
+    /**
+     * Il nome utente è unico su tutta la piattaforma, ma la ricerca resta
+     * limitata alla palestra del `join_code`: un nome di un'altra palestra non
+     * fa entrare qui.
+     */
+    #[Test]
+    public function a_username_from_another_gym_does_not_work(): void
+    {
+        $altra = Tenant::create(['name' => 'Altra', 'slug' => 'altra',
+            'join_code' => 'ALTR2345', 'contact_email' => 'x@x.test']);
+
+        app(TenantContext::class)->runAs($altra, function () use ($altra): void {
+            Role::create(['name' => 'member', 'guard_name' => 'web', 'tenant_id' => $altra->id]);
+            User::create([
+                'name' => 'Altrove', 'email' => 'altrove@altra.test',
+                'username' => 'altrove', 'password' => self::FAKE_PASSWORD,
+            ])->assignRole('member');
+        });
+
+        $this->postJson('/api/v1/auth/login', [
+            'join_code' => 'ALFA2345', 'email' => 'altrove', 'password' => self::FAKE_PASSWORD,
+        ])->assertStatus(422);
+    }
+
+    #[Test]
     public function it_refuses_login_for_an_inactive_user(): void
     {
         $u = $this->iscritto('anna@alfa.test');

@@ -12,6 +12,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -34,7 +35,7 @@ use Spatie\Permission\Traits\HasRoles;
  * un'eccezione sono quelle che si dimenticano.
  */
 #[Fillable([
-    'tenant_id', 'name', 'email', 'password', 'phone',
+    'tenant_id', 'name', 'email', 'username', 'password', 'phone',
     'avatar_path', 'locale', 'is_active',
 ])]
 // `is_super_admin` NON è fillable di proposito: si concede solo da seeder o da
@@ -84,6 +85,73 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'is_active' => 'boolean',
             'is_super_admin' => 'boolean',
         ];
+    }
+
+    // ───────────────────────── identificativi ─────────────────────────
+
+    /**
+     * Nome utente sempre in minuscolo.
+     *
+     * Chi lo digita non pensa alle maiuscole, e un vincolo `UNIQUE` che
+     * distingue `Marco` da `marco` lascerebbe registrare due account che
+     * all'occhio sono lo stesso — il modo classico per farsi passare per un
+     * altro. Normalizzare qui vale per ogni percorso: pannello, API, seeder.
+     */
+    protected function username(): Attribute
+    {
+        return Attribute::set(
+            fn (?string $value): ?string => $value === null || trim($value) === ''
+                ? null
+                : mb_strtolower(trim($value)),
+        );
+    }
+
+    protected function email(): Attribute
+    {
+        return Attribute::set(
+            fn (string $value): string => mb_strtolower(trim($value)),
+        );
+    }
+
+    /**
+     * Trova l'utente da un identificativo, email o nome utente che sia.
+     *
+     * 🚨 Risolve **noi**, invece di lasciar fare a `attempt()`, per un motivo
+     * preciso: l'email è unica **per palestra**, quindi lo stesso indirizzo può
+     * appartenere a due persone in due palestre. Al login dei pannelli non c'è
+     * un `join_code` che disambigui, e il provider di Laravel prenderebbe la
+     * prima riga che capita — in silenzio, e magari quella di un iscritto, che
+     * nel pannello non entra: l'amministratore vedrebbe «credenziali non
+     * valide» pur avendole giuste.
+     *
+     * Fra i candidati si preferisce quindi chi può davvero entrare in un
+     * pannello. Il nome utente non ha questo problema, essendo unico ovunque.
+     *
+     * @param  bool  $perPannello  se `true`, preferisce chi ha accesso a un pannello
+     */
+    public static function findByIdentifier(string $identifier, bool $perPannello = false): ?self
+    {
+        $identifier = mb_strtolower(trim($identifier));
+
+        $candidati = static::withoutGlobalScopes()
+            ->where(fn ($q) => $q->where('email', $identifier)->orWhere('username', $identifier))
+            ->get();
+
+        if ($candidati->count() <= 1) {
+            return $candidati->first();
+        }
+
+        if ($perPannello) {
+            $conPannello = $candidati->first(
+                fn (self $u): bool => $u->isSuperAdmin() || $u->isGymAdmin() || $u->isTrainer(),
+            );
+
+            if ($conPannello !== null) {
+                return $conPannello;
+            }
+        }
+
+        return $candidati->first();
     }
 
     // ───────────────────────── pannelli ─────────────────────────

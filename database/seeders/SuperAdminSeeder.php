@@ -58,6 +58,10 @@ class SuperAdminSeeder extends Seeder
                 'tenant_id' => null,
                 'name' => 'Amministratore piattaforma',
                 'email' => $email,
+                // Un nome utente breve: è l'account che si usa più spesso, e
+                // digitare un indirizzo intero a ogni accesso è una noia
+                // inutile. Resta unico su tutta la piattaforma.
+                'username' => (string) env('SEED_SUPERADMIN_USERNAME', 'god'),
                 'password' => $password,
                 'locale' => 'it',
             ]);
