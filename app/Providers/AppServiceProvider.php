@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\Responses\RoleAwareLoginResponse;
 use App\Support\Tenancy\TenantContext;
+use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -21,6 +23,14 @@ class AppServiceProvider extends ServiceProvider
          * girano nello stesso worker devono comunque usare `runAs()`.
          */
         $this->app->singleton(TenantContext::class);
+
+        /**
+         * Dopo il login, ognuno al suo pannello.
+         *
+         * Il form di accesso e' uno solo: e' il ruolo a decidere dove si
+         * atterra, non una scelta chiesta all'utente prima di entrare.
+         */
+        $this->app->bind(LoginResponse::class, RoleAwareLoginResponse::class);
     }
 
     public function boot(): void

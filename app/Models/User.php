@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -51,6 +52,27 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     use InteractsWithMedia;
     use Notifiable;
     use SoftDeletes;
+
+    /**
+     * Devono rispecchiare i `->default()` delle migration.
+     *
+     * 🚨 Non è ridondanza. I default del database si applicano all'`INSERT`,
+     * **non all'oggetto in memoria**: senza questi, subito dopo `User::create()`
+     * `is_active` vale `null`, e `canAccessPanel()` — che comincia proprio con
+     * `if (! $this->is_active)` — respinge l'utente dal suo stesso pannello.
+     *
+     * Il guasto è invisibile a chi rilegge l'utente con `find()` o `fresh()`
+     * prima di usarlo, ed è per questo che era passato inosservato: si
+     * manifesta solo nel percorso reale, dove si usa l'oggetto appena creato.
+     * Stessa trappola già pagata su `Tenant`.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'locale' => 'it',
+        'is_active' => true,
+        'is_super_admin' => false,
+    ];
 
     /** @return array<string, string> */
     protected function casts(): array
@@ -120,11 +142,18 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     /**
      * I controlli di ruolo di palestra passano tutti da qui.
      *
-     * `hasRole()` di spatie e' gia' limitato al tenant corrente grazie a
-     * TenantTeamResolver, quindi «e' trainer» significa sempre «e' trainer in
-     * QUESTA palestra».
+     * 🚨 **Valuta SEMPRE nella palestra dell'utente**, non in quella del
+     * contesto corrente.
      *
-     * ⚠️ NON accetta `UserRole::SuperAdmin`: quello non e' un ruolo spatie ma
+     * In modalità teams `hasRole()` guarda il tenant impostato in quel momento.
+     * Ma i ruoli di una persona esistono solo dentro la sua palestra, quindi
+     * «è un trainer?» ha una risposta sola e non deve dipendere da uno stato
+     * ambientale. Lasciandolo al contesto, la stessa chiamata rispondeva `true`
+     * o `false` a seconda di dove veniva fatta — e il punto peggiore era
+     * proprio il login, dove `ResolveTenant` non è ancora passato: un
+     * amministratore veniva scambiato per un iscritto e rispedito fuori.
+     *
+     * ⚠️ NON accetta `UserRole::SuperAdmin`: quello non è un ruolo spatie ma
      * la colonna `is_super_admin`. Passarlo qui darebbe sempre `false` in
      * silenzio, quindi lancia invece di mentire.
      */
@@ -136,7 +165,18 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             );
         }
 
-        return $this->hasRole($role->value);
+        $tenant = $this->tenant;
+
+        if ($tenant === null) {
+            // Nessuna palestra: nessun ruolo di palestra. È il caso del super
+            // admin, che non ne ha e non deve averne.
+            return false;
+        }
+
+        return app(TenantContext::class)->runAs(
+            $tenant,
+            fn (): bool => $this->hasRole($role->value),
+        );
     }
 
     /**
