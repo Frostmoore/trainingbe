@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -35,6 +36,10 @@ use Spatie\Permission\Traits\HasRoles;
     'tenant_id', 'name', 'email', 'password', 'phone',
     'avatar_path', 'locale', 'is_active',
 ])]
+// `is_super_admin` NON è fillable di proposito: si concede solo da seeder o da
+// console, mai per assegnazione di massa da una richiesta HTTP. Un campo del
+// genere in `$fillable` è una scalata di privilegi in attesa di un controller
+// distratto che passi `$request->all()`.
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser, HasMedia
 {
@@ -55,6 +60,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'is_super_admin' => 'boolean',
         ];
     }
 
@@ -112,20 +118,38 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     // ───────────────────────── ruoli ─────────────────────────
 
     /**
-     * I controlli di ruolo passano tutti da qui.
+     * I controlli di ruolo di palestra passano tutti da qui.
      *
      * `hasRole()` di spatie e' gia' limitato al tenant corrente grazie a
      * TenantTeamResolver, quindi «e' trainer» significa sempre «e' trainer in
      * QUESTA palestra».
+     *
+     * ⚠️ NON accetta `UserRole::SuperAdmin`: quello non e' un ruolo spatie ma
+     * la colonna `is_super_admin`. Passarlo qui darebbe sempre `false` in
+     * silenzio, quindi lancia invece di mentire.
      */
     public function hasAppRole(UserRole $role): bool
     {
+        if ($role->isPlatformLevel()) {
+            throw new InvalidArgumentException(
+                "{$role->value} non e' un ruolo spatie: usare isSuperAdmin()."
+            );
+        }
+
         return $this->hasRole($role->value);
     }
 
+    /**
+     * Vale su TUTTA la piattaforma, dentro e fuori da ogni palestra.
+     *
+     * Legge una colonna, non un ruolo spatie: i ruoli sono limitati al tenant
+     * corrente e tornerebbero `false` appena il super admin entra in una
+     * palestra — cioe' proprio quando gli serve (impersonazione, B2.3).
+     * La motivazione completa e' nella migration `..._add_is_super_admin_...`.
+     */
     public function isSuperAdmin(): bool
     {
-        return $this->hasAppRole(UserRole::SuperAdmin);
+        return (bool) $this->is_super_admin;
     }
 
     public function isGymAdmin(): bool

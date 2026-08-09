@@ -36,12 +36,30 @@ enum UserRole: string
     /**
      * Il ruolo vive fuori dalle palestre?
      *
-     * Serve al seeder e alle policy: un ruolo di piattaforma non va assegnato
-     * con un tenant, e un ruolo di palestra non va assegnato senza.
+     * ⚠️ Chi risponde `true` **NON è un ruolo spatie**: è la colonna
+     * `users.is_super_admin`. In modalità teams `model_has_roles.tenant_id` è
+     * NOT NULL e in chiave primaria, quindi un'assegnazione senza palestra è
+     * impossibile; e comunque i ruoli sono limitati al tenant corrente, mentre
+     * il super admin deve valere **anche dentro** una palestra.
+     *
+     * Il seeder (B1.8) crea ruoli spatie solo per i casi che rispondono `false`.
      */
     public function isPlatformLevel(): bool
     {
         return $this === self::SuperAdmin;
+    }
+
+    /**
+     * I soli ruoli che esistono davvero come ruoli spatie.
+     *
+     * @return array<int, self>
+     */
+    public static function tenantScoped(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            static fn (self $r): bool => ! $r->isPlatformLevel(),
+        ));
     }
 
     /** Puo' entrare in un pannello Filament? Gli iscritti usano solo l'app. */
