@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\God\Resources\Tenants\Tables;
 
+use App\Enums\AuditAction;
 use App\Enums\TenantStatus;
 use App\Models\Tenant;
+use App\Services\Audit\AuditLogger;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -109,11 +111,24 @@ class TenantsTable
                         ? 'Gli iscritti torneranno a entrare dall\'app e lo staff dal pannello.'
                         : 'Nessuno di questa palestra potrà più entrare, né dall\'app né dal pannello. '
                           .'I dati restano al loro posto.')
-                    ->action(fn (Tenant $r) => $r->update([
-                        'status' => $r->status === TenantStatus::Suspended
-                            ? TenantStatus::Active
-                            : TenantStatus::Suspended,
-                    ])),
+                    // Sospendere una palestra chiude fuori tutti i suoi utenti in
+                    // un colpo solo: e' fra le azioni per cui, il giorno dopo,
+                    // qualcuno chiedera' chi e' stato. Percio' finisce nel
+                    // registro (B10.2).
+                    ->action(function (Tenant $r): void {
+                        $riattiva = $r->status === TenantStatus::Suspended;
+
+                        $r->update([
+                            'status' => $riattiva ? TenantStatus::Active : TenantStatus::Suspended,
+                        ]);
+
+                        app(AuditLogger::class)->log(
+                            $riattiva ? AuditAction::TenantReactivated : AuditAction::TenantSuspended,
+                            $r,
+                            ['utenti_coinvolti' => $r->users()->count()],
+                            tenant: $r,
+                        );
+                    }),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

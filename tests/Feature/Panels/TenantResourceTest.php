@@ -211,6 +211,27 @@ class TenantResourceTest extends TestCase
         $this->getJson('/api/v1/branding/lookup?code=DEMO2345')->assertOk();
     }
 
+    /**
+     * Sospendere chiude fuori tutti gli utenti di una palestra in un colpo solo:
+     * e' fra le azioni per cui, il giorno dopo, qualcuno chiede chi e' stato.
+     */
+    #[Test]
+    public function suspending_is_recorded_in_the_audit_log(): void
+    {
+        $this->actingAs($this->god);
+
+        Livewire::test(ListTenants::class)
+            ->callTableAction('sospendi', $this->palestra);
+
+        $riga = \App\Models\AuditLog::withoutGlobalScopes()
+            ->ofAction(\App\Enums\AuditAction::TenantSuspended)
+            ->first();
+
+        $this->assertNotNull($riga);
+        $this->assertSame($this->god->id, $riga->actor_id);
+        $this->assertSame($this->palestra->id, $riga->tenant_id);
+    }
+
     // ───────────────────── elenco ─────────────────────
 
     #[Test]

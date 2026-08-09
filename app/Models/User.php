@@ -277,14 +277,10 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 
     // ───────────────────────── utilita' ─────────────────────────
 
-    /**
-     * Ultimo peso registrato.
-     *
-     * TODO(B4.2): leggerlo da `body_metrics` quando la tabella esistera'.
-     */
+    /** Ultimo peso registrato, dalla tabella che lo conosce. */
     public function latestWeight(): ?float
     {
-        return null;
+        return BodyMetric::latestWeightFor($this);
     }
 
     public function avatarUrl(): ?string

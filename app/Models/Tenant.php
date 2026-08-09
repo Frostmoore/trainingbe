@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\TenantStatus;
+use App\Services\Ai\Quota\TenantAiQuota;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -115,17 +116,31 @@ class Tenant extends Model
     /** Token AI consumati nel mese corrente (input + output). */
     public function aiTokensUsedThisMonth(): int
     {
-        // TODO(B6.4): implementare quando esiste la tabella ai_usage_logs.
-        return 0;
+        return AiUsageLog::tokensForTenant((int) $this->getKey());
     }
 
+    /**
+     * Il costo AI del mese in millesimi di centesimo.
+     *
+     * Congelato al momento di ogni chiamata, non ricalcolato dai listini di
+     * oggi: vedi `AiUsageRecorder`.
+     */
+    public function aiCostThisMonth(): int
+    {
+        return AiUsageLog::costForTenant((int) $this->getKey());
+    }
+
+    /**
+     * 🚨 Delega a `TenantAiQuota` e non ricalcola.
+     *
+     * La regola su cosa significhi `ai_monthly_token_cap = null` (default di
+     * sistema) contro `= 0` (illimitato esplicito) vive in un posto solo. Due
+     * implementazioni della stessa regola sono due regole che aspettano di
+     * divergere.
+     */
     public function hasAiQuotaLeft(): bool
     {
-        if ($this->ai_monthly_token_cap === null) {
-            return true;
-        }
-
-        return $this->aiTokensUsedThisMonth() < $this->ai_monthly_token_cap;
+        return app(TenantAiQuota::class)->hasQuotaLeft($this);
     }
 
     // ───────────────────────── utilità ─────────────────────────

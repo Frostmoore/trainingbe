@@ -54,5 +54,37 @@ class RateLimitServiceProvider extends ServiceProvider
             Limit::perMinute(10)->by($request->ip()),
             Limit::perHour(60)->by($request->ip()),
         ]);
+
+        /*
+        | AI (B6.6 / B10.2): 20 chiamate all'ora **per utente**, non per IP.
+        |
+        | 🚨 Per utente e' obbligatorio qui, per il motivo opposto a quello del
+        | login: queste richieste sono autenticate, e limitarle per IP
+        | significherebbe che venti persone sul wi-fi della palestra esauriscono
+        | il limite a testa in un'ora sola. Chi non e' autenticato non arriva a
+        | questi endpoint, quindi l'IP resta solo come rete di sicurezza.
+        |
+        | Questo limite protegge dal singolo utente che martella. Il conto di
+        | fine mese lo protegge la quota di palestra (`TenantAiQuota`), che e' un
+        | controllo diverso e serve comunque: cento iscritti educati bruciano il
+        | budget senza che nessuno superi il proprio limite orario.
+        */
+        RateLimiter::for('ai', function (Request $request): array {
+            $utente = $request->user();
+
+            return $utente !== null
+                ? [
+                    Limit::perHour(20)->by('ai|u'.$utente->getAuthIdentifier()),
+                    Limit::perMinute(6)->by('ai|u'.$utente->getAuthIdentifier()),
+                ]
+                : [Limit::perHour(5)->by('ai|ip'.$request->ip())];
+        });
+
+        // Ingest dei dati dell'orologio (B9.1): fuori dalla sessione, autenticato
+        // dal solo token per-utente. 60 all'ora basta per una sincronizzazione
+        // ogni minuto, che e' gia' piu' del necessario per il sonno.
+        RateLimiter::for('health-ingest', fn (Request $request): array => [
+            Limit::perHour(60)->by('ingest|'.$request->ip()),
+        ]);
     }
 }

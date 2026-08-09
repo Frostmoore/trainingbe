@@ -2,8 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
+use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
+use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
+use App\Http\Controllers\Api\V1\Training\BodyMetricController;
+use App\Http\Controllers\Api\V1\Training\ExerciseController;
+use App\Http\Controllers\Api\V1\Training\PhotoController;
+use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
+use App\Http\Controllers\Api\V1\Training\WorkoutSessionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -68,12 +76,68 @@ Route::prefix('v1')->group(function (): void {
     /*
     | ── Dominio (B4, B5, B6) ──────────────────────────────────────────────
     |
-    | Qui andranno schede, alimentazione e AI. TUTTI con la catena completa
-    | ['auth:sanctum','tenant','tenant.active']: sono dati della palestra, e
-    | senza `tenant` il global scope non filtra — l'iscritto vedrebbe le schede
-    | di tutti.
+    | TUTTI con la catena completa ['auth:sanctum','tenant','tenant.active']:
+    | sono dati della palestra, e senza `tenant` il global scope non filtra —
+    | l'iscritto vedrebbe le schede di tutti.
     |
-    | Non aggiungere endpoint di dominio senza quella catena.
+    | 🚨 Non aggiungere endpoint di dominio senza quella catena.
     */
+    Route::middleware(['auth:sanctum', 'tenant', 'tenant.active'])->group(function (): void {
+
+        // ── Allenamento (B4.5) ───────────────────────────────────────────
+        Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
+        Route::get('workout-plans/{plan}', [WorkoutPlanController::class, 'show'])->whereNumber('plan');
+
+        Route::get('workout-sessions', [WorkoutSessionController::class, 'index']);
+        Route::post('workout-sessions', [WorkoutSessionController::class, 'store']);
+        Route::get('workout-sessions/{session}', [WorkoutSessionController::class, 'show'])->whereNumber('session');
+        Route::post('workout-sessions/{session}/sets', [WorkoutSessionController::class, 'storeSet'])->whereNumber('session');
+        Route::post('workout-sessions/{session}/finish', [WorkoutSessionController::class, 'finish'])->whereNumber('session');
+        Route::patch('workout-sessions/{session}/kcal', [WorkoutSessionController::class, 'updateKcal'])->whereNumber('session');
+        Route::delete('workout-sessions/{session}', [WorkoutSessionController::class, 'destroy'])->whereNumber('session');
+
+        Route::get('exercises', [ExerciseController::class, 'index']);
+
+        Route::get('body-metrics', [BodyMetricController::class, 'index']);
+        Route::post('body-metrics', [BodyMetricController::class, 'store']);
+
+        // Le foto NON si servono da un URL pubblico: `file` controlla di chi
+        // sono prima di consegnarle. Vedi PhotoController.
+        Route::get('photos', [PhotoController::class, 'index']);
+        Route::post('photos', [PhotoController::class, 'store']);
+        Route::get('photos/{photo}/file', [PhotoController::class, 'file'])->whereNumber('photo');
+        Route::delete('photos/{photo}', [PhotoController::class, 'destroy'])->whereNumber('photo');
+
+        // ── Nutrizione (B5.5) ────────────────────────────────────────────
+        Route::get('diary', [DiaryController::class, 'index']);
+        Route::get('targets', [DiaryController::class, 'targets']);
+        Route::get('nutrition-plan', [DiaryController::class, 'plan']);
+
+        Route::post('food-entries', [DiaryController::class, 'store']);
+        Route::patch('food-entries/{entry}', [DiaryController::class, 'update'])->whereNumber('entry');
+        Route::delete('food-entries/{entry}', [DiaryController::class, 'destroy'])->whereNumber('entry');
+        Route::post('food-entries/{entry}/favorite', [FoodFavoriteController::class, 'fromEntry'])->whereNumber('entry');
+
+        Route::get('food-favorites', [FoodFavoriteController::class, 'index']);
+        Route::post('food-favorites/meal', [FoodFavoriteController::class, 'storeMeal']);
+        Route::post('food-favorites/{favorite}/add', [FoodFavoriteController::class, 'add'])->whereNumber('favorite');
+        Route::delete('food-favorites/{favorite}', [FoodFavoriteController::class, 'destroy'])->whereNumber('favorite');
+
+        Route::post('daily-burn', [DiaryController::class, 'storeBurn']);
+
+        // ── AI (B6.6) ────────────────────────────────────────────────────
+        //
+        // 🚨 Doppio limite, e servono entrambi: `throttle:ai` protegge dal
+        // singolo utente che martella, la quota di palestra (dentro il
+        // controller) protegge il conto di fine mese. Il primo senza il secondo
+        // lascerebbe cento iscritti educati bruciare il budget in un giorno.
+        Route::middleware('throttle:ai')->group(function (): void {
+            Route::post('ai/food/text', [AiController::class, 'foodFromText']);
+            Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
+            Route::get('ai/advice', [AiController::class, 'advice']);
+        });
+
+        Route::get('ai/usage', [AiController::class, 'usage']);
+    });
 
 });

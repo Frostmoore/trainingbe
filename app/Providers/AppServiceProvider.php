@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Http\ResponseFactory;
 use App\Http\Responses\RoleAwareLoginResponse;
+use App\Services\Ai\AiManager;
+use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
+use App\Support\Impersonation\Impersonator;
 use App\Support\Tenancy\TenantContext;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
+use Filament\Support\Facades\FilamentView;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -25,6 +31,31 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TenantContext::class);
 
         /**
+         * 🚨 Singleton, e non e' un'ottimizzazione.
+         *
+         * `AiManager` tiene il registro dei fornitori (`extend()`) e le istanze
+         * gia' costruite. Con un binding normale ogni iniezione ne creerebbe uno
+         * nuovo: un fornitore registrato in un punto — un test, un comando, un
+         * driver alternativo per una palestra — non esisterebbe per chi lo
+         * risolve altrove, **senza nessun errore**. Se ne accorgerebbe solo chi
+         * nota che una sostituzione non ha avuto effetto.
+         *
+         * E' anche cio' che evita di ricostruire il client HTTP del fornitore a
+         * ogni chiamata.
+         */
+        $this->app->singleton(AiManager::class);
+
+        /**
+         * I numeri con la virgola non devono diventare interi quando sono tondi.
+         *
+         * Il perche' — un crash in Dart che compare solo sui valori tondi — sta
+         * per esteso in `App\Http\ResponseFactory`. Va sostituita la fabbrica e
+         * non aggiunto un middleware: dopo la codifica l'informazione e' gia'
+         * persa.
+         */
+        $this->app->singleton(ResponseFactoryContract::class, ResponseFactory::class);
+
+        /**
          * Dopo il login, ognuno al suo pannello.
          *
          * Il form di accesso e' uno solo: e' il ruolo a decidere dove si
@@ -35,6 +66,40 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        $this->registraBannerImpersonazione();
+    }
+
+    /**
+     * La barra rossa in cima ai pannelli quando la sessione e' impersonata.
+     *
+     * Registrata qui e non in un singolo pannello perche' deve comparire in
+     * **tutti**: si impersona dal pannello di piattaforma ma si finisce in
+     * quello della palestra, ed e' proprio li' che serve ricordarselo.
+     *
+     * Il render hook e' `PANELS_TOPBAR_BEFORE` e non `BODY_START`: quest'ultimo
+     * finisce anche nelle pagine di login, dove non c'e' nessuna sessione da
+     * segnalare.
+     */
+    private function registraBannerImpersonazione(): void
+    {
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::TOPBAR_BEFORE,
+            function (): string {
+                $impersonator = app(Impersonator::class);
+
+                if (! $impersonator->isImpersonating()) {
+                    return '';
+                }
+
+                $target = auth()->user();
+
+                return view('impersonation.banner', [
+                    'impersonating' => true,
+                    'target' => $target?->name ?? '—',
+                    'tenant' => $target?->tenant?->name,
+                    'original' => $impersonator->originalUser()?->name ?? '—',
+                ])->render();
+            },
+        );
     }
 }
