@@ -291,6 +291,41 @@ class PanelAccessTest extends TestCase
             ->assertRedirect($destinazione);
     }
 
+    /**
+     * Chi è già autenticato non deve restare intrappolato sulla pagina di login.
+     *
+     * Il caso reale, e il più fastidioso: un super admin apre `/admin/login`,
+     * Filament vede la sessione e lo manda su `/admin` — dove non può entrare.
+     * 403 senza aver fatto niente, e senza via d'uscita se non cancellando i
+     * cookie. Deve finire su `/god`.
+     */
+    #[Test]
+    public function an_already_logged_in_user_is_sent_to_their_own_panel(): void
+    {
+        $this->actingAs($this->god)
+            ->get('/admin/login')
+            ->assertRedirect(filament()->getPanel('god')->getUrl());
+
+        $this->flushSession();
+
+        $this->actingAs($this->gymAdmin)
+            ->get('/god/login')
+            ->assertRedirect(filament()->getPanel('admin')->getUrl());
+    }
+
+    #[Test]
+    public function the_canonical_login_url_also_routes_a_logged_in_user(): void
+    {
+        $this->actingAs($this->god)
+            ->get('/login')
+            ->assertRedirect('/admin/login');
+
+        // e da lì il mount() lo smista su /god
+        $this->actingAs($this->god)
+            ->get('/admin/login')
+            ->assertRedirect(filament()->getPanel('god')->getUrl());
+    }
+
     // ───────────────────── accesso rapido di sviluppo ─────────────────────
 
     #[Test]

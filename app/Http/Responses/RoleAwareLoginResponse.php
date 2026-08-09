@@ -7,7 +7,6 @@ namespace App\Http\Responses;
 use App\Models\User;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Illuminate\Support\Facades\Auth;
-use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Dopo il login, ognuno al suo pannello.
@@ -19,16 +18,40 @@ use Symfony\Component\HttpFoundation\Response;
 class RoleAwareLoginResponse implements LoginResponse
 {
     /**
-     * ⚠️ **Nessun tipo di ritorno dichiarato, ed è deliberato.**
+     * Il pannello che spetta a questo utente, o `null` se non ne ha uno.
      *
-     * Il login di Filament passa da Livewire, e lì `redirect()` restituisce un
-     * `Livewire\Features\SupportRedirects\Redirector` — che non è un
-     * `RedirectResponse` e **nemmeno** un `Response` di Symfony. Qualunque tipo
-     * stretto fa esplodere il login con un `TypeError`, e **solo nel percorso
-     * reale**: chiamando il metodo da un test, fuori da Livewire, funziona.
+     * 🚨 **Restituisce una stringa, non una risposta**, e il motivo è concreto.
+     * Dentro Livewire `redirect()` produce un `Livewire\Redirector`, che non è
+     * un `RedirectResponse`, non è un `Response` di Symfony e non ha nemmeno
+     * `getTargetUrl()`. Ogni volta che si è provato a maneggiare l'oggetto
+     * risposta è saltato fuori un errore diverso, sempre e solo nel percorso
+     * reale. Con un URL non c'è niente da maneggiare.
      *
-     * Il contratto `Responsable` non dichiara un tipo proprio per questo
-     * motivo. Qui si fa lo stesso.
+     * È anche il motivo per cui questo metodo è statico e pubblico: lo usa sia
+     * la risposta al login, sia `Login::mount()` per chi ha già una sessione.
+     * Un solo punto che decide dove va ciascuno.
+     */
+    public static function urlFor(?User $user): ?string
+    {
+        if ($user === null) {
+            return null;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return self::destinazione('god');
+        }
+
+        if ($user->isGymAdmin() || $user->isTrainer()) {
+            return self::destinazione('admin');
+        }
+
+        return null;
+    }
+
+    /**
+     * ⚠️ Nessun tipo di ritorno dichiarato, come nel contratto `Responsable`:
+     * dentro Livewire il valore restituito da `redirect()` non soddisfa nessun
+     * tipo che si possa scrivere qui.
      *
      * @return mixed
      */
@@ -37,16 +60,14 @@ class RoleAwareLoginResponse implements LoginResponse
         /** @var User|null $user */
         $user = Auth::user();
 
+        $destinazione = self::urlFor($user);
+
+        if ($destinazione !== null) {
+            return redirect()->to($destinazione);
+        }
+
         if ($user === null) {
             return redirect()->route('login');
-        }
-
-        if ($user->isSuperAdmin()) {
-            return redirect()->to($this->destinazione('god'));
-        }
-
-        if ($user->isGymAdmin() || $user->isTrainer()) {
-            return redirect()->to($this->destinazione('admin'));
         }
 
         // Gli iscritti non hanno un pannello: usano l'app. Qui non ci arrivano
@@ -69,18 +90,14 @@ class RoleAwareLoginResponse implements LoginResponse
      * appartiene a quel pannello**. Altrimenti succede questo: uno arriva su
      * `/admin`, viene rimbalzato al login, entra come super admin — e
      * `intended()` lo riporta su `/admin`, dove un super admin non può entrare.
-     * Risultato: login riuscito e 403 in faccia, senza capire perché.
+     * Login riuscito e 403 in faccia, senza capire perché.
      *
-     * È esattamente il caso che si è presentato appena acceso il pannello.
+     * ⚠️ L'helper `session()`, non `$request->session()`: la richiesta che
+     * Livewire costruisce non ha una sessione legata.
      */
-    private function destinazione(string $panelId): string
+    private static function destinazione(string $panelId): string
     {
         $home = filament()->getPanel($panelId)->getUrl();
-
-        // ⚠️ L'helper `session()`, non `$request->session()`: la richiesta che
-        // Livewire costruisce non ha una sessione legata, e chiederla lì fa
-        // fallire con «Session store not set on request» — di nuovo un guasto
-        // che si vede solo nel percorso reale.
         $intended = session()->pull('url.intended');
 
         if (is_string($intended) && str_starts_with($intended, $home)) {

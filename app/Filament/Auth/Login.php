@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Auth;
 
+use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\User;
 use App\Support\Dev\QuickLogin;
 use Filament\Actions\Action;
@@ -23,6 +24,33 @@ use Illuminate\Validation\ValidationException;
  */
 class Login extends BaseLogin
 {
+    /**
+     * Chi è già autenticato va al pannello che gli spetta, non a questo.
+     *
+     * 🚨 Il comportamento di serie fa `redirect()->intended(Filament::getUrl())`,
+     * cioè manda alla home del **pannello da cui si è arrivati**. Con un login
+     * unico è sbagliato: un super admin che apre `/admin/login` finisce su
+     * `/admin`, dove non può entrare — **403 senza aver fatto niente**, e senza
+     * modo di uscirne se non cancellando i cookie.
+     *
+     * Con la sessione già aperta la pagina di login non ha nulla da chiedere:
+     * si riusa lo stesso smistamento del login vero.
+     */
+    public function mount(): void
+    {
+        /** @var \App\Models\User|null $user */
+        $user = filament()->auth()->user();
+        $destinazione = RoleAwareLoginResponse::urlFor($user);
+
+        if ($destinazione !== null) {
+            $this->redirect($destinazione);
+
+            return;
+        }
+
+        parent::mount();
+    }
+
     /**
      * Può entrare chi ha accesso ad **almeno un** pannello.
      *
