@@ -105,8 +105,8 @@ class AuthApiTest extends TestCase
             'join_code' => 'alfa2345',
             'name' => 'Anna',
             'email' => ' Anna@Esempio.IT ',
-            'password' => 'segretissima1',
-            'password_confirmation' => 'segretissima1',
+            'password' => self::FAKE_PASSWORD,
+            'password_confirmation' => self::FAKE_PASSWORD,
         ]);
 
         $r->assertCreated()
@@ -123,7 +123,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Furbo', 'email' => 'furbo@esempio.it',
-            'password' => 'segretissima1', 'password_confirmation' => 'segretissima1',
+            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             'role' => 'gym_admin', 'is_super_admin' => true, 'tenant_id' => 999,
         ])->assertCreated()->assertJsonPath('data.roles', ['member']);
 
@@ -138,7 +138,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'SOSP2345', 'name' => 'X', 'email' => 'x@esempio.it',
-            'password' => 'segretissima1', 'password_confirmation' => 'segretissima1',
+            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
         ])->assertStatus(422)->assertJsonValidationErrors('join_code');
     }
 
@@ -150,7 +150,7 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => 'segretissima1',
+            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertOk()->assertJsonPath('branding.slug', 'alfa');
     }
 
@@ -160,7 +160,7 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $passwordErrata = $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => 'sbagliata',
+            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => 'wrong-value',
         ]);
         $emailIgnota = $this->postJson('/api/v1/auth/login', [
             'join_code' => 'ALFA2345', 'email' => 'nessuno@alfa.test', 'password' => 'qualunque',
@@ -183,7 +183,7 @@ class AuthApiTest extends TestCase
         $u->forceFill(['is_active' => false])->save();
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => 'segretissima1',
+            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertStatus(422);
     }
 
@@ -275,7 +275,7 @@ class AuthApiTest extends TestCase
     {
         return app(TenantContext::class)->runAs($this->alfa, function () use ($email): User {
             $u = User::create([
-                'name' => 'Utente', 'email' => $email, 'password' => 'segretissima1',
+                'name' => 'Utente', 'email' => $email, 'password' => self::FAKE_PASSWORD,
             ]);
             $u->assignRole('member');
 

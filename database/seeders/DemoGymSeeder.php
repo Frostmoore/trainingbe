@@ -100,7 +100,10 @@ class DemoGymSeeder extends Seeder
             [
                 'tenant_id' => $tenant->id,
                 'name' => $nome,
-                'password' => 'password',   // solo per l'ambiente di sviluppo
+                // Dall'ambiente, cosi' nel repository non c'e' nessuna stringa
+                // che assomigli a una credenziale. Serve nota perche' il
+                // quick-access di sviluppo (B2.1) possa usarla.
+                'password' => (string) env('DEMO_USER_PASSWORD', 'demo'),
                 'locale' => $tenant->locale,
             ],
         );

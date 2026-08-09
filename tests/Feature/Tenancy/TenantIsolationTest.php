@@ -123,10 +123,10 @@ class TenantIsolationTest extends TestCase
     public function it_hides_other_tenants_records(): void
     {
         $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'Anna', 'email' => 'anna@alfa.test', 'password' => 'segretissima1',
+            'name' => 'Anna', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ]));
         $this->context()->runAs($this->beta, fn () => User::create([
-            'name' => 'Bruno', 'email' => 'bruno@beta.test', 'password' => 'segretissima1',
+            'name' => 'Bruno', 'email' => 'bruno@beta.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
         $this->assertSame(1, $this->context()->runAs($this->alfa, fn () => User::count()));
@@ -142,7 +142,7 @@ class TenantIsolationTest extends TestCase
     public function it_auto_fills_tenant_id_on_create(): void
     {
         $u = $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'Senza tenant esplicito', 'email' => 'x@alfa.test', 'password' => 'segretissima1',
+            'name' => 'Senza tenant esplicito', 'email' => 'x@alfa.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
         $this->assertSame($this->alfa->id, $u->tenant_id);
@@ -175,7 +175,7 @@ class TenantIsolationTest extends TestCase
     public function it_scopes_roles_per_tenant(): void
     {
         $u = $this->context()->runAs($this->alfa, function (): User {
-            $u = User::create(['name' => 'Tina', 'email' => 'tina@alfa.test', 'password' => 'segretissima1']);
+            $u = User::create(['name' => 'Tina', 'email' => 'tina@alfa.test', 'password' => self::FAKE_PASSWORD]);
             $u->assignRole('member');
 
             return $u;
@@ -203,7 +203,7 @@ class TenantIsolationTest extends TestCase
     public function it_keeps_super_admin_across_tenants(): void
     {
         $god = $this->context()->runWithoutTenant(fn () => User::create([
-            'name' => 'God', 'email' => 'god@piattaforma.test', 'password' => 'segretissima1',
+            'name' => 'God', 'email' => 'god@piattaforma.test', 'password' => self::FAKE_PASSWORD,
         ]));
         $god->forceFill(['is_super_admin' => true])->save();
 
@@ -222,10 +222,10 @@ class TenantIsolationTest extends TestCase
     public function it_allows_the_same_email_in_different_tenants(): void
     {
         $a = $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => 'segretissima1',
+            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,
         ]));
         $b = $this->context()->runAs($this->beta, fn () => User::create([
-            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => 'segretissima1',
+            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
         $this->assertNotSame($a->id, $b->id);
@@ -235,13 +235,13 @@ class TenantIsolationTest extends TestCase
     public function it_rejects_the_same_email_twice_in_one_tenant(): void
     {
         $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => 'segretissima1',
+            'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
         $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
 
         $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'Doppione', 'email' => 'mario@esempio.test', 'password' => 'segretissima1',
+            'name' => 'Doppione', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,
         ]));
     }
 
@@ -249,10 +249,10 @@ class TenantIsolationTest extends TestCase
     public function it_does_not_filter_without_context(): void
     {
         $this->context()->runAs($this->alfa, fn () => User::create([
-            'name' => 'A', 'email' => 'a@alfa.test', 'password' => 'segretissima1',
+            'name' => 'A', 'email' => 'a@alfa.test', 'password' => self::FAKE_PASSWORD,
         ]));
         $this->context()->runAs($this->beta, fn () => User::create([
-            'name' => 'B', 'email' => 'b@beta.test', 'password' => 'segretissima1',
+            'name' => 'B', 'email' => 'b@beta.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
         // Comportamento VOLUTO, non una svista: seeder, migration e il pannello

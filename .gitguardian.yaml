@@ -1,0 +1,26 @@
+# Configurazione di GitGuardian.
+#
+# Perché serve: i test e i seeder contengono per forza qualcosa che *somiglia* a
+# una password — non si può provare un login senza passarne una. Sono valori
+# finti e usa-e-getta, ma un analizzatore non ha modo di saperlo e segnala a
+# ogni push.
+#
+# Il problema degli avvisi a ripetizione non è il rumore: è che dopo un po'
+# nessuno li legge più, ed è così che passa inosservato quello vero.
+#
+# ⚠️ Qui si escludono SOLO percorsi di test e dati dimostrativi. Nessuna
+# esclusione su `app/`, `config/` o `.env*`: se un segreto vero finisse lì,
+# GitGuardian deve continuare a urlare.
+
+version: 2
+
+secret:
+  ignored-paths:
+    - 'tests/**'
+    - 'database/seeders/**'
+    - 'database/factories/**'
+
+  ignored-matches:
+    # La costante condivisa dai test (tests/TestCase.php).
+    - name: password finta dei test
+      match: not-a-secret-test-value
