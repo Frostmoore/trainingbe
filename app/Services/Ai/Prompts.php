@@ -20,6 +20,22 @@ namespace App\Services\Ai;
  * 512 per Opus. Sotto soglia il prefisso non viene cachato e il fornitore non lo
  * segnala. Se questo prompt venisse accorciato, il risparmio sparirebbe in
  * silenzio: e' il motivo per cui e' scritto per esteso e non compresso.
+ *
+ * 🚨 **Negli schemi NON si mettono `minimum` e `maximum`.** Anthropic li rifiuta:
+ *
+ *     output_config.format.schema:
+ *     For 'number' type, properties maximum, minimum are not supported
+ *
+ * E' un 400 su OGNI chiamata, che il controller traduce in 502 `ai_unavailable`:
+ * sembra un guasto del fornitore e invece e' una richiesta malformata da parte
+ * nostra. Ha tenuto ferme tutte le funzioni AI — cibo da testo, cibo da foto,
+ * calorie, consiglio, import PDF — perche' lo schema e' l'unica cosa che passa
+ * per tutte. **Il vincolo di intervallo va scritto nel prompt**, dove il modello
+ * se lo aspetta; qui sopra ogni `confidence` ha la sua regola «da 0 a 1».
+ *
+ * ⚠️ Nessun test lo ha preso: `FakeAiProvider` non parla con la rete, e la regola
+ * «nessun test tocca la rete» resta giusta. Il buco era che **una chiamata vera
+ * non era mai stata fatta**. Dopo ogni modifica agli schemi, farne una a mano.
  */
 final class Prompts
 {
@@ -87,7 +103,12 @@ final class Prompts
         4. Resta prudente. Sovrastimare le calorie bruciate porta la persona a mangiare
            di piu' credendo di essere in deficit, ed e' l'errore che fa fallire un
            percorso senza che nessuno capisca perche'.
-        5. Restituisci un numero intero di chilocalorie.
+        5. Restituisci un numero intero di chilocalorie, mai negativo.
+        6. CONFIDENZA. Il campo `confidence` va da 0 a 1: 0.9 o piu' se durata, carichi
+           e ripetizioni sono tutti presenti; sotto 0.6 se la durata manca o gli
+           esercizi non bastano a capire l'intensita'. Non gonfiarla: una stima
+           sbagliata dichiarata sicura viene sommata al fabbisogno del giorno e fa
+           mangiare di piu' a chi crede di essere in deficit.
         TXT;
 
     public const ADVICE_SYSTEM = <<<'TXT'
@@ -184,7 +205,7 @@ final class Prompts
                         'fat' => $numero,
                     ],
                 ],
-                'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                'confidence' => ['type' => 'number'],
                 'note' => ['type' => ['string', 'null']],
             ],
         ];
@@ -198,8 +219,8 @@ final class Prompts
             'additionalProperties' => false,
             'required' => ['kcal', 'confidence'],
             'properties' => [
-                'kcal' => ['type' => 'integer', 'minimum' => 0],
-                'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                'kcal' => ['type' => 'integer'],
+                'confidence' => ['type' => 'number'],
             ],
         ];
     }
@@ -214,7 +235,7 @@ final class Prompts
             'properties' => [
                 'name' => ['type' => 'string'],
                 'notes' => ['type' => ['string', 'null']],
-                'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                'confidence' => ['type' => 'number'],
                 'exercises' => [
                     'type' => 'array',
                     'items' => [
@@ -228,7 +249,7 @@ final class Prompts
                             'rest_sec' => ['type' => ['integer', 'null']],
                             'target_weight' => ['type' => ['number', 'null']],
                             'notes' => ['type' => ['string', 'null']],
-                            'confidence' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                            'confidence' => ['type' => 'number'],
                         ],
                     ],
                 ],
