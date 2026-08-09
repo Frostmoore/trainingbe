@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * Il diario alimentare — B5.5.
@@ -50,7 +51,7 @@ class DiaryController extends Controller
     {
         $dati = $request->validate([
             'description' => ['required', 'string', 'max:255'],
-            'meal' => ['nullable', 'string'],
+            'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
             'grams' => ['nullable', 'numeric', 'min:0', 'max:20000'],
             'qty' => ['nullable', 'numeric', 'min:0', 'max:10000'],
@@ -87,7 +88,7 @@ class DiaryController extends Controller
 
         $dati = $request->validate([
             'description' => ['sometimes', 'string', 'max:255'],
-            'meal' => ['sometimes', 'string'],
+            'meal' => ['sometimes', Rule::enum(MealType::class)],
             'eaten_at' => ['sometimes', 'date'],
             'grams' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:20000'],
             'qty' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:10000'],

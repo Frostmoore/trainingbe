@@ -94,6 +94,29 @@ class NutritionApiTest extends TestCase
             ->assertJsonPath('data.meal', MealType::Breakfast->value);
     }
 
+    /**
+     * 🚨 Un pasto sbagliato si RIFIUTA, non si corregge di nascosto.
+     *
+     * Prima la regola era `['nullable','string']`: qualunque parola passava, poi
+     * `MealType::tryFrom()` tornava null e si ripiegava sull'ora. Chiamando l'API
+     * con `meal: "pranzo"` (i nomi italiani dell'app storica) il cibo finiva
+     * nello spuntino del pomeriggio, con un **201** che diceva che era andato
+     * tutto bene. Chi sviluppa il client non ha modo di accorgersene: il valore
+     * sbagliato torna solo dentro la risposta, dove nessuno lo confronta.
+     */
+    #[Test]
+    public function an_unknown_meal_is_rejected_instead_of_being_guessed(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/food-entries', [
+                'description' => 'Pasta',
+                'kcal' => 400,
+                'meal' => 'pranzo',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('meal');
+    }
+
     #[Test]
     public function a_member_cannot_touch_the_entries_of_another(): void
     {

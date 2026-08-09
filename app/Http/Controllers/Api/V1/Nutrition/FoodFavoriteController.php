@@ -12,6 +12,7 @@ use App\Services\Nutrition\DiaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * I preferiti — B5.5.
@@ -86,7 +87,7 @@ class FoodFavoriteController extends Controller
     {
         $dati = $request->validate([
             'description' => ['required', 'string', 'max:255'],
-            'meal' => ['required', 'string'],
+            'meal' => ['required', Rule::enum(MealType::class)],
             'date' => ['nullable', 'date'],
         ]);
 
@@ -149,7 +150,7 @@ class FoodFavoriteController extends Controller
         }
 
         $dati = $request->validate([
-            'meal' => ['nullable', 'string'],
+            'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
         ]);
 

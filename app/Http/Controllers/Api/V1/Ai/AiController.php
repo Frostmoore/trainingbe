@@ -19,6 +19,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * Gli endpoint AI dell'app — B6.6.
@@ -46,7 +47,7 @@ class AiController extends Controller
     {
         $dati = $request->validate([
             'text' => ['required', 'string', 'min:2', 'max:1000'],
-            'meal' => ['nullable', 'string'],
+            'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
             // Se `false`, si restituisce la stima senza scrivere niente: serve
             // all'app per far confermare una stima poco sicura prima di
@@ -70,7 +71,7 @@ class AiController extends Controller
     {
         $dati = $request->validate([
             'photo' => ['required', 'image', 'max:12288'],
-            'meal' => ['nullable', 'string'],
+            'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
             'save' => ['nullable', 'boolean'],
         ]);
