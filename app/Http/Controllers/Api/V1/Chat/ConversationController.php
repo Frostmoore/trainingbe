@@ -29,6 +29,15 @@ class ConversationController extends Controller
     {
         $utente = $request->user();
 
+        // 🚨 Anche l'elenco passa dalla policy, non solo il singolo filo.
+        // È qui che si ferma una sessione impersonata: senza, il super admin
+        // nei panni di un trainer vedrebbe tutte le sue conversazioni — e il
+        // controllo sul singolo messaggio arriverebbe troppo tardi, perché
+        // l'elenco mostra già con chi parla e quando.
+        if (Gate::denies('viewAny', Conversation::class)) {
+            return response()->json(['data' => []]);
+        }
+
         $conversazioni = Conversation::query()
             ->forUser($utente)
             ->with(['trainer', 'member'])
@@ -139,6 +148,11 @@ class ConversationController extends Controller
 
         if ($altro === null || $altro->tenant_id !== $io->tenant_id) {
             return response()->json(['message' => __('Persona non trovata.')], 404);
+        }
+
+        // Nemmeno aprirne una nuova: sarebbe scrivere a nome di un altro.
+        if (Gate::denies('create', Conversation::class)) {
+            return response()->json(['message' => __('Conversazione non trovata.')], 404);
         }
 
         [$trainer, $membro] = $this->coppia($io, $altro);

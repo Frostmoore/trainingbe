@@ -15,6 +15,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use App\Filament\Gym\Pages\Chat as ChatPage;
+use App\Models\Conversation;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Gate;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
@@ -197,6 +201,122 @@ class ImpersonationTest extends TestCase
 
         $this->assertNotNull($rilettura, 'Una riga di audit e\' stata cancellata.');
         $this->assertSame($this->god->name, $rilettura->actor_label);
+    }
+
+    // ───────────────── quello che l'impersonazione NON dà ─────────────────
+
+    /**
+     * 🚨 **Impersonare NON dà accesso alle conversazioni.**
+     *
+     * È il buco che l'impersonazione apre se nessuno lo chiude: durante una
+     * sessione impersonata `auth()->user()` **è** il trainer, quindi per ogni
+     * altra regola del sistema il super admin *è* lui — ed è esattamente il
+     * punto dell'impersonazione. Ma qui quella sostituzione produrrebbe
+     * l'opposto di quello che la riservatezza della chat deve garantire:
+     * basterebbe entrare nei panni di un trainer per leggere tutto quello che
+     * i suoi iscritti gli hanno scritto.
+     *
+     * Il fatto che l'impersonazione sia tracciata **non basta**: la traccia
+     * rende l'accesso ricostruibile, non legittimo, e non cambia niente per
+     * l'iscritto che ha scritto credendo che leggesse solo il suo trainer.
+     */
+    #[Test]
+    public function impersonating_does_not_open_the_chats(): void
+    {
+        $iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto2@demo.test');
+
+        $this->trainer->assignedMembers()->attach($iscritto->id, [
+            'tenant_id' => $this->palestra->id, 'assigned_at' => now(),
+        ]);
+
+        $conversazione = $this->ctx()->runAs($this->palestra,
+            fn () => Conversation::between($this->trainer, $iscritto));
+
+        $this->ctx()->runAs($this->palestra, fn () => $conversazione->messages()->create([
+            'sender_id' => $iscritto->id,
+            'body' => 'Ho un problema che preferirei restasse fra noi',
+        ]));
+
+        // Il trainer, che è parte della conversazione, la legge.
+        $this->actingAs($this->trainer);
+        $this->assertTrue(Gate::allows('view', $conversazione));
+        $this->assertTrue(Gate::allows('viewAny', Conversation::class));
+
+        // Ora il super admin entra nei suoi panni.
+        app('auth')->forgetGuards();
+        $this->flushSession();
+        $this->actingAs($this->god);
+        filament()->setCurrentPanel('god');
+
+        Livewire::test(ListUsers::class)->callTableAction('impersona', $this->trainer);
+
+        $this->assertSame($this->trainer->id, auth()->id(), 'L\'impersonazione non è avvenuta.');
+
+        // 🚨 …e da qui in poi la chat è chiusa, benché l'utente autenticato sia
+        // esattamente lo stesso di prima.
+        $this->assertFalse(
+            Gate::allows('view', $conversazione),
+            'Impersonando un trainer si leggono le sue conversazioni con gli iscritti.',
+        );
+
+        $this->assertFalse(
+            Gate::allows('viewAny', Conversation::class),
+            'Impersonando si ottiene l\'elenco delle conversazioni.',
+        );
+
+        $this->assertFalse(
+            Gate::allows('create', Conversation::class),
+            'Impersonando si può aprire una conversazione a nome di un altro.',
+        );
+    }
+
+    /** E il pannello non mostra nemmeno la voce di menù. */
+    #[Test]
+    public function the_chat_page_is_closed_while_impersonating(): void
+    {
+        $this->actingAs($this->god);
+
+        Livewire::test(ListUsers::class)->callTableAction('impersona', $this->trainer);
+
+        app(TenantContext::class)->set($this->palestra);
+
+        $this->assertFalse(
+            ChatPage::canAccess(),
+            'La pagina dei messaggi è aperta a una sessione impersonata.',
+        );
+
+        $this->assertNull(ChatPage::getNavigationBadge());
+    }
+
+    /** Uscire dall'impersonazione restituisce l'accesso a chi di dovere. */
+    #[Test]
+    public function leaving_the_impersonation_gives_the_chat_back(): void
+    {
+        $iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto3@demo.test');
+
+        $this->trainer->assignedMembers()->attach($iscritto->id, [
+            'tenant_id' => $this->palestra->id, 'assigned_at' => now(),
+        ]);
+
+        $conversazione = $this->ctx()->runAs($this->palestra,
+            fn () => Conversation::between($this->trainer, $iscritto));
+
+        $this->actingAs($this->god);
+
+        Livewire::test(ListUsers::class)->callTableAction('impersona', $this->trainer);
+        $this->assertFalse(Gate::allows('view', $conversazione));
+
+        $this->get(route('impersonation.stop'));
+
+        // Ora il trainer vero, che rientra da solo, la rilegge.
+        app('auth')->forgetGuards();
+        $this->flushSession();
+        $this->actingAs($this->trainer);
+
+        $this->assertTrue(
+            Gate::allows('view', $conversazione),
+            'Finita l\'impersonazione, il trainer non riesce più a leggere le proprie chat.',
+        );
     }
 
     // ───────────────────── chi non si tocca ─────────────────────

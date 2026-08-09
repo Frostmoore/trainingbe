@@ -51,18 +51,32 @@ class Chat extends Page
 
     public string $body = '';
 
+    /**
+     * 🚨 **Chiusa del tutto durante un'impersonazione.**
+     *
+     * Non «vuota»: proprio non raggiungibile, e senza voce nel menù. Durante
+     * un'impersonazione `auth()->user()` è la persona impersonata, quindi ogni
+     * altro controllo la considererebbe legittimamente padrona delle proprie
+     * conversazioni — che è esattamente il contrario di quello che serve.
+     *
+     * Il fatto che l'impersonazione sia tracciata non basta: la traccia rende
+     * l'accesso ricostruibile, non legittimo, e non cambia niente per
+     * l'iscritto che ha scritto quelle cose al proprio trainer.
+     */
     public static function canAccess(): bool
     {
         $u = auth()->user();
 
-        return $u instanceof User && ($u->isGymAdmin() || $u->isTrainer());
+        return $u instanceof User
+            && ($u->isGymAdmin() || $u->isTrainer())
+            && Gate::allows('viewAny', Conversation::class);
     }
 
     public static function getNavigationBadge(): ?string
     {
         $u = auth()->user();
 
-        if (! $u instanceof User) {
+        if (! $u instanceof User || Gate::denies('viewAny', Conversation::class)) {
             return null;
         }
 
@@ -75,6 +89,12 @@ class Chat extends Page
     /** @return Collection<int, Conversation> */
     public function getConversationsProperty(): Collection
     {
+        // Seconda serratura: se qualcuno un giorno allentasse `canAccess()`,
+        // l'elenco resterebbe comunque vuoto per una sessione impersonata.
+        if (Gate::denies('viewAny', Conversation::class)) {
+            return collect();
+        }
+
         return Conversation::query()
             ->forUser(auth()->user())
             ->with(['trainer', 'member'])

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Gate;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +32,11 @@ Broadcast::channel('conversation.{conversationId}', function (User $user, int $c
         return false;
     }
 
-    return $conversazione->includes($user)
-        && $conversazione->tenant_id === $user->tenant_id;
+    // 🚨 Passa dalla policy invece di ripetere le condizioni.
+    //
+    // Non è pigrizia: la regola «nemmeno impersonando» vive lì, e duplicarla
+    // qui significherebbe che il giorno in cui cambia, questo canale resta
+    // indietro — e un canale che resta indietro non dà nessun errore, continua
+    // a consegnare messaggi a chi non dovrebbe riceverli.
+    return Gate::forUser($user)->allows('view', $conversazione);
 });

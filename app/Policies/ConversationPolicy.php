@@ -6,6 +6,7 @@ namespace App\Policies;
 
 use App\Models\Conversation;
 use App\Models\User;
+use App\Support\Impersonation\Impersonator;
 
 /**
  * Chi può leggere una conversazione — B8.
@@ -21,14 +22,27 @@ use App\Models\User;
  * ### 🚨 È l'UNICA policy senza scorciatoia per il super admin
  *
  * Tutte le altre cominciano con `before()` che lascia passare `isSuperAdmin()`. Qui **no**, e la
- * differenza è deliberata:
+ * differenza è deliberata: il pannello di piattaforma non ha nessuna risorsa sulle conversazioni,
+ * quindi togliere la scorciatoia non toglie nessuna funzione a nessuno — toglie solo un modo di
+ * sbagliare.
  *
- * - il super admin ha già una via legittima e **tracciata** per entrare nei dati di un cliente,
- *   l'impersonazione (B2.3), che scrive chi–chi–quando in `audit_logs`;
- * - una scorciatoia qui sarebbe invece un accesso **non tracciato** allo stesso materiale, e
- *   renderebbe la traccia dell'impersonazione una formalità aggirabile;
- * - il pannello di piattaforma non ha nessuna risorsa sulle conversazioni, quindi togliere la
- *   scorciatoia non toglie nessuna funzione a nessuno: toglie solo un modo di sbagliare.
+ * ### 🚨 E NEMMENO IMPERSONANDO
+ *
+ * Questa è la parte che conta davvero, ed è quella che si dimentica.
+ *
+ * Durante un'impersonazione `auth()->user()` **è** la persona impersonata: per ogni altra regola
+ * del sistema il super admin *è* quel trainer, ed è esattamente il punto dell'impersonazione. Ma
+ * qui quella sostituzione produrrebbe l'esatto contrario di quello che la riservatezza della chat
+ * deve garantire: basterebbe impersonare un trainer per leggere tutte le sue conversazioni con gli
+ * iscritti.
+ *
+ * Il fatto che l'impersonazione sia **tracciata** non basta. La traccia dice che qualcuno è
+ * entrato in un account, non che ha letto una conversazione: rende l'accesso ricostruibile, non
+ * legittimo. E soprattutto non cambia niente per l'iscritto, che ha scritto quelle cose al proprio
+ * trainer credendo — giustamente — che le leggesse solo lui.
+ *
+ * Quindi: **una sessione impersonata non legge NESSUNA conversazione**, sua o altrui. Non è un
+ * caso limite da gestire, è la regola.
  *
  * ### Dove si applica davvero il filtro
  *
@@ -41,11 +55,17 @@ class ConversationPolicy
 {
     // 🚨 Nessun `before()`: vedi la nota di classe. Non è una dimenticanza.
 
+    /**
+     * Si può avere un elenco di conversazioni?
+     *
+     * Chiunque può avere le **proprie** — quali siano lo decide lo scope, non
+     * questo metodo. Ma non chi sta impersonando: per lui l'elenco non esiste,
+     * e i tre punti d'ingresso (API, pannello, canali) lo chiedono qui invece
+     * di ripetere il controllo.
+     */
     public function viewAny(User $utente): bool
     {
-        // Chiunque può avere le **proprie** conversazioni. Quali siano, lo
-        // decide lo scope, non questo metodo.
-        return true;
+        return ! $this->staImpersonando();
     }
 
     public function view(User $utente, Conversation $conversazione): bool
@@ -55,7 +75,7 @@ class ConversationPolicy
 
     public function create(User $utente): bool
     {
-        return true;
+        return ! $this->staImpersonando();
     }
 
     public function update(User $utente, Conversation $conversazione): bool
@@ -90,7 +110,26 @@ class ConversationPolicy
      */
     private function partecipa(User $utente, Conversation $conversazione): bool
     {
+        // 🚨 Prima di tutto il resto: durante un'impersonazione l'utente
+        // "partecipante" è la persona impersonata, e senza questa riga il
+        // controllo qui sotto direbbe di sì.
+        if ($this->staImpersonando()) {
+            return false;
+        }
+
         return $conversazione->includes($utente)
             && $conversazione->tenant_id === $utente->tenant_id;
+    }
+
+    /**
+     * La sessione corrente è di qualcuno nei panni di un altro?
+     *
+     * Legge la sessione e non l'utente, perché è l'unico posto in cui la
+     * differenza esiste: l'utente autenticato, durante un'impersonazione, è
+     * indistinguibile da quello vero.
+     */
+    private function staImpersonando(): bool
+    {
+        return app(Impersonator::class)->isImpersonating();
     }
 }
