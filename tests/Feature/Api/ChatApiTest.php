@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -205,6 +206,86 @@ class ChatApiTest extends TestCase
         $this->comeApp($this->estraneo)
             ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Mi intrometto'])
             ->assertNotFound();
+    }
+
+    /**
+     * 🚨 **Il titolare della palestra NON legge le chat dei suoi trainer.**
+     *
+     * È materiale coperto da riservatezza: infortuni, disturbi alimentari,
+     * gravidanze, umore. Non è materiale che il titolare abbia titolo di
+     * leggere, e **sapere che potrebbe** basta a far smettere le persone di
+     * scrivere le cose che contano — cioè a rendere la chat inutile per quello
+     * per cui esiste.
+     *
+     * Il `gym_admin` è il caso più insidioso perché ha il permesso su tutto il
+     * resto della palestra: qui deve fermarsi.
+     */
+    #[Test]
+    public function the_gym_owner_cannot_read_the_chats_of_their_trainers(): void
+    {
+        $titolare = $this->creaUtente($this->alfa, UserRole::GymAdmin, 'titolare@alfa.test');
+
+        $c = $this->conversazione();
+
+        $this->comeApp($this->iscritto)
+            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ho un problema al ginocchio']);
+
+        // Non compare nel suo elenco…
+        $elenco = $this->comeApp($titolare)->getJson('/api/v1/conversations')->assertOk();
+        $this->assertSame([], $elenco->json('data'));
+
+        // …e nemmeno andando dritti sull'id.
+        $this->comeApp($titolare)
+            ->getJson("/api/v1/conversations/{$c->id}/messages")
+            ->assertNotFound();
+
+        // E non ci può nemmeno scrivere dentro.
+        $this->comeApp($titolare)
+            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ci sono anch\'io'])
+            ->assertNotFound();
+
+        $this->comeApp($titolare)
+            ->postJson("/api/v1/conversations/{$c->id}/read")
+            ->assertNotFound();
+    }
+
+    /**
+     * 🚨 Nemmeno il super admin, ed è l'unica policy senza la sua scorciatoia.
+     *
+     * Ha già una via legittima e **tracciata** per entrare nei dati di un
+     * cliente — l'impersonazione, che scrive chi–chi–quando in `audit_logs`. Una
+     * scorciatoia qui sarebbe un accesso **non tracciato** allo stesso materiale,
+     * e renderebbe quella traccia una formalità aggirabile.
+     */
+    #[Test]
+    public function not_even_the_super_admin_reads_a_conversation(): void
+    {
+        $god = $this->creaSuperAdmin();
+
+        $c = $this->conversazione();
+
+        $this->assertFalse(
+            Gate::forUser($god)->allows('view', $c),
+            'Il super admin può leggere una chat senza lasciare traccia: '
+            .'l\'impersonazione tracciata diventerebbe una formalità aggirabile.',
+        );
+    }
+
+    /** La regola vale anche per l'altro trainer, che è il caso già coperto. */
+    #[Test]
+    public function the_policy_only_lets_the_two_participants_through(): void
+    {
+        $c = $this->conversazione();
+
+        $this->assertTrue(Gate::forUser($this->trainer)->allows('view', $c));
+        $this->assertTrue(Gate::forUser($this->iscritto)->allows('view', $c));
+
+        $this->assertFalse(Gate::forUser($this->altroTrainer)->allows('view', $c));
+        $this->assertFalse(Gate::forUser($this->estraneo)->allows('view', $c));
+
+        // E nessuno la cancella: appartiene a due persone, e cancellarla
+        // sarebbe anche il modo per far sparire una richiesta scomoda.
+        $this->assertFalse(Gate::forUser($this->trainer)->allows('delete', $c));
     }
 
     #[Test]

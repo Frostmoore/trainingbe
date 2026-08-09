@@ -11,6 +11,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * La chat vista dall'app — B8.4.
@@ -172,14 +173,33 @@ class ConversationController extends Controller
     }
 
     /**
-     * 🚨 `forUser()` e non `find()`: il global scope limita alla palestra, ma
-     * dentro una palestra ci sono decine di conversazioni altrui.
+     * La conversazione, solo se chi chiede ci sta dentro.
+     *
+     * 🚨 **Due serrature, e servono per motivi diversi.**
+     *
+     * `forUser()` e non `find()`: il global scope limita alla palestra, ma dentro
+     * una palestra ci sono decine di conversazioni altrui — comprese quelle dei
+     * colleghi e quelle del titolare. Restituendo `null` si risponde 404, che
+     * non distingue «non esiste» da «non è tua»: distinguerli direbbe a chi
+     * prova gli id quali esistono.
+     *
+     * `ConversationPolicy` è la seconda: qui è ridondante **oggi**, e serve
+     * perché domani non lo sia. Se qualcuno cambiasse la query qui sopra — per
+     * aggiungere una funzione, per «far vedere anche al gym_admin» — la policy
+     * resterebbe a dire di no. Quello che le persone si scrivono in chat non
+     * deve dipendere da una sola riga di codice.
      */
     private function conversazioneDi(Request $request, int $id): ?Conversation
     {
-        return Conversation::query()
+        $conversazione = Conversation::query()
             ->forUser($request->user())
             ->find($id);
+
+        if ($conversazione === null) {
+            return null;
+        }
+
+        return Gate::allows('view', $conversazione) ? $conversazione : null;
     }
 
     private function nonTrovata(): JsonResponse

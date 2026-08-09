@@ -32,8 +32,11 @@
                         @endif
                     </button>
                 @empty
+                    {{-- Al titolare che non partecipa a nessun filo si dice *perché*
+                         non vede niente: altrimenti sembra un guasto, e il primo
+                         pensiero è chiedere di «sistemarlo». --}}
                     <p class="text-sm text-gray-500">
-                        Nessuna conversazione. Le apre l'iscritto dall'app, oppure tu dalla sua scheda.
+                        {{ $this->spiegazioneVuoto }}
                     </p>
                 @endforelse
             </x-filament::section>

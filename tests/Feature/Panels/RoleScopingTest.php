@@ -260,6 +260,51 @@ class RoleScopingTest extends TestCase
         $this->assertSame(3, $modello->exercises()->first()->sets);
     }
 
+    // ───────────────────────── chat ─────────────────────────
+
+    /**
+     * 🚨 **Il titolare apre la pagina dei messaggi e non vede le chat dei suoi
+     * trainer.**
+     *
+     * È materiale coperto da riservatezza. Il `gym_admin` è il caso più
+     * insidioso perché ha il permesso su tutto il resto della palestra: qui deve
+     * fermarsi, e la pagina glielo dice invece di sembrare rotta.
+     */
+    #[Test]
+    public function the_gym_owner_sees_no_conversation_in_the_panel(): void
+    {
+        $conversazione = $this->ctx()->runAs($this->alfa,
+            fn () => \App\Models\Conversation::between($this->trainerA, $this->mioIscritto));
+
+        $this->ctx()->runAs($this->alfa, fn () => $conversazione->messages()->create([
+            'sender_id' => $this->mioIscritto->id,
+            'body' => 'Ho un problema al ginocchio',
+        ]));
+
+        $this->entraCome($this->admin);
+
+        $pagina = Livewire::test(\App\Filament\Gym\Pages\Chat::class);
+
+        $this->assertCount(
+            0,
+            $pagina->get('conversations'),
+            'Il titolare vede le conversazioni fra i suoi trainer e i loro iscritti.',
+        );
+
+        // E nemmeno forzando l'id nel componente.
+        $pagina->set('conversationId', $conversazione->id);
+
+        $this->assertNull(
+            $pagina->get('active'),
+            'Forzando l\'id, il titolare arriva comunque al filo.',
+        );
+
+        // Il trainer che ci sta dentro, invece, la vede.
+        $this->entraCome($this->trainerA);
+
+        $this->assertCount(1, Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('conversations'));
+    }
+
     // ───────────────────────── impostazioni ─────────────────────────
 
     #[Test]
