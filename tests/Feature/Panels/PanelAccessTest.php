@@ -6,6 +6,7 @@ namespace Tests\Feature\Panels;
 
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Filament\Auth\Login;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Tenant;
 use App\Models\User;
@@ -14,6 +15,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -212,6 +214,81 @@ class PanelAccessTest extends TestCase
 
         $this->assertStringContainsString('/login', $destinazione);
         $this->assertFalse(Auth::check(), 'L\'iscritto è rimasto autenticato.');
+    }
+
+    /**
+     * Il login vero, attraverso Livewire.
+     *
+     * ⚠️ Serve **oltre** al test sulla risposta chiamata a mano, e non è un
+     * doppione: dentro Livewire `redirect()` restituisce un `Redirector` di
+     * Livewire invece di un `RedirectResponse`. Un tipo di ritorno stretto su
+     * `toResponse()` faceva esplodere il login con un `TypeError` **solo qui** —
+     * chiamando il metodo direttamente funzionava benissimo.
+     *
+     * Morale: il percorso reale va provato per intero, non a pezzi.
+     */
+    #[Test]
+    public function it_completes_a_real_login_through_livewire(): void
+    {
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $this->god->email, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(filament()->getPanel('god')->getUrl());
+
+        $this->assertTrue(Auth::check());
+    }
+
+    #[Test]
+    public function gym_staff_land_in_the_gym_panel_through_livewire(): void
+    {
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $this->gymAdmin->email, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(filament()->getPanel('admin')->getUrl());
+    }
+
+    #[Test]
+    public function members_are_told_to_use_the_app(): void
+    {
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $this->member->email, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertHasFormErrors(['email']);
+
+        $this->assertFalse(Auth::check());
+    }
+
+    /**
+     * L'indirizzo «richiesto prima» non deve scavalcare il pannello giusto.
+     *
+     * Il caso reale: uno arriva su `/admin`, viene rimbalzato al login, entra
+     * come super admin — e `intended()` lo riporta su `/admin`, dove un super
+     * admin non può entrare. Login riuscito e 403 in faccia.
+     */
+    #[Test]
+    public function it_ignores_an_intended_url_from_another_panel(): void
+    {
+        session(['url.intended' => url('/admin/qualcosa')]);
+
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $this->god->email, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertRedirect(filament()->getPanel('god')->getUrl());
+    }
+
+    /** Ma dentro il pannello giusto va onorato: si torna dove si voleva andare. */
+    #[Test]
+    public function it_honours_an_intended_url_inside_the_right_panel(): void
+    {
+        $destinazione = filament()->getPanel('admin')->getUrl().'/qualcosa';
+        session(['url.intended' => $destinazione]);
+
+        Livewire::test(Login::class)
+            ->fillForm(['email' => $this->gymAdmin->email, 'password' => self::FAKE_PASSWORD])
+            ->call('authenticate')
+            ->assertRedirect($destinazione);
     }
 
     // ───────────────────── accesso rapido di sviluppo ─────────────────────
