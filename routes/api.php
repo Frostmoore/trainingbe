@@ -103,6 +103,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
         Route::get('workout-plans/{plan}', [WorkoutPlanController::class, 'show'])->whereNumber('plan');
 
+        // C2 — l'iscritto si scrive le proprie schede (decisione D1). Quelle del
+        // trainer restano in sola lettura: la distinzione è in WorkoutPlanPolicy,
+        // e la risposta di `index` la riporta nel campo `editable`.
+        Route::post('workout-plans', [WorkoutPlanController::class, 'store']);
+        Route::put('workout-plans/{plan}', [WorkoutPlanController::class, 'update'])->whereNumber('plan');
+        Route::delete('workout-plans/{plan}', [WorkoutPlanController::class, 'destroy'])->whereNumber('plan');
+
         Route::get('workout-sessions', [WorkoutSessionController::class, 'index']);
         Route::post('workout-sessions', [WorkoutSessionController::class, 'store']);
         Route::get('workout-sessions/{session}', [WorkoutSessionController::class, 'show'])->whereNumber('session');
@@ -112,6 +119,11 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('workout-sessions/{session}', [WorkoutSessionController::class, 'destroy'])->whereNumber('session');
 
         Route::get('exercises', [ExerciseController::class, 'index']);
+
+        // C2.3 — l'esercizio che la libreria non ha. Nasce **della palestra**
+        // (D3): il vocabolario dev'essere comune, o lo storico di due iscritti
+        // non è confrontabile. 200 se esisteva già, 201 solo se è nato adesso.
+        Route::post('exercises', [ExerciseController::class, 'store']);
 
         Route::get('body-metrics', [BodyMetricController::class, 'index']);
         Route::post('body-metrics', [BodyMetricController::class, 'store']);

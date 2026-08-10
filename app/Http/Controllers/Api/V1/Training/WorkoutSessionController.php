@@ -9,6 +9,7 @@ use App\Models\Exercise;
 use App\Models\SessionSet;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
+use App\Services\Training\ExerciseMatcher;
 use App\Services\Training\WorkoutCalorieService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,7 @@ class WorkoutSessionController extends Controller
 {
     public function __construct(
         private readonly WorkoutCalorieService $calorie,
+        private readonly ExerciseMatcher $matcher,
     ) {}
 
     // ───────────────────────── elenco ─────────────────────────
@@ -121,7 +123,16 @@ class WorkoutSessionController extends Controller
         }
 
         $dati = $request->validate([
-            'exercise_id' => ['required', 'integer'],
+            // 🚨 O l'id, o il nome — C2.4.
+            //
+            // In sala capita di continuo che la scheda non corrisponda alla
+            // realta': una macchina occupata, un esercizio sostituito al volo.
+            // Il player dell'app storica permette di scrivere un nome nuovo e
+            // l'esercizio nasce da solo; costringere a un id significherebbe
+            // farsi creare prima l'esercizio in una seconda richiesta, che puo'
+            // fallire lasciando la serie non registrata.
+            'exercise_id' => ['required_without:exercise_name', 'integer'],
+            'exercise_name' => ['required_without:exercise_id', 'string', 'min:2', 'max:160'],
             'set_number' => ['required', 'integer', 'min:1', 'max:99'],
             'reps' => ['nullable', 'integer', 'min:0', 'max:999'],
             'weight' => ['nullable', 'numeric', 'min:0', 'max:999'],
@@ -129,16 +140,26 @@ class WorkoutSessionController extends Controller
             'rest_sec' => ['nullable', 'integer', 'min:0', 'max:3600'],
         ]);
 
-        // L'esercizio dev'essere visibile a questa palestra: lo scope
-        // «tenant o globale» lo garantisce.
-        if (Exercise::find($dati['exercise_id']) === null) {
-            return response()->json(['message' => __('Esercizio non trovato.')], 422);
+        if (isset($dati['exercise_id'])) {
+            // L'esercizio dev'essere visibile a questa palestra: lo scope
+            // «tenant o globale» lo garantisce.
+            if (Exercise::find($dati['exercise_id']) === null) {
+                return response()->json(['message' => __('Esercizio non trovato.')], 422);
+            }
+
+            $esercizioId = (int) $dati['exercise_id'];
+        } else {
+            // Il nome si riconcilia con la libreria prima di creare: «panca
+            // piana bilanciere» è la «panca piana» che la palestra ha già.
+            $esercizioId = $this->matcher
+                ->match($dati['exercise_name'], $request->user()->tenant_id, $request->user())
+                ->getKey();
         }
 
         $serie = SessionSet::updateOrCreate(
             [
                 'workout_session_id' => $s->id,
-                'exercise_id' => $dati['exercise_id'],
+                'exercise_id' => $esercizioId,
                 'set_number' => $dati['set_number'],
             ],
             [
