@@ -235,6 +235,9 @@ class SocialAuthController extends Controller
                     // una password vuota da nessun percorso, nemmeno futuro. Chi
                     // vorra' anche la password usera' il recupero.
                     'password' => Str::password(32),
+                    // 🚨 Falso: questa password non la conosce nessuno, ed e'
+                    // apposta. L'app non deve proporgli di cambiarla.
+                    'password_is_set' => false,
                     'locale' => $tenant->locale,
                 ]);
 

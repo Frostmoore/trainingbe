@@ -136,6 +136,12 @@ Route::prefix('v1')->group(function (): void {
         Route::get('account/deletion-preview', [AccountController::class, 'preview']);
         Route::delete('account', [AccountController::class, 'destroy']);
 
+        // G8 — email e password si cambiano dall'app. Entrambe chiedono la
+        // password attuale: un telefono lasciato sbloccato non deve bastare a
+        // spostare l'account su un indirizzo altrui.
+        Route::patch('account/email', [AccountController::class, 'updateEmail']);
+        Route::patch('account/password', [AccountController::class, 'updatePassword']);
+
         // ── Allenamento (B4.5) ───────────────────────────────────────────
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
         Route::get('workout-plans/{plan}', [WorkoutPlanController::class, 'show'])->whereNumber('plan');

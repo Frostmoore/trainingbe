@@ -87,6 +87,16 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'is_super_admin' => 'boolean',
 
             /*
+             * G8 — se questa persona ha una password che conosce.
+             *
+             * Chi entra con Google o Apple ne riceve comunque una, casuale:
+             * guardare la colonna `password` non dice niente. Serve a non
+             * proporgli un modulo che chiede «la password attuale» — che non
+             * ha mai saputo.
+             */
+            'password_is_set' => 'boolean',
+
+            /*
              * Il tetto AI **di questa persona** — C20.
              *
              * ⚠️ Volutamente **fuori da `$fillable`**: e' una concessione, e le
@@ -208,6 +218,12 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->belongsToMany(self::class, 'trainer_member', 'trainer_id', 'member_id')
             ->withPivot(['tenant_id', 'assigned_at', 'assigned_by'])
             ->withTimestamps();
+    }
+
+    /** Gli account esterni collegati — C17/G8. */
+    public function socialIdentities(): HasMany
+    {
+        return $this->hasMany(SocialIdentity::class);
     }
 
     /** Le schede assegnate a questa persona (non i modelli della palestra). */

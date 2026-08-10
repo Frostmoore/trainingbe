@@ -28,6 +28,18 @@ enum AuditAction: string
     case WorkoutPlanPublished = 'workout_plan.published';
     case NutritionPlanPublished = 'nutrition_plan.published';
 
+    /*
+     * G8 — email e password cambiate dall'interessato.
+     *
+     * 🚨 Un cambio di email è il passo che precede quasi ogni presa di
+     * controllo di un account: chi ci riesce si sposta l'indirizzo e poi usa il
+     * recupero password. Senza una riga qui, il giorno che qualcuno contesta
+     * «non sono stato io» non c'è modo di dire quando è successo né da quale
+     * indirizzo si veniva.
+     */
+    case EmailChanged = 'user.email_changed';
+    case PasswordChanged = 'user.password_changed';
+
     public function label(): string
     {
         return match ($this) {
@@ -41,6 +53,8 @@ enum AuditAction: string
             self::JoinCodeRegenerated => 'Codice d\'invito rigenerato',
             self::WorkoutPlanPublished => 'Scheda pubblicata',
             self::NutritionPlanPublished => 'Piano alimentare pubblicato',
+            self::EmailChanged => 'Email modificata',
+            self::PasswordChanged => 'Password modificata',
         };
     }
 

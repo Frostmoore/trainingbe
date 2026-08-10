@@ -7,10 +7,15 @@ namespace App\Http\Controllers\Api\V1;
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Services\Account\AccountEraser;
+use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * L'eliminazione del proprio account — C6.
@@ -87,5 +92,112 @@ class AccountController extends Controller
         $this->eraser->erase($utente);
 
         return response()->json(null, 204);
+    }
+
+    // ───────────────────────── email e password (G8) ─────────────────────────
+
+    /**
+     * Cambiare la propria email.
+     *
+     * 🚨 **Serve la password attuale.** Un telefono lasciato sbloccato sulla
+     * panca dello spogliatoio basterebbe altrimenti a spostare l'account su un
+     * indirizzo che non e' il tuo — e da li', con un recupero password, a
+     * prenderselo. E' la stessa ragione per cui la chiede l'eliminazione.
+     *
+     * ⚠️ **L'unicita' e' per palestra**, non globale: lo stesso indirizzo puo'
+     * appartenere a due persone in due palestre diverse, ed e' una situazione
+     * prevista. Una `unique` senza il vincolo sul tenant rifiuterebbe un'email
+     * perche' usata da qualcun altro **altrove**, e chi la subisce non avrebbe
+     * modo di capire perche'.
+     */
+    public function updateEmail(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        $dati = $request->validate([
+            'email' => [
+                'required', 'string', 'email', 'max:255',
+                Rule::unique('users', 'email')
+                    ->where('tenant_id', $utente->tenant_id)
+                    ->ignore($utente->getKey())
+                    ->whereNull('deleted_at'),
+            ],
+            'current_password' => ['required', 'string'],
+        ]);
+
+        $this->assertPassword($utente, $dati['current_password']);
+
+        $vecchia = $utente->email;
+
+        $utente->forceFill(['email' => $dati['email']])->save();
+
+        // Un cambio di email e' il passo che precede quasi ogni presa di
+        // controllo di un account: va lasciata traccia di chi e quando.
+        $this->audit->log(AuditAction::EmailChanged, $utente, ['da' => $vecchia]);
+
+        return response()->json(['data' => ['email' => $utente->email]]);
+    }
+
+    /**
+     * Cambiare la propria password.
+     *
+     * 🚨 **Le altre sessioni si chiudono.** Chi cambia password spesso lo fa
+     * perche' teme che qualcuno sia entrato: lasciare attivi i token degli altri
+     * dispositivi vorrebbe dire non aver cambiato niente per chi e' gia' dentro.
+     * Il token della richiesta corrente resta, o ci si disconnetterebbe da soli
+     * premendo «salva».
+     */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        $dati = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ]);
+
+        $this->assertPassword($utente, $dati['current_password']);
+
+        $utente->forceFill([
+            'password' => $dati['password'],
+            'password_is_set' => true,
+        ])->save();
+
+        $corrente = $request->user()->currentAccessToken();
+
+        $utente->tokens()
+            ->when(
+                $corrente instanceof PersonalAccessToken,
+                fn ($q) => $q->whereKeyNot($corrente->getKey()),
+            )
+            ->delete();
+
+        $this->audit->log(AuditAction::PasswordChanged, $utente);
+
+        return response()->json([
+            'message' => __('Password aggiornata. Le altre sessioni sono state chiuse.'),
+        ]);
+    }
+
+    /**
+     * La password attuale dev'essere quella giusta.
+     *
+     * ⚠️ Per chi entra con Google o Apple non esiste una password che conosca
+     * (`password_is_set` e' falso): glielo si dice, invece di lasciarlo
+     * indovinare contro un hash casuale che non indovinera' mai.
+     */
+    private function assertPassword(User $utente, string $password): void
+    {
+        if (! $utente->password_is_set) {
+            throw ValidationException::withMessages([
+                'current_password' => __('Questo account accede con Google o Apple e non ha una password.'),
+            ]);
+        }
+
+        if (! Hash::check($password, (string) $utente->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => __('La password attuale non è corretta.'),
+            ]);
+        }
     }
 }

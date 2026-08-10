@@ -40,6 +40,17 @@ class UserResource extends JsonResource
             'phone' => $this->resource->phone,
             'avatar_url' => $this->resource->avatarUrl(),
             'locale' => $this->resource->locale,
+
+            /*
+             * G8 — cosa puo' cambiare da solo.
+             *
+             * ⚠️ `password_is_set` e' falso per chi e' entrato con Google o
+             * Apple: l'app non deve mostrargli «cambia password», perche' il
+             * modulo chiederebbe quella attuale e lui non l'ha mai avuta.
+             */
+            'password_is_set' => (bool) $this->resource->password_is_set,
+            'social' => $this->resource->socialIdentities
+                ->map(fn ($i): string => $i->provider->value)->values()->all(),
             'roles' => $this->resource->getRoleNames()->values()->all(),
             /*
              * C7.2 — il profilo c'è **sempre**, anche vuoto.
