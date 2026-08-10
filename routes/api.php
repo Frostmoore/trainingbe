@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
@@ -56,6 +57,20 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:auth-register');
 
         Route::post('login', [AuthController::class, 'login'])
+            ->middleware('throttle:auth-login');
+
+        /*
+         * Accesso con Google o Apple — C17.
+         *
+         * ⚠️ Sotto `auth-login` e non `auth-register`, anche quando crea un
+         * account: dal punto di vista di chi la usa e' un **accesso**, e la
+         * distinzione fra prima volta e volte successive la fa il server, non
+         * l'utente. Metterla sul limite della registrazione bloccherebbe al
+         * terzo tentativo chi sta solo riprovando ad entrare.
+         *
+         * ⏸️ Risponde **501** finche' `services.social.*.client_ids` e' vuoto.
+         */
+        Route::post('social', [SocialAuthController::class, 'store'])
             ->middleware('throttle:auth-login');
 
         // ── Autenticate, ma raggiungibili anche a palestra SOSPESA ───────

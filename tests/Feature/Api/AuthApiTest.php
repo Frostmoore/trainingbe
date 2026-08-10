@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -55,7 +56,7 @@ class AuthApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.name', 'Alfa')
             ->assertJsonPath('data.slug', 'alfa')
-            ->assertJsonStructure(['data' => ['name', 'slug', 'logo_url', 'colors', 'locale']]);
+            ->assertJsonStructure(['data' => ['name', 'slug', 'logo_url', 'colors', 'locale', 'social']]);
     }
 
     /**
@@ -70,9 +71,19 @@ class AuthApiTest extends TestCase
         $dati = $this->getJson('/api/v1/branding/lookup?code=ALFA2345')->json('data');
 
         $this->assertSame(
-            ['name', 'slug', 'logo_url', 'colors', 'locale'],
+            ['name', 'slug', 'logo_url', 'colors', 'locale', 'social'],
             array_keys($dati),
         );
+
+        // ⚠️ `social` dice **quali pulsanti disegnare**, non come sono
+        // configurati: nessun client id, nessuna chiave. Un identificativo di
+        // applicazione qui non sarebbe un segreto grave, ma sarebbe comunque
+        // informazione regalata a chiunque conosca un codice palestra.
+        $this->assertIsArray($dati['social']);
+
+        foreach ($dati['social'] as $fornitore) {
+            $this->assertContains($fornitore, ['google', 'apple']);
+        }
     }
 
     #[Test]
@@ -192,6 +203,79 @@ class AuthApiTest extends TestCase
 
         $this->assertFalse($u->is_super_admin);
         $this->assertSame($this->alfa->id, $u->tenant_id);
+    }
+
+    // ───────────────────────── la password ─────────────────────────
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function passwordRifiutate(): array
+    {
+        return [
+            'troppo corta' => ['Ab1cdef', 'meno di otto caratteri'],
+            'senza numeri' => ['soltantolettere', 'lettere e basta'],
+            'senza lettere' => ['12345678901', 'cifre e basta'],
+        ];
+    }
+
+    /**
+     * 🚨 Il floor lato server.
+     *
+     * L'indicatore dell'app e' una **guida**, non un controllo: si aggira
+     * spegnendo il telefono. Quello che tiene e' questo.
+     */
+    #[Test]
+    #[DataProvider('passwordRifiutate')]
+    public function it_refuses_a_password_below_the_floor(string $password, string $perche): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'join_code' => 'ALFA2345', 'name' => 'Debole', 'email' => 'debole@esempio.it',
+            'username' => 'debole',
+            'password' => $password, 'password_confirmation' => $password,
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->assertNull(
+            User::withoutGlobalScopes()->where('email', 'debole@esempio.it')->first(),
+            "L'utente non deve esistere: {$perche}.",
+        );
+    }
+
+    /**
+     * 🚨 Il controllo che l'app rendeva inutile mandando due volte lo stesso
+     * valore.
+     *
+     * `confirmed` esiste per intercettare un **errore di battitura**: se il
+     * client ricopia il primo campo, la regola non puo' fallire mai e resta
+     * una protezione solo sulla carta — finche' qualcuno si trova chiuso fuori
+     * dal proprio account il giorno dopo l'iscrizione.
+     */
+    #[Test]
+    public function it_refuses_a_mismatched_confirmation(): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'join_code' => 'ALFA2345', 'name' => 'Distratto', 'email' => 'distratto@esempio.it',
+            'username' => 'distratto',
+            'password' => self::FAKE_PASSWORD,
+            'password_confirmation' => self::FAKE_PASSWORD.'-diversa',
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->assertNull(
+            User::withoutGlobalScopes()->where('email', 'distratto@esempio.it')->first(),
+        );
+    }
+
+    /** Una password lunga e semplice passa: e' esattamente cio' che si consiglia. */
+    #[Test]
+    public function it_accepts_a_long_simple_passphrase(): void
+    {
+        $frase = 'cavallo divano lampada 7';
+
+        $this->postJson('/api/v1/auth/register', [
+            'join_code' => 'ALFA2345', 'name' => 'Saggia', 'email' => 'saggia@esempio.it',
+            'username' => 'saggia',
+            'password' => $frase, 'password_confirmation' => $frase,
+        ])->assertCreated();
     }
 
     #[Test]

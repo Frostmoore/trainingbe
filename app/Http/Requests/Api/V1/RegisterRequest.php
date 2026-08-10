@@ -59,7 +59,37 @@ class RegisterRequest extends FormRequest
                 'unique:users,username',
             ],
 
-            'password' => ['required', 'confirmed', Password::defaults()->min(8)],
+            /*
+             * La password.
+             *
+             * 🚨 **`confirmed` funziona solo se il client manda due campi
+             * diversi.** L'app li chiede davvero due volte: se ricopiasse il
+             * primo valore, questa regola non potrebbe fallire mai e il
+             * controllo esisterebbe senza proteggere da niente — cioe' dal caso
+             * per cui e' li', l'errore di battitura che chiude fuori dal proprio
+             * account il giorno dopo l'iscrizione.
+             *
+             * ⚠️ **Lettere e numeri, e basta.** Non si pretendono maiuscole e
+             * simboli: la composizione forzata produce «Password1!» in tutto il
+             * mondo, che e' esattamente cio' che gli attacchi provano per primo.
+             * La lunghezza e' la variabile che conta, ed e' li' che l'app spinge
+             * con i suoi consigli (NIST 800-63B, §5.1.1.2).
+             *
+             * `uncompromised()` — il confronto con le password trapelate — e'
+             * dietro `auth.password_hibp` e **spento di serie**: e' una chiamata
+             * di rete verso un servizio esterno nel percorso di iscrizione, e
+             * questo gira su un server condiviso con altri siti. Vale la pena
+             * accenderlo, ma dev'essere una decisione presa, non un effetto
+             * collaterale. Quando fallisce la chiamata, la regola lascia
+             * passare: non blocca mai nessuno per un problema di rete.
+             */
+            'password' => [
+                'required',
+                'confirmed',
+                config('auth.password_hibp', false)
+                    ? Password::min(8)->letters()->numbers()->uncompromised()
+                    : Password::min(8)->letters()->numbers(),
+            ],
             'phone' => ['nullable', 'string', 'max:32'],
 
             // Etichetta del dispositivo, mostrata poi in /devices perché

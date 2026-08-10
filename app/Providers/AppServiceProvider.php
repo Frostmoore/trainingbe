@@ -31,6 +31,20 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TenantContext::class);
 
         /**
+         * La verifica dei token social — C17.
+         *
+         * Legato al contratto e non alla classe concreta perche' i test lo
+         * sostituiscono con un doppio: un test che deve produrre un token
+         * firmato da Google per provare la **logica di collegamento** starebbe
+         * provando la crittografia invece del proprio codice. La verifica vera
+         * ha un test suo, che parte da una chiave generata al volo.
+         */
+        $this->app->bind(
+            \App\Services\Auth\Social\SocialTokenVerifier::class,
+            \App\Services\Auth\Social\JwksSocialTokenVerifier::class,
+        );
+
+        /**
          * 🚨 Singleton, e non e' un'ottimizzazione.
          *
          * `AiManager` tiene il registro dei fornitori (`extend()`) e le istanze

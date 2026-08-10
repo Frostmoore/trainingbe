@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\SocialProvider;
 use App\Enums\TenantStatus;
 use App\Services\Ai\Quota\TenantAiQuota;
+use App\Services\Auth\Social\SocialTokenVerifier;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -108,6 +110,29 @@ class Tenant extends Model
                 'accent' => $this->color_accent,
             ],
             'locale' => $this->locale,
+
+            /*
+             * Con quali fornitori esterni si puo' accedere — C17.
+             *
+             * 🚨 **Lo decide il server, non l'app.** Un pulsante «Accedi con
+             * Apple» che risponde sempre errore fa sembrare rotta tutta
+             * l'applicazione, non solo quel pulsante: finche' mancano le
+             * credenziali in `services.social.*.client_ids`, l'elenco e' vuoto e
+             * l'app non disegna niente.
+             *
+             * ⚠️ Sta nel branding e non in un endpoint suo perche' l'app lo
+             * chiama gia' **prima** della schermata d'accesso, per vestirsi dei
+             * colori: una seconda richiesta per sapere quali pulsanti mostrare
+             * aggiungerebbe un'attesa a ogni avvio.
+             */
+            'social' => array_values(array_filter(
+                array_map(
+                    static fn (SocialProvider $p): ?string => app(SocialTokenVerifier::class)->configured($p)
+                        ? $p->value
+                        : null,
+                    SocialProvider::cases(),
+                ),
+            )),
         ];
     }
 

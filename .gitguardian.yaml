@@ -22,5 +22,8 @@ secret:
 
   ignored-matches:
     # La costante condivisa dai test (tests/TestCase.php).
+    #
+    # ⚠️ Deve restare uguale al valore di `TestCase::FAKE_PASSWORD`. La cifra in
+    # fondo c'è perché da v4.9.0 la registrazione pretende lettere e numeri.
     - name: password finta dei test
-      match: not-a-secret-test-value
+      match: not-a-secret-test-value-7
