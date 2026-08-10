@@ -11,9 +11,11 @@ use App\Http\Controllers\Api\V1\Health\HealthIngestController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Training\CalendarController;
 use App\Http\Controllers\Api\V1\Training\BodyMetricController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\PhotoController;
+use App\Http\Controllers\Api\V1\Training\SeriesController;
 use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
 use App\Http\Controllers\Api\V1\Training\WorkoutSessionController;
 use Illuminate\Http\Request;
@@ -127,6 +129,17 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('body-metrics', [BodyMetricController::class, 'index']);
         Route::post('body-metrics', [BodyMetricController::class, 'store']);
+
+        // C3 — le serie per i grafici. Un endpoint solo, stessa forma di
+        // risposta per entrambe le metriche: l'app ha un parser unico.
+        Route::get('series', [SeriesController::class, 'index']);
+
+        // C4 — il calendario. Mese e settimana restituiscono la stessa forma di
+        // celle: l'app disegna due layout, non due modelli di dati.
+        Route::get('calendar', [CalendarController::class, 'month']);
+        Route::get('calendar/week', [CalendarController::class, 'week']);
+        Route::get('calendar/{date}', [CalendarController::class, 'day'])
+            ->where('date', '\d{4}-\d{2}-\d{2}');
 
         // Le foto NON si servono da un URL pubblico: `file` controlla di chi
         // sono prima di consegnarle. Vedi PhotoController.

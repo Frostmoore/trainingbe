@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,6 +39,18 @@ class DailyBurn extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Il secondo filtro, oltre a quello per palestra.
+     *
+     * ⚠️ Aggiunto in C3 perché era l'unico modello personale a non averlo, e
+     * l'assenza costringe chi scrive una query nuova a mettere il `where` a
+     * mano — che è esattamente il momento in cui ci si dimentica.
+     */
+    public function scopeForUser(Builder $query, User|int $user): Builder
+    {
+        return $query->where('user_id', $user instanceof User ? $user->getKey() : $user);
     }
 
     /** Scrive o aggiorna il valore del giorno. */
