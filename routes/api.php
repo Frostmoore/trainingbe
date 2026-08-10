@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Health\HealthIngestController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -99,6 +100,14 @@ Route::prefix('v1')->group(function (): void {
         // È una PATCH perché l'app salva un campo alla volta mentre la persona
         // compila: una PUT costringerebbe a rimandare tutto ogni volta, e il
         // primo campo dimenticato azzererebbe gli altri.
+        // ── La schermata principale (D4) ─────────────────────────────────
+        //
+        // Una chiamata sola per calorie, allenamenti, peso, sonno e parametri:
+        // con sei richieste separate basta che una sia lenta perché la
+        // schermata compaia a pezzi. Il consiglio del giorno resta a parte
+        // (`/ai/advice`) perché è l'unico che può costare una chiamata AI.
+        Route::get('dashboard', [DashboardController::class, 'index']);
+
         Route::get('profile', [ProfileController::class, 'show']);
         Route::patch('profile', [ProfileController::class, 'update']);
 

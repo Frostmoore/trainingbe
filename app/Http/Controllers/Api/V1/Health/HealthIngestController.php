@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Health;
 
+use App\Enums\HealthMetric;
 use App\Enums\SleepStage;
 use App\Http\Controllers\Controller;
+use App\Models\HealthReading;
 use App\Models\HealthSample;
 use App\Models\User;
 use App\Services\Health\SleepAnalyzer;
@@ -13,6 +15,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 
 /**
  * L'ingest dei dati dell'orologio — B9.1.
@@ -51,10 +54,27 @@ class HealthIngestController extends Controller
         $dati = $request->validate([
             'token' => ['required', 'string', 'size:64'],
             'source' => ['nullable', 'string', 'max:32'],
-            'samples' => ['required', 'array', 'min:1', 'max:2000'],
+
+            /*
+             * ⚠️ `samples` non è più obbligatorio, ma **almeno uno dei due** sì.
+             *
+             * Il ponte sul telefono manda già `samples` (il sonno) e continuerà
+             * a farlo: renderlo facoltativo permette a una versione futura di
+             * mandare solo le misure senza che le vecchie smettano di
+             * funzionare. `required_without` copre il caso in cui non arrivi
+             * niente, che altrimenti risponderebbe 201 «accettati: 0» — un
+             * successo che non ha accettato nulla.
+             */
+            'samples' => ['nullable', 'array', 'max:2000', 'required_without:readings'],
             'samples.*.start' => ['required', 'date'],
             'samples.*.end' => ['required', 'date'],
             'samples.*.stage' => ['required', 'integer', 'min:0', 'max:20'],
+
+            // ── D3: HRV e battito ─────────────────────────────────────────
+            'readings' => ['nullable', 'array', 'max:2000', 'required_without:samples'],
+            'readings.*.metric' => ['required', Rule::enum(HealthMetric::class)],
+            'readings.*.measured_at' => ['required', 'date'],
+            'readings.*.value' => ['required', 'numeric'],
         ]);
 
         $utente = User::withoutGlobalScopes()
@@ -77,9 +97,50 @@ class HealthIngestController extends Controller
         $fuso = config('app.timezone');
         $sorgente = $dati['source'] ?? 'health_connect';
         $scritti = 0;
+        $misure = 0;
+        $scartate = 0;
 
-        $this->tenants->runAs($palestra, function () use ($dati, $utente, $fuso, $sorgente, &$scritti): void {
-            foreach ($dati['samples'] as $campione) {
+        $this->tenants->runAs($palestra, function () use ($dati, $utente, $fuso, $sorgente, &$scritti, &$misure, &$scartate): void {
+            foreach ($dati['readings'] ?? [] as $lettura) {
+                $metrica = HealthMetric::from((string) $lettura['metric']);
+                $valore = (float) $lettura['value'];
+
+                /*
+                 * 🚨 I valori assurdi si scartano **all'ingresso**, e si contano.
+                 *
+                 * Un HRV di 900 ms o un battito di 300 non sono dati: sono un
+                 * sensore che ha sbagliato. Se entrassero sposterebbero la media
+                 * della persona, e da quel momento **ogni** scostamento
+                 * calcolato su di essa sarebbe falso senza che niente lo
+                 * segnali. Si contano invece di ignorarli in silenzio: chi manda
+                 * i dati deve poter vedere che qualcosa non torna.
+                 */
+                if (! $metrica->isPlausible($valore)) {
+                    $scartate++;
+
+                    continue;
+                }
+
+                $quando = Carbon::parse($lettura['measured_at'])->setTimezone($fuso);
+
+                HealthReading::updateOrCreate(
+                    [
+                        'user_id' => $utente->getKey(),
+                        'source' => $sorgente,
+                        'metric' => $metrica->value,
+                        'measured_at' => $quando,
+                    ],
+                    [
+                        'tenant_id' => $utente->tenant_id,
+                        'day' => $quando->toDateString(),
+                        'value' => $valore,
+                    ],
+                );
+
+                $misure++;
+            }
+
+            foreach ($dati['samples'] ?? [] as $campione) {
                 // 🚨 Conversione esplicita: vedi la nota di classe.
                 $inizio = Carbon::parse($campione['start'])->setTimezone($fuso);
                 $fine = Carbon::parse($campione['end'])->setTimezone($fuso);
@@ -106,7 +167,13 @@ class HealthIngestController extends Controller
             }
         });
 
-        return response()->json(['data' => ['accepted' => $scritti]], 201);
+        return response()->json(['data' => [
+            'accepted' => $scritti,
+            'readings_accepted' => $misure,
+            // Chi manda i dati deve vedere che qualcosa è stato buttato: uno
+            // scarto silenzioso è indistinguibile da un dato mai inviato.
+            'readings_discarded' => $scartate,
+        ]], 201);
     }
 
     /** Il riepilogo di una notte, per l'app dell'iscritto. */

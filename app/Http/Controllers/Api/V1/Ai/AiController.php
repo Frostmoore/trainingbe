@@ -14,6 +14,7 @@ use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Quota\TenantAiQuota;
+use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +40,7 @@ class AiController extends Controller
         private readonly TenantAiQuota $quota,
         private readonly TenantContext $tenants,
         private readonly DiaryService $diary,
+        private readonly DashboardService $dashboard,
     ) {}
 
     // ───────────────────────── cibo ─────────────────────────
@@ -245,12 +247,38 @@ class AiController extends Controller
     private function contestoConsiglio(Request $request): array
     {
         $utente = $request->user();
-        $oggi = Carbon::today();
+        $adesso = Carbon::now();
+        $oggi = $adesso->copy()->startOfDay();
 
         $giornata = $this->diary->forDate($utente, $oggi);
+        $riepilogo = $this->dashboard->forToday($utente, $adesso);
 
         return [
             'date' => $oggi->toDateString(),
+
+            /*
+             * 🚨 **L'ORA È PARTE DEL CONTESTO, non un dettaglio.**
+             *
+             * 3.000 kcal alle dieci del mattino e 3.000 a fine giornata sono
+             * due situazioni opposte: la prima è una giornata che sta per
+             * andare fuori controllo e su cui si può ancora intervenire, la
+             * seconda è una giornata chiusa su cui l'unico consiglio sensato
+             * riguarda domani. Senza l'ora il modello dà lo stesso consiglio in
+             * entrambi i casi, e in uno dei due è **sbagliato** — non generico:
+             * sbagliato.
+             *
+             * `day_progress_pct` è la quota di giornata sveglia già passata
+             * (dalle 6 alle 23), che è il riferimento giusto per confrontare le
+             * calorie assunte con il target.
+             *
+             * ⚠️ Cambia durante il giorno, quindi entra nell'hash del contesto
+             * e il consiglio si rigenera. È voluto: un consiglio del mattino
+             * ripetuto la sera sarebbe fuori tempo. Il costo è contenuto dalla
+             * quota di palestra.
+             */
+            'time' => $adesso->format('H:i'),
+            'day_progress_pct' => $riepilogo['day_progress_pct'],
+
             'totals' => $giornata['totals'],
             'targets' => $giornata['targets'],
             'burned' => $giornata['burned'],
@@ -259,6 +287,23 @@ class AiController extends Controller
                 static fn (array $m): bool => $m['entries'] !== [],
             )),
             'goal' => $utente->profile?->goalForFormula(),
+
+            // ── D4: il resto della persona ────────────────────────────────
+            //
+            // Sonno, recupero e allenamento cambiano il consiglio: dopo una
+            // notte da quattro ore con l'HRV sotto la media, «spingi» è un
+            // cattivo consiglio anche se le calorie tornano.
+            'sleep' => $riepilogo['sleep'],
+            'vitals' => array_filter(
+                $riepilogo['vitals'],
+                static fn (mixed $v, string $k): bool => $k !== 'has_any' && $v !== null,
+                ARRAY_FILTER_USE_BOTH,
+            ),
+            'training' => [
+                'last_30_days' => $riepilogo['training']['last_30_days'],
+                'days_since_last' => $riepilogo['training']['days_since_last'],
+            ],
+            'body' => $riepilogo['body'],
         ];
     }
 }
