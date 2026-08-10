@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Chat;
 
+use App\Enums\UserRole;
 use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
@@ -59,6 +60,47 @@ class ConversationController extends Controller
                     'unread' => $c->unreadFor($utente),
                 ];
             })->all(),
+        ]);
+    }
+
+    /**
+     * A chi posso scrivere — C22.
+     *
+     * 🚨 **Senza questo, «scrivi al tuo trainer» era impossibile dall'app.**
+     * `POST /conversations` vuole un `user_id`, ma l'app non aveva nessun modo
+     * di sapere **quale**: l'elenco delle conversazioni mostra solo quelle che
+     * esistono gia', e chi non ne aveva nessuna vedeva una schermata vuota
+     * senza vie d'uscita — una chat in cui non si puo' cominciare a parlare.
+     *
+     * ⚠️ **Sono solo le persone collegate**, le stesse che `open()` accetta: i
+     * propri trainer per un iscritto, i propri assegnati per un trainer. Un
+     * elenco di tutta la palestra sarebbe, per un iscritto, la rubrica di tutti
+     * gli altri iscritti — cioe' esattamente cio' che `coppia()` impedisce.
+     */
+    public function contacts(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        if (Gate::denies('create', Conversation::class)) {
+            return response()->json(['data' => []]);
+        }
+
+        // Le due direzioni del legame: un utente puo' essere entrambe le cose
+        // (un trainer che si allena ha a sua volta un trainer).
+        $persone = $utente->assignedTrainers()->get()
+            ->merge($utente->assignedMembers()->get())
+            ->unique('id')
+            ->values();
+
+        return response()->json([
+            'data' => $persone->map(fn (User $p): array => [
+                'id' => $p->id,
+                'name' => $p->name,
+                'avatar_url' => $p->avatarUrl(),
+                // Serve all'app per dire «il tuo trainer» invece del solo nome:
+                // in una palestra si conosce il ruolo, non sempre il cognome.
+                'is_trainer' => $p->hasAppRole(UserRole::Trainer),
+            ])->all(),
         ]);
     }
 

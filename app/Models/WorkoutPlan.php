@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * Una scheda di allenamento.
@@ -21,16 +23,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * scheda di quella persona. Assegnare significa **copiare** il modello, non
  * puntarci: vedi `assignTo()`, dove c'e' scritto perche'.
  */
-class WorkoutPlan extends Model
+class WorkoutPlan extends Model implements HasMedia
 {
     use BelongsToTenant;
     use HasFactory;
+    use InteractsWithMedia;
     use SoftDeletes;
 
     protected $attributes = [
         'status' => 'draft',
         'source' => 'manual',
     ];
+
+    public const COLLECTION_IMMAGINE = 'image';
 
     protected $fillable = [
         'tenant_id', 'member_id', 'created_by', 'name', 'notes',
@@ -150,5 +155,27 @@ class WorkoutPlan extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('status', PlanStatus::Published->value);
+    }
+
+    // ───────────────────────── immagine ─────────────────────────
+
+    /**
+     * La copertina della scheda — C23.
+     *
+     * Stessa scelta di `Exercise::registerMediaCollections()`: URL pubblico,
+     * un file solo. Una scheda si riconosce prima dall'immagine che dal nome,
+     * e in un elenco di sei «Full body A/B/C» e' l'unica cosa che le
+     * distingue a colpo d'occhio.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::COLLECTION_IMMAGINE)
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->singleFile();
+    }
+
+    public function imageUrl(): ?string
+    {
+        return $this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null;
     }
 }

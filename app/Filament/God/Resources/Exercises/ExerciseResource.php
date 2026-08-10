@@ -21,6 +21,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -87,6 +88,18 @@ class ExerciseResource extends Resource
                         ->label('Nome')
                         ->required()
                         ->maxLength(160)
+                        ->columnSpanFull(),
+
+                    SpatieMediaLibraryFileUpload::make('immagine')
+                        ->label('Immagine')
+                        ->collection(Exercise::COLLECTION_IMMAGINE)
+                        ->image()
+                        ->imageEditor()
+                        ->maxSize(4096)
+                        ->helperText(
+                            'Compare accanto all\'esercizio nella scheda e durante l\'allenamento: '
+                            .'un\'immagine dice quale movimento è molto più in fretta di un nome.'
+                        )
                         ->columnSpanFull(),
 
                     Select::make('muscle_group')

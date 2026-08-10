@@ -221,6 +221,7 @@ Route::prefix('v1')->group(function (): void {
         // apre, e su rete mobile capita.
         Route::get('conversations', [ConversationController::class, 'index']);
         Route::post('conversations', [ConversationController::class, 'open']);
+        Route::get('conversations/contacts', [ConversationController::class, 'contacts']);
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/read', [ConversationController::class, 'read'])->whereNumber('conversation');

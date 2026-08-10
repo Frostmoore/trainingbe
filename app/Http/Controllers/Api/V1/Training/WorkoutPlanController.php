@@ -213,6 +213,10 @@ class WorkoutPlanController extends Controller
             'name' => $p->name,
             'notes' => $p->notes,
             'exercises_count' => $p->exercises->count(),
+
+            // C23 — la copertina. In un elenco di sei «Full body A/B/C» e' la
+            // sola cosa che le distingue a colpo d'occhio.
+            'image_url' => $p->imageUrl(),
             'starts_at' => $p->starts_at?->toDateString(),
             'ends_at' => $p->ends_at?->toDateString(),
             'published_at' => $p->published_at?->toIso8601String(),
@@ -251,6 +255,10 @@ class WorkoutPlanController extends Controller
                     'name' => $r->exercise?->name,
                     'muscle_group' => $r->exercise?->muscle_group?->value,
                     'equipment' => $r->exercise?->equipment,
+                    // C23 — la miniatura accanto all'esercizio, nella scheda e
+                    // nel player: durante l'allenamento un'immagine dice quale
+                    // movimento e' molto piu' in fretta di un nome.
+                    'image_url' => $r->exercise?->imageUrl(),
                 ],
                 'sets' => $r->sets,
                 'reps' => $r->reps,

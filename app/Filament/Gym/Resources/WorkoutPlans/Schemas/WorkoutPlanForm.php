@@ -14,6 +14,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,18 @@ class WorkoutPlanForm
                         ->label('Nome')
                         ->required()
                         ->maxLength(160)
+                        ->columnSpanFull(),
+
+                    SpatieMediaLibraryFileUpload::make('immagine')
+                        ->label('Immagine')
+                        ->collection(WorkoutPlan::COLLECTION_IMMAGINE)
+                        ->image()
+                        ->imageEditor()
+                        ->maxSize(4096)
+                        ->helperText(
+                            'La copertina della scheda. In un elenco di sei «Full body A/B/C» '
+                            .'è la sola cosa che le distingue a colpo d\'occhio.'
+                        )
                         ->columnSpanFull(),
 
                     Select::make('member_id')

@@ -47,6 +47,10 @@ class ExerciseController extends Controller
                 // «aggiunto dalla mia palestra», che e' l'unica differenza
                 // percepibile fra i due.
                 'is_global' => $e->isGlobal(),
+                // C23 — l'illustrazione, se la palestra o la piattaforma l'ha
+                // caricata. `null` quando non c'e': l'app disegna un segnaposto
+                // invece di una miniatura rotta.
+                'image_url' => $e->imageUrl(),
             ])->all(),
         ]);
     }

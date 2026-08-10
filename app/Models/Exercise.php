@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * Un esercizio: della piattaforma (`tenant_id` null) o di una palestra.
@@ -21,11 +23,14 @@ use Illuminate\Support\Str;
  * non e' il posto dove far rispettare i permessi di scrittura, perche' un
  * update non passa necessariamente da una select.
  */
-class Exercise extends Model
+class Exercise extends Model implements HasMedia
 {
     use BelongsToTenantOrGlobal;
     use HasFactory;
+    use InteractsWithMedia;
     use SoftDeletes;
+
+    public const COLLECTION_IMMAGINE = 'image';
 
     protected $attributes = [
         'is_custom' => false,
@@ -105,5 +110,32 @@ class Exercise extends Model
     public function metOrDefault(float $default): float
     {
         return $this->met !== null && $this->met > 0 ? (float) $this->met : $default;
+    }
+
+    // ───────────────────────── immagine ─────────────────────────
+
+    /**
+     * L'illustrazione dell'esercizio — C23.
+     *
+     * 🚨 **URL pubblico, a differenza delle foto dei progressi.** Quelle passano
+     * da un endpoint che controlla di chi sono, perche' sono dati personali.
+     * Questo e' il disegno di un bilanciere: farlo passare da un controllo di
+     * accesso vorrebbe dire un'intestazione a mano su ogni miniatura (come in
+     * `progressAuthHeaderProvider` lato app) e nessuna cache di rete, in cambio
+     * di niente.
+     *
+     * `singleFile()`: caricandone una nuova, la vecchia sparisce. Senza, ogni
+     * modifica lascerebbe dietro un file che non cancella piu' nessuno.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::COLLECTION_IMMAGINE)
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->singleFile();
+    }
+
+    public function imageUrl(): ?string
+    {
+        return $this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null;
     }
 }
