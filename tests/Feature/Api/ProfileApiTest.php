@@ -249,6 +249,33 @@ class ProfileApiTest extends TestCase
             ->assertJsonCount(6, 'data.meal_hours');
     }
 
+    /**
+     * 🚨 Trovato su staging il 2026-08-10, non da un test.
+     *
+     * Il seeder dimostrativo aveva scritto le chiavi in italiano
+     * (`colazione`/`pranzo`/`cena`): non corrispondendo a nessun `MealType` non
+     * avevano alcun effetto sul calcolo, ma `GET /profile` le restituiva lo
+     * stesso, e la risposta mostrava **nove** pasti invece di sei. In scrittura
+     * le scarta `UpdateProfileRequest`; mancava la stessa severita' in lettura.
+     */
+    #[Test]
+    public function junk_meal_hour_keys_already_in_the_column_are_not_returned(): void
+    {
+        Profile::create([
+            'tenant_id' => $this->alfa->id,
+            'user_id' => $this->iscritto->getKey(),
+            'meal_hours' => ['cena' => '20:00', 'dinner' => '19:00'],
+        ]);
+
+        $risposta = $this->comeApp($this->iscritto)
+            ->getJson('/api/v1/profile')
+            ->assertOk()
+            ->assertJsonCount(6, 'data.meal_hours')
+            ->assertJsonPath('data.meal_hours.dinner', '19:00');
+
+        $this->assertArrayNotHasKey('cena', $risposta->json('data.meal_hours'));
+    }
+
     // ───────────────────────── isolamento ─────────────────────────
 
     #[Test]

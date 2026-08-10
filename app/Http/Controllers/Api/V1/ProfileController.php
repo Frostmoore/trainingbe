@@ -90,7 +90,16 @@ class ProfileController extends Controller
             // Sempre i sei pasti, con i valori di serie dove l'utente non ha
             // scelto: cosi' l'app disegna il modulo senza dover conoscere i
             // default, che altrimenti finirebbero scritti anche in Dart.
-            'meal_hours' => array_merge(MealType::DEFAULT_HOURS, $profilo?->meal_hours ?? []),
+            //
+            // 🚨 **Sempre esattamente sei, mai di piu'.** In scrittura le chiavi
+            // sconosciute le scarta `UpdateProfileRequest`, ma nella colonna
+            // possono essercene di vecchie scritte da altrove — il seeder
+            // dimostrativo ne aveva tre in italiano, che non corrispondevano a
+            // nessun pasto e quindi non avevano alcun effetto, ma comparivano
+            // nella risposta facendo sembrare che i pasti fossero nove. Una
+            // lettura piu' permissiva della scrittura e' un modo per far vedere
+            // all'app dati che l'app non sa cosa siano.
+            'meal_hours' => $this->orariCompleti($profilo?->meal_hours),
 
             // Il peso non sta nel profilo: e' una serie storica (`body_metrics`),
             // e qui compare solo come ultimo valore noto, perche' senza non si
@@ -112,6 +121,25 @@ class ProfileController extends Controller
                 'goals' => Profile::GOALS,
             ],
         ];
+    }
+
+    /**
+     * I sei orari dei pasti: quelli scelti dall'utente sopra quelli di serie.
+     *
+     * Le chiavi che non sono un `MealType` si scartano — vedi la nota in
+     * `rappresenta()`.
+     *
+     * @param  array<string, string>|null  $scelti
+     * @return array<string, string>
+     */
+    private function orariCompleti(?array $scelti): array
+    {
+        $validi = array_intersect_key(
+            $scelti ?? [],
+            MealType::DEFAULT_HOURS,
+        );
+
+        return array_merge(MealType::DEFAULT_HOURS, $validi);
     }
 
     /**

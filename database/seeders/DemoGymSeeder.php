@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\MealType;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
 use App\Models\Profile;
@@ -73,7 +74,17 @@ class DemoGymSeeder extends Seeder
                         'activity_level' => $attivita,
                         'goal' => $obiettivo,
                         'target_weight_kg' => $peso,
-                        'meal_hours' => ['colazione' => '08:00', 'pranzo' => '13:00', 'cena' => '20:00'],
+                        // 🚨 Le chiavi sono i valori di `MealType`, non i nomi
+                        // italiani: erano `colazione`/`pranzo`/`cena` e non
+                        // corrispondevano a nessun pasto, quindi non avevano
+                        // alcun effetto — comparivano solo nella risposta di
+                        // `GET /profile`, facendo sembrare che ci fossero nove
+                        // pasti.
+                        'meal_hours' => [
+                            MealType::Breakfast->value => '08:00',
+                            MealType::Lunch->value => '13:00',
+                            MealType::Dinner->value => '20:00',
+                        ],
                     ]);
 
                     // Il trainer segue entrambi: serve a provare lo scoping
