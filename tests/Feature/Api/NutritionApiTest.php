@@ -117,6 +117,151 @@ class NutritionApiTest extends TestCase
             ->assertJsonValidationErrors('meal');
     }
 
+    // ───────────────── modifica con ricalcolo (C15) ─────────────────
+
+    /** Una voce con i valori per 100 g: è ciò che rende possibile il ricalcolo. */
+    private function voceConPer100(): FoodEntry
+    {
+        return $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => MealType::Lunch,
+            'description' => 'Petto di pollo',
+            'qty' => 100,
+            'unit' => 'g',
+            'grams' => 100,
+            'kcal' => 165,
+            'protein' => 31,
+            'carbs' => 0,
+            'fat' => 3.6,
+            'kcal_100' => 165,
+            'protein_100' => 31,
+            'carbs_100' => 0,
+            'fat_100' => 3.6,
+        ]));
+    }
+
+    /**
+     * 🚨 Cambiando la quantità i macro si aggiornano **da soli**, e li ricalcola
+     * il server.
+     *
+     * Se lo facesse l'app dovrebbe avere una seconda copia della tabella
+     * unità→grammi e dei valori per 100 g: il giorno che ne cambia una sola, il
+     * diario mostrerebbe un totale e il database ne conterrebbe un altro senza
+     * che niente lo segnali.
+     */
+    #[Test]
+    public function changing_the_quantity_rescales_the_macros(): void
+    {
+        $voce = $this->voceConPer100();
+
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 200])
+            ->assertOk()
+            ->assertJsonPath('data.grams', 200.0)
+            ->assertJsonPath('data.kcal', 330.0)
+            ->assertJsonPath('data.protein', 62.0);
+    }
+
+    /**
+     * ⚠️ I macro mandati **vincono sempre**: se l'utente li ha corretti a mano
+     * non si sovrascrivono con una stima.
+     */
+    #[Test]
+    public function macros_sent_by_hand_win_over_the_recalculation(): void
+    {
+        $voce = $this->voceConPer100();
+
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 200, 'kcal' => 300])
+            ->assertOk()
+            ->assertJsonPath('data.grams', 200.0)
+            ->assertJsonPath('data.kcal', 300.0)
+            // Gli altri, non mandati, si riscalano lo stesso.
+            ->assertJsonPath('data.protein', 62.0);
+    }
+
+    /**
+     * 🚨 Il fattore per unità viene **dalla voce**, non dalla tabella generica.
+     *
+     * Se l'AI ha detto che un cucchiaio di QUELL'olio pesa 14 g, raddoppiando
+     * devono venire 28 g — non i 30 della conversione generica, che non sa di
+     * che alimento si tratta.
+     */
+    #[Test]
+    public function the_food_aware_factor_survives_a_quantity_change(): void
+    {
+        $voce = $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => MealType::Lunch,
+            'description' => 'Olio di oliva',
+            'qty' => 1,
+            'unit' => 'cucchiaio',
+            'grams' => 14,
+            'kcal' => 126,
+            'kcal_100' => 900,
+        ]));
+
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 2])
+            ->assertOk()
+            ->assertJsonPath('data.grams', 28.0)
+            ->assertJsonPath('data.kcal', 252.0);
+    }
+
+    #[Test]
+    public function explicit_grams_win_over_any_conversion(): void
+    {
+        $voce = $this->voceConPer100();
+
+        // L'utente ha pesato la porzione: nessuna tabella sa più di una bilancia.
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 2, 'unit' => 'cucchiaio', 'grams' => 37])
+            ->assertOk()
+            ->assertJsonPath('data.grams', 37.0)
+            ->assertJsonPath('data.kcal', 61.05);
+    }
+
+    /**
+     * ⚠️ Senza valori per 100 g non si inventa niente: meglio un numero vecchio
+     * e visibile che uno nuovo e sbagliato.
+     */
+    #[Test]
+    public function without_per_100_values_the_macros_are_left_alone(): void
+    {
+        $voce = $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => MealType::Lunch,
+            'description' => 'Piatto misto',
+            'qty' => 1,
+            'unit' => 'g',
+            'grams' => 300,
+            'kcal' => 500,
+        ]));
+
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 2])
+            ->assertOk()
+            ->assertJsonPath('data.kcal', 500.0);
+    }
+
+    #[Test]
+    public function renaming_an_entry_does_not_touch_the_quantity(): void
+    {
+        $voce = $this->voceConPer100();
+
+        // Nessun campo di quantità nella richiesta: non deve scattare nessun
+        // ricalcolo, o rinominare una voce ne cambierebbe i numeri.
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['description' => 'Pollo alla griglia'])
+            ->assertOk()
+            ->assertJsonPath('data.description', 'Pollo alla griglia')
+            ->assertJsonPath('data.grams', 100.0)
+            ->assertJsonPath('data.kcal', 165.0);
+    }
+
     #[Test]
     public function a_member_cannot_touch_the_entries_of_another(): void
     {

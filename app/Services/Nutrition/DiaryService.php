@@ -158,6 +158,21 @@ class DiaryService
             'protein' => $v->protein,
             'carbs' => $v->carbs,
             'fat' => $v->fat,
+
+            /*
+             * I valori per 100 g. Servono all'app per **sapere** se cambiando
+             * la quantità i macro si aggiorneranno da soli: quando mancano —
+             * una voce scritta a mano senza riferimento — il modulo deve dirlo,
+             * invece di lasciar credere a un ricalcolo che non avverrà.
+             *
+             * ⚠️ Il ricalcolo lo fa comunque il server: questi numeri non sono
+             * lì perché l'app li usi per contare.
+             */
+            'kcal_100' => $v->kcal_100,
+            'protein_100' => $v->protein_100,
+            'carbs_100' => $v->carbs_100,
+            'fat_100' => $v->fat_100,
+
             'source' => $v->source->value,
         ];
     }
