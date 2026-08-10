@@ -14,7 +14,7 @@ use App\Models\User;
 use App\Services\Ai\AiUsageRecorder;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Exceptions\AiUnavailableException;
-use App\Services\Ai\Quota\TenantAiQuota;
+use App\Services\Ai\Quota\MemberAiQuota;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -214,11 +214,11 @@ class AiApiTest extends TestCase
      * rifiutando di concedere.
      */
     #[Test]
-    public function it_refuses_when_the_gym_ran_out_of_tokens(): void
+    public function it_refuses_when_the_member_ran_out_of_tokens(): void
     {
         $finta = $this->aiFinta();
 
-        $this->alfa->update(['ai_monthly_token_cap' => 1000]);
+        $this->alfa->update(['ai_monthly_tokens_per_member' => 1000]);
 
         // Prima chiamata: 620 token, sotto il tetto.
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
@@ -248,18 +248,69 @@ class AiApiTest extends TestCase
     #[Test]
     public function zero_means_unlimited_and_null_means_default(): void
     {
-        $quota = app(TenantAiQuota::class);
+        $quota = app(MemberAiQuota::class);
+        $iscritto = $this->iscritto->refresh();
 
-        $this->alfa->update(['ai_monthly_token_cap' => 0]);
-        $this->assertNull($quota->capFor($this->alfa->refresh()));
-        $this->assertNull($quota->remaining($this->alfa));
-        $this->assertNull($quota->usedPercent($this->alfa));
+        $this->alfa->update(['ai_monthly_tokens_per_member' => 0]);
+        $this->assertNull($quota->capFor($iscritto->refresh()));
+        $this->assertNull($quota->remaining($iscritto));
+        $this->assertNull($quota->usedPercent($iscritto));
 
-        $this->alfa->update(['ai_monthly_token_cap' => null]);
+        $this->alfa->update(['ai_monthly_tokens_per_member' => null]);
         $this->assertSame(
-            (int) config('ai.quota.default_monthly_tokens'),
-            $quota->capFor($this->alfa->refresh()),
+            (int) config('ai.quota.default_monthly_tokens_per_user'),
+            $quota->capFor($iscritto->refresh()),
         );
+    }
+
+    /**
+     * 🚨 **Il tetto della singola persona vince su quello della palestra.**
+     *
+     * E' cio' che permette di sbloccare qualcuno senza alzare il tetto a tutti:
+     * senza, l'unica leva sarebbe alzarlo per l'intera palestra, e il costo
+     * massimo del mese si moltiplicherebbe per il numero di iscritti.
+     */
+    #[Test]
+    public function a_members_own_cap_wins_over_the_gyms(): void
+    {
+        $quota = app(MemberAiQuota::class);
+
+        $this->alfa->update(['ai_monthly_tokens_per_member' => 5_000]);
+        $this->iscritto->forceFill(['ai_monthly_token_cap' => 50_000])->save();
+
+        $this->assertSame(50_000, $quota->capFor($this->iscritto->refresh()));
+
+        // E `0` sulla persona vale «illimitato», anche se la palestra ha un tetto.
+        $this->iscritto->forceFill(['ai_monthly_token_cap' => 0])->save();
+
+        $this->assertNull($quota->capFor($this->iscritto->refresh()));
+    }
+
+    /**
+     * 🚨 **Il consumo di uno non toglie niente agli altri.**
+     *
+     * E' il motivo per cui la quota e' passata da palestra a iscritto: con il
+     * pozzo comune, la quarta persona della palestra trovava le funzioni AI
+     * spente per il consumo delle prime tre.
+     */
+    #[Test]
+    public function one_member_burning_tokens_does_not_starve_another(): void
+    {
+        $this->aiFinta();
+
+        $this->alfa->update(['ai_monthly_tokens_per_member' => 1000]);
+
+        $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
+
+        // Il primo esaurisce il proprio tetto.
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertCreated();
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'banana'])->assertStatus(429);
+
+        // Il secondo non se ne accorge nemmeno.
+        $this->comeIscritto($altro)
+            ->postJson('/api/v1/ai/food/text', ['text' => 'mela'])
+            ->assertCreated();
     }
 
     #[Test]
@@ -267,7 +318,7 @@ class AiApiTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->alfa->update(['ai_monthly_token_cap' => 10_000]);
+        $this->alfa->update(['ai_monthly_tokens_per_member' => 10_000]);
 
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
 

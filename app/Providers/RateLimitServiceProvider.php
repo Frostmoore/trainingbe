@@ -65,7 +65,7 @@ class RateLimitServiceProvider extends ServiceProvider
         | questi endpoint, quindi l'IP resta solo come rete di sicurezza.
         |
         | Questo limite protegge dal singolo utente che martella. Il conto di
-        | fine mese lo protegge la quota di palestra (`TenantAiQuota`), che e' un
+        | fine mese lo protegge la quota per iscritto (`MemberAiQuota`), che e' un
         | controllo diverso e serve comunque: cento iscritti educati bruciano il
         | budget senza che nessuno superi il proprio limite orario.
         */

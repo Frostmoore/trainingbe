@@ -75,24 +75,29 @@ class TopTenantsByAiCost extends TableWidget
                         .number_format(AiUsageLog::millicentsToCurrency((int) $state), 2, ',', '.'))
                     ->alignEnd(),
 
-                TextColumn::make('quota')
-                    ->label('% del tetto')
+                /*
+                 * ⚠️ **Non c'e' piu' una «% del tetto» di palestra** — C20.
+                 *
+                 * La quota e' passata a essere di ciascun iscritto: una
+                 * percentuale di palestra sarebbe una frazione di un tetto che
+                 * non esiste, e chi la guardasse crederebbe di avere un margine
+                 * che nessuno gli garantisce.
+                 *
+                 * Quello che serve sapere da qui e' **quanto da' a ognuno**:
+                 * moltiplicato per gli iscritti, e' il costo massimo del mese —
+                 * un numero che si puo' calcolare prima di venderlo.
+                 */
+                TextColumn::make('per_iscritto')
+                    ->label('Token per iscritto')
                     ->getStateUsing(function (Tenant $r): string {
-                        $pct = app(TenantAiQuota::class)->usedPercent($r);
+                        $tetto = $r->tokensPerMember();
 
-                        return $pct === null ? 'illimitato' : number_format($pct, 1, ',', '.').'%';
+                        return $tetto === null
+                            ? 'illimitato'
+                            : number_format($tetto, 0, ',', '.');
                     })
                     ->badge()
-                    ->color(function (Tenant $r): string {
-                        $pct = app(TenantAiQuota::class)->usedPercent($r);
-
-                        return match (true) {
-                            $pct === null => 'gray',
-                            $pct >= 90 => 'danger',
-                            $pct >= 70 => 'warning',
-                            default => 'success',
-                        };
-                    })
+                    ->color(fn (Tenant $r): string => $r->tokensPerMember() === null ? 'warning' : 'gray')
                     ->alignEnd(),
             ])
             ->paginated(false)

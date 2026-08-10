@@ -10,10 +10,11 @@ use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Models\AiAdvice;
 use App\Models\FoodEntry;
+use App\Models\User;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\FoodEstimate;
-use App\Services\Ai\Quota\TenantAiQuota;
+use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tenancy\TenantContext;
@@ -37,7 +38,7 @@ class AiController extends Controller
 {
     public function __construct(
         private readonly AiManager $ai,
-        private readonly TenantAiQuota $quota,
+        private readonly MemberAiQuota $quota,
         private readonly TenantContext $tenants,
         private readonly DiaryService $diary,
         private readonly DashboardService $dashboard,
@@ -57,7 +58,7 @@ class AiController extends Controller
             'save' => ['nullable', 'boolean'],
         ]);
 
-        $this->assertQuota();
+        $this->assertQuota($request->user());
 
         $utente = $request->user();
 
@@ -78,7 +79,7 @@ class AiController extends Controller
             'save' => ['nullable', 'boolean'],
         ]);
 
-        $this->assertQuota();
+        $this->assertQuota($request->user());
 
         $utente = $request->user();
         $file = $request->file('photo');
@@ -124,7 +125,7 @@ class AiController extends Controller
             ]]);
         }
 
-        $this->assertQuota();
+        $this->assertQuota($request->user());
 
         $testo = $this->ai->for(AiFeature::DailyAdvice)->dailyAdvice(
             $contesto,
@@ -150,32 +151,35 @@ class AiController extends Controller
 
     // ───────────────────────── quota ─────────────────────────
 
-    /** Quanto resta: serve all'app per non proporre funzioni che daranno 429. */
+    /**
+     * Quanto resta: serve all'app per non proporre funzioni che daranno 429.
+     *
+     * 🚨 **È il consumo di chi sta chiedendo, non della palestra** (C20). Con
+     * il conteggio per palestra, questo endpoint mostrava a ciascuno una barra
+     * che si riempiva per colpa di altri — e non c'era niente che potesse
+     * farci.
+     */
     public function usage(Request $request): JsonResponse
     {
-        $palestra = $this->tenants->get();
-
-        if ($palestra === null) {
-            return response()->json(['data' => null]);
-        }
+        $utente = $request->user();
 
         return response()->json(['data' => [
-            'used_tokens' => $this->quota->usedThisMonth($palestra),
-            'cap_tokens' => $this->quota->capFor($palestra),
-            'remaining_tokens' => $this->quota->remaining($palestra),
-            'used_percent' => $this->quota->usedPercent($palestra),
+            'used_tokens' => $this->quota->usedThisMonth($utente),
+            'cap_tokens' => $this->quota->capFor($utente),
+            'remaining_tokens' => $this->quota->remaining($utente),
+            'used_percent' => $this->quota->usedPercent($utente),
         ]]);
     }
 
     // ───────────────────────── interni ─────────────────────────
 
-    private function assertQuota(): void
+    private function assertQuota(?User $utente): void
     {
-        $palestra = $this->tenants->get();
-
-        if ($palestra !== null) {
-            $this->quota->assertWithinQuota($palestra);
+        if ($utente === null) {
+            return;
         }
+
+        $this->quota->assertWithinQuota($utente);
     }
 
     /**

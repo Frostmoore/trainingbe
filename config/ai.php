@@ -92,13 +92,29 @@ return [
     | Quote
     |---------------------------------------------------------------------------
     |
-    | Il tetto vale per palestra e per mese solare. Una palestra con
-    | `ai_monthly_token_cap` esplicito usa quello; `null` sulla colonna significa
-    | «nessun limite», ed e' diverso da «non impostato» — per questo il default
-    | qui sotto si applica solo a chi non ha mai avuto un valore.
+    | 🚨 **Il tetto e' per ISCRITTO, non per palestra** (C20).
+    |
+    | Lo era per palestra fino a `v4.10.0`, ed era un pozzo comune: con
+    | 2.000.000 di token a palestra e un consumo medio di **551.000 a testa**
+    | (conti in `STIMA-COSTI-AI.md`) bastava per tre o quattro persone, e la
+    | quarta trovava le funzioni AI spente per il consumo di qualcun altro.
+    |
+    | Il valore si risolve in tre passi, dal piu' specifico al piu' generale:
+    |   1. `users.ai_monthly_token_cap`         — l'eccezione per una persona
+    |   2. `tenants.ai_monthly_tokens_per_member` — la scelta della palestra
+    |   3. questo default
+    |
+    | In tutti e tre **`0` vale «illimitato»** e `null` vale «non impostato,
+    | scendi al livello successivo»: sono due cose diverse, e senza la
+    | distinzione non si potrebbe sbloccare una persona sola.
+    |
+    | ⚠️ **1.200.000 non e' un numero tondo a caso**: copre l'utente pesante
+    | del documento dei costi (5 pasti a testo, 3 foto, 10 aperture al giorno
+    | ≈ 1,07 M token/mese) con un margine. Chi lo supera sta usando l'app in un
+    | modo che vale la pena guardare, non assecondare in silenzio.
     */
     'quota' => [
-        'default_monthly_tokens' => (int) env('AI_DEFAULT_MONTHLY_TOKENS', 2_000_000),
+        'default_monthly_tokens_per_user' => (int) env('AI_DEFAULT_MONTHLY_TOKENS_PER_USER', 1_200_000),
     ],
 
     /*

@@ -6,7 +6,6 @@ namespace App\Models;
 
 use App\Enums\SocialProvider;
 use App\Enums\TenantStatus;
-use App\Services\Ai\Quota\TenantAiQuota;
 use App\Services\Auth\Social\SocialTokenVerifier;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -48,7 +47,7 @@ class Tenant extends Model
         'name', 'slug', 'join_code', 'status', 'plan',
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
-        'ai_monthly_token_cap', 'ai_driver', 'settings', 'trial_ends_at',
+        'ai_monthly_tokens_per_member', 'ai_driver', 'settings', 'trial_ends_at',
     ];
 
     protected function casts(): array
@@ -57,7 +56,7 @@ class Tenant extends Model
             'status' => TenantStatus::class,
             'settings' => 'array',
             'trial_ends_at' => 'datetime',
-            'ai_monthly_token_cap' => 'integer',
+            'ai_monthly_tokens_per_member' => 'integer',
         ];
     }
 
@@ -156,16 +155,28 @@ class Tenant extends Model
     }
 
     /**
-     * 🚨 Delega a `TenantAiQuota` e non ricalcola.
+     * ⚠️ **La quota non e' piu' della palestra** — C20.
      *
-     * La regola su cosa significhi `ai_monthly_token_cap = null` (default di
-     * sistema) contro `= 0` (illimitato esplicito) vive in un posto solo. Due
-     * implementazioni della stessa regola sono due regole che aspettano di
-     * divergere.
+     * Era un pozzo comune: con 2 milioni di token a palestra e un consumo medio
+     * di 551.000 a testa bastava per tre o quattro persone, e la quarta restava
+     * senza AI per il consumo di qualcun altro. Adesso il tetto e' di ciascuno
+     * (`MemberAiQuota`), e la palestra lo governa decidendo quanto dare a ognuno
+     * dei suoi: `ai_monthly_tokens_per_member`.
+     *
+     * Il costo del mese resta visibile dal pannello (`aiCostThisMonth()`): e'
+     * la palestra a pagare, e vederlo serve — ma non e' piu' cio' che blocca.
      */
-    public function hasAiQuotaLeft(): bool
+    public function tokensPerMember(): ?int
     {
-        return app(TenantAiQuota::class)->hasQuotaLeft($this);
+        $suo = $this->ai_monthly_tokens_per_member;
+
+        if ($suo !== null) {
+            return $suo > 0 ? $suo : null;
+        }
+
+        $default = (int) config('ai.quota.default_monthly_tokens_per_user');
+
+        return $default > 0 ? $default : null;
     }
 
     // ───────────────────────── utilità ─────────────────────────

@@ -85,6 +85,18 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_super_admin' => 'boolean',
+
+            /*
+             * Il tetto AI **di questa persona** — C20.
+             *
+             * ⚠️ Volutamente **fuori da `$fillable`**: e' una concessione, e le
+             * concessioni non si assegnano in massa da una richiesta HTTP. Si
+             * imposta dal pannello o da console, come `is_super_admin`.
+             *
+             * `null` = usa quello della palestra (e poi il default di sistema).
+             * `0` = illimitato. Sono due cose diverse: vedi `MemberAiQuota`.
+             */
+            'ai_monthly_token_cap' => 'integer',
         ];
     }
 

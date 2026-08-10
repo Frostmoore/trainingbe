@@ -84,6 +84,22 @@ class AiUsageLog extends Model
             ->sum(DB::raw('input_tokens + output_tokens'));
     }
 
+    /**
+     * I token consumati da **una persona** nel mese — C20.
+     *
+     * 🚨 È questa la somma su cui poggia la quota, non quella per palestra: il
+     * tetto è di ciascuno, e il consumo di uno non deve togliere niente agli
+     * altri. `tokensForTenant()` resta, ma serve alla dashboard del pannello —
+     * a **vedere** quanto spende una palestra, non a bloccare nessuno.
+     */
+    public static function tokensForUser(int $userId, ?Carbon $month = null): int
+    {
+        return (int) static::withoutGlobalScopes()
+            ->where('user_id', $userId)
+            ->inMonth($month)
+            ->sum(DB::raw('input_tokens + output_tokens'));
+    }
+
     public static function costForTenant(int $tenantId, ?Carbon $month = null): int
     {
         return (int) static::withoutGlobalScopes()

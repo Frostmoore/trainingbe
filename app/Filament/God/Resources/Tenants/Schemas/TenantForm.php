@@ -115,11 +115,15 @@ class TenantForm
                         ->label('Fine del periodo di prova')
                         ->helperText('Scaduto, il login è negato anche se lo stato è ancora «in prova».'),
 
-                    TextInput::make('ai_monthly_token_cap')
-                        ->label('Tetto mensile di token AI')
+                    TextInput::make('ai_monthly_tokens_per_member')
+                        ->label('Token AI al mese, per iscritto')
                         ->numeric()
                         ->minValue(0)
-                        ->helperText('Vuoto = nessun limite.'),
+                        ->helperText(
+                            'Il tetto vale per OGNI iscritto, non per la palestra: '
+                            .'il costo massimo del mese è iscritti × questo numero. '
+                            .'Vuoto = default di sistema. 0 = nessun limite.'
+                        ),
 
                     Select::make('locale')
                         ->label('Lingua')
