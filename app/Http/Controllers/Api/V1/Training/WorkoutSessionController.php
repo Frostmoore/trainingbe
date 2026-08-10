@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Api\V1\Training;
 
 use App\Http\Controllers\Controller;
 use App\Models\Exercise;
+use App\Models\Media;
 use App\Models\SessionSet;
+use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Services\Training\ExerciseMatcher;
@@ -277,7 +279,55 @@ class WorkoutSessionController extends Controller
             'kcal' => $s->kcal_burned,
             'kcal_source' => $s->kcal_source?->value,
             'notes' => $s->notes,
+            'photos' => $this->fotoDi($s),
         ];
+    }
+
+    /**
+     * Le foto scattate durante questo allenamento — C5.
+     *
+     * ⚠️ Sta anche nel **riassunto** e non solo nel dettaglio: lo storico a
+     * schede usa la prima come miniatura, ed è ciò che lo rende leggibile a
+     * colpo d'occhio. Metterla solo nel dettaglio costringerebbe l'app a una
+     * chiamata per ogni scheda dell'elenco.
+     *
+     * 🚨 Le foto si caricano **tutte in una query** e si tengono in memoria per
+     * la durata della richiesta. Una query per sessione, su un elenco di
+     * cinquanta allenamenti, sarebbero cinquanta viaggi al database per
+     * disegnare cinquanta miniature.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function fotoDi(WorkoutSession $s): array
+    {
+        $this->caricaFoto($s->user_id);
+
+        return $this->fotoPerSessione[$s->getKey()] ?? [];
+    }
+
+    /**
+     * @var array<int, list<array<string, mixed>>>|null
+     */
+    private ?array $fotoPerSessione = null;
+
+    private function caricaFoto(int $userId): void
+    {
+        if ($this->fotoPerSessione !== null) {
+            return;
+        }
+
+        $this->fotoPerSessione = Media::query()
+            ->where('model_type', (new User)->getMorphClass())
+            ->where('model_id', $userId)
+            ->where('collection_name', 'workout')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy(fn (Media $m): int => (int) $m->getCustomProperty('workout_session_id'))
+            ->map(fn ($gruppo): array => $gruppo->map(fn (Media $m): array => [
+                'id' => $m->id,
+                'url' => url("/api/v1/photos/{$m->id}/file"),
+            ])->all())
+            ->all();
     }
 
     /** @return array<string, mixed> */

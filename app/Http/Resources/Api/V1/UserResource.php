@@ -26,11 +26,31 @@ class UserResource extends JsonResource
             'id' => $this->resource->id,
             'name' => $this->resource->name,
             'email' => $this->resource->email,
+
+            /*
+             * C7.1 — il nome utente.
+             *
+             * ⚠️ Mancava, e la registrazione lo chiede come campo obbligatorio:
+             * la persona lo sceglie, lo usa per accedere, e non lo rivede mai
+             * più da nessuna parte. Chi lo dimentica non ha modo di
+             * recuperarlo dall'app.
+             */
+            'username' => $this->resource->username,
+
             'phone' => $this->resource->phone,
             'avatar_url' => $this->resource->avatarUrl(),
             'locale' => $this->resource->locale,
             'roles' => $this->resource->getRoleNames()->values()->all(),
-            'profile' => $this->whenLoaded('profile', fn () => [
+            /*
+             * C7.2 — il profilo c'è **sempre**, anche vuoto.
+             *
+             * 🚨 Con `whenLoaded` la chiave spariva del tutto quando la
+             * relazione non era caricata o non esisteva, e l'app non poteva
+             * distinguere «profilo assente» da «profilo non chiesto»: due casi
+             * che richiedono schermate diverse. Una chiave che a volte c'è e a
+             * volte no costringe il client a un ramo in più per ogni campo.
+             */
+            'profile' => $this->resource->profile === null ? null : [
                 'sex' => $this->resource->profile->sex,
                 'birthdate' => $this->resource->profile->birthdate?->toDateString(),
                 'age' => $this->resource->profile->age(),
@@ -39,7 +59,7 @@ class UserResource extends JsonResource
                 'goal' => $this->resource->profile->goal,
                 'target_weight_kg' => $this->resource->profile->target_weight_kg,
                 'meal_hours' => $this->resource->profile->meal_hours,
-            ]),
+            ],
         ];
     }
 }

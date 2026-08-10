@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
@@ -100,6 +101,16 @@ Route::prefix('v1')->group(function (): void {
         // primo campo dimenticato azzererebbe gli altri.
         Route::get('profile', [ProfileController::class, 'show']);
         Route::patch('profile', [ProfileController::class, 'update']);
+
+        // ── Eliminazione dell'account (C6) ───────────────────────────────
+        //
+        // 🚨 Apple la pretende per ogni app con registrazione: dev'essere
+        // raggiungibile dall'app, senza scrivere a nessuno. `preview` esiste
+        // perché un'azione irreversibile va spiegata dove si compie, e la
+        // spiegazione deve venire dal server: scritta solo nell'app, diventa
+        // falsa il giorno che il server cambia politica.
+        Route::get('account/deletion-preview', [AccountController::class, 'preview']);
+        Route::delete('account', [AccountController::class, 'destroy']);
 
         // ── Allenamento (B4.5) ───────────────────────────────────────────
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
