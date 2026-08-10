@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\Health\HealthIngestController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\Training\BodyMetricController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\PhotoController;
@@ -88,6 +89,15 @@ Route::prefix('v1')->group(function (): void {
     | 🚨 Non aggiungere endpoint di dominio senza quella catena.
     */
     Route::middleware(['auth:sanctum', 'tenant', 'tenant.active'])->group(function (): void {
+
+        // ── Profilo (C1) ─────────────────────────────────────────────────
+        //
+        // Nessun id: si legge e si scrive sempre e solo il proprio profilo.
+        // È una PATCH perché l'app salva un campo alla volta mentre la persona
+        // compila: una PUT costringerebbe a rimandare tutto ogni volta, e il
+        // primo campo dimenticato azzererebbe gli altri.
+        Route::get('profile', [ProfileController::class, 'show']);
+        Route::patch('profile', [ProfileController::class, 'update']);
 
         // ── Allenamento (B4.5) ───────────────────────────────────────────
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);

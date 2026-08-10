@@ -198,8 +198,10 @@ class AiController extends Controller
         $utente = $request->user();
         $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : now();
 
+        // Gli orari dei pasti sono quelli di questa persona, non soglie fisse:
+        // vedi la nota su `MealType::fromProfile()`.
         $pasto = (isset($dati['meal']) ? MealType::tryFrom((string) $dati['meal']) : null)
-            ?? MealType::fromHour((int) $quando->format('G'));
+            ?? MealType::fromProfile($quando, $utente->profile?->meal_hours);
 
         $voci = [];
 

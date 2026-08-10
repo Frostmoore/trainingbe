@@ -156,7 +156,7 @@ class FoodFavoriteController extends Controller
 
         $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : now();
         $pasto = (isset($dati['meal']) ? MealType::tryFrom($dati['meal']) : null)
-            ?? MealType::fromHour((int) $quando->format('G'));
+            ?? MealType::fromProfile($quando, $request->user()->profile?->meal_hours);
 
         $voci = $preferito->addToDiary($pasto, $quando);
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\Members\Schemas;
 
 use App\Enums\UserRole;
+use App\Models\Profile;
 use App\Models\User;
 use App\Services\Nutrition\CalorieCalculator;
 use App\Support\Tenancy\TenantContext;
@@ -110,24 +111,16 @@ class MemberForm
                         ->minValue(100)
                         ->maxValue(250),
 
+                    // Le opzioni vengono dal modello, non da un elenco scritto qui:
+                    // vedi la nota su `Profile::ACTIVITY_LEVELS`.
                     Select::make('profile.activity_level')
                         ->label('Livello di attivita')
-                        ->options([
-                            'sedentary' => 'Sedentario',
-                            'light' => 'Leggero (1-2 allenamenti)',
-                            'moderate' => 'Moderato (3-4)',
-                            'active' => 'Attivo (5-6)',
-                            'very_active' => 'Atleta (due sedute al giorno)',
-                        ])
+                        ->options(Profile::ACTIVITY_LEVELS)
                         ->native(false),
 
                     Select::make('profile.goal')
                         ->label('Obiettivo')
-                        ->options([
-                            'lose_weight' => 'Dimagrire',
-                            'maintain' => 'Mantenere',
-                            'gain_muscle' => 'Aumentare massa',
-                        ])
+                        ->options(Profile::GOALS)
                         ->native(false),
 
                     TextInput::make('profile.target_weight_kg')

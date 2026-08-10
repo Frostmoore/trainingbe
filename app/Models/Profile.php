@@ -27,6 +27,43 @@ class Profile extends Model
         'activity_level', 'goal', 'target_weight_kg', 'meal_hours', 'notes',
     ];
 
+    /**
+     * I livelli di attivita' ammessi, con l'etichetta italiana.
+     *
+     * 🚨 **Questa e' la fonte unica.** Prima della fase C lo stesso elenco viveva
+     * in tre posti — il form di Filament, il `match` di `activityForFormula()` e
+     * un commento nella migration — e nessuno dei tre sapeva degli altri.
+     * Aggiungere un livello in uno solo produce un valore che il pannello offre e
+     * l'API rifiuta, oppure che l'API accetta e la formula traduce in
+     * `sedentary` **senza dirlo**: il fabbisogno risulta piu' basso del vero e
+     * nessun errore compare da nessuna parte.
+     *
+     * Chi aggiunge una voce qui deve aggiungerla anche in `activityForFormula()`.
+     *
+     * @var array<string, string>
+     */
+    public const ACTIVITY_LEVELS = [
+        'sedentary' => 'Sedentario',
+        'light' => 'Leggero (1-2 allenamenti)',
+        'moderate' => 'Moderato (3-4)',
+        'active' => 'Attivo (5-6)',
+        'very_active' => 'Atleta (due sedute al giorno)',
+    ];
+
+    /**
+     * Gli obiettivi ammessi dal profilo, con l'etichetta italiana.
+     *
+     * ⚠️ `cut` (definizione) NON e' qui: si imposta dal piano alimentare, non dal
+     * profilo. Vedi `goalForFormula()`.
+     *
+     * @var array<string, string>
+     */
+    public const GOALS = [
+        'lose_weight' => 'Dimagrire',
+        'maintain' => 'Mantenere',
+        'gain_muscle' => 'Aumentare massa',
+    ];
+
     protected function casts(): array
     {
         return [

@@ -8,6 +8,7 @@ use App\Enums\MealType;
 use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
+use App\Models\User;
 use App\Services\Nutrition\DiaryService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
@@ -72,7 +73,7 @@ class DiaryController extends Controller
             // Il pasto si deduce dall'ora quando l'app non lo dice: chiedere
             // «che pasto era?» per una banana alle 16 e' un attrito che fa
             // smettere di registrare.
-            'meal' => $this->pasto($dati['meal'] ?? null, $quando),
+            'meal' => $this->pasto($dati['meal'] ?? null, $quando, $utente),
         ]));
 
         return response()->json(['data' => $this->diary->voce($voce)], 201);
@@ -100,7 +101,7 @@ class DiaryController extends Controller
         ]);
 
         if (isset($dati['meal'])) {
-            $dati['meal'] = $this->pasto($dati['meal'], $voce->eaten_at);
+            $dati['meal'] = $this->pasto($dati['meal'], $voce->eaten_at, $request->user());
         }
 
         $voce->fill($dati)->save();
@@ -208,10 +209,20 @@ class DiaryController extends Controller
         return FoodEntry::query()->forUser($request->user())->find($id);
     }
 
-    private function pasto(?string $valore, ?Carbon $quando): MealType
+    /**
+     * Il pasto dichiarato dall'app, oppure quello dedotto dall'ora.
+     *
+     * 🚨 La deduzione usa **gli orari di questa persona** (`fromProfile`), non le
+     * soglie di serie: chi cena alle 18 vuole che un cibo delle 19 finisca nella
+     * cena, non nella merenda. Prima della fase C il profilo veniva ignorato.
+     */
+    private function pasto(?string $valore, ?Carbon $quando, User $utente): MealType
     {
         $tipo = $valore !== null ? MealType::tryFrom($valore) : null;
 
-        return $tipo ?? MealType::fromHour((int) ($quando ?? now())->format('G'));
+        return $tipo ?? MealType::fromProfile(
+            $quando ?? now(),
+            $utente->profile?->meal_hours,
+        );
     }
 }
