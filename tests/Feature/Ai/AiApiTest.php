@@ -416,4 +416,75 @@ class AiApiTest extends TestCase
         $this->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertUnauthorized();
         $this->getJson('/api/v1/ai/advice')->assertUnauthorized();
     }
+
+    // ───────── S8.2: il contesto arriva dall'app ─────────
+
+    /**
+     * 🚨 **Senza questo il consiglio del giorno era muto per tutti.**
+     *
+     * Da S5 il peso non sta piu' sul server, quindi `computedTargets()` non
+     * calcola piu' niente: il modello riceveva le calorie assunte e **nessun
+     * numero con cui confrontarle**. Adesso il fabbisogno lo calcola l'app e
+     * lo manda, e il server lo **inoltra**.
+     */
+    #[Test]
+    public function the_target_computed_by_the_app_reaches_the_model(): void
+    {
+        $ai = $this->aiFinta();
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/advice?target_kcal=2100&target_protein_g=150&target_carbs_g=210&target_fat_g=70')
+            ->assertOk();
+
+        $contesto = collect($ai->calls)
+            ->firstWhere('method', 'dailyAdvice')['args'];
+
+        $this->assertSame(2100.0, $contesto['targets']['kcal']);
+        $this->assertSame(150.0, $contesto['targets']['protein_g']);
+
+        // 💡 Dice al modello **da dove viene il numero**: «calcolato sui tuoi
+        // dati» e «prescritto dal tuo trainer» meritano un tono diverso.
+        $this->assertSame('app', $contesto['targets']['source']);
+    }
+
+    /**
+     * 🚨 **Il server lo inoltra e NON lo conserva.**
+     *
+     * E' la differenza fra «passare per» e «tenere», ed e' tutta la fase S5.
+     * L'unica traccia che resta e' l'**hash** del contesto — un digest, non un
+     * dato: da 2100 non si torna indietro.
+     */
+    #[Test]
+    public function the_forwarded_target_is_never_written_down(): void
+    {
+        $this->aiFinta();
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/advice?target_kcal=2100')
+            ->assertOk();
+
+        $riga = AiAdvice::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertStringNotContainsString('2100', $riga->context_hash);
+        $this->assertStringNotContainsString('2100', (string) $riga->toJson());
+    }
+
+    /**
+     * ⚠️ **Un numero assurdo non entra nel prompt.**
+     *
+     * Il server non puo' verificare che il target sia vero — il peso da cui
+     * nasce non ce l'ha — ma un `target_kcal` di 40.000 non produrrebbe un
+     * errore: produrrebbe un **consiglio alimentare assurdo**, detto con la
+     * stessa sicurezza di uno giusto.
+     */
+    #[Test]
+    public function an_absurd_target_is_refused(): void
+    {
+        $this->aiFinta();
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/advice?target_kcal=40000')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['target_kcal']);
+    }
 }

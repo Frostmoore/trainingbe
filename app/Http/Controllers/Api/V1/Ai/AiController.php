@@ -248,6 +248,48 @@ class AiController extends Controller
      *
      * @return array<string, mixed>
      */
+    /**
+     * Il fabbisogno che l'app ha calcolato sul telefono — S8.2.
+     *
+     * 🚨 **Nasce qui e muore nel prompt.** Non si scrive da nessuna parte:
+     * entra nel contesto, viene mandato al modello, e finisce. L'unica traccia
+     * che resta e' l'**hash** del contesto — che e' un digest, non un dato.
+     *
+     * ⚠️ **Si valida comunque.** Il server non ha modo di verificare che quel
+     * numero sia vero — il peso da cui nasce non ce l'ha — ma un `target_kcal`
+     * di 40.000 nel prompt non produrrebbe un errore: produrrebbe un
+     * **consiglio alimentare assurdo**, detto con la stessa sicurezza di uno
+     * giusto. I limiti sono gli stessi del pavimento e del tetto che
+     * `CalorieCalculator` applica da sempre.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function targetDallApp(Request $request): ?array
+    {
+        $dati = $request->validate([
+            'target_kcal' => ['nullable', 'numeric', 'min:1000', 'max:8000'],
+            'target_protein_g' => ['nullable', 'numeric', 'min:0', 'max:500'],
+            'target_carbs_g' => ['nullable', 'numeric', 'min:0', 'max:1200'],
+            'target_fat_g' => ['nullable', 'numeric', 'min:0', 'max:400'],
+        ]);
+
+        if (($dati['target_kcal'] ?? null) === null) {
+            return null;
+        }
+
+        return [
+            'kcal' => (float) $dati['target_kcal'],
+            'protein_g' => isset($dati['target_protein_g']) ? (float) $dati['target_protein_g'] : null,
+            'carbs_g' => isset($dati['target_carbs_g']) ? (float) $dati['target_carbs_g'] : null,
+            'fat_g' => isset($dati['target_fat_g']) ? (float) $dati['target_fat_g'] : null,
+
+            // 🚨 Dice al modello **da dove viene il numero**, e non e' un
+            // dettaglio: «calcolato sui tuoi dati» e «prescritto dal tuo
+            // trainer» meritano un tono diverso, e il secondo non si discute.
+            'source' => 'app',
+        ];
+    }
+
     private function contestoConsiglio(Request $request): array
     {
         $utente = $request->user();
@@ -284,7 +326,30 @@ class AiController extends Controller
             'day_progress_pct' => $riepilogo['day_progress_pct'],
 
             'totals' => $giornata['totals'],
-            'targets' => $giornata['targets'],
+
+            /*
+             * 🚨 **Il target puo' arrivare DALL'APP, e di solito e' l'unico
+             * modo** — S8.2.
+             *
+             * Da S5 il peso non sta piu' sul server, quindi
+             * `Profile::computedTargets()` non calcola piu' niente e
+             * `$giornata['targets']` e' **`null` per chiunque non abbia un
+             * piano alimentare attivo**. Senza questo, il consiglio del giorno
+             * era muto per tutti: il modello si ritrovava le calorie assunte
+             * senza nessun numero con cui confrontarle.
+             *
+             * 🚨 **Il server lo INOLTRA, non lo conserva.** Finisce nel prompt e
+             * nell'hash del contesto, e da li' sparisce: non c'e' nessuna
+             * colonna, nessuna tabella, nessun log che lo trattenga. La
+             * differenza fra «passare per» e «tenere» e' tutta la fase S5.
+             *
+             * ⚠️ **Il piano del trainer vince comunque.** Se `targets` c'e' gia'
+             * — cioe' se un piano alimentare e' attivo — quello che manda l'app
+             * si ignora: e' la stessa precedenza dell'interfaccia (D8), e
+             * invertirla qui darebbe un consiglio costruito su un numero
+             * diverso da quello che la persona ha davanti agli occhi.
+             */
+            'targets' => $giornata['targets'] ?? $this->targetDallApp($request),
             'burned' => $giornata['burned'],
             'meals_logged' => count(array_filter(
                 $giornata['meals'],
