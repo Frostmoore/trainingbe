@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\Dashboard;
 
-use App\Enums\HealthMetric;
 use App\Models\BodyMetric;
-use App\Models\HealthReading;
-use App\Models\HealthSample;
 use App\Models\User;
 use App\Models\WorkoutSession;
-use App\Services\Health\SleepAnalyzer;
 use App\Services\Nutrition\DiaryService;
 use App\Services\Training\WorkoutCalorieService;
 use Illuminate\Support\Carbon;
@@ -18,17 +14,29 @@ use Illuminate\Support\Carbon;
 /**
  * Il riepilogo di oggi, in una richiesta sola — D4.
  *
- * 🚨 **Un endpoint e non sei.** La schermata principale mostra calorie,
- * allenamenti recenti, peso, sonno, HRV e battito: con sei chiamate separate ne
- * basta una lenta per far comparire la schermata a pezzi, e su rete mobile
- * capita sempre. Qui si paga una query in più e si mostra tutto insieme o
- * niente.
+ * 🚨 **Un endpoint e non quattro.** La schermata principale mostra calorie,
+ * allenamenti recenti e peso: con chiamate separate ne basta una lenta per far
+ * comparire la schermata a pezzi, e su rete mobile capita sempre. Qui si paga
+ * una query in più e si mostra tutto insieme o niente.
  *
  * ⚠️ **Ogni sezione può essere `null`, e il `null` è un'informazione.** Nessuna
- * di queste cose è garantita: l'orologio può non aver mai mandato niente, il
- * profilo può essere incompleto. Restituire zeri al posto dei dati assenti
- * farebbe disegnare un HRV di 0 ms, che l'app mostrerebbe come un valore
- * pessimo invece che come un dato mancante.
+ * di queste cose è garantita: il profilo può essere incompleto, il peso può non
+ * essere mai stato registrato. Restituire zeri al posto dei dati assenti
+ * farebbe disegnare valori che l'app mostrerebbe come pessimi invece che come
+ * mancanti.
+ *
+ * 🚨 **SONNO, HRV E BATTITO NON PASSANO PIÙ DA QUI — S1 di
+ * `plan_security_and_retention.md`.**
+ *
+ * Fino a `v5.2.0` questo servizio restituiva anche `sleep` e `vitals`, letti da
+ * `health_samples` e `health_readings`. Quelle tabelle **non esistono più**: i
+ * dati del sensore restano sul telefono di chi li produce (decisione D9), e
+ * l'app se li calcola in locale.
+ *
+ * ⚠️ **Non è una funzione persa, è una funzione traslocata.** Chi cerca il
+ * riposo sulla dashboard lo trova nell'app, in `features/health/`. Chi volesse
+ * rimetterlo qui deve prima rileggere §C11 di `todo-2026-08-11.md`: il motivo
+ * per cui non c'è non è tecnico.
  */
 class DashboardService
 {
@@ -38,7 +46,6 @@ class DashboardService
     public function __construct(
         private readonly DiaryService $diario,
         private readonly WorkoutCalorieService $calorie,
-        private readonly SleepAnalyzer $analizzatoreSonno,
     ) {}
 
     /**
@@ -68,8 +75,15 @@ class DashboardService
             'nutrition' => $this->nutrizione($utente, $oggi),
             'training' => $this->allenamento($utente, $oggi),
             'body' => $this->corpo($utente),
-            'sleep' => $this->riposo($utente, $adesso),
-            'vitals' => $this->parametri($utente),
+
+            /*
+             * ⚠️ Qui c'erano 'sleep' e 'vitals'. Vedi il dartdoc della classe:
+             * i dati del sensore non passano piu' dal server (S1).
+             *
+             * L'app regge l'assenza di entrambe le chiavi senza modifiche:
+             * `DashboardSummary.fromJson` le legge gia' come opzionali e
+             * `RecoveryCard` esce prima se non ci sono.
+             */
         ];
     }
 
@@ -184,61 +198,15 @@ class DashboardService
         ];
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function riposo(User $utente, Carbon $adesso): ?array
-    {
-        $notte = HealthSample::nightOf($adesso);
-        $riepilogo = $this->analizzatoreSonno->night($utente, $notte);
-
-        if ($riepilogo === null) {
-            return null;
-        }
-
-        // Sulla dashboard serve il riassunto, non l'ipnogramma: quello sta nella
-        // schermata del sonno. Mandarlo qui vorrebbe dire trasferire centinaia
-        // di blocchi per disegnare una riga.
-        return [
-            'night' => $riepilogo['night'],
-            'asleep_minutes' => $riepilogo['asleep_minutes'],
-            'deep_pct' => $riepilogo['deep_pct'],
-            'rem_pct' => $riepilogo['rem_pct'],
-            'awake_minutes' => $riepilogo['awake_minutes'],
-            'overall' => $riepilogo['overall'],
-            'ratings' => $riepilogo['ratings'],
-        ];
-    }
-
-    /**
-     * HRV e battito, ciascuno con la propria media di riferimento.
+    /*
+     * ⚠️ Qui vivevano `riposo()` e `parametri()`. Cancellati in S1.4.
      *
-     * 🚨 **Il valore assoluto non si può interpretare.** Un HRV di 42 ms è
-     * ottimo per qualcuno e allarmante per qualcun altro: conta lo scostamento
-     * dalla media *di quella persona*. Mandare il numero senza la media
-     * significa che l'app — o l'AI — finirà per giudicarlo su una scala che non
-     * esiste.
+     * La regola che portavano — **un valore assoluto di HRV non si puo'
+     * interpretare, conta solo lo scostamento dalla media di quella persona** —
+     * non e' stata buttata: e' stata riscritta identica in Dart, in
+     * `lib/src/features/health/media_di_riferimento.dart` (fase S4.1).
      *
-     * @return array<string, mixed>
+     * 🚨 Chi la reimplementasse qui riporterebbe sul server i dati che questo
+     * piano esiste per toglierne.
      */
-    private function parametri(User $utente): array
-    {
-        $out = [];
-
-        foreach (HealthMetric::cases() as $metrica) {
-            $lettura = HealthReading::latestWithBaseline($utente, $metrica);
-
-            $out[$metrica->value] = $lettura === null ? null : array_merge($lettura, [
-                'label' => $metrica->label(),
-                'unit' => $metrica->unit(),
-            ]);
-        }
-
-        // Dice all'app se mostrare la sezione o spiegare che l'orologio non ha
-        // mai mandato niente: due schermate diverse, e senza questo campo
-        // dovrebbe dedurlo da tre null.
-        $out['has_any'] = collect($out)->contains(fn ($v): bool => $v !== null);
-
-        return $out;
-    }
 }

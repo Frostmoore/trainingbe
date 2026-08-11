@@ -80,11 +80,14 @@ class RateLimitServiceProvider extends ServiceProvider
                 : [Limit::perHour(5)->by('ai|ip'.$request->ip())];
         });
 
-        // Ingest dei dati dell'orologio (B9.1): fuori dalla sessione, autenticato
-        // dal solo token per-utente. 60 all'ora basta per una sincronizzazione
-        // ogni minuto, che e' gia' piu' del necessario per il sonno.
-        RateLimiter::for('health-ingest', fn (Request $request): array => [
-            Limit::perHour(60)->by('ingest|'.$request->ip()),
-        ]);
+        /*
+         * ⚠️ Qui c'era `health-ingest`, il limite dell'ingest dell'orologio.
+         * Cancellato in S1.7 insieme all'endpoint: i dati del sensore non
+         * arrivano piu' al server.
+         *
+         * 🚨 Un limitatore senza rotta non e' inerte: e' una riga che dice a chi
+         * legge che quell'ingresso esiste ancora, e prima o poi qualcuno ci
+         * riattacca una rotta.
+         */
     }
 }

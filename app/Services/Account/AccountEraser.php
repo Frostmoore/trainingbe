@@ -10,7 +10,6 @@ use App\Models\DailyBurn;
 use App\Models\DeviceToken;
 use App\Models\FoodEntry;
 use App\Models\FoodFavorite;
-use App\Models\HealthSample;
 use App\Models\Media;
 use App\Models\Message;
 use App\Models\User;
@@ -97,8 +96,24 @@ class AccountEraser
         FoodFavorite::withoutGlobalScopes()->where('user_id', $id)->delete();
         DailyBurn::withoutGlobalScopes()->where('user_id', $id)->delete();
         BodyMetric::withoutGlobalScopes()->where('user_id', $id)->delete();
-        HealthSample::withoutGlobalScopes()->where('user_id', $id)->delete();
         AiAdvice::withoutGlobalScopes()->where('user_id', $id)->delete();
+
+        /*
+         * ⚠️ Qui c'era `HealthSample`. La tabella non esiste piu' (S1.6): sonno,
+         * HRV e battito vivono sul telefono di chi li produce.
+         *
+         * 🚨 **E qui c'era anche un difetto, che vale la pena ricordare.**
+         * `health_readings` (HRV e battito a riposo) **non veniva cancellata da
+         * nessuno**: sopravviveva alla cancellazione dell'account. Era una
+         * violazione del diritto alla cancellazione su una categoria
+         * particolare, ed e' rimasta invisibile per settimane perche' la tabella
+         * era nata dopo questo metodo e nessuno lo aveva riaperto.
+         *
+         * La lezione non e' «ricordarsi di aggiornare l'eraser»: e' che una
+         * regola affidata alla memoria e' gia' rotta. In **S9.3** entra il test
+         * che passa in rassegna **tutte** le tabelle con `user_id` e verifica
+         * che dopo `erase()` non sopravviva nessuna riga.
+         */
 
         $utente->profile()->delete();
     }
@@ -179,7 +194,6 @@ class AccountEraser
             'avatar_path' => null,
             'password' => bcrypt(Str::random(64)),
             'remember_token' => null,
-            'health_ingest_token' => null,
             'is_active' => false,
             'email_verified_at' => null,
         ])->save();

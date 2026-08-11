@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DashboardController;
-use App\Http\Controllers\Api\V1\Health\HealthIngestController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\ProfileController;
@@ -235,9 +234,20 @@ Route::prefix('v1')->group(function (): void {
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);
 
-        // ── Sonno (B9.2) ─────────────────────────────────────────────────
-        Route::get('health/sleep', [HealthIngestController::class, 'sleep']);
-        Route::post('health/ingest-token', [HealthIngestController::class, 'rotateToken']);
+        /*
+        | ── Sonno e parametri vitali: NON CI SONO PIU' ────────────────────
+        |
+        | 🚨 Qui vivevano `GET health/sleep` e `POST health/ingest-token`.
+        | Cancellate in S1.1 di `plan_security_and_retention.md`.
+        |
+        | Sonno, HRV e battito **restano sul telefono di chi li produce**
+        | (decisione D9): il server non li riceve, non li conserva e non li
+        | manda a nessun modello. Non e' una funzione persa, e' una funzione
+        | traslocata nell'app — `lib/src/features/health/`.
+        |
+        | ⚠️ Chi volesse riaprirle deve prima leggere §C11 e §C12 di
+        | `todo-2026-08-11.md`: il motivo per cui non ci sono non e' tecnico.
+        */
 
         /*
         | Autorizzazione dei canali privati per l'APP (B8.2).
@@ -256,17 +266,15 @@ Route::prefix('v1')->group(function (): void {
     });
 
     /*
-    | ── Ingest dall'orologio (B9.1) ───────────────────────────────────────
+    | ── L'ingest dall'orologio non esiste piu' ────────────────────────────
     |
-    | 🚨 **Fuori da `auth:sanctum`, ed e' l'unico endpoint scrivente che lo e'.**
-    | Chi manda i dati e' un'automazione sul telefono che non ha una sessione:
-    | autentica il solo token, che e' **per utente** (`users.health_ingest_token`)
-    | e non globale come nell'app storica. Revocarlo per una persona non tocca
-    | nessun altro.
+    | Qui c'era `POST health/ingest`, **l'unico endpoint scrivente fuori da
+    | `auth:sanctum`**: si autenticava con `users.health_ingest_token` perche'
+    | chi mandava i dati era un'automazione senza sessione.
     |
-    | Rate-limited perche' non c'e' nient'altro a proteggerlo.
+    | 🚨 Cancellato in S1.1 insieme alla colonna del token. Ed e' un guadagno
+    | doppio: oltre a togliere i dati sanitari dal server, **toglie l'unica
+    | superficie scrivente non autenticata da Sanctum** che il progetto avesse.
     */
-    Route::post('health/ingest', [HealthIngestController::class, 'store'])
-        ->middleware('throttle:health-ingest');
 
 });

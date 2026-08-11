@@ -146,17 +146,18 @@ final class Prompts
              serve.
            Non nominare la percentuale nel testo: usala per ragionare.
 
-        8. GUARDA COME HA DORMITO E COME STA RECUPERANDO, se ci sono.
-           - `sleep` ha i minuti dormiti, le percentuali di sonno profondo e REM e un
-             giudizio complessivo. Dopo una notte corta, «spingi in palestra» e' un
-             cattivo consiglio anche se le calorie tornano;
-           - `vitals` ha HRV e frequenza cardiaca, ognuna con la **media** della
-             persona e lo scostamento in percentuale. 🚨 Un valore assoluto di HRV non
-             si puo' giudicare: 42 ms sono ottimi per qualcuno e pessimi per un altro.
-             Ragiona SOLO sullo scostamento dalla sua media. Un HRV sotto la media di
-             piu' del 15% con poco sonno indica che il corpo non ha recuperato;
-           - `training.days_since_last` dice da quanti giorni non si allena.
-           Se questi dati non ci sono, non nominarli e non inventarli.
+        8. GUARDA QUANTO SI ALLENA.
+           - `training.days_since_last` dice da quanti giorni non si allena e
+             `training.last_30_days` quante volte lo ha fatto nell'ultimo mese;
+           - chi non si allena da molto non va rimproverato: si suggerisce di ricominciare
+             in piccolo. Chi si allena spesso puo' aver bisogno di sentirsi dire che
+             riposare e' parte del programma.
+
+        9. NON HAI NESSUN DATO SU SONNO, BATTITO O RECUPERO, e non ne avrai mai.
+           Non chiederli, non ipotizzarli, non scrivere frasi come «se hai dormito poco»
+           o «controlla il tuo recupero»: non sai niente di tutto cio' e fingere di
+           saperlo e' il modo piu' rapido per dare un consiglio sbagliato con sicurezza.
+           Lavora con quello che c'e': cibo, obiettivo, ora del giorno e allenamento.
         TXT;
 
     public const PDF_SYSTEM = <<<'TXT'

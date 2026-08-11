@@ -292,17 +292,25 @@ class AiController extends Controller
             )),
             'goal' => $utente->profile?->goalForFormula(),
 
-            // ── D4: il resto della persona ────────────────────────────────
-            //
-            // Sonno, recupero e allenamento cambiano il consiglio: dopo una
-            // notte da quattro ore con l'HRV sotto la media, «spingi» è un
-            // cattivo consiglio anche se le calorie tornano.
-            'sleep' => $riepilogo['sleep'],
-            'vitals' => array_filter(
-                $riepilogo['vitals'],
-                static fn (mixed $v, string $k): bool => $k !== 'has_any' && $v !== null,
-                ARRAY_FILTER_USE_BOTH,
-            ),
+            /*
+             * ── Il resto della persona ────────────────────────────────────
+             *
+             * 🚨 **Qui c'erano `sleep` e `vitals`, e sono stati tolti in S1.5.**
+             *
+             * Non per risparmiare token: perche' quei dati **non escono piu' dal
+             * telefono di chi li produce** (decisione D9). Mandarli ad Anthropic
+             * o a OpenAI era un trasferimento di dati sanitari verso gli Stati
+             * Uniti, e questo piano esiste per farlo sparire alla radice invece
+             * di gestirlo con contratti e clausole.
+             *
+             * ⚠️ Il consiglio ragiona ora **solo su cibo e allenamento**, che
+             * non sono dati del corpo. E' un consiglio meno informato, ed e' una
+             * perdita accettata consapevolmente: vedi §C11 di
+             * `todo-2026-08-11.md`.
+             *
+             * 🚨 Chi volesse rimetterli deve prima leggere §C12, dove c'e' la
+             * ragione legale per cui non ci sono.
+             */
             'training' => [
                 'last_30_days' => $riepilogo['training']['last_30_days'],
                 'days_since_last' => $riepilogo['training']['days_since_last'],
