@@ -66,16 +66,16 @@ class SeriesCalendarApiTest extends TestCase
         ]));
     }
 
-    private function pesa(Carbon $giorno, float $kg): void
-    {
-        $this->ctx()->runAs($this->alfa, fn () => BodyMetric::create([
-            'user_id' => $this->iscritto->getKey(),
-            'date' => $giorno->toDateString(),
-            'weight_kg' => $kg,
-        ]));
-    }
-
-    // ───────────────────────── C3: peso ─────────────────────────
+    /*
+     * ⚠️ Qui c'era `pesa()`, e i due test sulla serie del peso. Cancellati in
+     * S5.4: `body_metrics` non esiste piu' e la serie la costruisce l'app dal
+     * proprio archivio (`weightSeriesProvider`).
+     *
+     * 🚨 L'helper era rimasto orfano dopo la cancellazione dei test: PHP non se
+     * ne accorge, perche' risolve la classe solo quando il codice gira. Un
+     * riferimento a un modello inesistente dentro un metodo mai chiamato passa
+     * la suite e **esplode il giorno che qualcuno riusa l'helper**.
+     */
 
 
 
