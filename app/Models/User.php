@@ -37,7 +37,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 #[Fillable([
     'tenant_id', 'name', 'email', 'username', 'password', 'phone',
-    'avatar_path', 'locale', 'is_active',
+    'avatar_path', 'locale', 'timezone', 'is_active',
 ])]
 // `is_super_admin` NON è fillable di proposito: si concede solo da seeder o da
 // console, mai per assegnazione di massa da una richiesta HTTP. Un campo del
@@ -125,6 +125,61 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'health_consent_at' => 'datetime',
             'ai_consent_at' => 'datetime',
         ];
+    }
+
+    // ───────────────────────── il giorno di chi guarda (A3) ─────────────────────────
+
+    /**
+     * Il fuso orario di questa persona.
+     *
+     * 🚨 **La catena e' `users.timezone` → `tenants.timezone` → `Europe/Rome`**, e
+     * ogni anello ha un senso proprio: il primo serve a chi viaggia o vive
+     * altrove, il secondo e' il caso normale di una palestra, il terzo evita
+     * che un dato mancante faccia ricadere tutto su UTC — che e' l'unico valore
+     * **sicuramente sbagliato** per un prodotto italiano.
+     *
+     * ⚠️ `null` non e' un buco: significa «usa quello della palestra».
+     */
+    public function fusoOrario(): string
+    {
+        return $this->timezone
+            ?? $this->tenant?->timezone
+            ?? config('app.display_timezone', 'Europe/Rome');
+    }
+
+    /**
+     * L'inizio di **oggi** per questa persona, espresso in UTC.
+     *
+     * 🚨 **E' il metodo che chiude il difetto A3.** `Carbon::today()` dava la
+     * mezzanotte **UTC**: alle 00:22 di Roma rispondeva ancora con il giorno
+     * prima, e il diario si apriva sul giorno sbagliato — la cena registrata
+     * tardi finiva in ieri.
+     *
+     * ⚠️ **Il valore torna in UTC**, ed e' voluto: serve a confrontarlo con i
+     * timestamp del database, che restano in UTC e devono restarci. Quello che
+     * cambia e' **dove si taglia la giornata**, non come si conservano gli
+     * istanti.
+     */
+    public function inizioDiOggi(?Carbon $adesso = null): Carbon
+    {
+        return ($adesso?->copy() ?? Carbon::now())
+            ->setTimezone($this->fusoOrario())
+            ->startOfDay()
+            ->setTimezone('UTC');
+    }
+
+    /**
+     * La data di oggi per questa persona, come `Y-m-d`.
+     *
+     * 💡 Serve dove il giorno e' una **etichetta** e non un istante: la chiave
+     * della cache del consiglio, la colonna `date` del diario, il
+     * raggruppamento dello storico.
+     */
+    public function dataDiOggi(?Carbon $adesso = null): string
+    {
+        return ($adesso?->copy() ?? Carbon::now())
+            ->setTimezone($this->fusoOrario())
+            ->toDateString();
     }
 
     // ───────────────────────── consensi (S9) ─────────────────────────

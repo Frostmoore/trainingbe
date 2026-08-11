@@ -53,9 +53,43 @@ class DashboardService
     public function forToday(User $utente, ?Carbon $adesso = null): array
     {
         $adesso ??= Carbon::now();
+
+        /*
+         * ⏸️ **A3 — QUI VA IL CONFINE DEL GIORNO DI CHI GUARDA, e non c'e'
+         * ancora.** Le fondamenta ci sono (`User::inizioDiOggi()`,
+         * `User::dataDiOggi()`, colonna `users.timezone`), il resto no.
+         *
+         * 🚨 **Non basta sostituire questa riga**, ed e' il motivo per cui non
+         * e' stato fatto a meta': `$oggi` finisce in `DiaryService::forDate()`,
+         * che passa per `FoodEntry::scopeOnDate()`, che rifa'
+         * `startOfDay()`/`endOfDay()` **in UTC**. Cambiare solo qui darebbe un
+         * riepilogo che mostra il giorno giusto in intestazione e **quello
+         * sbagliato nei dati** — cioe' peggio del difetto, perche' incoerente
+         * invece che uniformemente sbagliato.
+         *
+         * ⚠️ La migrazione va fatta **tutta insieme**: `scopeOnDate`,
+         * `DiaryService`, `SeriesService`, `CalendarService`, il raggruppamento
+         * per settimana e l'hash della cache del consiglio. Con il test che
+         * serve: un utente in `Europe/Rome` alle 00:30 deve vedere il giorno
+         * nuovo — senza, **di giorno funziona comunque** e non ci si accorge di
+         * niente.
+         */
         $oggi = $adesso->copy()->startOfDay();
 
         return [
+            /*
+             * ⚠️ **Quando si fara' A3, qui va `$utente->dataDiOggi($adesso)` —
+             * e NON `$oggi->toDateString()`.**
+             *
+             * E' la trappola trovata provando a farlo: `inizioDiOggi()`
+             * restituisce l'**istante** della mezzanotte locale riportato in
+             * UTC, che per Roma sono **le 22:00 del giorno prima**. Chiedergli
+             * la data darebbe l'etichetta sbagliata — cioe' lo stesso difetto,
+             * spostato di un metodo.
+             *
+             * 💡 Istante ed etichetta sono due cose diverse: il primo serve a
+             * confrontare timestamp, la seconda a scriverci sopra «11 agosto».
+             */
             'date' => $oggi->toDateString(),
 
             /*
