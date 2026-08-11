@@ -50,6 +50,49 @@ class WorkoutPlanController extends Controller
         ]);
     }
 
+    /**
+     * I modelli della palestra — S7.
+     *
+     * ── 🚨 Serve perché l'assegnazione è uscita dal pannello ──────────────
+     *
+     * Il trainer manda una scheda **dalla chat, dall'app**: è l'unico posto in
+     * cui esistono le chiavi per cifrarla. Ma i modelli li scrive nel pannello,
+     * quindi l'app deve poterli **leggere** — e questo è l'endpoint che glieli
+     * dà, per intero, pronti da serializzare dentro un messaggio.
+     *
+     * ⚠️ **Solo i modelli** (`member_id IS NULL`), e solo a chi allena. Un
+     * iscritto che chiamasse questa rotta si vedrebbe l'intero patrimonio di
+     * schede della palestra: è il lavoro del trainer, e non è materiale suo.
+     *
+     * 💡 I modelli **restano sul server in chiaro**, ed è deliberato (S7.3):
+     * non parlano di nessuno — sono esercizi, serie e ripetizioni — e sono il
+     * patrimonio della palestra. Quello che non deve restare scritto è il
+     * **legame fra una persona e un programma**, e quello adesso viaggia solo
+     * dentro una busta cifrata.
+     */
+    public function templates(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        if (! $utente->isTrainer() && ! $utente->isGymAdmin()) {
+            // 403 e non 404: qui non c'è nessun id da indovinare, quindi non
+            // c'è nessun oracolo da proteggere. Dire la verità aiuta chi sta
+            // scrivendo il client.
+            return response()->json(['message' => __('Non sei un trainer.')], 403);
+        }
+
+        $modelli = WorkoutPlan::query()
+            ->templates()
+            ->published()
+            ->with(['exercises.exercise', 'creator'])
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'data' => $modelli->map(fn (WorkoutPlan $p): array => $this->dettaglio($p))->all(),
+        ]);
+    }
+
     public function show(Request $request, int $plan): JsonResponse
     {
         $piano = WorkoutPlan::query()

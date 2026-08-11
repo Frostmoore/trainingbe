@@ -144,6 +144,17 @@ Route::prefix('v1')->group(function (): void {
 
         // ── Allenamento (B4.5) ───────────────────────────────────────────
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
+
+        // 🚨 S7 — i modelli della palestra, per chi allena.
+        //
+        // L'assegnazione è uscita dal pannello: il trainer manda la scheda
+        // **dalla chat, dall'app**, perché è l'unico posto in cui esistono le
+        // chiavi per cifrarla. I modelli però li scrive nel pannello, e da lì
+        // l'app deve poterli leggere.
+        //
+        // ⚠️ **Prima di `{plan}`**: `whereNumber` protegge già la rotta con
+        // l'id, ma l'ordine rende esplicito che `templates` non è un id.
+        Route::get('workout-plans/templates', [WorkoutPlanController::class, 'templates']);
         Route::get('workout-plans/{plan}', [WorkoutPlanController::class, 'show'])->whereNumber('plan');
 
         // C2 — l'iscritto si scrive le proprie schede (decisione D1). Quelle del
