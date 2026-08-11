@@ -107,7 +107,64 @@ class User extends Authenticatable implements FilamentUser, HasMedia
              * `0` = illimitato. Sono due cose diverse: vedi `MemberAiQuota`.
              */
             'ai_monthly_token_cap' => 'integer',
+
+            /*
+             * S9 — i consensi.
+             *
+             * 🚨 **Sono date, non booleani.** L'art. 7(1) chiede di poter
+             * *dimostrare* che il consenso e' stato dato, e un `true` senza data
+             * non dimostra niente: non dice quando, quindi non dice nemmeno a
+             * quale versione dell'informativa si riferisse.
+             *
+             * ⚠️ `null` significa **non dato**, che sul piano degli effetti e'
+             * la stessa cosa di «negato». Un booleano `false` di serie avrebbe
+             * confuso «non ha ancora scelto» con «ha detto di no».
+             */
+            'age_confirmed_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
+            'health_consent_at' => 'datetime',
+            'ai_consent_at' => 'datetime',
         ];
+    }
+
+    // ───────────────────────── consensi (S9) ─────────────────────────
+
+    /**
+     * Ha dichiarato di essere maggiorenne.
+     *
+     * ⚠️ **Dichiarato, non verificato**, e la differenza e' scritta apposta nel
+     * nome del metodo: dopo S5 il server non sa quanti anni ha la persona,
+     * perche' la data di nascita sta sul telefono.
+     */
+    public function haDichiaratoMaggioreEta(): bool
+    {
+        return $this->age_confirmed_at !== null;
+    }
+
+    /**
+     * Puo' mandare il proprio diario a un modello AI.
+     *
+     * 🚨 **Serve il consenso specifico, non quello ai dati sanitari.** Sono due
+     * decisioni diverse: chi accetta che i propri dati stiano **da noi** non ha
+     * per questo accettato che vadano **ad Anthropic**, negli Stati Uniti.
+     */
+    public function puoUsareAi(): bool
+    {
+        return $this->ai_consent_at !== null;
+    }
+
+    /**
+     * Registra o revoca un consenso.
+     *
+     * 🚨 **Revocabile con la stessa facilita' con cui e' stato dato**
+     * (art. 7(3)): passare `false` azzera la data, e non c'e' nessun percorso
+     * piu' lungo o piu' difficile per togliere che per mettere. Un consenso che
+     * si da' con un tocco e si toglie scrivendo un'email **non e' liberamente
+     * revocabile**, e quindi non e' consenso valido.
+     */
+    public function registraConsenso(string $colonna, bool $dato): void
+    {
+        $this->forceFill([$colonna => $dato ? now() : null])->save();
     }
 
     // ───────────────────────── identificativi ─────────────────────────

@@ -68,6 +68,24 @@ class AuthController extends Controller
                     'locale' => $tenant->locale,
                 ]);
 
+                /*
+                 * 🚨 **S9.2 — la dichiarazione si registra col suo istante.**
+                 *
+                 * `RegisterRequest` ha gia' preteso `accepted`, quindi qui non
+                 * si controlla di nuovo: si **conserva** il momento in cui e'
+                 * stata data. L'art. 7(1) chiede di poterlo dimostrare, e senza
+                 * la data non si dimostra niente.
+                 *
+                 * ⚠️ `forceFill` e non `$fillable`: sono campi che nessuna
+                 * richiesta deve poter assegnare in massa. Un `age_confirmed_at`
+                 * fillable vorrebbe dire che basta mandarlo in un `PATCH` per
+                 * dichiararsi maggiorenne senza mai passare da una casella.
+                 */
+                $user->forceFill([
+                    'age_confirmed_at' => now(),
+                    'terms_accepted_at' => now(),
+                ])->save();
+
                 $user->assignRole(UserRole::Member->value);
 
                 return $user;

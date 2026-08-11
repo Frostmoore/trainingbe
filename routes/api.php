@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\RecoveryKeyController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
@@ -218,7 +219,11 @@ Route::prefix('v1')->group(function (): void {
         // singolo utente che martella, la quota di palestra (dentro il
         // controller) protegge il conto di fine mese. Il primo senza il secondo
         // lascerebbe cento iscritti educati bruciare il budget in un giorno.
-        Route::middleware('throttle:ai')->group(function (): void {
+        // 🚨 `ai.consent` prima di `throttle`: senza il consenso esplicito
+        // (art. 9(2)(a)) niente esce verso Anthropic. È un middleware e non un
+        // `if` nel controller perché valga anche sulle rotte AI che non esistono
+        // ancora — la prossima partirebbe scoperta, e funzionerebbe benissimo.
+        Route::middleware(['ai.consent', 'throttle:ai'])->group(function (): void {
             Route::post('ai/food/text', [AiController::class, 'foodFromText']);
             Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
             Route::get('ai/advice', [AiController::class, 'advice']);
@@ -256,6 +261,18 @@ Route::prefix('v1')->group(function (): void {
         // l'intero schema non servirebbe a niente.
         Route::get('account/recovery-key', [RecoveryKeyController::class, 'show']);
         Route::put('account/recovery-key', [RecoveryKeyController::class, 'store']);
+
+        // ── I consensi facoltativi (S9.1) ────────────────────────────────
+        //
+        // 🚨 Si danno **dopo** l'iscrizione, uno per uno. Chiederli al momento
+        // della registrazione li trasformerebbe in condizioni per usare il
+        // servizio, e un consenso che serve per iscriversi non è «liberamente
+        // dato» (art. 7(4)) — cioè non è consenso.
+        //
+        // 🚨 Revocare costa esattamente quanto concedere: stessa chiamata,
+        // `false` invece di `true` (art. 7(3)).
+        Route::get('account/consents', [ConsentController::class, 'show']);
+        Route::patch('account/consents', [ConsentController::class, 'update']);
 
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);

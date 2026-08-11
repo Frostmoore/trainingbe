@@ -92,6 +92,37 @@ class RegisterRequest extends FormRequest
             ],
             'phone' => ['nullable', 'string', 'max:32'],
 
+            /*
+             * 🚨 **Lo sbarramento dei maggiorenni — S9.2.**
+             *
+             * `accepted` e non `boolean`: un `false` deve **fallire**, non
+             * essere registrato come «ha detto di no e comunque entra».
+             *
+             * ⚠️ **Non e' un controllo sulla data di nascita**, ed e' voluto:
+             * dopo S5 il profilo sta sul telefono e il server non sa quanti anni
+             * ha la persona. E' una **dichiarazione**, conservata con data e ora
+             * in `users.age_confirmed_at`.
+             *
+             * 💡 **Perche' una dichiarazione basta**: 18+ e' la scelta che
+             * *chiude* il problema invece di gestirlo. Sotto i 14 anni
+             * servirebbe raccogliere e verificare il consenso di chi esercita la
+             * responsabilita' genitoriale; fra i 14 e i 17 la soglia cambia da
+             * Stato a Stato dell'Unione. Una riga sola copre tutti i casi.
+             */
+            'age_confirmed' => ['required', 'accepted'],
+
+            /*
+             * Le condizioni d'uso: obbligatorie, perche' sono il contratto.
+             *
+             * ⚠️ **I consensi facoltativi NON stanno qui** e non si chiedono
+             * alla registrazione: dati sanitari e invio all'AI si concedono
+             * dopo, uno per uno, da `PATCH /account/consents`. Metterli in
+             * questo modulo li trasformerebbe in condizioni per iscriversi, e un
+             * consenso che serve per usare il servizio non e' «liberamente
+             * dato» ai sensi dell'art. 7(4) — cioe' non e' consenso.
+             */
+            'terms_accepted' => ['required', 'accepted'],
+
             // Etichetta del dispositivo, mostrata poi in /devices perché
             // l'utente possa riconoscere e revocare la sessione giusta.
             'device_name' => ['nullable', 'string', 'max:100'],

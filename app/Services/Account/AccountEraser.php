@@ -13,6 +13,7 @@ use App\Models\FoodFavorite;
 use App\Models\Media;
 use App\Models\Message;
 use App\Models\RecoveryKey;
+use App\Models\SocialIdentity;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
@@ -191,6 +192,29 @@ class AccountEraser
         $utente->tokens()->delete();
 
         DeviceToken::withoutGlobalScopes()
+            ->where('user_id', $utente->getKey())
+            ->delete();
+
+        /*
+         * 🚨 **Il legame con Google e Apple, trovato mancante in S9.3.**
+         *
+         * La foreign key di `social_identities` e' `cascadeOnDelete`, quindi
+         * sembrava a posto — ⚠️ ma la riga `users` **resta in soft delete**, e
+         * una cancellazione che non avviene non fa scattare nessuna cascade.
+         *
+         * Il sintomo non era quello che verrebbe da pensare: non si rientrava
+         * nell'account cancellato (`SocialIdentity::user()` punta a un modello
+         * con `SoftDeletes` e restituisce `null`). Il danno era peggiore e
+         * silenzioso: **quella persona non poteva piu' registrarsi, mai**, con
+         * quell'account Google — l'identita' risultava presa da un utente che
+         * non esiste piu', e l'errore diceva soltanto «Non e' stato possibile
+         * completare l'accesso».
+         *
+         * 💡 E' anche l'unica riga che collega la persona a un identificativo
+         * **di un altro fornitore**: tenerla dopo una richiesta di cancellazione
+         * non avrebbe avuto nessuna giustificazione.
+         */
+        SocialIdentity::query()
             ->where('user_id', $utente->getKey())
             ->delete();
     }

@@ -107,6 +107,12 @@ class SocialAuthApiTest extends TestCase
         return $this->postJson('/api/v1/auth/social', array_merge([
             'provider' => 'google',
             'id_token' => 'token-finto',
+
+            // S9.2 — al primo accesso (cioè quando c'è il `join_code`) servono
+            // anche di qui. ⚠️ Sono innocui quando il codice non c'è:
+            // `exclude_without:join_code` li toglie dalla validazione.
+            'age_confirmed' => true,
+            'terms_accepted' => true,
         ], $extra));
     }
 

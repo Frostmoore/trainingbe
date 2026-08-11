@@ -51,6 +51,14 @@ class AiApiTest extends TestCase
         $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
 
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
+
+        // 🚨 S9.1 — senza consenso esplicito niente esce verso Anthropic, e
+        // ogni rotta AI risponde 403. Qui lo si concede perché questi test
+        // parlano d'altro; ⚠️ che il cancello funzioni è provato altrove, in
+        // `ConsentApiTest`, e **deve** restare provato lì: se il consenso
+        // arrivasse di serie da `creaUtente()`, il giorno in cui il cancello si
+        // rompesse non se ne accorgerebbe nessuno.
+        $this->iscritto->registraConsenso('ai_consent_at', true);
     }
 
     private function comeIscritto(?User $u = null): static
@@ -196,6 +204,7 @@ class AiApiTest extends TestCase
         $this->aiFinta();
 
         $altroIscritto = $this->creaUtente($this->beta, UserRole::Member, 'anna@beta.test');
+        $altroIscritto->registraConsenso('ai_consent_at', true);
 
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
         $this->comeIscritto($altroIscritto)->postJson('/api/v1/ai/food/text', ['text' => 'pera']);
@@ -301,6 +310,7 @@ class AiApiTest extends TestCase
         $this->alfa->update(['ai_monthly_tokens_per_member' => 1000]);
 
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
+        $altro->registraConsenso('ai_consent_at', true);
 
         // Il primo esaurisce il proprio tetto.
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();

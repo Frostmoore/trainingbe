@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => \App\Http\Middleware\ResolveTenant::class,
             'tenant.active' => \App\Http\Middleware\EnsureTenantActive::class,
+
+            // 🚨 S9.1 — senza consenso esplicito niente esce verso Anthropic.
+            // Va **dopo** `auth:sanctum`: ha bisogno dell'utente per sapere
+            // cosa ha acconsentito.
+            'ai.consent' => \App\Http\Middleware\RequireAiConsent::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

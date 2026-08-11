@@ -46,6 +46,24 @@ class SocialLoginRequest extends FormRequest
             'id_token' => ['required', 'string', 'max:8192'],
 
             'join_code' => ['nullable', 'string', 'size:8'],
+
+            /*
+             * 🚨 **Lo sbarramento dei maggiorenni, anche di qui — S9.2.**
+             *
+             * ⚠️ `exclude_without:join_code` e non `required`: il `join_code`
+             * arriva **solo al primo accesso**, ed e' quello il momento in cui
+             * ci si iscrive. Chiederlo a ogni accesso vorrebbe dire far
+             * ridichiarare la maggiore eta' a ogni apertura dell'app — e
+             * trasformerebbe una dichiarazione in un tasto che si preme senza
+             * leggere.
+             *
+             * 💡 **Questa e' la porta che si dimentica**: chi entra con Google
+             * non passa da `RegisterRequest`. Metterlo solo sul modulo di
+             * registrazione lascerebbe scoperta meta' delle iscrizioni.
+             */
+            'age_confirmed' => ['exclude_without:join_code', 'required', 'accepted'],
+            'terms_accepted' => ['exclude_without:join_code', 'required', 'accepted'],
+
             'device_name' => ['nullable', 'string', 'max:100'],
         ];
     }

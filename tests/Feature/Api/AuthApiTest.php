@@ -114,6 +114,7 @@ class AuthApiTest extends TestCase
     {
         $r = $this->postJson('/api/v1/auth/register', [
             'join_code' => 'alfa2345',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'name' => 'Anna',
             'email' => ' Anna@Esempio.IT ',
             'username' => ' Anna.Nuova ',
@@ -163,6 +164,7 @@ class AuthApiTest extends TestCase
 
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Anna', 'email' => 'anna2@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'gia.preso',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
         ])->assertStatus(422)->assertJsonValidationErrors('username');
@@ -182,6 +184,7 @@ class AuthApiTest extends TestCase
         foreach (['ab', 'con spazi', 'con@chiocciola', '.punto', 'punto.'] as $sbagliato) {
             $this->postJson('/api/v1/auth/register', [
                 'join_code' => 'ALFA2345', 'name' => 'X', 'email' => 'x'.md5($sbagliato).'@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
                 'username' => $sbagliato,
                 'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             ])->assertStatus(422)->assertJsonValidationErrors('username');
@@ -194,6 +197,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Furbo', 'email' => 'furbo@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'furbo',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             'role' => 'gym_admin', 'is_super_admin' => true, 'tenant_id' => 999,
@@ -231,6 +235,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Debole', 'email' => 'debole@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'debole',
             'password' => $password, 'password_confirmation' => $password,
         ])->assertStatus(422)->assertJsonValidationErrors('password');
@@ -255,6 +260,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Distratto', 'email' => 'distratto@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'distratto',
             'password' => self::FAKE_PASSWORD,
             'password_confirmation' => self::FAKE_PASSWORD.'-diversa',
@@ -273,6 +279,7 @@ class AuthApiTest extends TestCase
 
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'ALFA2345', 'name' => 'Saggia', 'email' => 'saggia@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'saggia',
             'password' => $frase, 'password_confirmation' => $frase,
         ])->assertCreated();
@@ -283,6 +290,7 @@ class AuthApiTest extends TestCase
     {
         $this->postJson('/api/v1/auth/register', [
             'join_code' => 'SOSP2345', 'name' => 'X', 'email' => 'x@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'xxx',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
         ])->assertStatus(422)->assertJsonValidationErrors('join_code');

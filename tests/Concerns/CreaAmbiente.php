@@ -64,6 +64,25 @@ trait CreaAmbiente
                 'password' => TestCase::FAKE_PASSWORD,
             ], $extra));
 
+            /*
+             * ⚠️ **La maggiore eta' e le condizioni d'uso si danno per scontate
+             * qui, i consensi facoltativi NO** (S9).
+             *
+             * Chi arriva da `creaUtente()` e' una persona gia' iscritta: nella
+             * vita reale la dichiarazione l'ha data al momento dell'iscrizione,
+             * e farla mancare renderebbe ogni test un test sullo sbarramento.
+             *
+             * 🚨 `health_consent_at` e `ai_consent_at` restano invece **`null`**,
+             * ed e' deliberato: e' lo stato di serie di chiunque si iscrive, e
+             * un test che chiama l'AI **deve** concederlo esplicitamente. Se li
+             * mettessimo qui, il giorno in cui il cancello dell'AI si rompesse
+             * nessun test se ne accorgerebbe.
+             */
+            $u->forceFill([
+                'age_confirmed_at' => now(),
+                'terms_accepted_at' => now(),
+            ])->save();
+
             $u->assignRole($ruolo->value);
 
             return $u;

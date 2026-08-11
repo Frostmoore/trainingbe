@@ -241,6 +241,23 @@ class SocialAuthController extends Controller
                     'locale' => $tenant->locale,
                 ]);
 
+                /*
+                 * 🚨 **Lo sbarramento vale anche di qui — S9.2.**
+                 *
+                 * ⚠️ **È la porta che si dimentica.** Chi entra con Google non
+                 * passa da `RegisterRequest`, quindi mettere la casella solo sul
+                 * modulo di registrazione lascerebbe scoperta metà delle
+                 * iscrizioni — e nella Parte B, con i *free user*, sarà la
+                 * maggioranza.
+                 *
+                 * La dichiarazione la pretende `SocialLoginRequest` al primo
+                 * accesso; qui si conserva il momento in cui è stata data.
+                 */
+                $utente->forceFill([
+                    'age_confirmed_at' => now(),
+                    'terms_accepted_at' => now(),
+                ])->save();
+
                 $utente->assignRole(UserRole::Member->value);
             }
 
