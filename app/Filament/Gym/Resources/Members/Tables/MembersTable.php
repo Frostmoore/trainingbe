@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\Members\Tables;
 
-use App\Models\BodyMetric;
 use App\Models\User;
 use App\Models\WorkoutSession;
 use Filament\Actions\BulkActionGroup;
@@ -54,13 +53,16 @@ class MembersTable
                     ->placeholder('mai')
                     ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray'),
 
-                TextColumn::make('peso')
-                    ->label('Peso')
-                    ->getStateUsing(fn (User $r): ?string => ($p = BodyMetric::latestWeightFor($r)) !== null
-                        ? number_format($p, 1, ',', '').' kg'
-                        : null)
-                    ->placeholder('—')
-                    ->toggleable(),
+                /*
+                 * 🚨 Qui c'era la colonna «Peso», e non e' stata tolta per
+                 * ripulire: e' stata tolta perche' **non deve esserci**.
+                 *
+                 * Decisione D9-bis: *«il trainer non ha bisogno di vedere peso,
+                 * altezza ed eta': puo' chiederli»*. Da S5.4 il peso non sta
+                 * nemmeno piu' sul server, quindi questa colonna non avrebbe
+                 * potuto funzionare comunque — ma sarebbe stata rimossa lo
+                 * stesso.
+                 */
 
                 IconColumn::make('is_active')
                     ->label('Attivo')

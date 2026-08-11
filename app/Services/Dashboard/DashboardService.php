@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Dashboard;
 
-use App\Models\BodyMetric;
 use App\Models\User;
 use App\Models\WorkoutSession;
 use App\Services\Nutrition\DiaryService;
@@ -170,28 +169,20 @@ class DashboardService
     }
 
     /**
+     * Il corpo — ma il server ne sa **una cosa sola**.
+     *
+     * 🚨 **Peso e misure non stanno piu' qui** (S5.4, decisione D9-bis):
+     * `body_metrics` non esiste, e l'app li legge dal proprio archivio locale.
+     *
+     * ⚠️ Resta il **peso obiettivo**, ed e' voluto: e' una **preferenza** che
+     * la persona ha dichiarato nel profilo, non una misura del suo corpo. Vive
+     * in `profiles` e ci resta.
+     *
      * @return array<string, mixed>
      */
     private function corpo(User $utente): array
     {
-        $ultime = BodyMetric::query()
-            ->forUser($utente)
-            ->whereNotNull('weight_kg')
-            ->orderByDesc('date')
-            ->limit(2)
-            ->get();
-
-        $attuale = $ultime->first();
-        $precedente = $ultime->skip(1)->first();
-
         return [
-            'weight_kg' => $attuale === null ? null : (float) $attuale->weight_kg,
-            'weight_at' => $attuale?->date->toDateString(),
-            // La differenza dalla pesata precedente: il numero da solo non dice
-            // se si sta andando nella direzione giusta.
-            'weight_delta' => ($attuale === null || $precedente === null)
-                ? null
-                : round((float) $attuale->weight_kg - (float) $precedente->weight_kg, 1),
             'target_weight_kg' => $utente->profile?->target_weight_kg === null
                 ? null
                 : (float) $utente->profile->target_weight_kg,

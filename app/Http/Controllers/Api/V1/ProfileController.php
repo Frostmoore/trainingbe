@@ -73,7 +73,19 @@ class ProfileController extends Controller
     private function rappresenta(User $utente): array
     {
         $profilo = $utente->profile;
-        $peso = $utente->latestWeight();
+        /*
+         * 🚨 **`null`, e non e' una dimenticanza** — S5.5.
+         *
+         * Il peso non sta piu' sul server (D9-bis), quindi `weight_kg` entra
+         * SEMPRE in `missing` e `derived` e' SEMPRE `null`. L'app se li calcola
+         * da sola con `CalcolatoreCalorie`, che ha il peso nel proprio archivio.
+         *
+         * ⚠️ **Il contratto non cambia forma**, e questo e' voluto: `missing` e
+         * `derived` esistevano gia' e l'app li sapeva gia' leggere. Chi legge la
+         * risposta non vede un endpoint nuovo — vede un profilo a cui manca un
+         * pezzo, che e' una situazione che sapeva gia' gestire.
+         */
+        $peso = null;
         $mancanti = $this->mancanti($profilo, $peso);
 
         return [

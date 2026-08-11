@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
@@ -66,7 +65,9 @@ class DashboardApiTest extends TestCase
                 'day_progress_pct',
                 'nutrition' => ['totals', 'targets', 'burned', 'entries_count'],
                 'training' => ['last_30_days', 'days_since_last', 'recent'],
-                'body' => ['weight_kg', 'weight_delta', 'target_weight_kg'],
+                // ⚠️ Solo il peso OBIETTIVO: peso e scostamento sono dati del
+                // corpo e da S5 non stanno piu' sul server (D9-bis).
+                'body' => ['target_weight_kg'],
             ]]);
     }
 
@@ -135,29 +136,6 @@ class DashboardApiTest extends TestCase
         $this->assertSame(1, $risposta->json('data.training.last_30_days'));
     }
 
-    #[Test]
-    public function the_dashboard_shows_the_weight_and_how_it_changed(): void
-    {
-        $this->ctx()->runAs($this->alfa, function (): void {
-            BodyMetric::create([
-                'user_id' => $this->iscritto->getKey(),
-                'date' => Carbon::today()->subDays(7)->toDateString(),
-                'weight_kg' => 85.0,
-            ]);
-
-            BodyMetric::create([
-                'user_id' => $this->iscritto->getKey(),
-                'date' => Carbon::today()->toDateString(),
-                'weight_kg' => 84.2,
-            ]);
-        });
-
-        $risposta = $this->comeApp($this->iscritto)->getJson('/api/v1/dashboard')->assertOk();
-
-        $this->assertSame(84.2, $risposta->json('data.body.weight_kg'));
-        // Il numero da solo non dice se si sta andando nella direzione giusta.
-        $this->assertSame(-0.8, $risposta->json('data.body.weight_delta'));
-    }
 
     #[Test]
     public function the_dashboard_sums_what_was_eaten_today(): void

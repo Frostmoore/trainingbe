@@ -14,9 +14,7 @@ use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\Training\CalendarController;
-use App\Http\Controllers\Api\V1\Training\BodyMetricController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
-use App\Http\Controllers\Api\V1\Training\PhotoController;
 use App\Http\Controllers\Api\V1\Training\SeriesController;
 use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
 use App\Http\Controllers\Api\V1\Training\WorkoutSessionController;
@@ -167,8 +165,13 @@ Route::prefix('v1')->group(function (): void {
         // non è confrontabile. 200 se esisteva già, 201 solo se è nato adesso.
         Route::post('exercises', [ExerciseController::class, 'store']);
 
-        Route::get('body-metrics', [BodyMetricController::class, 'index']);
-        Route::post('body-metrics', [BodyMetricController::class, 'store']);
+        /*
+        | ⚠️ `body-metrics` non esiste piu' — S5.4.
+        |
+        | Peso e misure sono dati del corpo e restano sul telefono di chi li
+        | produce (decisione D9-bis). L'app li tiene in `ArchivioSalute` e il
+        | server non li vede mai.
+        */
 
         // C3 — le serie per i grafici. Un endpoint solo, stessa forma di
         // risposta per entrambe le metriche: l'app ha un parser unico.
@@ -181,12 +184,14 @@ Route::prefix('v1')->group(function (): void {
         Route::get('calendar/{date}', [CalendarController::class, 'day'])
             ->where('date', '\d{4}-\d{2}-\d{2}');
 
-        // Le foto NON si servono da un URL pubblico: `file` controlla di chi
-        // sono prima di consegnarle. Vedi PhotoController.
-        Route::get('photos', [PhotoController::class, 'index']);
-        Route::post('photos', [PhotoController::class, 'store']);
-        Route::get('photos/{photo}/file', [PhotoController::class, 'file'])->whereNumber('photo');
-        Route::delete('photos/{photo}', [PhotoController::class, 'destroy'])->whereNumber('photo');
+        /*
+        | ⚠️ Le rotte `photos` non esistono piu' — S5.4.
+        |
+        | Le foto dei progressi sono file sul telefono di chi le scatta
+        | (decisione D9-bis). Non c'e' piu' niente da caricare, da servire o da
+        | autenticare — ed e' sparito con loro anche il difetto G12, che nasceva
+        | proprio dal dover autenticare a mano il download di un'immagine.
+        */
 
         // ── Nutrizione (B5.5) ────────────────────────────────────────────
         Route::get('diary', [DiaryController::class, 'index']);

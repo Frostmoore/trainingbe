@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Account;
 
 use App\Models\AiAdvice;
-use App\Models\BodyMetric;
 use App\Models\DailyBurn;
 use App\Models\DeviceToken;
 use App\Models\FoodEntry;
@@ -95,7 +94,6 @@ class AccountEraser
         FoodEntry::withoutGlobalScopes()->where('user_id', $id)->delete();
         FoodFavorite::withoutGlobalScopes()->where('user_id', $id)->delete();
         DailyBurn::withoutGlobalScopes()->where('user_id', $id)->delete();
-        BodyMetric::withoutGlobalScopes()->where('user_id', $id)->delete();
         AiAdvice::withoutGlobalScopes()->where('user_id', $id)->delete();
 
         /*

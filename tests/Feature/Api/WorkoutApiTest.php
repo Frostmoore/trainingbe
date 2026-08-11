@@ -7,7 +7,6 @@ namespace Tests\Feature\Api;
 use App\Enums\KcalSource;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\Exercise;
 use App\Models\Tenant;
 use App\Models\User;
@@ -264,15 +263,18 @@ class WorkoutApiTest extends TestCase
     {
         $this->aiFinta()->willThrow(new \RuntimeException('fornitore giu\''));
 
-        BodyMetric::create([
-            'tenant_id' => $this->alfa->id, 'user_id' => $this->iscritto->id,
-            'date' => today(), 'weight_kg' => 80,
-        ]);
-
         $sessione = $this->sessioneAperta(startedMinutesAgo: 60);
 
+        /*
+         * 🚨 Il peso arriva **nella richiesta** — S5.4.
+         *
+         * Prima si scriveva una riga in `body_metrics` e il server la leggeva.
+         * Quella tabella non esiste piu' (D9-bis): il peso lo manda l'app, che
+         * ce l'ha nel proprio archivio, e il server lo usa per questa stima
+         * **senza conservarlo**.
+         */
         $risposta = $this->comeIscritto()
-            ->postJson("/api/v1/workout-sessions/{$sessione->id}/finish", [])
+            ->postJson("/api/v1/workout-sessions/{$sessione->id}/finish", ['weight_kg' => 80])
             ->assertOk()
             ->assertJsonPath('data.kcal_source', 'formula');
 
@@ -296,15 +298,6 @@ class WorkoutApiTest extends TestCase
 
     // ───────────────────────── misure ─────────────────────────
 
-    #[Test]
-    public function a_second_weigh_in_on_the_same_day_is_a_correction(): void
-    {
-        $this->comeIscritto()->postJson('/api/v1/body-metrics', ['weight_kg' => 80.5])->assertCreated();
-        $this->comeIscritto()->postJson('/api/v1/body-metrics', ['weight_kg' => 80.1])->assertCreated();
-
-        $this->assertSame(1, BodyMetric::withoutGlobalScopes()->where('user_id', $this->iscritto->id)->count());
-        $this->assertSame(80.1, BodyMetric::latestWeightFor($this->iscritto));
-    }
 
     // ───────────────────────── esercizi ─────────────────────────
 

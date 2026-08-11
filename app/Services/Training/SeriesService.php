@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Training;
 
-use App\Models\BodyMetric;
 use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\User;
@@ -52,37 +51,16 @@ class SeriesService
      * @param  int  $giorni  `0` = tutto lo storico
      * @return array<string, mixed>
      */
-    public function weight(User $utente, int $giorni): array
-    {
-        $da = $giorni > 0
-            ? Carbon::today()->subDays($giorni - 1)
-            : Carbon::today()->subYears(self::ANNI_INDIETRO);
-
-        $righe = BodyMetric::query()
-            ->forUser($utente)
-            ->whereNotNull('weight_kg')
-            ->where('date', '>=', $da->toDateString())
-            ->orderBy('date')
-            ->get(['date', 'weight_kg']);
-
-        return [
-            'metric' => 'weight',
-            'labels' => $righe->map(fn (BodyMetric $m): string => $m->date->format('d/m/y'))->all(),
-            'values' => $righe->map(fn (BodyMetric $m): float => (float) $m->weight_kg)->all(),
-            'granularity' => 'point',
-            'period' => $righe->isEmpty()
-                ? null
-                : $righe->first()->date->format('d/m/Y').' – '.$righe->last()->date->format('d/m/Y'),
-        ];
-    }
-
-    /**
-     * Calorie assunte e bruciate, giorno per giorno.
+    /*
+     * ⚠️ Qui viveva `weight(User $utente, int $giorni): array`. Cancellato in
+     * S5.4: il peso non sta piu' sul server (decisione D9-bis), e la serie la
+     * costruisce l'app dal proprio archivio locale
+     * (`weightSeriesProvider` in `dashboard_controller.dart`).
      *
-     * @param  int  $giorni  `0` = tutto lo storico
-     * @param  int  $offset  quante finestre indietro (per scorrere i periodi)
-     * @return array<string, mixed>
+     * 🚨 `calories()` invece RESTA: le calorie del diario non sono un dato del
+     * corpo. Due serie con la stessa forma e due sorgenti diverse, ed e' voluto.
      */
+
     public function calories(User $utente, int $giorni, int $offset = 0): array
     {
         [$da, $a, $tutto] = $this->finestra($giorni, $offset);

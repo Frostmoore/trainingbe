@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
@@ -41,23 +40,25 @@ class ProfileApiTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
-    private function pesoDi(User $utente, float $kg): void
-    {
-        BodyMetric::create([
-            'tenant_id' => $utente->tenant_id,
-            'user_id' => $utente->getKey(),
-            'date' => today(),
-            'weight_kg' => $kg,
-        ]);
-    }
-
     // ───────────────────────── scrittura ─────────────────────────
 
+    /**
+     * 🚨 **Il profilo si salva, ma `derived` resta `null`** — S5.5.
+     *
+     * Non e' una regressione: il server **non conosce piu' il peso** (decisione
+     * D9-bis), e senza peso non c'e' BMI, ne' BMR, ne' TDEE, ne' target.
+     *
+     * ⚠️ E il server **non inventa un peso di ripiego** per riempire il campo:
+     * un target calorico costruito su un peso finto non e' un numero storto,
+     * e' una dieta storta. Meglio `null`, che l'app sa gia' leggere.
+     *
+     * 💡 I valori li calcola l'app con `CalcolatoreCalorie` (S5.1), che ha il
+     * peso nel proprio archivio. La prova che le due formule coincidono sta nei
+     * test Dart, che usano **gli stessi valori attesi** del test PHP.
+     */
     #[Test]
-    public function it_saves_the_profile_and_returns_the_derived_values(): void
+    public function it_saves_the_profile_but_leaves_the_derived_values_to_the_app(): void
     {
-        $this->pesoDi($this->iscritto, 84.0);
-
         $this->comeApp($this->iscritto)
             ->patchJson('/api/v1/profile', [
                 'sex' => 'm',
@@ -69,13 +70,10 @@ class ProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.sex', 'm')
             ->assertJsonPath('data.height_cm', 178)
-            ->assertJsonPath('data.missing', [])
-            // Il fabbisogno c'e' e i macro lo ricompongono: se `derived` fosse
-            // null qui, l'app mostrerebbe ancora «Nessun obiettivo impostato».
-            ->assertJsonStructure(['data' => ['derived' => [
-                'bmi', 'bmr', 'tdee', 'target_kcal',
-                'macros' => ['protein_g', 'carbs_g', 'fat_g'],
-            ]]]);
+            // ⚠️ Il peso resta l'unica cosa che manca, e manchera' sempre:
+            // e' l'app a saperlo.
+            ->assertJsonPath('data.missing', ['weight_kg'])
+            ->assertJsonPath('data.derived', null);
 
         $this->assertDatabaseHas('profiles', [
             'user_id' => $this->iscritto->getKey(),
@@ -177,15 +175,14 @@ class ProfileApiTest extends TestCase
     #[Test]
     public function the_missing_list_shrinks_as_the_fields_arrive(): void
     {
-        $this->pesoDi($this->iscritto, 80.0);
-
         $this->comeApp($this->iscritto)
             ->patchJson('/api/v1/profile', ['sex' => 'm', 'height_cm' => 180])
             ->assertOk()
             ->assertJsonPath('data.derived', null)
-            // Resta solo la data di nascita: l'app puo' chiedere **quella**,
-            // invece di dire genericamente che manca qualcosa.
-            ->assertJsonPath('data.missing', ['birthdate']);
+            // Resta la data di nascita — che l'app puo' chiedere invece di
+            // dire genericamente che manca qualcosa — e il peso, che il server
+            // non conoscera' mai piu' (S5.5).
+            ->assertJsonPath('data.missing', ['weight_kg', 'birthdate']);
     }
 
     // ───────────────────── gli orari dei pasti ─────────────────────

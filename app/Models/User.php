@@ -242,11 +242,6 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasMany(NutritionPlan::class, 'member_id');
     }
 
-    public function bodyMetrics(): HasMany
-    {
-        return $this->hasMany(BodyMetric::class);
-    }
-
     /** I trainer che seguono questo iscritto. */
     public function assignedTrainers(): BelongsToMany
     {
@@ -327,11 +322,14 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 
     // ───────────────────────── utilita' ─────────────────────────
 
-    /** Ultimo peso registrato, dalla tabella che lo conosce. */
-    public function latestWeight(): ?float
-    {
-        return BodyMetric::latestWeightFor($this);
-    }
+    /*
+     * ⚠️ Qui vivevano `bodyMetrics()` e `latestWeight()`. Cancellati in S5.4.
+     *
+     * 🚨 **Il server non sa piu' quanto pesa nessuno** (decisione D9-bis).
+     * Chi ha bisogno del peso per una stima deve **riceverlo nella richiesta**:
+     * lo fa `POST /workout-sessions/{id}/finish` con il campo `weight_kg`, che
+     * transita e non viene conservato.
+     */
 
     public function avatarUrl(): ?string
     {

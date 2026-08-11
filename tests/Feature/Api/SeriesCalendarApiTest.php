@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
@@ -78,38 +77,7 @@ class SeriesCalendarApiTest extends TestCase
 
     // ───────────────────────── C3: peso ─────────────────────────
 
-    #[Test]
-    public function the_weight_series_is_a_list_of_dated_points(): void
-    {
-        $this->pesa(Carbon::today()->subDays(10), 84.0);
-        $this->pesa(Carbon::today()->subDays(3), 83.2);
 
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/series?metric=weight&days=30')
-            ->assertOk()
-            ->assertJsonPath('data.granularity', 'point')
-            ->assertJsonPath('data.values', [84.0, 83.2])
-            ->assertJsonCount(2, 'data.labels');
-    }
-
-    /**
-     * 🚨 I buchi NON si riempiono.
-     *
-     * Con gli zeri il grafico precipita ogni volta che uno si dimentica di
-     * pesarsi; con l'ultimo valore noto disegna un plateau che nessuno ha mai
-     * misurato. Si mostrano i punti che esistono.
-     */
-    #[Test]
-    public function missing_days_are_not_filled_in_the_weight_series(): void
-    {
-        $this->pesa(Carbon::today()->subDays(6), 84.0);
-        $this->pesa(Carbon::today(), 83.0);
-
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/series?metric=weight&days=7')
-            ->assertOk()
-            ->assertJsonCount(2, 'data.values');
-    }
 
     // ───────────────────────── C3: calorie ─────────────────────────
 

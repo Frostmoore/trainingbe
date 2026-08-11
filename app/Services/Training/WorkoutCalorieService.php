@@ -6,7 +6,6 @@ namespace App\Services\Training;
 
 use App\Enums\AiFeature;
 use App\Enums\KcalSource;
-use App\Models\BodyMetric;
 use App\Models\DailyBurn;
 use App\Models\User;
 use App\Models\WorkoutSession;
@@ -66,9 +65,24 @@ class WorkoutCalorieService
 
     // ───────────────────────── ingredienti ─────────────────────────
 
+    /**
+     * Il peso da usare per la stima.
+     *
+     * 🚨 **Il server non sa piu' quanto pesi nessuno** — S5.4. `body_metrics`
+     * non esiste piu': peso e misure restano sul telefono (decisione D9-bis).
+     *
+     * ⚠️ Restituisce sempre il **peso di ripiego**. Non e' una svista: chi
+     * vuole una stima accurata deve **mandare il proprio peso nella
+     * richiesta**, e l'app lo fa quando conclude un allenamento
+     * (`POST /workout-sessions/{id}/finish`, campo `weight_kg`). Il valore
+     * transita e non viene conservato.
+     *
+     * 💡 Sui totali giornalieri il ripiego basta: quelli sommano stime gia'
+     * calcolate al momento giusto, non le rifanno.
+     */
     public function bodyweight(User $user): float
     {
-        return BodyMetric::latestWeightFor($user) ?? self::FALLBACK_WEIGHT_KG;
+        return self::FALLBACK_WEIGHT_KG;
     }
 
     /** Il valore dichiarato dall'utente per quel giorno, se c'e'. */
@@ -169,7 +183,7 @@ class WorkoutCalorieService
      * della formula: l'utente ha appena finito di allenarsi e deve vedere un
      * numero, non un errore che riguarda un fornitore di cui non sa niente.
      */
-    public function estimateAndStore(WorkoutSession $session, ?User $user = null): void
+    public function estimateAndStore(WorkoutSession $session, ?User $user = null, ?float $kgDaRichiesta = null): void
     {
         if ($session->hasManualKcal()) {
             return;
@@ -180,7 +194,10 @@ class WorkoutCalorieService
         }
 
         $user ??= $session->user;
-        $kg = $this->bodyweight($user);
+
+        // ⚠️ Il peso mandato dall'app vince sul ripiego: e' l'unico modo che il
+        // server ha di stimare bene, adesso che non conserva piu' i pesi.
+        $kg = $kgDaRichiesta ?? $this->bodyweight($user);
 
         $formula = $this->formulaKcal($session, $kg);
 

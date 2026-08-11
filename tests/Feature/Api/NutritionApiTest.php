@@ -7,7 +7,6 @@ namespace Tests\Feature\Api;
 use App\Enums\MealType;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
 use App\Models\Profile;
@@ -344,15 +343,26 @@ class NutritionApiTest extends TestCase
             ->assertJsonPath('data.kcal_base', 1800);
     }
 
+    /**
+     * 🚨 **Senza piano, il server non calcola nessun target** — S5.5.
+     *
+     * Non perche' manchi la formula: perche' manca **il peso**, che da S5 vive
+     * solo sul telefono (decisione D9-bis). Il target del profilo lo calcola
+     * l'app con `CalcolatoreCalorie`, il ritratto fedele di `CalorieCalculator`
+     * verificato con gli stessi valori attesi (S5.1).
+     *
+     * ⚠️ E il server **non inventa niente**: restituisce `null`, non uno zero
+     * ne' un valore di ripiego. Un target calorico sbagliato non e' un numero
+     * storto — e' una dieta storta.
+     */
     #[Test]
-    public function without_a_plan_the_target_comes_from_the_profile(): void
+    public function without_a_plan_the_server_computes_no_target_and_says_so(): void
     {
         $this->profiloCompleto();
 
         $risposta = $this->comeIscritto()->getJson('/api/v1/targets')->assertOk();
 
-        $this->assertSame('profile', $risposta->json('data.source'));
-        $this->assertGreaterThan(1200, $risposta->json('data.kcal'));
+        $this->assertNull($risposta->json('data.kcal_base'));
     }
 
     /**
@@ -526,9 +536,11 @@ class NutritionApiTest extends TestCase
                 'goal' => 'maintain',
             ]);
 
-            BodyMetric::create([
-                'user_id' => $this->iscritto->id, 'date' => today(), 'weight_kg' => 80,
-            ]);
+            /*
+             * ⚠️ Niente peso: da S5.5 il server non lo conosce piu' (D9-bis).
+             * Un profilo «completo» lato server e' completo di tutto TRANNE il
+             * peso, e per questo il target dal profilo non si calcola piu' qui.
+             */
         });
     }
 

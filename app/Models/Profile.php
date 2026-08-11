@@ -160,7 +160,21 @@ class Profile extends Model
      */
     public function computedTargets(?float $weightKg = null): ?array
     {
-        $peso = $weightKg ?? $this->user?->latestWeight();
+        /*
+         * 🚨 **Il server non sa piu' quanto pesa nessuno** — S5.5.
+         *
+         * `body_metrics` non esiste (decisione D9-bis). Senza un peso passato
+         * esplicitamente qui non si calcola niente, e **va bene cosi'**: chi
+         * chiede i target di una persona vera li calcola nell'app, con
+         * `CalcolatoreCalorie` (il ritratto fedele di `CalorieCalculator`,
+         * S5.1), che ha il peso in locale.
+         *
+         * ⚠️ Il parametro resta perche' serve al **pannello del trainer**, che
+         * compone i **modelli** di piano su valori d'esempio — e i modelli non
+         * sono dati personali (decisione D6). E' il motivo per cui
+         * `CalorieCalculator` non e' stato cancellato dal backend.
+         */
+        $peso = $weightKg;
         $eta = $this->age();
 
         if ($peso === null || $eta === null || $this->height_cm === null) {

@@ -201,6 +201,17 @@ class WorkoutSessionController extends Controller
             $dati = $request->validate([
                 'ended_at' => ['nullable', 'date', 'before_or_equal:now'],
                 'notes' => ['nullable', 'string', 'max:2000'],
+
+                /*
+                 * 🚨 Il peso arriva DALL'APP e non si conserva — S5.4.
+                 *
+                 * Il server non ha piu' `body_metrics` (decisione D9-bis),
+                 * quindi senza questo campo la stima delle calorie userebbe il
+                 * peso di ripiego per tutti. Il valore serve al calcolo di
+                 * questa richiesta e **non viene salvato da nessuna parte**:
+                 * transita, come previsto da «il server e' un tramite».
+                 */
+                'weight_kg' => ['nullable', 'numeric', 'min:25', 'max:400'],
             ]);
 
             $s->forceFill([
@@ -208,7 +219,11 @@ class WorkoutSessionController extends Controller
                 'notes' => $dati['notes'] ?? $s->notes,
             ])->save();
 
-            $this->calorie->estimateAndStore($s, $request->user());
+            $this->calorie->estimateAndStore(
+                $s,
+                $request->user(),
+                isset($dati['weight_kg']) ? (float) $dati['weight_kg'] : null,
+            );
         }
 
         return response()->json(['data' => $this->dettaglio($s->refresh()->load('sets.exercise'))]);

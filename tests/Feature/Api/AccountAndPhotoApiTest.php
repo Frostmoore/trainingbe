@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\BodyMetric;
 use App\Models\Conversation;
 use App\Models\FoodEntry;
 use App\Models\Media;
@@ -66,101 +65,10 @@ class AccountAndPhotoApiTest extends TestCase
 
     // ───────────────── C5: foto legate all'allenamento ─────────────────
 
-    #[Test]
-    public function a_photo_can_be_attached_to_a_workout(): void
-    {
-        $s = $this->sessione();
 
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', [
-                'photo' => UploadedFile::fake()->image('dopo.jpg'),
-                'workout_session_id' => $s->id,
-            ], ['Accept' => 'application/json'])
-            ->assertCreated()
-            ->assertJsonPath('data.type', 'workout')
-            ->assertJsonPath('data.workout_session_id', $s->id);
-    }
 
-    /**
-     * 🚨 La miniatura sta nel **riassunto**, non solo nel dettaglio.
-     *
-     * Lo storico a schede la usa per essere leggibile a colpo d'occhio: se
-     * stesse solo nel dettaglio, l'app dovrebbe fare una chiamata per ogni
-     * scheda dell'elenco.
-     */
-    #[Test]
-    public function the_workout_list_carries_the_photo_for_the_thumbnail(): void
-    {
-        $s = $this->sessione();
 
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', [
-                'photo' => UploadedFile::fake()->image('dopo.jpg'),
-                'workout_session_id' => $s->id,
-            ], ['Accept' => 'application/json'])
-            ->assertCreated();
 
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/workout-sessions')
-            ->assertOk()
-            ->assertJsonCount(1, 'data.0.photos');
-    }
-
-    #[Test]
-    public function a_progress_photo_has_no_session(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', ['photo' => UploadedFile::fake()->image('io.jpg')], ['Accept' => 'application/json'])
-            ->assertCreated()
-            ->assertJsonPath('data.type', 'progress')
-            ->assertJsonPath('data.workout_session_id', null);
-    }
-
-    #[Test]
-    public function the_gallery_shows_both_kinds_of_photo(): void
-    {
-        $s = $this->sessione();
-
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', ['photo' => UploadedFile::fake()->image('io.jpg')], ['Accept' => 'application/json'])
-            ->assertCreated();
-
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', [
-                'photo' => UploadedFile::fake()->image('dopo.jpg'),
-                'workout_session_id' => $s->id,
-            ], ['Accept' => 'application/json'])
-            ->assertCreated();
-
-        // È la stessa foto guardata da due punti di vista, non due copie.
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/photos')
-            ->assertOk()
-            ->assertJsonCount(2, 'data');
-    }
-
-    /**
-     * 🚨 Senza questo controllo si potrebbe appendere una propria foto alla
-     * sessione di un altro, e quella comparirebbe nel **suo** storico.
-     */
-    #[Test]
-    public function a_photo_cannot_be_attached_to_the_workout_of_someone_else(): void
-    {
-        $compagno = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
-        $sua = $this->sessione($compagno);
-
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', [
-                'photo' => UploadedFile::fake()->image('furba.jpg'),
-                'workout_session_id' => $sua->id,
-            ], ['Accept' => 'application/json'])
-            ->assertStatus(422);
-
-        $this->comeApp($compagno)
-            ->getJson('/api/v1/workout-sessions')
-            ->assertOk()
-            ->assertJsonCount(0, 'data.0.photos');
-    }
 
     // ─────────────── C6: eliminazione dell'account ───────────────
 
@@ -205,12 +113,6 @@ class AccountAndPhotoApiTest extends TestCase
             'kcal' => 500,
         ]));
 
-        $this->ctx()->runAs($this->alfa, fn () => BodyMetric::create([
-            'user_id' => $this->iscritto->getKey(),
-            'date' => today()->toDateString(),
-            'weight_kg' => 80,
-        ]));
-
         $this->sessione();
 
         $this->comeApp($this->iscritto)
@@ -220,7 +122,6 @@ class AccountAndPhotoApiTest extends TestCase
         $id = $this->iscritto->getKey();
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->where('user_id', $id)->count());
-        $this->assertSame(0, BodyMetric::withoutGlobalScopes()->where('user_id', $id)->count());
         $this->assertSame(0, WorkoutSession::withoutGlobalScopes()->where('user_id', $id)->count());
         $this->assertSame(0, \App\Models\Profile::withoutGlobalScopes()->where('user_id', $id)->count());
     }
@@ -283,24 +184,6 @@ class AccountAndPhotoApiTest extends TestCase
             ->assertUnauthorized();
     }
 
-    #[Test]
-    public function the_photos_are_removed_from_the_disk_too(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->post('/api/v1/photos', ['photo' => UploadedFile::fake()->image('io.jpg')], ['Accept' => 'application/json'])
-            ->assertCreated();
-
-        $this->comeApp($this->iscritto)
-            ->deleteJson('/api/v1/account', ['password' => TestCase::FAKE_PASSWORD])
-            ->assertNoContent();
-
-        // Una riga rimossa senza il file lascerebbe sul server proprio le
-        // immagini più personali, dopo che qualcuno ha chiesto di sparire.
-        $this->assertSame(
-            0,
-            Media::query()->where('model_id', $this->iscritto->getKey())->count(),
-        );
-    }
 
     // ─────────────── C7: rifiniture del contratto ───────────────
 
