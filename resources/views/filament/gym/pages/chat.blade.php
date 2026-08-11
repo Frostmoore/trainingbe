@@ -1,90 +1,52 @@
 {{--
-    La chat dello staff.
+    Il cartello che ha sostituito la chat del pannello — S6.8.
 
-    `wire:poll` e non un socket: nel pannello qualche secondo di ritardo non
-    cambia niente, e legare una pagina Filament a Reverb significherebbe che la
-    chat dello staff smette di funzionare quando il processo WebSocket ha un
-    problema. Il socket serve all'app, dove conta.
+    ⚠️ Non è una pagina «in costruzione»: è la spiegazione definitiva del perché
+    i messaggi non si leggono più da qui. Il testo dice la cosa vera — non
+    «funzione spostata», ma «non possiamo leggerli» — perché è quello il punto,
+    ed è anche l'argomento di vendita verso gli iscritti.
 --}}
 <x-filament-panels::page>
-    <div wire:poll.10s class="grid gap-4 md:grid-cols-3">
+    <div class="mx-auto max-w-2xl space-y-6 py-8 text-center">
 
-        {{-- Elenco delle conversazioni --}}
-        <div class="md:col-span-1">
-            <x-filament::section heading="Conversazioni">
-                @forelse ($this->conversations as $conversazione)
-                    @php
-                        $altro = $conversazione->otherParty(auth()->user());
-                        $nonLetti = $conversazione->unreadFor(auth()->user());
-                    @endphp
-
-                    <button type="button"
-                            wire:click="apri({{ $conversazione->id }})"
-                            @class([
-                                'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm',
-                                'bg-primary-50 dark:bg-primary-950' => $conversationId === $conversazione->id,
-                                'hover:bg-gray-50 dark:hover:bg-gray-800' => $conversationId !== $conversazione->id,
-                            ])>
-                        <span class="truncate font-medium">{{ $altro?->name ?? '—' }}</span>
-
-                        @if ($nonLetti > 0)
-                            <x-filament::badge color="danger">{{ $nonLetti }}</x-filament::badge>
-                        @endif
-                    </button>
-                @empty
-                    {{-- Al titolare che non partecipa a nessun filo si dice *perché*
-                         non vede niente: altrimenti sembra un guasto, e il primo
-                         pensiero è chiedere di «sistemarlo». --}}
-                    <p class="text-sm text-gray-500">
-                        {{ $this->spiegazioneVuoto }}
-                    </p>
-                @endforelse
-            </x-filament::section>
+        <div class="flex justify-center">
+            <x-filament::icon
+                icon="heroicon-o-lock-closed"
+                class="h-12 w-12 text-primary-500"
+            />
         </div>
 
-        {{-- Thread --}}
-        <div class="md:col-span-2">
-            @if ($this->active)
-                <x-filament::section :heading="$this->active->otherParty(auth()->user())?->name ?? 'Conversazione'">
-                    <div class="mb-4 flex max-h-[28rem] flex-col gap-2 overflow-y-auto">
-                        @foreach ($this->active->messages as $messaggio)
-                            @php $mio = $messaggio->sender_id === auth()->id(); @endphp
+        <h2 class="text-xl font-bold tracking-tight">
+            I messaggi si leggono nell'app
+        </h2>
 
-                            <div @class(['flex', 'justify-end' => $mio])>
-                                <div @class([
-                                    'max-w-[80%] rounded-2xl px-3 py-2 text-sm',
-                                    'bg-primary-600 text-white' => $mio,
-                                    'bg-gray-100 dark:bg-gray-800' => ! $mio,
-                                ])>
-                                    <div>{{ $messaggio->body }}</div>
-                                    <div class="mt-1 text-[11px] opacity-70">
-                                        {{ $messaggio->created_at?->format('d/m H:i') }}
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
+        @if ($this->nonLetti > 0)
+            <p class="text-sm font-medium text-primary-600 dark:text-primary-400">
+                Hai {{ $this->nonLetti }}
+                {{ $this->nonLetti === 1 ? 'messaggio non letto' : 'messaggi non letti' }}.
+            </p>
+        @endif
 
-                    <form wire:submit="invia" class="flex items-end gap-2">
-                        <div class="flex-1">
-                            <x-filament::input.wrapper>
-                                <x-filament::input
-                                    type="text"
-                                    wire:model="body"
-                                    placeholder="Scrivi un messaggio…"
-                                    maxlength="4000"
-                                />
-                            </x-filament::input.wrapper>
-                        </div>
+        <div class="space-y-4 text-sm text-gray-500 dark:text-gray-400">
+            <p>
+                Le conversazioni sono <strong>cifrate da un telefono all'altro</strong>:
+                le chiavi per aprirle stanno solo sul tuo dispositivo e su quello
+                della persona con cui parli.
+            </p>
 
-                        <x-filament::button type="submit">Invia</x-filament::button>
-                    </form>
-                </x-filament::section>
-            @else
-                <x-filament::section>
-                    <p class="text-sm text-gray-500">Scegli una conversazione per leggerla.</p>
-                </x-filament::section>
-            @endif
+            <p>
+                Vuol dire che <strong>nemmeno noi possiamo leggerle</strong>, e quindi
+                nemmeno questo pannello può mostrartele: il server conserva i
+                messaggi e li consegna, ma non ha modo di aprirli.
+            </p>
+
+            <p class="text-gray-400 dark:text-gray-500">
+                È lo stesso motivo per cui il titolare della palestra non ha mai
+                potuto leggere le conversazioni fra i trainer e i loro iscritti —
+                solo che adesso non è più una regola del programma:
+                è una proprietà dei dati.
+            </p>
         </div>
+
     </div>
 </x-filament-panels::page>

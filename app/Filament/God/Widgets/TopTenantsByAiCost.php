@@ -7,7 +7,6 @@ namespace App\Filament\God\Widgets;
 use App\Models\AiUsageLog;
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
-use App\Services\Ai\Quota\TenantAiQuota;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;

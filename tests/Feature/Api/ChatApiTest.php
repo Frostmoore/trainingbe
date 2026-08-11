@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
+use Tests\Concerns\ScriveBusteCifrate;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ class ChatApiTest extends TestCase
     use ChiamaComeApp;
     use CreaAmbiente;
     use RefreshDatabase;
+    use ScriveBusteCifrate;
 
     private Tenant $alfa;
 
@@ -129,9 +131,12 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ciao, ho un dubbio sulla scheda'])
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Ciao, ho un dubbio sulla scheda'))
             ->assertCreated()
-            ->assertJsonPath('data.body', 'Ciao, ho un dubbio sulla scheda');
+            // ⚠️ Torna indietro la **busta**, non il testo: il server ha
+            // conservato byte che non sa leggere e li ha restituiti identici.
+            ->assertJsonPath('data.body', $this->corpoDi('Ciao, ho un dubbio sulla scheda'))
+            ->assertJsonPath('data.envelope_version', 1);
 
         $this->comeApp($this->trainer)
             ->getJson("/api/v1/conversations/{$c->id}/messages")
@@ -152,11 +157,11 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $primo = $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Primo'])
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Primo'))
             ->json('data.id');
 
         $this->comeApp($this->trainer)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Secondo']);
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Secondo'));
 
         $nuovi = $this->comeApp($this->iscritto)
             ->getJson("/api/v1/conversations/{$c->id}/messages?after={$primo}")
@@ -164,7 +169,7 @@ class ChatApiTest extends TestCase
             ->json('data');
 
         $this->assertCount(1, $nuovi);
-        $this->assertSame('Secondo', $nuovi[0]['body']);
+        $this->assertSame($this->corpoDi('Secondo'), $nuovi[0]['body']);
     }
 
     #[Test]
@@ -173,7 +178,7 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ciao']);
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Ciao'));
 
         $elenco = $this->comeApp($this->trainer)->getJson('/api/v1/conversations')->assertOk();
         $this->assertSame(1, $elenco->json('data.0.unread'));
@@ -197,14 +202,14 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Riservato']);
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Riservato'));
 
         $this->comeApp($this->altroTrainer)
             ->getJson("/api/v1/conversations/{$c->id}/messages")
             ->assertNotFound();
 
         $this->comeApp($this->estraneo)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Mi intrometto'])
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Mi intrometto'))
             ->assertNotFound();
     }
 
@@ -228,7 +233,7 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ho un problema al ginocchio']);
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Ho un problema al ginocchio'));
 
         // Non compare nel suo elenco…
         $elenco = $this->comeApp($titolare)->getJson('/api/v1/conversations')->assertOk();
@@ -241,7 +246,7 @@ class ChatApiTest extends TestCase
 
         // E non ci può nemmeno scrivere dentro.
         $this->comeApp($titolare)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ci sono anch\'io'])
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Ci sono anch\'io'))
             ->assertNotFound();
 
         $this->comeApp($titolare)
@@ -294,7 +299,7 @@ class ChatApiTest extends TestCase
         $c = $this->conversazione();
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$c->id}/messages", ['body' => 'Ciao'])
+            ->postJson("/api/v1/conversations/{$c->id}/messages", $this->busta('Ciao'))
             ->assertCreated();
 
         Event::assertDispatched(MessageSent::class);
@@ -313,10 +318,10 @@ class ChatApiTest extends TestCase
             fn () => Conversation::between($this->trainer, $this->estraneo));
 
         $this->comeApp($this->iscritto)
-            ->postJson("/api/v1/conversations/{$primaChat->id}/messages", ['body' => 'A']);
+            ->postJson("/api/v1/conversations/{$primaChat->id}/messages", $this->busta('A'));
 
         $this->comeApp($this->estraneo)
-            ->postJson("/api/v1/conversations/{$secondaChat->id}/messages", ['body' => 'B']);
+            ->postJson("/api/v1/conversations/{$secondaChat->id}/messages", $this->busta('B'));
 
         $elenco = $this->comeApp($this->trainer)->getJson('/api/v1/conversations')->assertOk()->json('data');
 

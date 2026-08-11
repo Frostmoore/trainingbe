@@ -137,12 +137,30 @@ class ConversationController extends Controller
             return $this->nonTrovata();
         }
 
+        /*
+         * 🚨 **Da S6 il server accetta solo buste cifrate.**
+         *
+         * `envelope_version` e `nonce` sono `required` proprio per questo: un
+         * client che mandasse ancora testo in chiaro — una versione vecchia
+         * dell'app, uno script, un test dimenticato — riceve 422 invece di
+         * vedersi accettare il messaggio. ⚠️ Senza questo vincolo la chat
+         * tornerebbe leggibile **un messaggio alla volta**, senza che niente si
+         * rompa e senza che nessuno se ne accorga.
+         *
+         * Il server non puo' verificare che i byte siano *davvero* una busta
+         * valida — non ha le chiavi — ma puo' pretendere che ne abbiano la
+         * forma.
+         */
         $dati = $request->validate([
-            'body' => ['required', 'string', 'min:1', 'max:4000'],
+            'envelope_version' => ['required', 'integer', 'min:1', 'max:255'],
+            'nonce' => ['required', 'string', 'size:32'],
+            'body' => ['required', 'string', 'min:1', 'max:8000'],
         ]);
 
         $messaggio = $c->messages()->create([
             'sender_id' => $request->user()->getKey(),
+            'envelope_version' => $dati['envelope_version'],
+            'nonce' => $dati['nonce'],
             'body' => $dati['body'],
         ]);
 

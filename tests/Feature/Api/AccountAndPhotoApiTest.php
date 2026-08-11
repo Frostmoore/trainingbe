@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
+use Tests\Concerns\ScriveBusteCifrate;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ class AccountAndPhotoApiTest extends TestCase
     use ChiamaComeApp;
     use CreaAmbiente;
     use RefreshDatabase;
+    use ScriveBusteCifrate;
 
     private Tenant $alfa;
 
@@ -145,7 +147,10 @@ class AccountAndPhotoApiTest extends TestCase
             Message::create([
                 'conversation_id' => $c->getKey(),
                 'sender_id' => $this->iscritto->getKey(),
-                'body' => 'Domanda sulla scheda',
+                // Da S6 il corpo e' una busta cifrata: il testo qui non c'e'
+                // mai stato, e il test verifica che la **riga** sopravviva alla
+                // cancellazione dell'account, non cosa c'era scritto.
+                ...$this->busta('Domanda sulla scheda'),
             ]);
 
             return $c;
@@ -160,7 +165,16 @@ class AccountAndPhotoApiTest extends TestCase
             ->first();
 
         $this->assertNotNull($messaggio, 'La conversazione del trainer è stata svuotata.');
-        $this->assertSame('Domanda sulla scheda', $messaggio->body, 'Il testo è stato riscritto.');
+        // ⚠️ Da S6 il confronto è sulla **busta**, non sul testo — che qui non
+        // c'è mai stato. La regola però è la stessa e vale ancora: la busta non
+        // si riscrive, perché riscriverla sarebbe falsificare una conversazione
+        // davvero avvenuta. E dopo la cancellazione non è nemmeno più possibile:
+        // le chiavi per rifarla non esistono più da nessuna parte.
+        $this->assertSame(
+            $this->corpoDi('Domanda sulla scheda'),
+            $messaggio->body,
+            'La busta è stata riscritta.',
+        );
 
         // L'autore c'è ancora come riga, ma non è più nessuno.
         $autore = User::withoutGlobalScopes()->withTrashed()->find($messaggio->sender_id);

@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Account\RecoveryKeyController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
+use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -235,6 +237,25 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/read', [ConversationController::class, 'read'])->whereNumber('conversation');
+
+        // ── Le chiavi della chat (S6.3) ──────────────────────────────────
+        //
+        // 🚨 La chiave dell'altra persona si prende **attraverso la
+        // conversazione**, non per id utente. Le chiavi sono pubbliche, ma
+        // «chi ha una chiave in questo sistema» e' gia' un'informazione: dice
+        // chi e' iscritto e chi ha aperto l'app. Una rubrica aperta la
+        // regalerebbe.
+        Route::put('chat-key', [ChatKeyController::class, 'store']);
+        Route::get('conversations/{conversation}/key', [ChatKeyController::class, 'show'])->whereNumber('conversation');
+
+        // ── Il pacchetto incartato della chiave maestra (S6.2) ────────────
+        //
+        // 🚨 Il server conserva byte che non sa leggere. La password di
+        // recupero **non passa mai di qui**: la derivazione avviene sul
+        // telefono, e se la password toccasse il server anche per un istante
+        // l'intero schema non servirebbe a niente.
+        Route::get('account/recovery-key', [RecoveryKeyController::class, 'show']);
+        Route::put('account/recovery-key', [RecoveryKeyController::class, 'store']);
 
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Services\Account;
 
 use App\Models\AiAdvice;
+use App\Models\ChatKey;
 use App\Models\DailyBurn;
 use App\Models\DeviceToken;
 use App\Models\FoodEntry;
 use App\Models\FoodFavorite;
 use App\Models\Media;
 use App\Models\Message;
+use App\Models\RecoveryKey;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
@@ -112,6 +114,27 @@ class AccountEraser
          * che passa in rassegna **tutte** le tabelle con `user_id` e verifica
          * che dopo `erase()` non sopravviva nessuna riga.
          */
+
+        /*
+         * 🚨 **Le chiavi (S6), aggiunte QUI e non dopo.**
+         *
+         * E' esattamente il difetto di `health_readings` raccontato sopra: una
+         * tabella nuova con `user_id` che nessuno ricollega all'eraser. La
+         * differenza e' che questa volta la riga si scrive **nella stessa
+         * sessione in cui nasce la tabella**, invece di fidarsi di ricordarsene.
+         *
+         * ⚠️ Cancellare il pacchetto incartato non e' un dettaglio: e' materiale
+         * attaccabile offline. Chi chiede di sparire non deve lasciare da noi
+         * qualcosa contro cui provare password per sempre.
+         *
+         * 💡 Il pacchetto sparisce, i **messaggi restano** (cifrati, illeggibili
+         * da chiunque, compresi noi). Non e' una contraddizione: sono
+         * documentazione professionale del trainer, e senza la chiave non
+         * identificano piu' nessuno — sono byte casuali con accanto «Utente
+         * eliminato».
+         */
+        RecoveryKey::query()->where('user_id', $id)->delete();
+        ChatKey::query()->where('user_id', $id)->delete();
 
         $utente->profile()->delete();
     }

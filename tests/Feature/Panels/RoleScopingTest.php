@@ -16,6 +16,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
+use Tests\Concerns\ScriveBusteCifrate;
 use Tests\TestCase;
 
 /**
@@ -34,6 +35,7 @@ class RoleScopingTest extends TestCase
 {
     use CreaAmbiente;
     use RefreshDatabase;
+    use ScriveBusteCifrate;
 
     private Tenant $alfa;
 
@@ -263,46 +265,55 @@ class RoleScopingTest extends TestCase
     // ───────────────────────── chat ─────────────────────────
 
     /**
-     * 🚨 **Il titolare apre la pagina dei messaggi e non vede le chat dei suoi
-     * trainer.**
+     * 🚨 **Nemmeno il conteggio dei non letti arriva al titolare.**
      *
-     * È materiale coperto da riservatezza. Il `gym_admin` è il caso più
-     * insidioso perché ha il permesso su tutto il resto della palestra: qui deve
-     * fermarsi, e la pagina glielo dice invece di sembrare rotta.
+     * ⚠️ **Il test è cambiato in S6, la regola no.** La pagina dei messaggi non
+     * mostra più nessuna conversazione a nessuno — i corpi sono buste cifrate e
+     * il server non ha le chiavi — quindi non ha più senso verificare che il
+     * titolare non le veda: **non le vede più nessuno da qui**.
+     *
+     * Resta però un pezzo che il server sa ancora fare, perché si calcola sui
+     * metadati: **quanti messaggi non letti ci sono**. Ed è proprio lì che la
+     * riservatezza poteva rientrare dalla finestra — un badge che dice al
+     * titolare «i tuoi trainer hanno 14 messaggi non letti» è già
+     * un'informazione sulle conversazioni altrui.
+     *
+     * Il `gym_admin` è il caso più insidioso perché ha il permesso su tutto il
+     * resto della palestra: qui si ferma.
      */
     #[Test]
-    public function the_gym_owner_sees_no_conversation_in_the_panel(): void
+    public function the_gym_owner_gets_no_signal_about_other_peoples_chats(): void
     {
         $conversazione = $this->ctx()->runAs($this->alfa,
             fn () => \App\Models\Conversation::between($this->trainerA, $this->mioIscritto));
 
         $this->ctx()->runAs($this->alfa, fn () => $conversazione->messages()->create([
             'sender_id' => $this->mioIscritto->id,
-            'body' => 'Ho un problema al ginocchio',
+            ...$this->busta('Ho un problema al ginocchio'),
         ]));
 
         $this->entraCome($this->admin);
 
-        $pagina = Livewire::test(\App\Filament\Gym\Pages\Chat::class);
-
-        $this->assertCount(
+        $this->assertSame(
             0,
-            $pagina->get('conversations'),
-            'Il titolare vede le conversazioni fra i suoi trainer e i loro iscritti.',
+            Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('nonLetti'),
+            'Il titolare conta i messaggi non letti delle chat dei suoi trainer.',
         );
-
-        // E nemmeno forzando l'id nel componente.
-        $pagina->set('conversationId', $conversazione->id);
 
         $this->assertNull(
-            $pagina->get('active'),
-            'Forzando l\'id, il titolare arriva comunque al filo.',
+            \App\Filament\Gym\Pages\Chat::getNavigationBadge(),
+            'Il badge nel menù rivela al titolare l\'attività delle chat altrui.',
         );
 
-        // Il trainer che ci sta dentro, invece, la vede.
+        // Il trainer che ci sta dentro, invece, il proprio conteggio ce l'ha:
+        // senza, non saprebbe mai che qualcuno gli ha scritto.
         $this->entraCome($this->trainerA);
 
-        $this->assertCount(1, Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('conversations'));
+        $this->assertSame(
+            1,
+            Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('nonLetti'),
+        );
+        $this->assertSame('1', \App\Filament\Gym\Pages\Chat::getNavigationBadge());
     }
 
     // ───────────────────────── impostazioni ─────────────────────────

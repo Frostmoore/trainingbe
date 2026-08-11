@@ -20,6 +20,7 @@ use App\Models\Conversation;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Gate;
 use Tests\Concerns\CreaAmbiente;
+use Tests\Concerns\ScriveBusteCifrate;
 use Tests\TestCase;
 
 /**
@@ -34,6 +35,7 @@ class ImpersonationTest extends TestCase
 {
     use CreaAmbiente;
     use RefreshDatabase;
+    use ScriveBusteCifrate;
 
     private User $god;
 
@@ -234,7 +236,7 @@ class ImpersonationTest extends TestCase
 
         $this->ctx()->runAs($this->palestra, fn () => $conversazione->messages()->create([
             'sender_id' => $iscritto->id,
-            'body' => 'Ho un problema che preferirei restasse fra noi',
+            ...$this->busta('Ho un problema che preferirei restasse fra noi'),
         ]));
 
         // Il trainer, che è parte della conversazione, la legge.
