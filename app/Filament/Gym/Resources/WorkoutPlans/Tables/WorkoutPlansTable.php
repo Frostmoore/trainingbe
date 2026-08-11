@@ -102,36 +102,39 @@ class WorkoutPlansTable
                  * infortunio — le cambierebbe tutte. Il modello e' un punto di
                  * partenza, non un contratto vincolante.
                  */
-                Action::make('assegna')
-                    ->label('Assegna')
-                    ->icon('heroicon-m-user-plus')
-                    ->color('success')
+                /*
+                 * 🚨 **«Assegna» non c'e' piu': si manda dall'app — S7.**
+                 *
+                 * Da S6 la chat e' cifrata da un telefono all'altro, e cifrare
+                 * richiede la chiave privata del trainer — che sta **solo sul
+                 * suo telefono**. Questo pannello e' reso dal server, e il
+                 * server non ha nessuna chiave: non puo' produrre una scheda
+                 * cifrata, e una scheda non cifrata lascerebbe scritto nel
+                 * database **chi segue quale programma**.
+                 *
+                 * 💡 Non e' una funzione persa, e' una funzione spostata: il
+                 * trainer apre la chat dell'iscritto nell'app, tocca l'icona
+                 * della scheda e sceglie il modello. Da li' viaggia cifrata, e
+                 * l'iscritto la aggiunge alle proprie con un tocco.
+                 *
+                 * ⚠️ **`WorkoutPlan::assignTo()` esiste ancora** e non e' stata
+                 * cancellata: la usa `NutritionPlanResource`, e resta valida per
+                 * il giorno in cui servisse duplicare un modello dentro il
+                 * pannello. Quello che non c'e' piu' e' **questa strada**.
+                 */
+                Action::make('come_si_assegna')
+                    ->label('Come si assegna')
+                    ->icon('heroicon-m-device-phone-mobile')
+                    ->color('gray')
                     ->visible(fn (WorkoutPlan $r): bool => $r->isTemplate())
-                    ->schema([
-                        Select::make('member_id')
-                            ->label('A chi')
-                            ->options(fn (): array => static::iscrittiAssegnabili())
-                            ->searchable()
-                            ->required(),
-                    ])
-                    ->modalDescription('Ne verra\' creata una copia sua: le modifiche successive non toccheranno il modello.')
-                    ->action(function (WorkoutPlan $r, array $data): void {
-                        $membro = User::find($data['member_id']);
-
-                        if ($membro === null) {
-                            return;
-                        }
-
-                        $copia = $r->assignTo($membro, auth()->user());
-
-                        Notification::make()
-                            ->title("Copiata su {$membro->name}")
-                            ->body('E\' una bozza: pubblicala quando e\' pronta.')
-                            ->success()
-                            ->send();
-
-                        unset($copia);
-                    }),
+                    ->modalDescription(
+                        'Le schede si mandano dall\'app, dalla chat con l\'iscritto: '
+                        .'tocca l\'icona della scheda accanto al campo del messaggio e '
+                        .'scegli questo modello. Viaggia cifrata, e nessun altro puo\' '
+                        .'vedere chi segue quale programma — nemmeno noi.'
+                    )
+                    ->modalSubmitAction(false)
+                    ->action(fn () => null),
 
                 Action::make('pubblica')
                     ->label(fn (WorkoutPlan $r): string => $r->status === PlanStatus::Published ? 'Archivia' : 'Pubblica')
