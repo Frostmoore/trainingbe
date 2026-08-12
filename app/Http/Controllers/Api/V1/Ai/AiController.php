@@ -140,6 +140,10 @@ class AiController extends Controller
             'items.*.protein' => ['nullable', 'numeric', 'min:0', 'max:2000'],
             'items.*.carbs' => ['nullable', 'numeric', 'min:0', 'max:2000'],
             'items.*.fat' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            // ⚠️ Grammi di alcol etilico: non finisce in nessuna colonna, ma se
+            // non passasse di qui la conferma perderebbe l'unico dato che rende
+            // coerente una bevanda alcolica.
+            'items.*.alcohol' => ['nullable', 'numeric', 'min:0', 'max:2000'],
         ]);
 
         /*

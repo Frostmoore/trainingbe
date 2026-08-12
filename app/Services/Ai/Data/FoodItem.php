@@ -23,6 +23,21 @@ final readonly class FoodItem
         public ?float $protein,
         public ?float $carbs,
         public ?float $fat,
+        /**
+         * I grammi di **alcol etilico**, che rendono 7 kcal l'uno.
+         *
+         * 🚨 **Esiste per la guardia sulla coerenza energetica**, non per il
+         * diario: senza, un bicchiere di vino sembrerebbe incoerente ogni volta.
+         * Il vino ha circa 4 g di carboidrati e 15 g di alcol per 150 ml: Atwater
+         * senza l'alcol prevede 16 kcal contro le 125 vere, cioe' l'87% di
+         * scarto — e la guardia punirebbe una stima perfettamente giusta.
+         *
+         * ⚠️ **Non ha una colonna nel database**, ed e' voluto: non entra in
+         * nessun totale e nessuna schermata lo mostra. Sopravvive comunque in
+         * `food_entries.ai_raw`, che e' JSON — cosi' il giorno che servisse
+         * davvero il dato storico c'e' gia'.
+         */
+        public ?float $alcohol = null,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -37,6 +52,7 @@ final readonly class FoodItem
             protein: isset($data['protein']) ? (float) $data['protein'] : null,
             carbs: isset($data['carbs']) ? (float) $data['carbs'] : null,
             fat: isset($data['fat']) ? (float) $data['fat'] : null,
+            alcohol: isset($data['alcohol']) ? (float) $data['alcohol'] : null,
         );
     }
 
@@ -52,6 +68,7 @@ final readonly class FoodItem
             'protein' => $this->protein,
             'carbs' => $this->carbs,
             'fat' => $this->fat,
+            'alcohol' => $this->alcohol,
         ];
     }
 }

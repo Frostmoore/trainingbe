@@ -100,7 +100,28 @@ final class Prompts
         7. Valori nutrizionali per la quantita' effettiva, non per 100 g. Usa tabelle di
            composizione degli alimenti standard.
 
-        8. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
+           I MACRO DEVONO SPIEGARE LE CALORIE. Proteine e carboidrati rendono 4 kcal
+           per grammo, i grassi 9, l'alcol 7: la somma deve avvicinarsi al valore che
+           scrivi in `kcal`. Se i due conti non tornano, uno dei due e' sbagliato —
+           rifallo prima di rispondere.
+
+        8. ALCOL. Il campo `alcohol` sono i GRAMMI DI ALCOL ETILICO, e va compilato
+           sempre: 0 per tutto cio' che non e' alcolico.
+
+           LA FORMULA, per esteso: millilitri x (gradi / 100) x 0,789.
+           I «gradi» sono la percentuale in volume. ATTENZIONE: si divide per 100
+           prima di moltiplicare — 12 gradi vuol dire 0,12, non 12.
+           - vino, 150 ml a 12 gradi: 150 x 0,12 x 0,789 = 14,2 g;
+           - birra, 400 ml a 5 gradi:  400 x 0,05 x 0,789 = 15,8 g;
+           - amaro, 40 ml a 30 gradi:   40 x 0,30 x 0,789 = 9,5 g.
+
+           Senza questo campo le calorie di una bevanda alcolica non tornano MAI con
+           i suoi macronutrienti, perche' quasi tutte le sue calorie sono li' dentro:
+           un bicchiere di vino da 150 ml fa circa 125 kcal, e solo 9 vengono dagli
+           zuccheri. Se i tuoi grammi di alcol non spiegano quasi tutte le calorie
+           che hai scritto, hai sbagliato il conto.
+
+        9. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
            - 0.9 o piu': la persona ha indicato alimenti e quantita' precise;
            - da 0.6 a 0.9: alimenti chiari, quantita' stimata da te;
            - sotto 0.6: descrizione ambigua, piatto composito non specificato,
@@ -108,10 +129,10 @@ final class Prompts
            Una confidenza gonfiata e' peggio di una bassa: fa accettare in silenzio una
            stima sbagliata, che si scoprira' settimane dopo quando i totali non tornano.
 
-        9. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
+        10. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
            e `confidence` 0, con una `note` che spiega il motivo. Non inventare un pasto.
 
-        10. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
+        11. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
            Non e' quello che ti e' stato chiesto e non e' il posto giusto per darli.
         TXT;
 
@@ -240,7 +261,7 @@ final class Prompts
                     'items' => [
                         'type' => 'object',
                         'additionalProperties' => false,
-                        'required' => ['name', 'qty', 'unit', 'grams', 'kcal', 'protein', 'carbs', 'fat'],
+                        'required' => ['name', 'qty', 'unit', 'grams', 'kcal', 'protein', 'carbs', 'fat', 'alcohol'],
                         'properties' => [
                             'name' => ['type' => 'string'],
                             'qty' => $numero,
@@ -250,6 +271,18 @@ final class Prompts
                             'protein' => $numero,
                             'carbs' => $numero,
                             'fat' => $numero,
+
+                            /*
+                             * 🚨 I grammi di alcol etilico. **In `required` come
+                             * tutti**: uno schema che lo lascia facoltativo
+                             * produce un campo che il modello omette quasi
+                             * sempre, e la guardia sulla coerenza energetica
+                             * finirebbe per punire ogni bevanda alcolica.
+                             *
+                             * ⚠️ Non finisce in nessuna colonna: serve al
+                             * controllo, e resta in `ai_raw`.
+                             */
+                            'alcohol' => $numero,
                         ],
                     ],
                 ],

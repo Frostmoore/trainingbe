@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Ai\Data;
 
+use App\Services\Ai\Guardie\CoerenzaEnergetica;
+
 /**
  * Cosa il modello ha visto in un piatto o letto in una frase.
  *
@@ -33,12 +35,25 @@ final readonly class FoodEstimate
             array_values($data['items'] ?? []),
         );
 
-        return new self(
+        $stima = new self(
             items: $items,
             totals: self::normalizeTotals($data['totals'] ?? null, $items),
             confidence: (float) ($data['confidence'] ?? 0.0),
             note: isset($data['note']) ? (string) $data['note'] : null,
         );
+
+        /*
+         * 🚨 **La guardia si applica QUI e non nei provider.**
+         *
+         * `FoodEstimate::fromArray()` e' l'unica porta da cui passa ogni stima —
+         * Anthropic, OpenAI, il doppio dei test e la conferma dall'app. Metterla
+         * nei provider vorrebbe dire ripeterla in sei punti e dimenticarla nel
+         * settimo: il fornitore aggiunto fra un anno nascerebbe **senza**
+         * guardia, e funzionerebbe benissimo.
+         *
+         * ⚠️ E' la stessa ragione per cui `scriviVoci()` e' un metodo solo.
+         */
+        return CoerenzaEnergetica::correggi($stima);
     }
 
     /**
