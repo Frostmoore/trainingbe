@@ -49,10 +49,33 @@ class CalorieCalculator
      * @var array<string, float>
      */
     public const GOAL_DELTA = [
-        'lose' => -0.15,
-        'cut' => -0.25,
+        'lose_fast' => -0.20,
+        'lose_slow' => -0.10,
         'maintain' => 0.0,
-        'bulk' => 0.12,
+        'gain_lean' => 0.10,
+        'gain_fast' => 0.20,
+    ];
+
+    /**
+     * ⚠️ **Il vocabolario vecchio, tenuto vivo per i dati gia' salvati.**
+     *
+     * Fino al 12/08/2026 gli obiettivi erano tre — `lose` (−15%), `maintain`,
+     * `bulk` (+12%) — piu' un `cut` (−25%) che il codice conosceva e che
+     * **nessuno impostava mai**: il docblock diceva «si imposta dal piano
+     * alimentare», e nel piano alimentare non c'era una riga che lo facesse. E'
+     * la stessa forma degli altri difetti di questi giorni: una regola scritta e
+     * mai eseguita.
+     *
+     * 🚨 Restano qui e **non** in `GOAL_DELTA` perche' non devono comparire in
+     * nessuna tendina: sono solo un ponte per i profili salvati prima della
+     * migrazione e per i piani alimentari che li avessero congelati.
+     *
+     * @var array<string, string>
+     */
+    public const GOAL_STORICI = [
+        'lose' => 'lose_slow',
+        'cut' => 'lose_fast',
+        'bulk' => 'gain_lean',
     ];
 
     /**
@@ -70,10 +93,11 @@ class CalorieCalculator
      * @var array<string, array{protein: float, carbs: float, fat: float}>
      */
     public const MACRO_SPLIT = [
-        'lose' => ['protein' => 0.32, 'carbs' => 0.38, 'fat' => 0.30],
-        'cut' => ['protein' => 0.38, 'carbs' => 0.32, 'fat' => 0.30],
+        'lose_fast' => ['protein' => 0.38, 'carbs' => 0.32, 'fat' => 0.30],
+        'lose_slow' => ['protein' => 0.32, 'carbs' => 0.38, 'fat' => 0.30],
         'maintain' => ['protein' => 0.25, 'carbs' => 0.48, 'fat' => 0.27],
-        'bulk' => ['protein' => 0.25, 'carbs' => 0.52, 'fat' => 0.23],
+        'gain_lean' => ['protein' => 0.28, 'carbs' => 0.50, 'fat' => 0.22],
+        'gain_fast' => ['protein' => 0.25, 'carbs' => 0.52, 'fat' => 0.23],
     ];
 
     /** Calorie per grammo: le costanti di Atwater. */
@@ -132,9 +156,28 @@ class CalorieCalculator
      */
     public function calorieTarget(float $tdee, string $goal): int
     {
-        $delta = self::GOAL_DELTA[mb_strtolower($goal)] ?? 0.0;
+        $delta = self::GOAL_DELTA[self::normalizzaObiettivo($goal)] ?? 0.0;
 
         return max(1200, (int) round($tdee * (1 + $delta)));
+    }
+
+    /**
+     * Traduce un obiettivo del vocabolario vecchio in quello nuovo.
+     *
+     * 🚨 **Un obiettivo sconosciuto vale `maintain`, non un errore** — ma
+     * `maintain` e' anche il valore che si otterrebbe per sbaglio dimenticando
+     * una traduzione, ed e' esattamente cosi' che il 12/08/2026 chi aveva
+     * scritto «voglio dimagrire» si e' ritrovato un target di mantenimento.
+     *
+     * ⚠️ Per questo la conversione e' esplicita e in un posto solo: chi aggiunge
+     * un obiettivo tocca `GOAL_DELTA`, `MACRO_SPLIT` e `Profile::GOALS`, e i
+     * test in `CalorieCalculatorTest` falliscono da soli se ne dimentica uno.
+     */
+    public static function normalizzaObiettivo(string $goal): string
+    {
+        $goal = mb_strtolower(trim($goal));
+
+        return self::GOAL_STORICI[$goal] ?? $goal;
     }
 
     /**
@@ -144,7 +187,7 @@ class CalorieCalculator
      */
     public function macros(int $kcal, string $goal): array
     {
-        $split = self::MACRO_SPLIT[mb_strtolower($goal)] ?? self::MACRO_SPLIT['maintain'];
+        $split = self::MACRO_SPLIT[self::normalizzaObiettivo($goal)] ?? self::MACRO_SPLIT['maintain'];
 
         return [
             'protein_g' => (int) round($kcal * $split['protein'] / self::KCAL_PER_G['protein']),

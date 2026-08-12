@@ -51,7 +51,7 @@ class DemoGymSeeder extends Seeder
             // I ruoli sono per palestra: vanno creati dentro ciascuna.
             $this->callWith(RoleSeeder::class, ['tenant' => $tenant]);
 
-            $this->context->runAs($tenant, function () use ($tenant, $i): void {
+            $this->context->runAs($tenant, function () use ($tenant): void {
                 $admin = $this->utente($tenant, "admin@{$tenant->slug}.test",
                     'Anna Amministratrice', UserRole::GymAdmin);
 
@@ -61,7 +61,7 @@ class DemoGymSeeder extends Seeder
                 // Un paio di iscritti, con profilo compilato: senza, il calcolo
                 // del fabbisogno calorico (B5) non avrebbe su cosa girare.
                 foreach ([
-                    ['Marco Iscritto', 'm', '1990-04-12', 178, 'moderate', 'lose_weight', 75.0],
+                    ['Marco Iscritto', 'm', '1990-04-12', 178, 'moderate', 'lose_slow', 75.0],
                     ['Giulia Iscritta', 'f', '1995-09-30', 165, 'light', 'maintain', 58.0],
                 ] as $k => [$nome, $sesso, $nascita, $altezza, $attivita, $obiettivo, $peso]) {
                     $m = $this->utente($tenant, "iscritto{$k}@{$tenant->slug}.test", $nome, UserRole::Member);

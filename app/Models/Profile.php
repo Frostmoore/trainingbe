@@ -43,25 +43,45 @@ class Profile extends Model
      * @var array<string, string>
      */
     public const ACTIVITY_LEVELS = [
-        'sedentary' => 'Sedentario',
-        'light' => 'Leggero (1-2 allenamenti)',
-        'moderate' => 'Moderato (3-4)',
-        'active' => 'Attivo (5-6)',
-        'very_active' => 'Atleta (due sedute al giorno)',
+        'sedentary' => 'Sedentario (lavoro da fermo, niente allenamenti)',
+        'light' => 'Leggermente attivo (1-2 allenamenti a settimana)',
+        'moderate' => 'Moderatamente attivo (3-4 a settimana)',
+        'active' => 'Molto attivo (5-6 a settimana)',
+        'very_active' => 'Estremamente attivo (ogni giorno, o due sedute)',
     ];
 
     /**
      * Gli obiettivi ammessi dal profilo, con l'etichetta italiana.
      *
-     * ⚠️ `cut` (definizione) NON e' qui: si imposta dal piano alimentare, non dal
-     * profilo. Vedi `goalForFormula()`.
+     * ── 🚨 Perche' sono cinque e non tre (12/08/2026) ─────────────────────
+     *
+     * Il committente: *«non e' una stima accurata se sono solo 3 scelte»*. Con
+     * tre gradini l'unica alternativa a «mantenere» era un taglio del 15%, che e'
+     * troppo per chi vuole andare piano e troppo poco per chi ha fretta — e chi
+     * non si ritrova nel numero smette di fidarsi dell'app, non dell'obiettivo.
+     *
+     * La scala e' **simmetrica**: −20% / −10% / 0 / +10% / +20%. Su un TDEE di
+     * 2.500 kcal fa 2.000 → 2.250 → 2.500 → 2.750 → 3.000.
+     *
+     * ⚠️ **La scelta resta della persona**, e nella maggior parte dei casi gliela
+     * suggerira' il suo trainer: qui non si decide niente al posto suo, si
+     * offrono gradini abbastanza fini da poterla esprimere.
+     *
+     * 💡 `cut` **non c'e' piu'**. C'era, valeva −25%, e il docblock diceva che si
+     * impostava dal piano alimentare: nel piano alimentare non c'era una riga che
+     * lo facesse. Il suo posto lo prende `lose_fast`.
+     *
+     * Chi aggiunge una voce qui deve aggiungerla anche in
+     * `CalorieCalculator::GOAL_DELTA` e `::MACRO_SPLIT`.
      *
      * @var array<string, string>
      */
     public const GOALS = [
-        'lose_weight' => 'Dimagrire',
-        'maintain' => 'Mantenere',
-        'gain_muscle' => 'Aumentare massa',
+        'lose_fast' => 'Dimagrimento rapido',
+        'lose_slow' => 'Dimagrimento graduale',
+        'maintain' => 'Mantenimento',
+        'gain_lean' => 'Aumento massa controllato',
+        'gain_fast' => 'Aumento massa rapido',
     ];
 
     protected function casts(): array
@@ -134,18 +154,30 @@ class Profile extends Model
     }
 
     /**
-     * `lose_weight`/`gain_muscle` → `lose`/`bulk`.
+     * L'obiettivo nel vocabolario del calcolatore.
      *
-     * `cut` non ha corrispondente in questa tabella: e' un obiettivo che si
-     * imposta dal piano alimentare, non dal profilo.
+     * 🚨 **Dal 12/08/2026 i due vocabolari coincidono**, e questa e' una scelta,
+     * non una coincidenza: la traduzione fra `lose_weight` e `lose` e' costata
+     * un target di **mantenimento** a chi aveva scritto «voglio dimagrire», per
+     * settimane, senza che niente lo segnalasse. Due elenchi da tenere allineati
+     * a mano prima o poi divergono; uno solo no.
+     *
+     * ⚠️ Il metodo resta perche' deve tradurre i valori **salvati prima**
+     * (`lose_weight`, `gain_muscle`, e i `lose`/`cut`/`bulk` interni), e perche'
+     * l'app ne ha un ritratto fedele in `UserProfile.obiettivoPerFormula`.
      */
     public function goalForFormula(): string
     {
-        return match ($this->goal) {
-            'lose_weight' => 'lose',
-            'gain_muscle' => 'bulk',
-            default => 'maintain',
+        $goal = CalorieCalculator::normalizzaObiettivo((string) $this->goal);
+
+        // Il vocabolario precedente del profilo, per i dati non ancora migrati.
+        $goal = match ($goal) {
+            'lose_weight' => 'lose_slow',
+            'gain_muscle' => 'gain_lean',
+            default => $goal,
         };
+
+        return isset(CalorieCalculator::GOAL_DELTA[$goal]) ? $goal : 'maintain';
     }
 
     /**

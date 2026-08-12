@@ -35,7 +35,8 @@ return new class extends Migration
 
             // sedentary | light | moderate | active | very_active
             $table->string('activity_level', 20)->nullable();
-            // lose_weight | maintain | gain_muscle
+            // lose_fast | lose_slow | maintain | gain_lean | gain_fast
+            // (fino al 12/08/2026: lose_weight | maintain | gain_muscle)
             $table->string('goal', 20)->nullable();
             $table->decimal('target_weight_kg', 5, 2)->nullable();
 

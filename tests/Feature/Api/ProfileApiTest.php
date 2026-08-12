@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Nutrition\CalorieCalculator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -65,7 +66,7 @@ class ProfileApiTest extends TestCase
                 'birthdate' => '1988-04-12',
                 'height_cm' => 178,
                 'activity_level' => 'moderate',
-                'goal' => 'lose_weight',
+                'goal' => 'lose_slow',
             ])
             ->assertOk()
             ->assertJsonPath('data.sex', 'm')
@@ -79,7 +80,7 @@ class ProfileApiTest extends TestCase
             'user_id' => $this->iscritto->getKey(),
             'tenant_id' => $this->alfa->id,
             'height_cm' => 178,
-            'goal' => 'lose_weight',
+            'goal' => 'lose_slow',
         ]);
     }
 
@@ -337,7 +338,7 @@ class ProfileApiTest extends TestCase
 
             $this->assertArrayHasKey(
                 $profilo->activityForFormula(),
-                \App\Services\Nutrition\CalorieCalculator::ACTIVITY,
+                CalorieCalculator::ACTIVITY,
                 "Il livello «{$livello}» non ha una traduzione in activityForFormula().",
             );
 
@@ -361,7 +362,7 @@ class ProfileApiTest extends TestCase
 
             $this->assertArrayHasKey(
                 $profilo->goalForFormula(),
-                \App\Services\Nutrition\CalorieCalculator::GOAL_DELTA,
+                CalorieCalculator::GOAL_DELTA,
                 "L'obiettivo «{$obiettivo}» non ha una traduzione in goalForFormula().",
             );
         }

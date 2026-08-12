@@ -647,4 +647,142 @@ class NutritionApiTest extends TestCase
             ->assertCreated()
             ->json('data.id');
     }
+    // ───────── la massa impossibile, che BLOCCA (12/08/2026) ─────────
+
+    /**
+     * 🚨 **L'unica guardia del sistema che rifiuta invece di avvisare.**
+     *
+     * Il 12/08/2026 il modello ha prodotto delle coppiette di maiale con 56 g di
+     * proteine, 4 di carboidrati e 40 di grassi **per 100 g**: acqua zero.
+     * 588 kcal sono un numero plausibile, ed e' per questo che sarebbe passato.
+     *
+     * Il committente: *«non e' possibile che un alimento abbia piu' macro che
+     * peso»*. Qui non c'e' nessuna interpretazione in cui quel numero abbia
+     * senso, quindi non si abbassa la confidenza: si rifiuta.
+     */
+    #[Test]
+    public function an_entry_with_more_macros_than_mass_is_refused(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/food-entries', [
+                'description' => 'Coppiette di maiale',
+                'grams' => 100,
+                'kcal' => 588,
+                'protein' => 56,
+                'carbs' => 4,
+                'fat' => 40,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'macros_exceed_mass');
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * 🚨 **Vale su OGNI strada**, perche' la guardia sta nel `saving()` del
+     * modello e non in una regola di validazione. Una `Rule` andrebbe ripetuta in
+     * cinque controller e dimenticata nel sesto.
+     */
+    #[Test]
+    public function the_mass_guard_holds_on_the_ai_path_too(): void
+    {
+        $this->iscritto->registraConsenso('ai_consent_at', true);
+
+        $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'items' => [
+                    ['name' => 'Coppiette', 'grams' => 100, 'kcal' => 588, 'protein' => 56, 'carbs' => 4, 'fat' => 40],
+                ],
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'macros_exceed_mass');
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * ⚠️ **Anche la modifica**: correggere una voce sana in una impossibile deve
+     * fallire, o la guardia sarebbe aggirabile con due richieste.
+     */
+    #[Test]
+    public function an_edit_cannot_make_an_entry_impossible(): void
+    {
+        $voce = FoodEntry::create([
+            'tenant_id' => $this->iscritto->tenant_id,
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => 'lunch',
+            'description' => 'Petto di pollo',
+            'grams' => 100,
+            'kcal' => 165,
+            'protein' => 31,
+            'carbs' => 0,
+            'fat' => 3.6,
+        ]);
+
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['protein' => 150])
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'macros_exceed_mass');
+
+        $this->assertSame(31.0, (float) $voce->fresh()->protein);
+    }
+
+    /**
+     * 🚨 **Cento grammi d'olio sono cento grammi di grassi, e vanno salvati.**
+     *
+     * I grassi puri e gli zuccheri puri sono gli unici alimenti senza acqua: se
+     * la guardia li rifiutasse, rifiuterebbe l'olio — che e' fra le voci piu'
+     * comuni di qualunque diario.
+     */
+    #[Test]
+    public function pure_fat_reaches_one_hundred_percent_and_is_accepted(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/food-entries', [
+                'description' => 'Olio EVO',
+                'grams' => 100,
+                'kcal' => 900,
+                'protein' => 0,
+                'carbs' => 0,
+                'fat' => 100,
+            ])
+            ->assertCreated();
+
+        $this->assertSame(1, FoodEntry::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * 💡 Il 2% di tolleranza e' per gli arrotondamenti: il modello manda numeri
+     * interi, e tre arrotondamenti per eccesso su una voce da 100 g possono
+     * sforare di poco senza che ci sia niente di impossibile.
+     */
+    #[Test]
+    public function rounding_does_not_trip_the_guard(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/food-entries', [
+                'description' => 'Zucchero',
+                'grams' => 100,
+                'kcal' => 400,
+                'protein' => 0,
+                'carbs' => 101,
+                'fat' => 0,
+            ])
+            ->assertCreated();
+    }
+
+    /** ⚠️ Senza grammi non c'e' niente con cui confrontare: non si blocca. */
+    #[Test]
+    public function without_grams_nothing_is_refused(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/food-entries', [
+                'description' => 'Un piatto',
+                'kcal' => 500,
+                'protein' => 900,
+            ])
+            ->assertCreated();
+    }
 }

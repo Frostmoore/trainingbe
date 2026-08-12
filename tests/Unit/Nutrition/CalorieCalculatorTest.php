@@ -84,13 +84,43 @@ class CalorieCalculatorTest extends TestCase
 
     // ───────────────────────── obiettivo ─────────────────────────
 
+    /**
+     * 🚨 **La scala dei cinque gradini**, simmetrica per costruzione.
+     *
+     * Il committente, il 12/08/2026: *«non e' una stima accurata se sono solo 3
+     * scelte»*. Con tre gradini l'unica alternativa a «mantenere» era un taglio
+     * del 15%: troppo per chi vuole andare piano, troppo poco per chi ha fretta.
+     *
+     * L'esempio che ha dato lui, su un TDEE di 2.500 kcal:
+     * 2.000 → 2.250 → 2.500 → 2.750 → 3.000.
+     */
     #[Test]
     public function it_applies_the_goal_delta(): void
     {
-        $this->assertSame(2550, $this->calc->calorieTarget(3000.0, 'lose'));      // −15%
-        $this->assertSame(2250, $this->calc->calorieTarget(3000.0, 'cut'));       // −25%
-        $this->assertSame(3000, $this->calc->calorieTarget(3000.0, 'maintain'));
-        $this->assertSame(3360, $this->calc->calorieTarget(3000.0, 'bulk'));      // +12%
+        $this->assertSame(2000, $this->calc->calorieTarget(2500.0, 'lose_fast'));   // −20%
+        $this->assertSame(2250, $this->calc->calorieTarget(2500.0, 'lose_slow'));   // −10%
+        $this->assertSame(2500, $this->calc->calorieTarget(2500.0, 'maintain'));
+        $this->assertSame(2750, $this->calc->calorieTarget(2500.0, 'gain_lean'));   // +10%
+        $this->assertSame(3000, $this->calc->calorieTarget(2500.0, 'gain_fast'));   // +20%
+    }
+
+    /**
+     * ⚠️ **Il vocabolario vecchio continua a funzionare.**
+     *
+     * Un piano alimentare salvato mesi fa, o un profilo non ancora migrato, non
+     * devono ritrovarsi silenziosamente su «mantenimento»: e' esattamente il
+     * difetto che il 12/08/2026 ha dato un target di mantenimento a chi aveva
+     * scritto «voglio dimagrire».
+     */
+    #[Test]
+    public function the_old_vocabulary_still_works(): void
+    {
+        $this->assertSame(2250, $this->calc->calorieTarget(2500.0, 'lose'));  // → lose_slow
+        $this->assertSame(2000, $this->calc->calorieTarget(2500.0, 'cut'));   // → lose_fast
+        $this->assertSame(2750, $this->calc->calorieTarget(2500.0, 'bulk'));  // → gain_lean
+
+        // 🚨 Un obiettivo che non esiste vale mantenimento, non un errore.
+        $this->assertSame(2500, $this->calc->calorieTarget(2500.0, 'volare'));
     }
 
     /**
@@ -102,8 +132,8 @@ class CalorieCalculatorTest extends TestCase
     #[Test]
     public function it_never_goes_below_the_floor(): void
     {
-        $this->assertSame(1200, $this->calc->calorieTarget(1400.0, 'cut'));
-        $this->assertSame(1200, $this->calc->calorieTarget(800.0, 'cut'));
+        $this->assertSame(1200, $this->calc->calorieTarget(1400.0, 'lose_fast'));
+        $this->assertSame(1200, $this->calc->calorieTarget(800.0, 'lose_fast'));
     }
 
     // ───────────────────────── macro ─────────────────────────
@@ -152,7 +182,7 @@ class CalorieCalculatorTest extends TestCase
     public function cutting_raises_the_protein_share(): void
     {
         $mantenimento = $this->calc->macros(2000, 'maintain');
-        $definizione = $this->calc->macros(2000, 'cut');
+        $definizione = $this->calc->macros(2000, 'lose_fast');
 
         $this->assertGreaterThan($mantenimento['protein_g'], $definizione['protein_g']);
     }

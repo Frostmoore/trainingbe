@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\FoodSource;
 use App\Enums\MealType;
+use App\Exceptions\MassaIncoerenteException;
 use App\Models\Concerns\BelongsToTenant;
 use App\Services\Nutrition\FoodUnit;
 use App\Support\Tempo\GiornoLocale;
@@ -81,7 +82,91 @@ class FoodEntry extends Model
                 $voce->carbs ??= $voce->carbs_100 !== null ? round($voce->carbs_100 * $fattore, 2) : null;
                 $voce->fat ??= $voce->fat_100 !== null ? round($voce->fat_100 * $fattore, 2) : null;
             }
+
+            // 🚨 Per ultima: controlla i valori DEFINITIVI, dopo ogni derivazione.
+            self::rifiutaMassaImpossibile($voce);
         });
+    }
+
+    /**
+     * 🚨 **I macronutrienti non possono pesare piu' dell'alimento.**
+     *
+     * ── Perche' questa guardia BLOCCA, mentre le altre no ────────────────────
+     *
+     * Il 12/08/2026 il modello ha prodotto delle coppiette di maiale con 56 g di
+     * proteine, 4 di carboidrati e 40 di grassi **per 100 g**: cento grammi di
+     * macro in cento grammi di prodotto, cioe' acqua zero. 588 kcal sono un
+     * numero perfettamente plausibile, ed e' per questo che sarebbe passato.
+     *
+     * Il committente: *«la guardia sull'impossibilita' della massa e'
+     * hard-blocking perche' non e' possibile che un alimento abbia piu' macro che
+     * peso»*. Ed e' esatto: qui non c'e' nessuna interpretazione, nessuna tabella
+     * e nessun margine di stima in cui quel numero abbia senso. La guardia sulla
+     * coerenza **energetica** e' morbida perche' la' un numero fuori banda puo'
+     * essere giusto (la fibra, i polioli); qui no.
+     *
+     * ⚠️ **Sta nel `saving()` e non in una regola di validazione**, cosi' vale per
+     * OGNI strada: l'AI con `save: true`, la conferma, l'inserimento a mano, la
+     * modifica, i preferiti, il piano alimentare, e quella che verra' scritta fra
+     * un anno. Una `Rule` andrebbe ripetuta in cinque controller e dimenticata
+     * nel sesto.
+     *
+     * 🚨 **Si controlla per ULTIMA**, dopo tutte le derivazioni: prima dei
+     * ricalcoli i valori possono essere legittimamente incompleti, e bocciare
+     * un'incoerenza che il modello stesso stava per sistemare vorrebbe dire
+     * rifiutare voci sane.
+     *
+     * 💡 **Il 2% di tolleranza** e' per gli arrotondamenti: il modello manda
+     * numeri interi, e tre arrotondamenti per eccesso su una voce da 100 g
+     * possono sforare di poco senza che ci sia niente di impossibile. Cento
+     * grammi d'olio che dichiarano 100 g di grassi sono giusti; 140 no.
+     */
+    private static function rifiutaMassaImpossibile(self $voce): void
+    {
+        $grammi = $voce->grams;
+
+        if ($grammi === null || $grammi <= 0) {
+            return;
+        }
+
+        $p = (float) ($voce->protein ?? 0);
+        $c = (float) ($voce->carbs ?? 0);
+        $f = (float) ($voce->fat ?? 0);
+        $somma = $p + $c + $f;
+
+        // 1. Oltre la massa dell'alimento: impossibile, punto.
+        $oltreLaMassa = $somma > $grammi * 1.02;
+
+        /*
+         * 2. Al limite, ma con piu' di un macronutriente.
+         *
+         * 🚨 **La prima prova da sola non prendeva le coppiette**: 56 + 4 + 40
+         * fa esattamente 100 su 100 g, cioe' al limite e non oltre. Il test lo
+         * ha fatto vedere subito, in Dart prima e qui poi.
+         *
+         * 💡 Un alimento con piu' di un macronutriente contiene **sempre acqua**,
+         * e non arriva mai al 100%. Al 100% ci arrivano solo i grassi puri e gli
+         * zuccheri puri, che di macronutrienti ne hanno **uno solo**: 100 g
+         * d'olio sono 100 g di grassi, e vanno salvati.
+         *
+         * ⚠️ Questa seconda prova e' l'unico pezzo **euristico** di una regola
+         * altrimenti fisica: al 97% non e' impossibile in senso stretto, e' solo
+         * inverosimile. Se un alimento vero dovesse mai inciamparci, la soglia va
+         * allargata **qui e in `VoceStimata.macroImpossibili` insieme** — se le
+         * due divergono, l'app lascia salvare qualcosa che il server rifiuta.
+         */
+        $quantiMacro = count(array_filter([$p, $c, $f], static fn (float $m): bool => $m > 0.5));
+        $senzaAcqua = $quantiMacro > 1 && $somma > $grammi * 0.97;
+
+        if (! $oltreLaMassa && ! $senzaAcqua) {
+            return;
+        }
+
+        throw new MassaIncoerenteException(
+            alimento: (string) $voce->description,
+            grammi: (float) $grammi,
+            macroTotali: $somma,
+        );
     }
 
     /**
