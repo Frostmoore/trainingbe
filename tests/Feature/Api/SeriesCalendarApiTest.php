@@ -44,6 +44,29 @@ class SeriesCalendarApiTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
+    /**
+     * Il giorno locale della persona, non quello di Greenwich.
+     *
+     * ── 🚨 Il difetto che questo helper chiude (13/08/2026, 00:20) ───────────
+     *
+     * Questi test costruivano gli istanti con `Carbon::today()`, che e'
+     * **mezzanotte UTC**. Con l'utente su `Europe/Rome` (UTC+2) c'e' una
+     * finestra di due ore, fra la mezzanotte locale e quella di Greenwich, in
+     * cui «oggi» sono due giorni diversi: il test scriveva un allenamento «5
+     * giorni fa» in UTC e il server ne contava 6 in locale.
+     *
+     * ⚠️ **Passavano per ventidue ore su ventiquattro.** Un test cosi' non e'
+     * verde: e' verde quasi sempre, il che e' peggio, perche' il giorno che
+     * diventa rosso nessuno crede che sia lui ad avere ragione.
+     *
+     * 💡 E' esattamente la classe di difetto chiusa da A3 — vedi
+     * `GiornoLocale` — che nei test era rimasta.
+     */
+    private function oggi(int $giorniFa = 0): Carbon
+    {
+        return $this->iscritto->giornoDiOggi()->menoGiorni($giorniFa)->locale();
+    }
+
     private function mangia(Carbon $quando, int $kcal, ?User $chi = null): FoodEntry
     {
         $chi ??= $this->iscritto;
@@ -77,14 +100,12 @@ class SeriesCalendarApiTest extends TestCase
      * la suite e **esplode il giorno che qualcuno riusa l'helper**.
      */
 
-
-
     // ───────────────────────── C3: calorie ─────────────────────────
 
     #[Test]
     public function the_calorie_series_has_one_slot_per_day_even_when_empty(): void
     {
-        $this->mangia(Carbon::today()->setTime(13, 0), 2000);
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
 
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=7')
@@ -109,8 +130,8 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function averages_only_count_the_days_with_data(): void
     {
-        $this->mangia(Carbon::today()->setTime(13, 0), 2000);
-        $this->mangia(Carbon::today()->subDay()->setTime(13, 0), 2400);
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
+        $this->mangia($this->oggi(1)->setTime(13, 0), 2400);
 
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=7')
@@ -129,11 +150,11 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function the_manual_burn_replaces_the_sessions_it_does_not_add_up(): void
     {
-        $this->allena(Carbon::today()->setTime(18, 0));
+        $this->allena($this->oggi()->setTime(18, 0));
 
         $this->ctx()->runAs($this->alfa, fn () => DailyBurn::create([
             'user_id' => $this->iscritto->getKey(),
-            'date' => Carbon::today()->toDateString(),
+            'date' => $this->iscritto->giornoDiOggi()->etichetta,
             'kcal' => 800,
         ]));
 
@@ -150,8 +171,8 @@ class SeriesCalendarApiTest extends TestCase
         // Due giorni nello stesso mese: la media al giorno è la loro media, non
         // la somma. Una somma mensile accanto a barre giornaliere sembra
         // un'esplosione di calorie.
-        $this->mangia(Carbon::today()->setTime(13, 0), 2000);
-        $this->mangia(Carbon::today()->subDay()->setTime(13, 0), 3000);
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
+        $this->mangia($this->oggi(1)->setTime(13, 0), 3000);
 
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=365')
@@ -177,7 +198,7 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function days_zero_means_the_whole_history_and_does_not_scroll(): void
     {
-        $this->mangia(Carbon::today()->setTime(13, 0), 2000);
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
 
         $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=0')
@@ -192,7 +213,7 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function the_offset_scrolls_by_whole_windows(): void
     {
-        $this->mangia(Carbon::today()->subDays(8)->setTime(13, 0), 1800);
+        $this->mangia($this->oggi(8)->setTime(13, 0), 1800);
 
         // offset 1 con days 7 = la settimana prima, non «un giorno prima».
         $risposta = $this->comeApp($this->iscritto)
@@ -230,7 +251,7 @@ class SeriesCalendarApiTest extends TestCase
     public function the_series_of_a_gym_mate_never_leak_in(): void
     {
         $compagno = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
-        $this->mangia(Carbon::today()->setTime(13, 0), 9999, $compagno);
+        $this->mangia($this->oggi()->setTime(13, 0), 9999, $compagno);
 
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=7')
@@ -281,15 +302,15 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function a_day_with_nothing_logged_is_null_not_zero(): void
     {
-        $this->mangia(Carbon::today()->setTime(13, 0), 0);
+        $this->mangia($this->oggi()->setTime(13, 0), 0);
 
         $celle = collect($this->comeApp($this->iscritto)
-            ->getJson('/api/v1/calendar?month='.Carbon::today()->format('Y-m'))
+            ->getJson('/api/v1/calendar?month='.$this->oggi()->format('Y-m'))
             ->assertOk()
             ->json('data.days'));
 
-        $oggi = $celle->firstWhere('date', Carbon::today()->toDateString());
-        $domani = $celle->firstWhere('date', Carbon::today()->addDay()->toDateString());
+        $oggi = $celle->firstWhere('date', $this->iscritto->giornoDiOggi()->etichetta);
+        $domani = $celle->firstWhere('date', $this->iscritto->giornoDiOggi()->piuGiorni(1)->etichetta);
 
         $this->assertSame(0, $oggi['kcal'], 'Un pasto da zero calorie è comunque un pasto registrato.');
 
@@ -301,11 +322,11 @@ class SeriesCalendarApiTest extends TestCase
     #[Test]
     public function the_day_detail_lists_meals_and_sessions(): void
     {
-        $this->mangia(Carbon::today()->setTime(13, 0), 700);
-        $this->allena(Carbon::today()->setTime(18, 0));
+        $this->mangia($this->oggi()->setTime(13, 0), 700);
+        $this->allena($this->oggi()->setTime(18, 0));
 
         $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/calendar/'.Carbon::today()->toDateString())
+            ->getJson('/api/v1/calendar/'.$this->iscritto->giornoDiOggi()->etichetta)
             ->assertOk()
             ->assertJsonPath('data.kcal', 700)
             ->assertJsonCount(1, 'data.entries')
@@ -355,10 +376,10 @@ class SeriesCalendarApiTest extends TestCase
     public function the_calendar_of_a_gym_mate_is_never_visible(): void
     {
         $compagno = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
-        $this->mangia(Carbon::today()->setTime(13, 0), 4321, $compagno);
+        $this->mangia($this->oggi()->setTime(13, 0), 4321, $compagno);
 
         $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/calendar/'.Carbon::today()->toDateString())
+            ->getJson('/api/v1/calendar/'.$this->iscritto->giornoDiOggi()->etichetta)
             ->assertOk()
             ->assertJsonPath('data.kcal', 0)
             ->assertJsonCount(0, 'data.entries');

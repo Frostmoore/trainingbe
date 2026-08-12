@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\FoodEstimate;
+use App\Services\Ai\Data\FoodItem;
+use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
@@ -44,6 +46,7 @@ class AiController extends Controller
         private readonly TenantContext $tenants,
         private readonly DiaryService $diary,
         private readonly DashboardService $dashboard,
+        private readonly MealValidator $validatore,
     ) {}
 
     // ───────────────────────── cibo ─────────────────────────
@@ -64,12 +67,22 @@ class AiController extends Controller
 
         $utente = $request->user();
 
-        $stima = $this->ai->for(AiFeature::FoodText)->foodFromText(
-            $dati['text'],
-            AiCallContext::for($utente, AiFeature::FoodText),
+        /*
+         * 🚨 **Il retry riscrive il MESSAGGIO UTENTE, mai il prompt di sistema.**
+         *
+         * Il prompt di sistema e' il prefisso identico di ogni chiamata di ogni
+         * utente, ed e' cio' che lo rende cachabile a un decimo del costo.
+         * Infilarci l'elenco degli errori di *questa* richiesta lo invaliderebbe
+         * per tutti, **senza dare nessun errore**: si vedrebbe solo in fattura.
+         */
+        [$stima, $avvisi] = $this->stimaValidata(
+            fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::FoodText)->foodFromText(
+                $dati['text'].$appendice,
+                AiCallContext::for($utente, AiFeature::FoodText),
+            ),
         );
 
-        return $this->rispostaStima($request, $stima, FoodSource::AiText, $dati);
+        return $this->rispostaStima($request, $stima, FoodSource::AiText, $dati, $avvisi);
     }
 
     public function foodFromPhoto(Request $request): JsonResponse
@@ -86,13 +99,63 @@ class AiController extends Controller
         $utente = $request->user();
         $file = $request->file('photo');
 
+        /*
+         * ⚠️ **Dalla foto non c'e' retry**, ed e' un debito dichiarato:
+         * `foodFromImage()` non ha un posto in cui mettere l'appendice con gli
+         * errori, e aggiungercelo vorrebbe dire cambiare la firma di tutti e tre
+         * i fornitori. Gli avvisi si raccolgono lo stesso.
+         */
         $stima = $this->ai->for(AiFeature::FoodPhoto)->foodFromImage(
             $file->getRealPath(),
             (string) $file->getMimeType(),
             AiCallContext::for($utente, AiFeature::FoodPhoto),
         );
 
-        return $this->rispostaStima($request, $stima, FoodSource::AiPhoto, $dati);
+        $esito = $this->validatore->valida($stima);
+
+        return $this->rispostaStima(
+            $request,
+            $esito['stima'],
+            FoodSource::AiPhoto,
+            $dati,
+            array_merge($esito['avvisi'], $esito['gravi']),
+        );
+    }
+
+    /**
+     * Chiama il modello, controlla, e **una volta sola** gli chiede di rifare.
+     *
+     * ── 🚨 Perche' un solo tentativo ──────────────────────────────────────────
+     *
+     * Un errore grave e' quasi sempre di formato — un'unita' vietata, un enum
+     * sconosciuto — e il modello lo corregge alla prima richiesta. Se non lo
+     * corregge alla seconda non lo correggera' alla terza: quello che
+     * cambierebbe, ripetendo, e' solo il conto di fine mese.
+     *
+     * ⚠️ **Se anche il secondo tentativo fallisce si restituisce comunque la
+     * stima**, con gli errori negli avvisi. E' l'app che decide: il foglio di
+     * conferma li mostra, e la persona corregge o annulla. Rifiutare tutto
+     * vorrebbe dire buttare una chiamata gia' pagata e lasciare chi scrive senza
+     * niente.
+     *
+     * @param  callable(string): FoodEstimate  $chiamata
+     * @return array{0: FoodEstimate, 1: list<string>}
+     */
+    private function stimaValidata(callable $chiamata): array
+    {
+        $esito = $this->validatore->valida($chiamata(''));
+
+        if ($esito['gravi'] === []) {
+            return [$esito['stima'], $esito['avvisi']];
+        }
+
+        $appendice = "\n\n[SISTEMA] Il tuo output precedente violava lo schema: "
+            .implode(' ', $esito['gravi'])
+            .' Correggi e restituisci solo il JSON.';
+
+        $secondo = $this->validatore->valida($chiamata($appendice));
+
+        return [$secondo['stima'], array_merge($secondo['avvisi'], $secondo['gravi'])];
     }
 
     /**
@@ -144,6 +207,15 @@ class AiController extends Controller
             // non passasse di qui la conferma perderebbe l'unico dato che rende
             // coerente una bevanda alcolica.
             'items.*.alcohol' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            // I campi che l'app rimanda indietro cosi' come li ha ricevuti: non
+            // finiscono in colonne, ma restano in `ai_raw` e servono al validatore.
+            'items.*.ml' => ['nullable', 'numeric', 'min:0', 'max:20000'],
+            'items.*.basis' => ['nullable', Rule::in(FoodItem::BASI)],
+            'items.*.state' => ['nullable', Rule::in(FoodItem::STATI)],
+            'items.*.declared' => ['nullable', 'boolean'],
+            'items.*.brand' => ['nullable', 'string', 'max:120'],
+            'items.*.abv_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
         ]);
 
         /*
@@ -153,7 +225,8 @@ class AiController extends Controller
          * ricalcola quando mancano. Due strade che scrivono lo stesso pasto in
          * due modi diversi e' come nascono i totali che non tornano.
          */
-        $stima = FoodEstimate::fromArray(['items' => $dati['items']]);
+        $esito = $this->validatore->valida(FoodEstimate::fromArray(['items' => $dati['items']]));
+        $stima = $esito['stima'];
 
         $voci = $this->scriviVoci(
             $request->user(),
@@ -273,12 +346,17 @@ class AiController extends Controller
         FoodEstimate $stima,
         FoodSource $fonte,
         array $dati,
+        array $avvisi = [],
     ): JsonResponse {
         $salva = (bool) ($dati['save'] ?? true);
 
         if (! $salva || $stima->items === []) {
             return response()->json(['data' => [
                 'estimate' => $stima->toArray(),
+                // ⚠️ Gli avvisi del validatore viaggiano insieme alla stima: sono
+                // cio' che il foglio di conferma mostra quando il backend ha
+                // corretto qualcosa o ha trovato un numero implausibile.
+                'warnings' => $avvisi,
                 'entries' => [],
                 'saved' => false,
             ]]);
@@ -288,6 +366,7 @@ class AiController extends Controller
 
         return response()->json(['data' => [
             'estimate' => $stima->toArray(),
+            'warnings' => $avvisi,
             'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
             'saved' => true,
         ]], 201);

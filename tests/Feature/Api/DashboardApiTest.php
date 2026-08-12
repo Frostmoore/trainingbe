@@ -52,6 +52,29 @@ class DashboardApiTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
+    /**
+     * Il giorno locale della persona, non quello di Greenwich.
+     *
+     * ── 🚨 Il difetto che questo helper chiude (13/08/2026, 00:20) ───────────
+     *
+     * Questi test costruivano gli istanti con `Carbon::today()`, che e'
+     * **mezzanotte UTC**. Con l'utente su `Europe/Rome` (UTC+2) c'e' una
+     * finestra di due ore, fra la mezzanotte locale e quella di Greenwich, in
+     * cui «oggi» sono due giorni diversi: il test scriveva un allenamento «5
+     * giorni fa» in UTC e il server ne contava 6 in locale.
+     *
+     * ⚠️ **Passavano per ventidue ore su ventiquattro.** Un test cosi' non e'
+     * verde: e' verde quasi sempre, il che e' peggio, perche' il giorno che
+     * diventa rosso nessuno crede che sia lui ad avere ragione.
+     *
+     * 💡 E' esattamente la classe di difetto chiusa da A3 — vedi
+     * `GiornoLocale` — che nei test era rimasta.
+     */
+    private function oggi(int $giorniFa = 0): Carbon
+    {
+        return $this->iscritto->giornoDiOggi()->menoGiorni($giorniFa)->locale();
+    }
+
     #[Test]
     public function the_dashboard_answers_with_every_section(): void
     {
@@ -110,7 +133,7 @@ class DashboardApiTest extends TestCase
         /*
          * 🚨 **Le ore sono quelle dell'orologio di chi guarda** — A3.
          *
-         * ⚠️ Prima si costruivano con `Carbon::today()->setTime(8, 0)`, cioe'
+         * ⚠️ Prima si costruivano con `$this->oggi()->setTime(8, 0)`, cioe'
          * **le 8 UTC**, e il test passava solo perche' il servizio leggeva l'ora
          * nello stesso fuso sbagliato. A Roma quelle sono le 10, e la giornata
          * sveglia e' passata al 24% invece che al 12%.
@@ -137,8 +160,8 @@ class DashboardApiTest extends TestCase
     {
         $this->ctx()->runAs($this->alfa, fn () => WorkoutSession::create([
             'user_id' => $this->iscritto->getKey(),
-            'started_at' => Carbon::today()->subDays(5)->setTime(18, 0),
-            'ended_at' => Carbon::today()->subDays(5)->setTime(19, 0),
+            'started_at' => $this->oggi(5)->setTime(18, 0),
+            'ended_at' => $this->oggi(5)->setTime(19, 0),
         ]));
 
         $risposta = $this->comeApp($this->iscritto)->getJson('/api/v1/dashboard')->assertOk();

@@ -9,10 +9,20 @@ use App\Services\Ai\Guardie\CoerenzaEnergetica;
 /**
  * Cosa il modello ha visto in un piatto o letto in una frase.
  *
+ * 🚨 **I totali NON arrivano dal modello: li calcola PHP.**
+ *
+ * Fino al 13/08/2026 lo schema chiedeva anche `totals`, e `normalizeTotals()` li
+ * usava quando c'erano. Era un'occasione di errore regalata: chiedere a un
+ * modello di sommare quattro numeri **dopo** avergli fatto fare tutta
+ * l'inferenza aggiunge un modo di sbagliare e non aggiunge niente. Il backend le
+ * somme non le sbaglia mai.
+ *
+ * ⚠️ E' anche la ragione per cui `totals` e' sparito dallo schema: un campo che
+ * il modello puo' compilare e' un campo che qualcuno prima o poi legge.
+ *
  * `confidence` non e' decorazione: sotto una soglia l'app deve chiedere conferma
- * invece di scrivere nel diario. Una stima sbagliata accettata in silenzio si
- * scopre settimane dopo, quando i totali non tornano e non si sa piu' quale
- * voce fosse sbagliata.
+ * invece di scrivere nel diario. Dal 12/08/2026 lo fa davvero — vedi
+ * `ConfermaStimaSheet` lato app.
  */
 final readonly class FoodEstimate
 {
@@ -37,47 +47,57 @@ final readonly class FoodEstimate
 
         $stima = new self(
             items: $items,
-            totals: self::normalizeTotals($data['totals'] ?? null, $items),
+            // 🚨 Sempre ricalcolati, anche se il modello li avesse mandati.
+            totals: self::sommaDi($items),
             confidence: (float) ($data['confidence'] ?? 0.0),
-            note: isset($data['note']) ? (string) $data['note'] : null,
+            note: self::notaDi($data),
         );
 
         /*
          * 🚨 **La guardia si applica QUI e non nei provider.**
          *
-         * `FoodEstimate::fromArray()` e' l'unica porta da cui passa ogni stima —
-         * Anthropic, OpenAI, il doppio dei test e la conferma dall'app. Metterla
-         * nei provider vorrebbe dire ripeterla in sei punti e dimenticarla nel
+         * `fromArray()` e' l'unica porta da cui passa ogni stima — Anthropic,
+         * OpenAI, il doppio dei test e la conferma dall'app. Metterla nei
+         * provider vorrebbe dire ripeterla in sei punti e dimenticarla nel
          * settimo: il fornitore aggiunto fra un anno nascerebbe **senza**
          * guardia, e funzionerebbe benissimo.
-         *
-         * ⚠️ E' la stessa ragione per cui `scriviVoci()` e' un metodo solo.
          */
         return CoerenzaEnergetica::correggi($stima);
     }
 
     /**
-     * I totali: quelli del modello se ci sono, altrimenti la somma delle voci.
+     * La nota del modello.
      *
-     * Ricalcolarli quando mancano evita che un chiamante trovi `null` e sommi a
-     * modo suo — che e' il modo in cui due punti del sistema arrivano a due
-     * totali diversi per lo stesso pasto.
+     * 🚨 **Resta un campo libero, e non va ristretto a «segnala l'assenza di
+     * cibo».** E' il campo che il 12/08/2026 ha spiegato perche' una cotoletta
+     * fosse stimata male — *«non e' stato specificato se sono panate»* — mentre
+     * la `confidence` diceva 0.85, cioe' «sicuro». Il numero mentiva, il testo
+     * no.
      *
-     * @param  array<string, mixed>|null  $totals
+     * ⚠️ Una nota di soli spazi vale **assente**: mostrarla disegnerebbe un
+     * riquadro d'avviso con dentro il nulla.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function notaDi(array $data): ?string
+    {
+        $nota = isset($data['note']) ? trim((string) $data['note']) : '';
+
+        return $nota === '' ? null : $nota;
+    }
+
+    /**
+     * La somma delle voci.
+     *
+     * 💡 Statica e pubblica perche' la usa anche `MealValidator` dopo aver
+     * corretto una voce: due somme scritte in due punti sono due totali che
+     * prima o poi divergono.
+     *
      * @param  list<FoodItem>  $items
      * @return array{kcal: ?float, protein: ?float, carbs: ?float, fat: ?float}
      */
-    private static function normalizeTotals(?array $totals, array $items): array
+    public static function sommaDi(array $items): array
     {
-        if (is_array($totals) && isset($totals['kcal'])) {
-            return [
-                'kcal' => (float) $totals['kcal'],
-                'protein' => isset($totals['protein']) ? (float) $totals['protein'] : null,
-                'carbs' => isset($totals['carbs']) ? (float) $totals['carbs'] : null,
-                'fat' => isset($totals['fat']) ? (float) $totals['fat'] : null,
-            ];
-        }
-
         $somma = ['kcal' => 0.0, 'protein' => 0.0, 'carbs' => 0.0, 'fat' => 0.0];
 
         foreach ($items as $i) {
