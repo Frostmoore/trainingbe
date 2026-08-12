@@ -8,7 +8,7 @@ use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\User;
 use App\Models\WorkoutSession;
-use Illuminate\Support\Carbon;
+use App\Support\Tempo\GiornoLocale;
 
 /**
  * Le serie temporali per i grafici — C3.
@@ -63,7 +63,7 @@ class SeriesService
 
     public function calories(User $utente, int $giorni, int $offset = 0): array
     {
-        [$da, $a, $tutto] = $this->finestra($giorni, $offset);
+        [$da, $a, $tutto] = $this->finestra($utente, $giorni, $offset);
 
         $assunte = $this->kcalAssunte($utente, $da, $a);
         $bruciate = $this->kcalBruciate($utente, $da, $a);
@@ -78,19 +78,26 @@ class SeriesService
     // ───────────────────────── la finestra ─────────────────────────
 
     /**
-     * @return array{0: Carbon, 1: Carbon, 2: bool}
+     * 🚨 **La finestra parte da «oggi» di chi guarda** — A3. Con
+     * `Carbon::today()` l'ultima barra del grafico era il giorno UTC: dopo le
+     * 22:00 di Roma l'utente vedeva il grafico fermarsi a ieri, e le calorie
+     * appena registrate non comparivano da nessuna parte.
+     *
+     * @return array{0: GiornoLocale, 1: GiornoLocale, 2: bool}
      */
-    private function finestra(int $giorni, int $offset): array
+    private function finestra(User $utente, int $giorni, int $offset): array
     {
+        $oggi = $utente->giornoDiOggi();
+
         if ($giorni <= 0) {
-            return [Carbon::today()->subYears(self::ANNI_INDIETRO), Carbon::today(), true];
+            return [$oggi->menoAnni(self::ANNI_INDIETRO), $oggi, true];
         }
 
         // `offset` scorre di finestre INTERE: con 7 giorni, offset 1 è la
         // settimana prima, non «un giorno prima». Scorrere di un giorno alla
         // volta farebbe ballare le etichette a ogni tocco.
-        $a = Carbon::today()->subDays($offset * $giorni);
-        $da = $a->copy()->subDays($giorni - 1);
+        $a = $oggi->menoGiorni($offset * $giorni);
+        $da = $a->menoGiorni($giorni - 1);
 
         return [$da, $a, false];
     }
@@ -100,15 +107,22 @@ class SeriesService
     /**
      * Calorie assunte per giorno, in **una** query.
      *
+     * 🚨 **Il raggruppamento e' nel fuso di chi guarda, non in UTC** — A3, ed
+     * e' il punto che l'analisi iniziale non aveva visto. `->toDateString()` su
+     * `eaten_at` raggruppa per giorno **UTC**: una cena delle 00:30 di Roma
+     * finiva nella barra del giorno prima. Il risultato era un grafico con una
+     * serata a digiuno seguita da una colazione da 900 kcal — due barre
+     * sbagliate al prezzo di una, e nessun segnale che qualcosa non tornasse.
+     *
      * @return array<string, int>
      */
-    private function kcalAssunte(User $utente, Carbon $da, Carbon $a): array
+    private function kcalAssunte(User $utente, GiornoLocale $da, GiornoLocale $a): array
     {
         return FoodEntry::query()
             ->forUser($utente)
-            ->whereBetween('eaten_at', [$da->copy()->startOfDay(), $a->copy()->endOfDay()])
+            ->whereBetween('eaten_at', $da->finestraFinoA($a))
             ->get(['eaten_at', 'kcal'])
-            ->groupBy(fn (FoodEntry $v): string => $v->eaten_at->toDateString())
+            ->groupBy(fn (FoodEntry $v): string => GiornoLocale::etichettaDi($v->eaten_at, $da->fuso))
             ->map(fn ($gruppo): int => (int) round($gruppo->sum('kcal')))
             ->all();
     }
@@ -125,11 +139,16 @@ class SeriesService
      *
      * @return array<string, int>
      */
-    private function kcalBruciate(User $utente, Carbon $da, Carbon $a): array
+    private function kcalBruciate(User $utente, GiornoLocale $da, GiornoLocale $a): array
     {
+        /*
+         * ⚠️ `daily_burns.date` e' una colonna `date`, cioe' **gia' un'etichetta**:
+         * qui si confrontano etichette con etichette, e non ci va la finestra.
+         * E' la meta' di A3 che si sbaglia nel verso opposto.
+         */
         $manuali = DailyBurn::query()
             ->forUser($utente)
-            ->whereBetween('date', [$da->toDateString(), $a->toDateString()])
+            ->whereBetween('date', [$da->etichetta, $a->etichetta])
             ->get(['date', 'kcal'])
             ->mapWithKeys(fn (DailyBurn $d): array => [$d->date->toDateString() => (int) $d->kcal])
             ->all();
@@ -138,9 +157,9 @@ class SeriesService
 
         $daSessioni = WorkoutSession::query()
             ->forUser($utente)
-            ->whereBetween('started_at', [$da->copy()->startOfDay(), $a->copy()->endOfDay()])
+            ->whereBetween('started_at', $da->finestraFinoA($a))
             ->get()
-            ->groupBy(fn (WorkoutSession $s): string => $s->started_at->toDateString())
+            ->groupBy(fn (WorkoutSession $s): string => GiornoLocale::etichettaDi($s->started_at, $da->fuso))
             ->map(fn ($gruppo): int => (int) $gruppo->sum(
                 fn (WorkoutSession $s): int => $this->calorie->kcalOf($s, $kg),
             ))
@@ -156,17 +175,16 @@ class SeriesService
      * @param  array<string, int>  $bruciate
      * @return array<string, mixed>
      */
-    private function perGiorno(Carbon $da, Carbon $a, array $assunte, array $bruciate): array
+    private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate): array
     {
         $etichette = [];
         $consumate = [];
         $spese = [];
 
-        for ($g = $da->copy(); $g <= $a; $g->addDay()) {
-            $chiave = $g->toDateString();
-            $etichette[] = $g->format('d/m');
-            $consumate[] = $assunte[$chiave] ?? 0;
-            $spese[] = $bruciate[$chiave] ?? 0;
+        foreach ($da->finoA($a) as $g) {
+            $etichette[] = $g->locale()->format('d/m');
+            $consumate[] = $assunte[$g->etichetta] ?? 0;
+            $spese[] = $bruciate[$g->etichetta] ?? 0;
         }
 
         return [
@@ -175,7 +193,7 @@ class SeriesService
             'consumed' => $consumate,
             'burned' => $spese,
             'granularity' => 'day',
-            'period' => $da->format('d/m').' – '.$a->format('d/m/Y'),
+            'period' => $da->locale()->format('d/m').' – '.$a->locale()->format('d/m/Y'),
             'averages' => $this->medie($consumate, $spese),
         ];
     }
@@ -190,30 +208,31 @@ class SeriesService
      * @param  array<string, int>  $bruciate
      * @return array<string, mixed>
      */
-    private function perMese(Carbon $da, Carbon $a, array $assunte, array $bruciate, bool $tutto): array
+    private function perMese(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate, bool $tutto): array
     {
         $etichette = [];
         $consumate = [];
         $spese = [];
 
-        for ($mese = $da->copy()->startOfMonth(); $mese <= $a; $mese->addMonth()) {
-            $inizio = $mese->copy()->startOfMonth();
-            $fine = $mese->copy()->endOfMonth()->min($a);
+        for ($mese = $da->inizioMese(); $mese->nonDopoDi($a); $mese = $mese->piuMesi(1)) {
+            $inizio = $mese;
+            // L'ultimo mese si ferma al giorno chiesto, non alla fine del mese:
+            // altrimenti la media di agosto includerebbe giorni non ancora
+            // vissuti, contati come zero.
+            $fine = $mese->fineMese()->nonDopoDi($a) ? $mese->fineMese() : $a;
 
-            $etichette[] = $mese->format('m/y');
+            $etichette[] = $mese->locale()->format('m/y');
 
             $c = [];
             $b = [];
 
-            for ($g = $inizio->copy(); $g <= $fine; $g->addDay()) {
-                $chiave = $g->toDateString();
-
-                if (($assunte[$chiave] ?? 0) > 0) {
-                    $c[] = $assunte[$chiave];
+            foreach ($inizio->finoA($fine) as $g) {
+                if (($assunte[$g->etichetta] ?? 0) > 0) {
+                    $c[] = $assunte[$g->etichetta];
                 }
 
-                if (($bruciate[$chiave] ?? 0) > 0) {
-                    $b[] = $bruciate[$chiave];
+                if (($bruciate[$g->etichetta] ?? 0) > 0) {
+                    $b[] = $bruciate[$g->etichetta];
                 }
             }
 
@@ -229,7 +248,7 @@ class SeriesService
             'granularity' => 'month',
             'period' => $tutto
                 ? 'tutto lo storico (media al giorno, per mese)'
-                : $da->format('m/y').' – '.$a->format('m/y').' (media al giorno)',
+                : $da->locale()->format('m/y').' – '.$a->locale()->format('m/y').' (media al giorno)',
             'averages' => $this->medie($consumate, $spese),
         ];
     }

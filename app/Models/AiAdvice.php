@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * Un consiglio gia' generato, tenuto da parte.
@@ -58,12 +58,19 @@ class AiAdvice extends Model
         return md5((string) json_encode($context));
     }
 
-    /** @param array<string, mixed> $context */
-    public static function cached(User $user, Carbon $date, string $kind, array $context): ?self
+    /**
+     * 🚨 **Il giorno fa parte della chiave di cache**, ed e' per questo che il
+     * consiglio si rigenera a mezzanotte senza nessun cron. ⚠️ Deve pero'
+     * essere la **mezzanotte di chi legge**: con il confine in UTC, a Roma il
+     * consiglio cambiava alle 02:00 d'estate.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public static function cached(User $user, GiornoLocale $giorno, string $kind, array $context): ?self
     {
         return static::query()
             ->where('user_id', $user->getKey())
-            ->whereDate('date', $date->toDateString())
+            ->whereDate('date', $giorno->etichetta)
             ->where('kind', $kind)
             ->where('context_hash', self::hashOf($context))
             ->first();

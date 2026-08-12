@@ -8,11 +8,11 @@ use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Models\Concerns\BelongsToTenant;
 use App\Services\Nutrition\FoodUnit;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * Una voce del diario alimentare.
@@ -98,12 +98,22 @@ class FoodEntry extends Model
         return $query->where('user_id', $user instanceof User ? $user->getKey() : $user);
     }
 
-    public function scopeOnDate(Builder $query, Carbon $date): Builder
+    /**
+     * Le voci di **un giorno di chi guarda** — A3.
+     *
+     * 🚨 **Il parametro e' un `GiornoLocale` e non un `Carbon`, ed e' il punto
+     * in cui il difetto e' stato chiuso.** Prima questo scope rifaceva
+     * `startOfDay()`/`endOfDay()` sul `Carbon` ricevuto, cioe' **in UTC**: la
+     * cena delle 00:30 di Roma cadeva nel giorno prima, e il diario si apriva
+     * sul giorno sbagliato.
+     *
+     * ⚠️ Cambiare il tipo e' deliberato. Accettare ancora un `Carbon` avrebbe
+     * lasciato in piedi ogni chiamata sbagliata **senza un solo segnale**; cosi'
+     * invece chi passa un istante prende un errore di tipo, subito.
+     */
+    public function scopeOnDate(Builder $query, GiornoLocale $giorno): Builder
     {
-        return $query->whereBetween('eaten_at', [
-            $date->copy()->startOfDay(),
-            $date->copy()->endOfDay(),
-        ]);
+        return $query->whereBetween('eaten_at', $giorno->finestra());
     }
 
     /**

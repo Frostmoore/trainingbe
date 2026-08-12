@@ -13,6 +13,7 @@ use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -80,14 +81,28 @@ class NutritionApiTest extends TestCase
             ->assertJsonPath('data.grams', 30.0);
     }
 
-    /** Il pasto si deduce dall'ora quando l'app non lo dice. */
+    /**
+     * Il pasto si deduce dall'ora quando l'app non lo dice.
+     *
+     * 🚨 **L'ora e' quella dell'orologio di chi mangia, non UTC** — A3.
+     *
+     * ⚠️ Prima questo test costruiva l'istante con `today()->setTime(8, 30)`,
+     * cioe' **le 8:30 UTC**, e passava solo perche' il server tagliava la
+     * giornata nello stesso fuso sbagliato. A Roma quelle sono le 10:30, e il
+     * cornetto finiva nella merenda: il test verde certificava il difetto.
+     */
     #[Test]
     public function the_meal_is_inferred_from_the_hour(): void
     {
+        $colazione = Carbon::parse(
+            $this->iscritto->dataDiOggi().' 08:30',
+            $this->iscritto->fusoOrario(),
+        );
+
         $this->comeIscritto()
             ->postJson('/api/v1/food-entries', [
                 'description' => 'Cornetto',
-                'eaten_at' => today()->setTime(8, 30)->toIso8601String(),
+                'eaten_at' => $colazione->toIso8601String(),
             ])
             ->assertCreated()
             ->assertJsonPath('data.meal', MealType::Breakfast->value);

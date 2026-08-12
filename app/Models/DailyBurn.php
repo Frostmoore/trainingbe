@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * Le calorie bruciate in un giorno, **dichiarate dall'utente**.
@@ -53,20 +53,27 @@ class DailyBurn extends Model
         return $query->where('user_id', $user instanceof User ? $user->getKey() : $user);
     }
 
-    /** Scrive o aggiorna il valore del giorno. */
-    public static function put(User $user, Carbon $date, int $kcal): self
+    /**
+     * Scrive o aggiorna il valore del giorno.
+     *
+     * 💡 `date` e' una colonna **`date`**, cioe' gia' un'etichetta: qui serve
+     * `$giorno->etichetta` e non la finestra. ⚠️ E' l'altra meta' di A3, quella
+     * che si sbaglia nel verso opposto — passare un istante e prenderne la data
+     * darebbe «le 22:00 di ieri», che come etichetta e' **ieri**.
+     */
+    public static function put(User $user, GiornoLocale $giorno, int $kcal): self
     {
         return static::updateOrCreate(
-            ['user_id' => $user->getKey(), 'date' => $date->toDateString()],
+            ['user_id' => $user->getKey(), 'date' => $giorno->etichetta],
             ['tenant_id' => $user->tenant_id, 'kcal' => $kcal],
         );
     }
 
-    public static function forDate(User|int $user, Carbon $date): ?self
+    public static function forDate(User|int $user, GiornoLocale $giorno): ?self
     {
         return static::query()
             ->where('user_id', $user instanceof User ? $user->getKey() : $user)
-            ->whereDate('date', $date->toDateString())
+            ->whereDate('date', $giorno->etichetta)
             ->first();
     }
 }

@@ -12,7 +12,7 @@ use App\Models\WorkoutSession;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\WorkoutAiContext;
-use Illuminate\Support\Carbon;
+use App\Support\Tempo\GiornoLocale;
 use Throwable;
 
 /**
@@ -86,9 +86,9 @@ class WorkoutCalorieService
     }
 
     /** Il valore dichiarato dall'utente per quel giorno, se c'e'. */
-    public function manualDaily(User $user, Carbon $date): ?int
+    public function manualDaily(User $user, GiornoLocale $giorno): ?int
     {
-        return DailyBurn::forDate($user, $date)?->kcal;
+        return DailyBurn::forDate($user, $giorno)?->kcal;
     }
 
     // ───────────────────────── il calcolo ─────────────────────────
@@ -136,13 +136,13 @@ class WorkoutCalorieService
      * un contributo aggiuntivo. Sommarlo raddoppierebbe la giornata di chi
      * corregge il numero dopo essersi allenato.
      */
-    public function dailyBurned(User $user, Carbon $date, ?float $kg = null): DailyBurnResult
+    public function dailyBurned(User $user, GiornoLocale $giorno, ?float $kg = null): DailyBurnResult
     {
-        $manuale = $this->manualDaily($user, $date);
+        $manuale = $this->manualDaily($user, $giorno);
 
         $sessioni = WorkoutSession::query()
             ->forUser($user)
-            ->onDate($date)
+            ->onDate($giorno)
             ->get();
 
         if ($manuale !== null) {

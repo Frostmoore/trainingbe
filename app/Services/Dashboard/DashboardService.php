@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WorkoutSession;
 use App\Services\Nutrition\DiaryService;
 use App\Services\Training\WorkoutCalorieService;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Support\Carbon;
 
 /**
@@ -55,42 +56,35 @@ class DashboardService
         $adesso ??= Carbon::now();
 
         /*
-         * ⏸️ **A3 — QUI VA IL CONFINE DEL GIORNO DI CHI GUARDA, e non c'e'
-         * ancora.** Le fondamenta ci sono (`User::inizioDiOggi()`,
-         * `User::dataDiOggi()`, colonna `users.timezone`), il resto no.
+         * ✅ **A3 — il confine del giorno e' quello di chi guarda.**
          *
-         * 🚨 **Non basta sostituire questa riga**, ed e' il motivo per cui non
-         * e' stato fatto a meta': `$oggi` finisce in `DiaryService::forDate()`,
-         * che passa per `FoodEntry::scopeOnDate()`, che rifa'
-         * `startOfDay()`/`endOfDay()` **in UTC**. Cambiare solo qui darebbe un
-         * riepilogo che mostra il giorno giusto in intestazione e **quello
-         * sbagliato nei dati** — cioe' peggio del difetto, perche' incoerente
-         * invece che uniformemente sbagliato.
+         * `GiornoLocale` tiene insieme le due cose che prima erano confuse in un
+         * `Carbon` solo: l'**etichetta** con cui la persona chiama il giorno, e
+         * la **finestra di istanti** con cui si interroga il database. Da qui
+         * scende in `DiaryService` e nei due `scopeOnDate`, che ricevono lo
+         * stesso oggetto invece di ricalcolare il confine per conto proprio.
          *
-         * ⚠️ La migrazione va fatta **tutta insieme**: `scopeOnDate`,
-         * `DiaryService`, `SeriesService`, `CalendarService`, il raggruppamento
-         * per settimana e l'hash della cache del consiglio. Con il test che
-         * serve: un utente in `Europe/Rome` alle 00:30 deve vedere il giorno
-         * nuovo — senza, **di giorno funziona comunque** e non ci si accorge di
-         * niente.
+         * 🚨 Era esattamente questo il motivo per cui non si poteva fare a
+         * meta': cambiare solo questa riga avrebbe dato l'intestazione giusta
+         * sopra i dati di ieri.
          */
-        $oggi = $adesso->copy()->startOfDay();
+        $oggi = $utente->giornoDiOggi($adesso);
+
+        // L'ora locale: da qui in giu' «le 8 del mattino» sono le 8 di chi
+        // guarda, non le 8 di Greenwich.
+        $adessoLocale = $adesso->copy()->setTimezone($utente->fusoOrario());
 
         return [
             /*
-             * ⚠️ **Quando si fara' A3, qui va `$utente->dataDiOggi($adesso)` —
-             * e NON `$oggi->toDateString()`.**
+             * ⚠️ **L'etichetta, e NON `$oggi->inizio()->toDateString()`.**
              *
-             * E' la trappola trovata provando a farlo: `inizioDiOggi()`
-             * restituisce l'**istante** della mezzanotte locale riportato in
-             * UTC, che per Roma sono **le 22:00 del giorno prima**. Chiedergli
-             * la data darebbe l'etichetta sbagliata — cioe' lo stesso difetto,
-             * spostato di un metodo.
-             *
-             * 💡 Istante ed etichetta sono due cose diverse: il primo serve a
-             * confrontare timestamp, la seconda a scriverci sopra «11 agosto».
+             * E' la trappola trovata provando a fare questa migrazione:
+             * `inizio()` restituisce l'**istante** della mezzanotte locale
+             * riportato in UTC, che per Roma sono **le 22:00 del giorno prima**.
+             * Chiedergli la data darebbe l'etichetta sbagliata — cioe' lo stesso
+             * difetto, spostato di un metodo.
              */
-            'date' => $oggi->toDateString(),
+            'date' => $oggi->etichetta,
 
             /*
              * 🚨 L'ORA, e non solo la data.
@@ -100,10 +94,16 @@ class DashboardService
              * fuori controllo, la seconda è una giornata finita. Senza l'ora,
              * qualunque lettura dei totali — quella dell'app e quella dell'AI —
              * è cieca su questa differenza.
+             *
+             * ⚠️ **E dev'essere l'ora LOCALE.** Con `$adesso` in UTC, alle 8 del
+             * mattino a Roma qui usciva `6`, e il consiglio dell'AI parlava di
+             * una giornata appena cominciata a chi stava per pranzare. Era la
+             * meta' meno visibile di A3: la data sbagliata si nota, un'ora
+             * sbagliata di due sembra solo un consiglio poco azzeccato.
              */
-            'now' => $adesso->toIso8601String(),
-            'hour' => (int) $adesso->format('G'),
-            'day_progress_pct' => $this->quantaGiornataEPassata($adesso),
+            'now' => $adessoLocale->toIso8601String(),
+            'hour' => (int) $adessoLocale->format('G'),
+            'day_progress_pct' => $this->quantaGiornataEPassata($adessoLocale),
 
             'nutrition' => $this->nutrizione($utente, $oggi),
             'training' => $this->allenamento($utente, $oggi),
@@ -126,6 +126,10 @@ class DashboardService
      * ⚠️ Si conta dalle 6 alle 23: alle 8 del mattino è passato circa il 12%
      * della giornata in cui si mangia, non il 33% delle ore. Usare le 24 ore
      * farebbe sembrare «indietro» chiunque a metà mattina.
+     *
+     * 🚨 **`$adesso` dev'essere gia' nel fuso di chi guarda** — A3. Le 6 e le 23
+     * sono ore di una giornata vissuta, non istanti UTC: passando un `Carbon` in
+     * UTC, a Roma d'estate la «giornata sveglia» comincerebbe alle 8.
      */
     private function quantaGiornataEPassata(Carbon $adesso): int
     {
@@ -147,7 +151,7 @@ class DashboardService
     /**
      * @return array<string, mixed>
      */
-    private function nutrizione(User $utente, Carbon $oggi): array
+    private function nutrizione(User $utente, GiornoLocale $oggi): array
     {
         $giornata = $this->diario->forDate($utente, $oggi);
 
@@ -163,7 +167,7 @@ class DashboardService
     /**
      * @return array<string, mixed>
      */
-    private function allenamento(User $utente, Carbon $oggi): array
+    private function allenamento(User $utente, GiornoLocale $oggi): array
     {
         $recenti = WorkoutSession::query()
             ->forUser($utente)
@@ -178,15 +182,21 @@ class DashboardService
         return [
             'last_30_days' => WorkoutSession::query()
                 ->forUser($utente)
-                ->where('started_at', '>=', $oggi->copy()->subDays(30))
+                ->where('started_at', '>=', $oggi->menoGiorni(30)->inizio())
                 ->count(),
 
-            // Serve a dire «non ti alleni da 5 giorni», che è l'informazione
-            // che fa tornare in palestra. Un elenco senza questo numero
-            // costringe a fare il conto a mente.
+            /*
+             * Serve a dire «non ti alleni da 5 giorni», che è l'informazione
+             * che fa tornare in palestra. Un elenco senza questo numero
+             * costringe a fare il conto a mente.
+             *
+             * ⚠️ Il conto e' fra **etichette di giorni**, non fra istanti: un
+             * allenamento delle 23:00 di ieri e uno delle 07:00 di oggi distano
+             * otto ore, ma la risposta giusta e' «1 giorno» e non «0».
+             */
             'days_since_last' => $recenti->isEmpty()
                 ? null
-                : (int) $recenti->first()->started_at->copy()->startOfDay()->diffInDays($oggi),
+                : GiornoLocale::perIstante($recenti->first()->started_at, $oggi->fuso)->giorniDa($oggi),
 
             'open_session_id' => $recenti->firstWhere('ended_at', null)?->id,
 

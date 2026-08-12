@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Training;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Services\Training\CalendarService;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -26,11 +28,15 @@ class CalendarController extends Controller
             'month' => ['nullable', 'date_format:Y-m'],
         ]);
 
-        $mese = $request->filled('month')
-            ? Carbon::createFromFormat('Y-m', (string) $request->query('month'))->startOfMonth()
-            : Carbon::today()->startOfMonth();
+        $utente = $request->user();
 
-        return response()->json(['data' => $this->calendario->month($request->user(), $mese)]);
+        // A3: «questo mese» e' quello di chi guarda. Con `Carbon::today()`, il
+        // 1º del mese alle 00:30 di Roma il calendario si apriva sul mese prima.
+        $mese = $request->filled('month')
+            ? $utente->giorno((string) $request->query('month').'-01')
+            : $utente->giornoDiOggi();
+
+        return response()->json(['data' => $this->calendario->month($utente, $mese->inizioMese())]);
     }
 
     public function week(Request $request): JsonResponse
@@ -39,16 +45,18 @@ class CalendarController extends Controller
             'week' => ['nullable', 'date'],
         ]);
 
-        $giorno = $request->filled('week')
-            ? Carbon::parse((string) $request->query('week'))
-            : Carbon::today();
+        $utente = $request->user();
 
-        return response()->json(['data' => $this->calendario->week($request->user(), $giorno)]);
+        $giorno = $request->filled('week')
+            ? $utente->giorno((string) $request->query('week'))
+            : $utente->giornoDiOggi();
+
+        return response()->json(['data' => $this->calendario->week($utente, $giorno)]);
     }
 
     public function day(Request $request, string $date): JsonResponse
     {
-        $giorno = $this->giornoValido($date);
+        $giorno = $this->giornoValido($request->user(), $date);
 
         if ($giorno === null) {
             // 422 e non un ripiego su oggi: rispondere con un giorno diverso da
@@ -71,15 +79,22 @@ class CalendarController extends Controller
      *
      * La verifica è il giro di andata e ritorno: se riformattando non si
      * riottiene la stringa di partenza, la data non esisteva.
+     *
+     * ⚠️ Il controllo si fa **prima** di costruire il `GiornoLocale`, e su una
+     * `Carbon` senza fuso: qui si sta validando una **stringa**, non un istante.
+     * Mescolare le due cose rimetterebbe in circolo il difetto A3 proprio nel
+     * metodo che serve a non fidarsi dell'input.
      */
-    private function giornoValido(string $date): ?Carbon
+    private function giornoValido(User $utente, string $date): ?GiornoLocale
     {
         try {
-            $giorno = Carbon::createFromFormat('Y-m-d', $date)->startOfDay();
+            $giorno = Carbon::createFromFormat('Y-m-d', $date);
         } catch (\Throwable) {
             return null;
         }
 
-        return $giorno->format('Y-m-d') === $date ? $giorno : null;
+        return $giorno->format('Y-m-d') === $date
+            ? $utente->giorno($date)
+            : null;
     }
 }

@@ -97,8 +97,9 @@ class FoodFavoriteController extends Controller
             return response()->json(['message' => __('Pasto non valido.')], 422);
         }
 
-        $giorno = isset($dati['date']) ? Carbon::parse($dati['date']) : Carbon::today();
         $utente = $request->user();
+        // A3: il giorno e' quello di chi salva il pasto, non quello di UTC.
+        $giorno = isset($dati['date']) ? $utente->giorno($dati['date']) : $utente->giornoDiOggi();
 
         $voci = FoodEntry::query()
             ->forUser($utente)
@@ -154,9 +155,19 @@ class FoodFavoriteController extends Controller
             'eaten_at' => ['nullable', 'date'],
         ]);
 
-        $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : now();
+        $utente = $request->user();
+        $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : Carbon::now();
+
+        /*
+         * ⚠️ `$quando` resta l'istante UTC — e' quello che finisce in `eaten_at`.
+         * A `fromProfile()` va invece l'**ora dell'orologio di chi mangia**: le
+         * soglie del profilo («ceno alle 20») sono ore locali, non UTC. A3.
+         */
         $pasto = (isset($dati['meal']) ? MealType::tryFrom($dati['meal']) : null)
-            ?? MealType::fromProfile($quando, $request->user()->profile?->meal_hours);
+            ?? MealType::fromProfile(
+                $quando->copy()->setTimezone($utente->fusoOrario()),
+                $utente->profile?->meal_hours,
+            );
 
         $voci = $preferito->addToDiary($pasto, $quando);
 

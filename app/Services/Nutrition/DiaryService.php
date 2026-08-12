@@ -9,7 +9,7 @@ use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
 use App\Models\User;
 use App\Services\Training\WorkoutCalorieService;
-use Illuminate\Support\Carbon;
+use App\Support\Tempo\GiornoLocale;
 
 /**
  * La giornata alimentare di una persona, composta una volta sola.
@@ -35,21 +35,26 @@ class DiaryService
      *
      * @return array<string, mixed>
      */
-    public function forDate(User $user, Carbon $date): array
+    public function forDate(User $user, GiornoLocale $giorno): array
     {
         $voci = FoodEntry::query()
             ->forUser($user)
-            ->onDate($date)
+            ->onDate($giorno)
             ->orderBy('eaten_at')
             ->get();
 
-        $bruciate = $this->calorie->dailyBurned($user, $date);
-        $target = $this->targetsFor($user, $date, $bruciate->kcal);
+        $bruciate = $this->calorie->dailyBurned($user, $giorno);
+        $target = $this->targetsFor($user, $giorno, $bruciate->kcal);
 
         $totali = FoodEntry::totals($voci);
 
         return [
-            'date' => $date->toDateString(),
+            /*
+             * ⚠️ **L'etichetta, non `inizio()->toDateString()`** — A3. Il
+             * secondo darebbe «le 22:00 di ieri», cioe' il giorno prima: e' la
+             * trappola trovata provando a fare questa migrazione a meta'.
+             */
+            'date' => $giorno->etichetta,
             'meals' => $this->perPasto($voci),
             'totals' => $totali,
             'burned' => $bruciate->toArray(),
@@ -74,11 +79,11 @@ class DiaryService
      *
      * @return array<string, mixed>|null
      */
-    public function targetsFor(User $user, Carbon $date, ?int $burnedKcal = null): ?array
+    public function targetsFor(User $user, GiornoLocale $giorno, ?int $burnedKcal = null): ?array
     {
-        $bruciate = $burnedKcal ?? $this->calorie->dailyBurned($user, $date)->kcal;
+        $bruciate = $burnedKcal ?? $this->calorie->dailyBurned($user, $giorno)->kcal;
 
-        $piano = NutritionPlan::activeFor($user, $date);
+        $piano = NutritionPlan::activeFor($user, $giorno);
 
         if ($piano !== null && $piano->target_kcal !== null) {
             return [

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\KcalSource;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -99,12 +100,17 @@ class WorkoutSession extends Model
         return $query->where('user_id', $user instanceof User ? $user->getKey() : $user);
     }
 
-    public function scopeOnDate(Builder $query, Carbon $date): Builder
+    /**
+     * Le sessioni di **un giorno di chi guarda** — A3.
+     *
+     * ⚠️ Stessa regola di `FoodEntry::scopeOnDate()`: il confine del giorno e'
+     * quello della persona, non quello di UTC. Chi si allena alle 22:30 di Roma
+     * finiva nel giorno dopo, e le calorie bruciate comparivano nella giornata
+     * sbagliata.
+     */
+    public function scopeOnDate(Builder $query, GiornoLocale $giorno): Builder
     {
-        return $query->whereBetween('started_at', [
-            $date->copy()->startOfDay(),
-            $date->copy()->endOfDay(),
-        ]);
+        return $query->whereBetween('started_at', $giorno->finestra());
     }
 
     public function scopeClosed(Builder $query): Builder

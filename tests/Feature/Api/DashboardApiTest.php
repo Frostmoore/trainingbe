@@ -107,9 +107,22 @@ class DashboardApiTest extends TestCase
     {
         $servizio = app(DashboardService::class);
 
-        $alle8 = $servizio->forToday($this->iscritto, Carbon::today()->setTime(8, 0));
-        $alle20 = $servizio->forToday($this->iscritto, Carbon::today()->setTime(20, 0));
-        $alle3 = $servizio->forToday($this->iscritto, Carbon::today()->setTime(3, 0));
+        /*
+         * 🚨 **Le ore sono quelle dell'orologio di chi guarda** — A3.
+         *
+         * ⚠️ Prima si costruivano con `Carbon::today()->setTime(8, 0)`, cioe'
+         * **le 8 UTC**, e il test passava solo perche' il servizio leggeva l'ora
+         * nello stesso fuso sbagliato. A Roma quelle sono le 10, e la giornata
+         * sveglia e' passata al 24% invece che al 12%.
+         */
+        $alle = fn (int $ora): Carbon => Carbon::parse(
+            $this->iscritto->dataDiOggi().' '.sprintf('%02d:00', $ora),
+            $this->iscritto->fusoOrario(),
+        );
+
+        $alle8 = $servizio->forToday($this->iscritto, $alle(8));
+        $alle20 = $servizio->forToday($this->iscritto, $alle(20));
+        $alle3 = $servizio->forToday($this->iscritto, $alle(3));
 
         // Alle 8 del mattino è passato circa il 12% della giornata sveglia
         // (6→23), non il 33% delle ore: usare le 24 ore farebbe sembrare
@@ -135,7 +148,6 @@ class DashboardApiTest extends TestCase
         $this->assertSame(5, $risposta->json('data.training.days_since_last'));
         $this->assertSame(1, $risposta->json('data.training.last_30_days'));
     }
-
 
     #[Test]
     public function the_dashboard_sums_what_was_eaten_today(): void

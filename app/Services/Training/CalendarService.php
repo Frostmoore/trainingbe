@@ -9,7 +9,7 @@ use App\Models\FoodEntry;
 use App\Models\User;
 use App\Models\WorkoutSession;
 use App\Services\Nutrition\DiaryService;
-use Illuminate\Support\Carbon;
+use App\Support\Tempo\GiornoLocale;
 
 /**
  * Il calendario: il mese a colpo d'occhio e il dettaglio di un giorno — C4.
@@ -36,21 +36,21 @@ class CalendarService
      *
      * @return array<string, mixed>
      */
-    public function month(User $utente, Carbon $mese): array
+    public function month(User $utente, GiornoLocale $mese): array
     {
-        $primo = $mese->copy()->startOfMonth();
-        $ultimo = $mese->copy()->endOfMonth();
+        $primo = $mese->inizioMese();
+        $ultimo = $mese->fineMese();
 
-        $da = $primo->copy()->startOfWeek();
-        $a = $ultimo->copy()->endOfWeek();
+        $da = $primo->inizioSettimana();
+        $a = $ultimo->fineSettimana();
 
         return [
-            'month' => $primo->format('Y-m'),
-            'title' => ucfirst($primo->translatedFormat('F Y')),
-            'prev' => $primo->copy()->subMonth()->format('Y-m'),
-            'next' => $primo->copy()->addMonth()->format('Y-m'),
+            'month' => $primo->locale()->format('Y-m'),
+            'title' => ucfirst($primo->locale()->translatedFormat('F Y')),
+            'prev' => $primo->piuMesi(-1)->locale()->format('Y-m'),
+            'next' => $primo->piuMesi(1)->locale()->format('Y-m'),
             'target_kcal' => $this->targetDiOggi($utente),
-            'days' => $this->celle($utente, $da, $a, $primo->month),
+            'days' => $this->celle($utente, $da, $a, $primo->locale()->month),
         ];
     }
 
@@ -60,16 +60,16 @@ class CalendarService
      *
      * @return array<string, mixed>
      */
-    public function week(User $utente, Carbon $giorno): array
+    public function week(User $utente, GiornoLocale $giorno): array
     {
-        $da = $giorno->copy()->startOfWeek();
-        $a = $giorno->copy()->endOfWeek();
+        $da = $giorno->inizioSettimana();
+        $a = $giorno->fineSettimana();
 
         return [
-            'week' => $da->toDateString(),
-            'title' => $da->translatedFormat('d M').' – '.$a->translatedFormat('d M Y'),
-            'prev' => $da->copy()->subWeek()->toDateString(),
-            'next' => $da->copy()->addWeek()->toDateString(),
+            'week' => $da->etichetta,
+            'title' => $da->locale()->translatedFormat('d M').' – '.$a->locale()->translatedFormat('d M Y'),
+            'prev' => $da->menoGiorni(7)->etichetta,
+            'next' => $da->piuGiorni(7)->etichetta,
             'target_kcal' => $this->targetDiOggi($utente),
             'days' => $this->celle($utente, $da, $a, null),
         ];
@@ -80,7 +80,7 @@ class CalendarService
      *
      * @return array<string, mixed>
      */
-    public function day(User $utente, Carbon $giorno): array
+    public function day(User $utente, GiornoLocale $giorno): array
     {
         $voci = FoodEntry::query()
             ->forUser($utente)
@@ -100,8 +100,8 @@ class CalendarService
         $kg = $this->calorie->bodyweight($utente);
 
         return [
-            'date' => $giorno->toDateString(),
-            'title' => ucfirst($giorno->translatedFormat('l d F Y')),
+            'date' => $giorno->etichetta,
+            'title' => ucfirst($giorno->locale()->translatedFormat('l d F Y')),
             'kcal' => (int) round($voci->sum('kcal')),
             'burned' => $bruciate->toArray(),
             'entries' => $voci->map(fn (FoodEntry $v): array => $this->diario->voce($v))->all(),
@@ -126,13 +126,23 @@ class CalendarService
     /**
      * @return list<array<string, mixed>>
      */
-    private function celle(User $utente, Carbon $da, Carbon $a, ?int $meseCorrente): array
+    private function celle(User $utente, GiornoLocale $da, GiornoLocale $a, ?int $meseCorrente): array
     {
+        $fuso = $da->fuso;
+
+        /*
+         * 🚨 **I `groupBy` sono nel fuso di chi guarda** — A3.
+         *
+         * Prima raggruppavano su `->toDateString()` del timestamp, cioe' **in
+         * UTC**: una cena delle 00:30 di Roma cadeva nella casella del giorno
+         * prima. Sul calendario e' il difetto piu' visibile di tutti, perche' si
+         * vede la casella sbagliata accanto a quella giusta.
+         */
         $assunte = FoodEntry::query()
             ->forUser($utente)
-            ->whereBetween('eaten_at', [$da->copy()->startOfDay(), $a->copy()->endOfDay()])
+            ->whereBetween('eaten_at', $da->finestraFinoA($a))
             ->get(['eaten_at', 'kcal'])
-            ->groupBy(fn (FoodEntry $v): string => $v->eaten_at->toDateString())
+            ->groupBy(fn (FoodEntry $v): string => GiornoLocale::etichettaDi($v->eaten_at, $fuso))
             ->map(fn ($g): int => (int) round($g->sum('kcal')))
             ->all();
 
@@ -140,27 +150,29 @@ class CalendarService
 
         $sessioni = WorkoutSession::query()
             ->forUser($utente)
-            ->whereBetween('started_at', [$da->copy()->startOfDay(), $a->copy()->endOfDay()])
+            ->whereBetween('started_at', $da->finestraFinoA($a))
             ->get()
-            ->groupBy(fn (WorkoutSession $s): string => $s->started_at->toDateString());
+            ->groupBy(fn (WorkoutSession $s): string => GiornoLocale::etichettaDi($s->started_at, $fuso));
 
+        // ⚠️ `daily_burns.date` e' gia' un'etichetta: qui niente finestra.
         $manuali = DailyBurn::query()
             ->forUser($utente)
-            ->whereBetween('date', [$da->toDateString(), $a->toDateString()])
+            ->whereBetween('date', [$da->etichetta, $a->etichetta])
             ->get(['date', 'kcal'])
             ->mapWithKeys(fn (DailyBurn $d): array => [$d->date->toDateString() => (int) $d->kcal])
             ->all();
 
+        $oggi = $utente->giornoDiOggi();
         $celle = [];
 
-        for ($g = $da->copy(); $g <= $a; $g->addDay()) {
-            $chiave = $g->toDateString();
+        foreach ($da->finoA($a) as $g) {
+            $chiave = $g->etichetta;
             $delGiorno = $sessioni[$chiave] ?? collect();
 
             $celle[] = [
                 'date' => $chiave,
-                'day' => $g->day,
-                'dow' => ucfirst($g->translatedFormat('D')),
+                'day' => $g->locale()->day,
+                'dow' => ucfirst($g->locale()->translatedFormat('D')),
 
                 /*
                  * 🚨 `null` se non c'è NIENTE registrato, `0` se c'è qualcosa
@@ -177,8 +189,14 @@ class CalendarService
                 'burned' => $manuali[$chiave] ?? (int) $delGiorno->sum(
                     fn (WorkoutSession $s): int => $this->calorie->kcalOf($s, $kg),
                 ),
-                'in_month' => $meseCorrente === null || $g->month === $meseCorrente,
-                'today' => $g->isToday(),
+                'in_month' => $meseCorrente === null || $g->locale()->month === $meseCorrente,
+
+                /*
+                 * ⚠️ «Oggi» e' quello di chi guarda, non `Carbon::isToday()`
+                 * — che confronta col giorno **UTC**. Dopo le 22:00 di Roma il
+                 * pallino di oggi si spostava sulla casella di domani.
+                 */
+                'today' => $g->eUgualeA($oggi),
             ];
         }
 

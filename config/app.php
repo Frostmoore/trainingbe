@@ -69,6 +69,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone — l'ultimo anello della catena A3
+    |--------------------------------------------------------------------------
+    |
+    | 🚨 NON e' il fuso dell'applicazione, ed e' deliberato che siano due chiavi
+    | diverse. 'timezone' governa come i timestamp finiscono a database, e deve
+    | restare UTC per sempre: cambiarlo mescolerebbe dati vecchi e nuovi in modo
+    | irreparabile. Questa invece governa DOVE SI TAGLIA LA GIORNATA di chi
+    | guarda, cioe' quando per una persona comincia «oggi».
+    |
+    | La catena e' `users.timezone` -> `tenants.timezone` -> questa chiave.
+    | Serve solo quando i primi due anelli mancano: senza, si ricadrebbe su UTC,
+    | che e' l'unico valore SICURAMENTE sbagliato per un prodotto italiano.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Europe/Rome'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

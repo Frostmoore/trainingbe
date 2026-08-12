@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Nutrition;
 
 use App\Enums\MealType;
+use App\Http\Controllers\Controller;
 use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
 use App\Models\User;
-use App\Services\Nutrition\FoodUnit;
 use App\Services\Nutrition\DiaryService;
-use App\Http\Controllers\Controller;
+use App\Services\Nutrition\FoodUnit;
+use App\Support\Tempo\GiornoLocale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Il diario alimentare — B5.5.
@@ -211,13 +213,30 @@ class DiaryController extends Controller
     public function storeBurn(Request $request): JsonResponse
     {
         $dati = $request->validate([
-            'date' => ['nullable', 'date', 'before_or_equal:today'],
+            'date' => ['nullable', 'date'],
             'kcal' => ['required', 'integer', 'min:0', 'max:20000'],
         ]);
 
-        $giorno = isset($dati['date']) ? Carbon::parse($dati['date']) : Carbon::today();
+        $utente = $request->user();
+        $oggi = $utente->giornoDiOggi();
+        $giorno = isset($dati['date']) ? $utente->giorno($dati['date']) : $oggi;
 
-        $riga = DailyBurn::put($request->user(), $giorno, $dati['kcal']);
+        /*
+         * 🚨 **Il «non nel futuro» si controlla qui e non con
+         * `before_or_equal:today`** — A3.
+         *
+         * Quella regola confronta con il giorno **UTC**: alle 00:30 di Roma
+         * l'utente ha davanti il 12 agosto, ma per Laravel «today» e' ancora
+         * l'11, e la richiesta veniva rifiutata con un 422 incomprensibile —
+         * «la data non puo' essere futura» su una data che era **oggi**.
+         */
+        if ($oggi->primaDi($giorno)) {
+            throw ValidationException::withMessages([
+                'date' => __('Non si possono registrare calorie di un giorno futuro.'),
+            ]);
+        }
+
+        $riga = DailyBurn::put($utente, $giorno, $dati['kcal']);
 
         return response()->json(['data' => [
             'date' => $riga->date->toDateString(),
@@ -274,11 +293,22 @@ class DiaryController extends Controller
 
     // ───────────────────────── interni ─────────────────────────
 
-    private function giorno(Request $request): Carbon
+    /**
+     * Il giorno chiesto, nel fuso di chi lo chiede — A3.
+     *
+     * 🚨 **`?date=2026-08-12` e' gia' un'etichetta locale**, e va presa cosi'
+     * com'e': l'app manda il giorno che ha mostrato all'utente. Quando non
+     * arriva niente, «oggi» e' quello della persona — con `Carbon::today()` era
+     * quello di Greenwich, e dopo le 22:00 di Roma il diario si apriva su ieri.
+     */
+    private function giorno(Request $request): GiornoLocale
     {
         $d = $request->query('date');
+        $utente = $request->user();
 
-        return is_string($d) && $d !== '' ? Carbon::parse($d) : Carbon::today();
+        return is_string($d) && $d !== ''
+            ? $utente->giorno($d)
+            : $utente->giornoDiOggi();
     }
 
     private function voceDi(Request $request, int $id): ?FoodEntry
@@ -292,13 +322,20 @@ class DiaryController extends Controller
      * 🚨 La deduzione usa **gli orari di questa persona** (`fromProfile`), non le
      * soglie di serie: chi cena alle 18 vuole che un cibo delle 19 finisca nella
      * cena, non nella merenda. Prima della fase C il profilo veniva ignorato.
+     *
+     * 🚨 **E l'ora dev'essere quella dell'orologio di chi mangia** — A3. Qui
+     * arrivava un istante in UTC: a Roma d'estate le 20:00 diventavano le 18:00,
+     * e la cena finiva sistematicamente nella merenda. Era il difetto piu'
+     * subdolo del gruppo, perche' non sbaglia **il giorno** — sbaglia solo la
+     * riga in cui la voce compare, e sembra una scelta discutibile del prodotto
+     * invece che un errore.
      */
     private function pasto(?string $valore, ?Carbon $quando, User $utente): MealType
     {
         $tipo = $valore !== null ? MealType::tryFrom($valore) : null;
 
         return $tipo ?? MealType::fromProfile(
-            $quando ?? now(),
+            ($quando ?? Carbon::now())->copy()->setTimezone($utente->fusoOrario()),
             $utente->profile?->meal_hours,
         );
     }

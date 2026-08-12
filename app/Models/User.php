@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
+use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\MediaLibrary\HasMedia;
@@ -48,6 +50,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 {
     /** @use HasFactory<UserFactory> */
     use BelongsToTenant;
+
     use HasApiTokens;
     use HasFactory;
     use HasRoles;
@@ -148,12 +151,30 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     }
 
     /**
-     * L'inizio di **oggi** per questa persona, espresso in UTC.
+     * **Oggi** per questa persona — il punto di partenza di ogni lettura datata.
      *
      * 🚨 **E' il metodo che chiude il difetto A3.** `Carbon::today()` dava la
      * mezzanotte **UTC**: alle 00:22 di Roma rispondeva ancora con il giorno
      * prima, e il diario si apriva sul giorno sbagliato — la cena registrata
      * tardi finiva in ieri.
+     *
+     * 💡 Restituisce un {@see GiornoLocale} e non un `Carbon` proprio perche' un
+     * giorno e' **etichetta e finestra insieme**: chiedere l'una o l'altra sono
+     * due metodi diversi, e confonderle non e' piu' possibile.
+     */
+    public function giornoDiOggi(?Carbon $adesso = null): GiornoLocale
+    {
+        return GiornoLocale::oggi($this, $adesso);
+    }
+
+    /** Il giorno chiesto da questa persona, da un'etichetta `Y-m-d` o da un istante. */
+    public function giorno(string|Carbon $quando): GiornoLocale
+    {
+        return GiornoLocale::perUtente($this, $quando);
+    }
+
+    /**
+     * L'inizio di **oggi** per questa persona, espresso in UTC.
      *
      * ⚠️ **Il valore torna in UTC**, ed e' voluto: serve a confrontarlo con i
      * timestamp del database, che restano in UTC e devono restarci. Quello che
@@ -162,10 +183,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      */
     public function inizioDiOggi(?Carbon $adesso = null): Carbon
     {
-        return ($adesso?->copy() ?? Carbon::now())
-            ->setTimezone($this->fusoOrario())
-            ->startOfDay()
-            ->setTimezone('UTC');
+        return $this->giornoDiOggi($adesso)->inizio();
     }
 
     /**
@@ -177,9 +195,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      */
     public function dataDiOggi(?Carbon $adesso = null): string
     {
-        return ($adesso?->copy() ?? Carbon::now())
-            ->setTimezone($this->fusoOrario())
-            ->toDateString();
+        return $this->giornoDiOggi($adesso)->etichetta;
     }
 
     // ───────────────────────── consensi (S9) ─────────────────────────

@@ -111,7 +111,14 @@ class AiController extends Controller
         }
 
         $utente = $request->user();
-        $oggi = Carbon::today();
+
+        /*
+         * 🚨 **Mezzanotte di chi legge, non di Greenwich** — A3. Con
+         * `Carbon::today()` il consiglio si rigenerava alle 02:00 di Roma
+         * d'estate: chi apriva l'app all'una di notte trovava ancora quello del
+         * giorno prima, che parlava di una giornata gia' chiusa.
+         */
+        $oggi = $utente->giornoDiOggi();
 
         $contesto = $this->contestoConsiglio($request);
 
@@ -135,7 +142,7 @@ class AiController extends Controller
         $riga = AiAdvice::create([
             'tenant_id' => $utente->tenant_id,
             'user_id' => $utente->getKey(),
-            'date' => $oggi->toDateString(),
+            'date' => $oggi->etichetta,
             'kind' => 'daily',
             'context_hash' => AiAdvice::hashOf($contesto),
             'body' => $testo,
@@ -294,13 +301,13 @@ class AiController extends Controller
     {
         $utente = $request->user();
         $adesso = Carbon::now();
-        $oggi = $adesso->copy()->startOfDay();
+        $oggi = $utente->giornoDiOggi($adesso);
 
         $giornata = $this->diary->forDate($utente, $oggi);
         $riepilogo = $this->dashboard->forToday($utente, $adesso);
 
         return [
-            'date' => $oggi->toDateString(),
+            'date' => $oggi->etichetta,
 
             /*
              * 🚨 **L'ORA È PARTE DEL CONTESTO, non un dettaglio.**
@@ -322,7 +329,13 @@ class AiController extends Controller
              * ripetuto la sera sarebbe fuori tempo. Il costo è contenuto dalla
              * quota di palestra.
              */
-            'time' => $adesso->format('H:i'),
+            /*
+             * ⚠️ **L'ora LOCALE** — A3. In UTC il modello riceveva «18:00» per
+             * una cena delle 20 a Roma, e consigliava di stare leggeri a chi
+             * aveva gia' finito di mangiare. Il consiglio non era generico: era
+             * sbagliato, e sembrava soltanto poco azzeccato.
+             */
+            'time' => $adesso->copy()->setTimezone($utente->fusoOrario())->format('H:i'),
             'day_progress_pct' => $riepilogo['day_progress_pct'],
 
             'totals' => $giornata['totals'],
