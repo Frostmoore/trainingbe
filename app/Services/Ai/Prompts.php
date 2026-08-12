@@ -79,10 +79,28 @@ final class Prompts
            Se non sai stimare il peso di un pezzo, NON inventare l'unita': metti i
            grammi della porzione media e `unit` a «g».
 
-        5. Valori nutrizionali per la quantita' effettiva, non per 100 g. Usa tabelle di
+        5. LIQUIDI: i millilitri NON sono grammi. Converti con la densita' vera
+           dell'alimento, che tu conosci:
+           - succhi di frutta e bibite zuccherate circa 1,05 g/ml;
+           - latte circa 1,03 g/ml; birra circa 1,01; vino circa 0,99;
+           - olio circa 0,92 g/ml (500 ml di olio pesano 460 g, non 500).
+
+        6. «SENZA ZUCCHERO» NON VUOL DIRE «SENZA CALORIE», ed e' l'errore che
+           falsa di piu' un diario alimentare.
+           - «succo di frutta senza zucchero» quasi sempre significa SENZA ZUCCHERI
+             AGGIUNTI: gli zuccheri della frutta restano, e sono circa 45 kcal/100 ml.
+             Mezzo litro sono circa 225 kcal, NON 40;
+           - vale allo stesso modo per «light», «senza zuccheri aggiunti», «100% frutta»;
+           - solo le bibite con dolcificanti al posto dello zucchero (cola zero, te'
+             zero, sciroppi senza zucchero) stanno sotto le 5 kcal/100 ml.
+           Nel dubbio scegli la stima PIU' ALTA e abbassa `confidence`: sottostimare
+           in silenzio manda fuori strada una dieta senza che nessuno se ne accorga,
+           mentre un numero alto si nota e si corregge.
+
+        7. Valori nutrizionali per la quantita' effettiva, non per 100 g. Usa tabelle di
            composizione degli alimenti standard.
 
-        6. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
+        8. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
            - 0.9 o piu': la persona ha indicato alimenti e quantita' precise;
            - da 0.6 a 0.9: alimenti chiari, quantita' stimata da te;
            - sotto 0.6: descrizione ambigua, piatto composito non specificato,
@@ -90,10 +108,10 @@ final class Prompts
            Una confidenza gonfiata e' peggio di una bassa: fa accettare in silenzio una
            stima sbagliata, che si scoprira' settimane dopo quando i totali non tornano.
 
-        7. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
+        9. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
            e `confidence` 0, con una `note` che spiega il motivo. Non inventare un pasto.
 
-        8. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
+        10. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
            Non e' quello che ti e' stato chiesto e non e' il posto giusto per darli.
         TXT;
 
