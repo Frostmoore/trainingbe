@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\RecoveryKeyController;
+use App\Http\Controllers\Api\V1\Account\TimezoneController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\Training\CalendarController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\SeriesController;
@@ -284,6 +285,16 @@ Route::prefix('v1')->group(function (): void {
         // `false` invece di `true` (art. 7(3)).
         Route::get('account/consents', [ConsentController::class, 'show']);
         Route::patch('account/consents', [ConsentController::class, 'update']);
+
+        // ── Il fuso orario della persona (A3) ─────────────────────────────
+        //
+        // 🚨 Il server non può indovinarlo: l'IP dice dov'è la rete, l'offset
+        // non distingue Roma d'estate da Helsinki d'inverno. Lo sa solo il
+        // telefono, e lo manda a ogni avvio.
+        //
+        // `PUT` perché è idempotente: è lo stato del dispositivo, non una
+        // modifica a qualcosa.
+        Route::put('account/timezone', [TimezoneController::class, 'update']);
 
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);
