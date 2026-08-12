@@ -16,6 +16,7 @@ use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Ai\Quota\MemberAiQuota;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -536,6 +537,56 @@ class AiApiTest extends TestCase
             ->getJson('/api/v1/ai/advice?target_kcal=40000')
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['target_kcal']);
+    }
+
+    // ───────────────────── la foto ha lo stesso trattamento ─────────────────
+
+    /**
+     * 🚨 **Testo e foto passano dallo STESSO prompt di sistema.**
+     *
+     * Non e' scontato e vale la pena provarlo: due prompt diversi produrrebbero
+     * due comportamenti diversi a parita' di alimento, e la differenza si
+     * scoprirebbe solo confrontando due voci nate dalle due strade.
+     */
+    #[Test]
+    public function the_photo_uses_the_same_system_prompt_as_the_text(): void
+    {
+        $finta = $this->aiFinta();
+
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false]);
+
+        $this->comeIscritto()->postJson('/api/v1/ai/food/photo', [
+            'photo' => UploadedFile::fake()->image('piatto.jpg', 400, 400),
+            'save' => false,
+        ])->assertOk();
+
+        $chiamate = collect($finta->calls)->pluck('method');
+
+        $this->assertTrue($chiamate->contains('foodFromText'));
+        $this->assertTrue($chiamate->contains('foodFromImage'));
+    }
+
+    /**
+     * ⚠️ **Il doppio non deve produrre un'unita' vietata.**
+     *
+     * `FakeAiProvider::foodFromImage()` restituiva `unit => 'porzione'`, che in
+     * produzione e' un errore grave del validatore: il doppio insegnava ai test
+     * una forma che il sistema rifiuta. Un doppio che mente e' peggio di nessun
+     * doppio, perche' i test restano verdi mentre provano la cosa sbagliata.
+     */
+    #[Test]
+    public function the_fake_photo_estimate_would_survive_the_validator(): void
+    {
+        $this->aiFinta();
+
+        $risposta = $this->comeIscritto()->postJson('/api/v1/ai/food/photo', [
+            'photo' => UploadedFile::fake()->image('piatto.jpg', 400, 400),
+            'save' => false,
+        ])->assertOk();
+
+        $this->assertSame([], $risposta->json('data.warnings'));
+        $this->assertSame('g', $risposta->json('data.estimate.items.0.unit'));
+        $this->assertSame('per_100g', $risposta->json('data.estimate.items.0.basis'));
     }
 
     // ───────────────────── conferma della stima (A4.8) ─────────────────────

@@ -111,14 +111,26 @@ class FakeAiProvider implements AiProvider
         ]);
     }
 
-    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx): FoodEstimate
+    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx, string $extra = ''): FoodEstimate
     {
-        $this->record('foodFromImage', ['path' => $absolutePath, 'mime' => $mimeType], $ctx);
+        // ⚠️ `extra` si registra: e' l'unico modo per provare che il retry lo
+        // manda davvero, e che finisce nel messaggio e non nel sistema.
+        $this->record('foodFromImage', ['path' => $absolutePath, 'mime' => $mimeType, 'extra' => $extra], $ctx);
 
+        /*
+         * 🚨 **Il doppio deve produrre dati che il validatore accetta.**
+         *
+         * Qui c'era `unit => 'porzione'`, che e' una delle unita' **vietate**:
+         * il doppio insegnava ai test una forma che in produzione sarebbe un
+         * errore grave. Un doppio che mente e' peggio di nessun doppio, perche'
+         * i test restano verdi mentre provano la cosa sbagliata.
+         */
         return $this->nextFood ?? FoodEstimate::fromArray([
             'items' => [[
-                'name' => 'Piatto riconosciuto', 'qty' => 1, 'unit' => 'porzione', 'grams' => 350,
-                'kcal' => 620, 'protein' => 35, 'carbs' => 55, 'fat' => 28,
+                'name' => 'Piatto riconosciuto', 'qty' => 350, 'unit' => 'g', 'grams' => 350,
+                'basis' => 'per_100g', 'state' => 'cotto', 'declared' => false,
+                'kcal' => 620, 'protein_g' => 35, 'carbs_g' => 55, 'fat_g' => 28,
+                'alcohol_g' => 0, 'confidence' => 0.72,
             ]],
             'confidence' => 0.72,
         ]);

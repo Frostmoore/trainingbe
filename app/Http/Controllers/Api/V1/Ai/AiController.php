@@ -100,26 +100,30 @@ class AiController extends Controller
         $file = $request->file('photo');
 
         /*
-         * ⚠️ **Dalla foto non c'e' retry**, ed e' un debito dichiarato:
-         * `foodFromImage()` non ha un posto in cui mettere l'appendice con gli
-         * errori, e aggiungercelo vorrebbe dire cambiare la firma di tutti e tre
-         * i fornitori. Gli avvisi si raccolgono lo stesso.
+         * 🚨 **Stesso trattamento del testo**: stesso prompt di sistema, stesso
+         * schema, stesso validatore e **stesso retry**. Il 13/08/2026 il retry
+         * dalla foto era un debito dichiarato — `foodFromImage()` non aveva un
+         * posto in cui mettere l'appendice — ed e' stato chiuso aggiungendo un
+         * parametro `$extra` al contratto dei fornitori.
+         *
+         * ⚠️ Perche' contava: un errore grave e' un'unita' vietata o un enum
+         * sbagliato, e non c'e' nessuna ragione per cui il modello debba
+         * sbagliarli meno guardando una foto. Chi fotografa il pranzo aveva
+         * meno garanzie di chi lo scrive, senza che niente lo dicesse.
          */
-        $stima = $this->ai->for(AiFeature::FoodPhoto)->foodFromImage(
-            $file->getRealPath(),
-            (string) $file->getMimeType(),
-            AiCallContext::for($utente, AiFeature::FoodPhoto),
+        $percorso = $file->getRealPath();
+        $mime = (string) $file->getMimeType();
+
+        [$stima, $avvisi] = $this->stimaValidata(
+            fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::FoodPhoto)->foodFromImage(
+                $percorso,
+                $mime,
+                AiCallContext::for($utente, AiFeature::FoodPhoto),
+                $appendice,
+            ),
         );
 
-        $esito = $this->validatore->valida($stima);
-
-        return $this->rispostaStima(
-            $request,
-            $esito['stima'],
-            FoodSource::AiPhoto,
-            $dati,
-            array_merge($esito['avvisi'], $esito['gravi']),
-        );
+        return $this->rispostaStima($request, $stima, FoodSource::AiPhoto, $dati, $avvisi);
     }
 
     /**

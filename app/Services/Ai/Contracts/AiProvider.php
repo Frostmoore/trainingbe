@@ -35,7 +35,18 @@ interface AiProvider
 
     public function foodFromText(string $text, AiCallContext $ctx): FoodEstimate;
 
-    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx): FoodEstimate;
+    /**
+     * La stima da una foto.
+     *
+     * @param  string  $extra  Testo da aggiungere alla richiesta, dopo l'immagine.
+     *                         🚨 Serve al **retry**: quando il validatore trova un
+     *                         errore grave, l'elenco delle violazioni entra qui —
+     *                         cioe' nel messaggio utente, **mai** nel prompt di
+     *                         sistema, che e' il prefisso cachato e condiviso da
+     *                         tutti. Infilarcelo lo invaliderebbe per tutti senza
+     *                         dare nessun errore: si vedrebbe solo in fattura.
+     */
+    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx, string $extra = ''): FoodEstimate;
 
     public function workoutCalories(WorkoutAiContext $context, AiCallContext $ctx): int;
 

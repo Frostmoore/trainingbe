@@ -302,6 +302,21 @@ final class Prompts
         8. nessun totale, e in uscita SOLO il JSON dello schema.
         TXT;
 
+    /**
+     * La domanda che accompagna la foto.
+     *
+     * 🚨 **Sta qui e non nei provider** perche' i tre fornitori devono chiedere
+     * la stessa cosa: due frasi diverse producono due comportamenti diversi a
+     * parita' di prompt di sistema, e la differenza si scoprirebbe solo
+     * cambiando fornitore.
+     *
+     * ⚠️ E' un messaggio **utente**, non di sistema: non entra nel prefisso
+     * cachato, e infatti puo' essere allungata dal retry senza invalidare niente.
+     */
+    public const DOMANDA_FOTO = 'Cosa c\'e\' in questo piatto? Applica tutte le regole sopra: '
+        .'scomponi gli alimenti, stima le porzioni in grammi, compila `state` per '
+        .'ciascuno e dimmi nella `note` cosa non riesci a vedere dalla foto.';
+
     public const WORKOUT_KCAL_SYSTEM = <<<'TXT'
         Stimi le calorie consumate durante un allenamento in palestra.
         Rispondi SEMPRE e SOLO con l'oggetto JSON richiesto dallo schema.

@@ -70,7 +70,7 @@ class AnthropicProvider implements AiProvider
         return FoodEstimate::fromArray($dati);
     }
 
-    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx): FoodEstimate
+    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx, string $extra = ''): FoodEstimate
     {
         $img = $this->images->prepare($absolutePath, $mimeType);
 
@@ -91,7 +91,7 @@ class AnthropicProvider implements AiProvider
                     ],
                     [
                         'type' => 'text',
-                        'text' => 'Cosa c\'e\' in questo piatto? Stima le porzioni.',
+                        'text' => Prompts::DOMANDA_FOTO.$extra,
                     ],
                 ],
             ]],

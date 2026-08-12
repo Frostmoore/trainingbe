@@ -60,7 +60,7 @@ class OpenAiProvider implements AiProvider
         ));
     }
 
-    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx): FoodEstimate
+    public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx, string $extra = ''): FoodEstimate
     {
         $img = $this->images->prepare($absolutePath, $mimeType);
 
@@ -72,7 +72,7 @@ class OpenAiProvider implements AiProvider
                 ['type' => 'image_url', 'image_url' => [
                     'url' => 'data:'.$img['mime'].';base64,'.$img['data'],
                 ]],
-                ['type' => 'text', 'text' => 'Cosa c\'e\' in questo piatto? Stima le porzioni.'],
+                ['type' => 'text', 'text' => Prompts::DOMANDA_FOTO.$extra],
             ],
             Prompts::foodSchema(),
             'food_estimate',
