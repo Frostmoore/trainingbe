@@ -33,6 +33,7 @@ class AiUsageLog extends Model
             'input_tokens' => 'integer',
             'output_tokens' => 'integer',
             'cache_read_tokens' => 'integer',
+            'cache_creation_tokens' => 'integer',
             'cost_millicents' => 'integer',
             'duration_ms' => 'integer',
             'success' => 'boolean',
@@ -51,9 +52,30 @@ class AiUsageLog extends Model
     }
 
     /** I token che contano per la quota: input + output. */
+    /**
+     * 🚨 **Tutti e quattro i tipi di token, e non due.**
+     *
+     * Fino al 13/08/2026 questo conto era `input + output`: ignorava sia i token
+     * letti dalla cache sia — molto peggio — quelli di **creazione**, che si
+     * pagano 1,25 volte l'input e sono i piu' cari dei tre.
+     *
+     * ⚠️ La conseguenza non era solo un contatore ottimista: e' da qui che passa
+     * la **quota mensile**, cioe' la cosa che protegge la fattura. Una chiamata
+     * con un prompt da cinquemila token risultava costata dodici, e il tetto non
+     * la vedeva quasi.
+     *
+     * 💡 Si sommano **tutti**, ognuno per il proprio numero di token e non per il
+     * proprio costo: la quota conta token, non soldi. Il costo, che pesa i tre
+     * tipi in modo diverso, sta in `cost_millicents`.
+     */
+    public const COLONNE_TOKEN = 'input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens';
+
     public function billableTokens(): int
     {
-        return $this->input_tokens + $this->output_tokens;
+        return $this->input_tokens
+            + $this->output_tokens
+            + $this->cache_creation_tokens
+            + $this->cache_read_tokens;
     }
 
     // ───────────────────────── query ─────────────────────────
@@ -81,7 +103,7 @@ class AiUsageLog extends Model
         return (int) static::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->inMonth($month)
-            ->sum(DB::raw('input_tokens + output_tokens'));
+            ->sum(DB::raw(self::COLONNE_TOKEN));
     }
 
     /**
@@ -97,7 +119,7 @@ class AiUsageLog extends Model
         return (int) static::withoutGlobalScopes()
             ->where('user_id', $userId)
             ->inMonth($month)
-            ->sum(DB::raw('input_tokens + output_tokens'));
+            ->sum(DB::raw(self::COLONNE_TOKEN));
     }
 
     public static function costForTenant(int $tenantId, ?Carbon $month = null): int

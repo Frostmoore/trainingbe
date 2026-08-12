@@ -16,10 +16,26 @@ namespace App\Services\Ai;
  * leggendo `cacheReadInputTokens` alla seconda chiamata, o la fattura a fine
  * mese.
  *
- * ⚠️ **Il minimo cachabile non e' uniforme**: 1024 token per Sonnet e Haiku,
- * 512 per Opus. Sotto soglia il prefisso non viene cachato e il fornitore non lo
- * segnala. Se questo prompt venisse accorciato, il risparmio sparirebbe in
- * silenzio: e' il motivo per cui e' scritto per esteso e non compresso.
+ * 🚨 **C'e' un minimo di lunghezza sotto il quale NON si cacha niente**, e il
+ * fornitore non lo segnala. Se questo prompt venisse accorciato il risparmio
+ * sparirebbe in silenzio: e' il motivo per cui e' scritto per esteso e non
+ * compresso.
+ *
+ * ⚠️ **Qui c'era scritto «1024 token per Sonnet e Haiku, 512 per Opus», e i
+ * dati non lo confermano.** Il 13/08/2026, leggendo `ai_usage_logs`:
+ *
+ *   - con il prefisso a **~2.200 token** la cache non e' MAI stata usata, nemmeno
+ *     fra tre chiamate a due secondi di distanza (righe 84-86 del log);
+ *   - con il prefisso a **5.068 token** funziona: una scrittura e otto letture.
+ *
+ * Il codice non era cambiato: `cacheControl` c'e' identico da `v6.9.0`. L'unica
+ * variabile era la lunghezza. 🚨 **Quindi questa trappola non era teorica: ha
+ * morso per tutta la vita del progetto, in silenzio, fino al 12/08/2026 sera.**
+ *
+ * 💡 La soglia vera per `claude-haiku-4-5` sta fra 2.200 e 5.068 token e non e'
+ * stata misurata con precisione: **non inventarne una**. Prima di accorciare un
+ * prompt, si lancia `php artisan ai:prova-classificatore` e si guarda
+ * `cache_read_tokens` sulla seconda chiamata.
  *
  * 🚨 **Negli schemi NON si mettono `minimum` e `maximum`.** Anthropic li rifiuta:
  *

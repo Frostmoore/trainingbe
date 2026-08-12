@@ -199,6 +199,80 @@ class AiApiTest extends TestCase
         $this->assertSame(0, $recorder->costMillicents('modello-mai-visto', 1_000_000, 1_000_000));
     }
 
+    /**
+     * 🚨 **Scrivere la cache costa 1,25 volte l'input**, ed e' la voce piu' cara
+     * delle tre.
+     *
+     * ── Il buco, trovato il 13/08/2026 ──────────────────────────────────────
+     *
+     * Nei log c'era una riga con `input_tokens = 12` e `cache_read_tokens = 0`
+     * per una chiamata con un prompt da **cinquemila** token: quei cinquemila
+     * erano finiti nella voce che non guardavamo, e per il contatore quella
+     * chiamata era costata **niente**.
+     *
+     * ⚠️ **Da qui discende che una chiamata che SCRIVE la cache costa il 25% in
+     * piu' di una senza cache.** Conviene solo se qualcuno la legge entro cinque
+     * minuti: su un'installazione con un utente solo la cache costa, con traffico
+     * vero paga dieci volte tanto.
+     */
+    #[Test]
+    public function writing_the_cache_costs_more_than_plain_input(): void
+    {
+        $recorder = app(AiUsageRecorder::class);
+
+        // 1.000.000 di token in ingresso: 100.000 millicent a listino.
+        $pieno = $recorder->costMillicents('claude-haiku-4-5', 1_000_000, 0);
+
+        // Gli stessi token, ma scritti in cache: 1,25x.
+        $scrittura = $recorder->costMillicents('claude-haiku-4-5', 0, 0, 0, 1_000_000);
+
+        // E letti dalla cache: un decimo.
+        $lettura = $recorder->costMillicents('claude-haiku-4-5', 0, 0, 1_000_000);
+
+        $this->assertSame(100_000, $pieno);
+        $this->assertSame(125_000, $scrittura);
+        $this->assertSame(10_000, $lettura);
+
+        $this->assertGreaterThan($pieno, $scrittura, 'Scrivere la cache costa PIU\' di non usarla.');
+    }
+
+    /**
+     * 🚨 **La quota conta tutti e quattro i tipi di token.**
+     *
+     * Fino al 13/08/2026 `billableTokens()` faceva `input + output`: ignorava sia
+     * la lettura sia — molto peggio — la **creazione** della cache. Non era solo
+     * un contatore ottimista: da lì passa il tetto mensile, cioè la cosa che
+     * protegge la fattura. Una chiamata con un prompt da cinquemila token
+     * risultava costata dodici, e il tetto non la vedeva quasi.
+     */
+    #[Test]
+    public function the_quota_counts_the_cache_tokens_too(): void
+    {
+        $riga = AiUsageLog::create([
+            'tenant_id' => $this->alfa->id,
+            'user_id' => $this->iscritto->getKey(),
+            'provider' => 'anthropic',
+            'model' => 'claude-haiku-4-5',
+            'feature' => AiFeature::FoodText->value,
+            'input_tokens' => 12,
+            'output_tokens' => 150,
+            'cache_read_tokens' => 0,
+            'cache_creation_tokens' => 5068,
+            'cost_millicents' => 0,
+            'duration_ms' => 900,
+            'success' => true,
+            'created_at' => now(),
+        ]);
+
+        $this->assertSame(5230, $riga->billableTokens());
+
+        $this->assertSame(
+            5230,
+            app(MemberAiQuota::class)->usedThisMonth($this->iscritto),
+            'La quota deve vedere i token della cache: sono quelli che si pagano di piu\'.',
+        );
+    }
+
     /** Il contatore di una palestra non vede quello di un'altra. */
     #[Test]
     public function usage_is_isolated_between_gyms(): void

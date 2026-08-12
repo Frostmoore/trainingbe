@@ -21,6 +21,9 @@ use Throwable;
  */
 class AiUsageRecorder
 {
+    /** Quanto costa scrivere la cache, rispetto all'input: 1,25x (TTL 5 minuti). */
+    public const MOLTIPLICATORE_SCRITTURA = 1.25;
+
     public function record(
         AiCallContext $ctx,
         string $provider,
@@ -31,6 +34,7 @@ class AiUsageRecorder
         int $durationMs,
         bool $success,
         ?string $errorCode = null,
+        int $cacheCreationTokens = 0,
     ): ?AiUsageLog {
         try {
             return AiUsageLog::create([
@@ -42,7 +46,14 @@ class AiUsageRecorder
                 'input_tokens' => max(0, $inputTokens),
                 'output_tokens' => max(0, $outputTokens),
                 'cache_read_tokens' => max(0, $cacheReadTokens),
-                'cost_millicents' => $this->costMillicents($model, $inputTokens, $outputTokens, $cacheReadTokens),
+                'cache_creation_tokens' => max(0, $cacheCreationTokens),
+                'cost_millicents' => $this->costMillicents(
+                    $model,
+                    $inputTokens,
+                    $outputTokens,
+                    $cacheReadTokens,
+                    $cacheCreationTokens,
+                ),
                 'duration_ms' => max(0, $durationMs),
                 'success' => $success,
                 'error_code' => $errorCode,
@@ -70,8 +81,13 @@ class AiUsageRecorder
      * messo in `.env` deve funzionare subito, e un contatore a zero e' un
      * problema visibile — un'eccezione in mezzo a una chiamata riuscita no.
      */
-    public function costMillicents(string $model, int $in, int $out, int $cacheRead = 0): int
-    {
+    public function costMillicents(
+        string $model,
+        int $in,
+        int $out,
+        int $cacheRead = 0,
+        int $cacheWrite = 0,
+    ): int {
         $listino = config("ai.pricing.{$model}");
 
         if (! is_array($listino)) {
@@ -80,7 +96,21 @@ class AiUsageRecorder
 
         $costo = ($in * ($listino['in'] ?? 0))
             + ($out * ($listino['out'] ?? 0))
-            + ($cacheRead * ($listino['cache_read'] ?? 0));
+            + ($cacheRead * ($listino['cache_read'] ?? 0))
+            /*
+             * 🚨 **La scrittura della cache costa 1,25 volte l'input.**
+             *
+             * Non e' una tariffa a se': e' un moltiplicatore su quella
+             * d'ingresso, e per questo si ricava dal listino invece di
+             * essere una quarta riga da tenere allineata a mano.
+             *
+             * ⚠️ Quindi una chiamata che **scrive** la cache costa il 25%
+             * IN PIU' di una senza cache. Conviene solo se qualcun altro la
+             * legge entro cinque minuti: il pareggio sta intorno a 1,3
+             * chiamate per finestra. Su un'installazione con un utente solo
+             * la cache **costa**; con traffico vero paga dieci volte tanto.
+             */
+            + ($cacheWrite * ($listino['in'] ?? 0) * self::MOLTIPLICATORE_SCRITTURA);
 
         return (int) round($costo / 1_000_000);
     }

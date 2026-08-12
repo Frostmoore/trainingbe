@@ -257,6 +257,10 @@ class AnthropicProvider implements AiProvider
                 $message->usage->cacheReadInputTokens ?? 0,
                 $durata,
                 success: true,
+                // 🚨 La voce più cara delle tre: 1,25x l'input. Fino al
+                // 13/08/2026 non la guardava nessuno, e un prompt da cinquemila
+                // token risultava costato dodici.
+                cacheCreationTokens: $message->usage->cacheCreationInputTokens ?? 0,
             );
 
             // 🚨 Il rifiuto arriva con HTTP 200: va guardato PRIMA di leggere
