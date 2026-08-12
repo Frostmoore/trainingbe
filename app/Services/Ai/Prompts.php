@@ -33,9 +33,23 @@ namespace App\Services\Ai;
  * per tutte. **Il vincolo di intervallo va scritto nel prompt**, dove il modello
  * se lo aspetta; qui sopra ogni `confidence` ha la sua regola «da 0 a 1».
  *
+ * 🚨 **Un `enum` NON puo' stare su un tipo unione.** Anthropic rifiuta anche
+ * questo:
+ *
+ *     output_config.format.schema: Invalid schema:
+ *     Enum value 'per_100g' does not match declared type '['string', 'null']'
+ *
+ * ⚠️ Stessa forma del caso sopra: 400 su ogni chiamata, che il controller
+ * traduce in 502 `ai_unavailable` — sembra un guasto del fornitore. Chi vuole un
+ * enum «facoltativo» mette un valore che significa «non si applica»
+ * (`non_applicabile`) invece di aggiungere `null` al tipo. E' anche piu' onesto:
+ * `null` non dice se il campo non si applica o se il modello non l'ha compilato.
+ *
  * ⚠️ Nessun test lo ha preso: `FakeAiProvider` non parla con la rete, e la regola
  * «nessun test tocca la rete» resta giusta. Il buco era che **una chiamata vera
- * non era mai stata fatta**. Dopo ogni modifica agli schemi, farne una a mano.
+ * non era mai stata fatta** — ed e' il motivo per cui esiste
+ * `php artisan ai:prova-classificatore`, che va lanciato dopo ogni modifica a
+ * questa classe. Questa trappola l'ha trovata lui, in trenta secondi.
  */
 final class Prompts
 {
@@ -460,7 +474,7 @@ final class Prompts
                              * ogni bevanda, sempre nella stessa direzione.
                              */
                             'ml' => $numero,
-                            'basis' => ['type' => ['string', 'null'], 'enum' => ['per_100g', 'per_100ml', null]],
+                            'basis' => ['type' => 'string', 'enum' => ['per_100g', 'per_100ml']],
 
                             /*
                              * 🚨 La singola fonte di errore piu' grande del
@@ -469,8 +483,8 @@ final class Prompts
                              * l'app **chiede** invece di indovinare.
                              */
                             'state' => [
-                                'type' => ['string', 'null'],
-                                'enum' => ['crudo', 'cotto', 'non_applicabile', 'ambiguo', null],
+                                'type' => 'string',
+                                'enum' => ['crudo', 'cotto', 'non_applicabile', 'ambiguo'],
                             ],
 
                             // 💡 Una quantita' dichiarata non si rimette in discussione.
