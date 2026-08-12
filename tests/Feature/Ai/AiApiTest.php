@@ -537,4 +537,190 @@ class AiApiTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['target_kcal']);
     }
+
+    // ───────────────────── conferma della stima (A4.8) ─────────────────────
+
+    /**
+     * 🚨 **Il flusso vero dell'app**, in due tempi: prima la stima senza
+     * scrivere, poi la conferma di chi ha guardato i numeri.
+     *
+     * ── Perche' esiste ──────────────────────────────────────────────────────
+     *
+     * Provando l'app il 12/08/2026 il committente ha chiesto perche' il modello
+     * non avesse capito che una cotoletta e' impanata. Il modello **lo aveva
+     * scritto** nella propria `note` — *«non e' stato specificato se sono
+     * panate»* — e nessuno la leggeva: l'app scriveva in diario e basta.
+     *
+     * ⚠️ `FoodEstimate` lo diceva dal primo giorno: *«sotto una soglia l'app
+     * deve chiedere conferma invece di scrivere nel diario»*. Era una regola in
+     * un docblock, e nessuna riga di codice la eseguiva.
+     */
+    #[Test]
+    public function a_confirmed_estimate_becomes_diary_entries(): void
+    {
+        $this->aiFinta()->willReturnFood(FoodEstimate::fromArray([
+            'items' => [
+                ['name' => 'Cotoletta di pollo impanata', 'qty' => 200, 'unit' => 'g', 'grams' => 200, 'kcal' => 340, 'protein' => 32, 'carbs' => 12, 'fat' => 16],
+            ],
+            'confidence' => 0.9,
+            'note' => 'Impanatura e olio assorbito compresi.',
+        ]));
+
+        // 1. La stima: niente in diario, ma la nota e la confidenza arrivano.
+        $stima = $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/text', ['text' => 'una cotoletta di pollo impanata', 'save' => false])
+            ->assertOk()
+            ->assertJsonPath('data.saved', false)
+            ->assertJsonPath('data.estimate.note', 'Impanatura e olio assorbito compresi.')
+            ->json('data.estimate.items');
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+
+        // 2. La conferma: adesso si scrive.
+        $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'meal' => 'lunch',
+                'items' => $stima,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.saved', true)
+            ->assertJsonCount(1, 'data.entries')
+            ->assertJsonPath('data.entries.0.description', 'Cotoletta di pollo impanata');
+
+        $voce = FoodEntry::withoutGlobalScopes()->firstOrFail();
+
+        // 🚨 L'origine sopravvive alla conferma: senza, ogni voce nascerebbe
+        // `manual` e il giorno che un modello peggiora non si saprebbe piu'
+        // quali voci rifare — che e' esattamente cio' per cui `FoodSource`
+        // esiste.
+        $this->assertSame('ai_text', $voce->source->value);
+        $this->assertSame('Cotoletta di pollo impanata', $voce->ai_raw['name'] ?? null);
+        $this->assertSame(12.0, (float) $voce->carbs);
+    }
+
+    /**
+     * 🚨 **La conferma non chiama il modello e non consuma quota.**
+     *
+     * La chiamata e' gia' stata pagata dalla stima: far pagare anche la
+     * conferma vorrebbe dire far pagare due volte lo stesso pasto, e con la
+     * quota al limite si arriverebbe all'assurdo di aver speso i token per una
+     * stima che poi non si puo' salvare.
+     */
+    #[Test]
+    public function confirming_costs_nothing(): void
+    {
+        $this->aiFinta();
+
+        $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
+            ])
+            ->assertCreated();
+
+        $this->assertSame(
+            0,
+            AiUsageLog::withoutGlobalScopes()->count(),
+            'La conferma ha contato come una chiamata AI: sarebbe far pagare due volte lo stesso pasto.',
+        );
+    }
+
+    /**
+     * ⚠️ La conferma sta dietro `ai.consent` come tutto il resto del flusso.
+     *
+     * Non perche' mandi qualcosa a Anthropic — non manda niente — ma perche'
+     * una voce che entra in diario dopo la revoca farebbe sembrare che la
+     * revoca non abbia funzionato. E' il difetto #3 del 12/08, che riguardava
+     * l'interfaccia e non il server: qui si chiude anche dal lato server.
+     */
+    #[Test]
+    public function without_consent_nothing_can_be_confirmed(): void
+    {
+        $senzaConsenso = $this->creaUtente($this->alfa, UserRole::Member, 'senza@alfa.test');
+
+        $this->comeApp($senzaConsenso)
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * 🚨 Solo le due fonti AI.
+     *
+     * Accettare `plan` da qui lascerebbe marchiare «dal piano alimentare» una
+     * voce che nel piano non c'e', e l'aderenza al piano — che per una palestra
+     * e' *la* domanda — diventerebbe un numero falso.
+     */
+    #[Test]
+    public function a_confirmation_cannot_forge_its_own_origin(): void
+    {
+        foreach (['manual', 'plan', 'favorite'] as $fonte) {
+            $this->comeIscritto()
+                ->postJson('/api/v1/ai/food/confirm', [
+                    'source' => $fonte,
+                    'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
+                ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['source']);
+        }
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * ⚠️ **I numeri corretti a mano vincono.**
+     *
+     * E' il senso stesso del foglio di conferma: se si potessero solo accettare
+     * o rifiutare i numeri del modello, il pulsante «precisa» non servirebbe a
+     * niente.
+     */
+    #[Test]
+    public function the_numbers_edited_by_hand_are_the_ones_that_get_saved(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'meal' => 'dinner',
+                'items' => [
+                    ['name' => 'Cotoletta di pollo', 'qty' => 250, 'unit' => 'g', 'grams' => 250, 'kcal' => 475, 'protein' => 40, 'carbs' => 15, 'fat' => 20],
+                ],
+            ])
+            ->assertCreated();
+
+        $voce = FoodEntry::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertSame(250.0, (float) $voce->grams);
+        $this->assertSame(475.0, (float) $voce->kcal);
+
+        // 🚨 E i valori per 100 g si derivano lo stesso: senza, correggere la
+        // quantita' dopo aver confermato non ricalcolerebbe niente (difetto #9).
+        $this->assertSame(190.0, (float) $voce->kcal_100);
+    }
+
+    /**
+     * 🚨 **Un pasto e' una cosa sola.** Se una voce non passa, non ne entra
+     * nessuna: mezza cena in diario e' un totale sbagliato che non dichiara di
+     * esserlo.
+     */
+    #[Test]
+    public function a_meal_is_written_whole_or_not_at_all(): void
+    {
+        $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/confirm', [
+                'source' => 'ai_text',
+                'items' => [
+                    ['name' => 'Pasta', 'grams' => 80, 'kcal' => 280],
+                    ['name' => 'Sugo', 'grams' => 100, 'kcal' => -5],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['items.1.kcal']);
+
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+    }
 }

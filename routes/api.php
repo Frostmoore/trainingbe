@@ -239,6 +239,20 @@ Route::prefix('v1')->group(function (): void {
             Route::post('ai/food/text', [AiController::class, 'foodFromText']);
             Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
             Route::get('ai/advice', [AiController::class, 'advice']);
+
+            /*
+             * 🚨 **La conferma sta dentro `ai.consent` ma NON consuma quota.**
+             * Non chiama nessun modello: scrive una stima gia' pagata dalla
+             * chiamata con `save: false`. Fuori dal gruppo, pero', una voce
+             * potrebbe entrare in diario dopo che il consenso e' stato
+             * revocato — e chi ha appena revocato penserebbe che la revoca non
+             * abbia funzionato (difetto #3 del 12/08).
+             *
+             * ⚠️ Resta sotto `throttle:ai` anche se non costa token: e' una
+             * scrittura in blocco, e il tetto la protegge dall'app che ripete
+             * la stessa conferma perche' la risposta e' andata persa.
+             */
+            Route::post('ai/food/confirm', [AiController::class, 'confirm']);
         });
 
         Route::get('ai/usage', [AiController::class, 'usage']);

@@ -22,6 +22,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -92,6 +93,76 @@ class AiController extends Controller
         );
 
         return $this->rispostaStima($request, $stima, FoodSource::AiPhoto, $dati);
+    }
+
+    /**
+     * Scrive nel diario una stima che la persona ha **confermato** — A4.8.
+     *
+     * ── 🚨 Perche' esiste un endpoint invece di riusare `/food-entries` ──────
+     *
+     * Perche' `source` e `ai_raw` devono sopravvivere alla conferma. `FoodSource`
+     * lo dice da sempre: *«quando un modello AI comincia a sbagliare le stime,
+     * bisogna poter ritrovare TUTTE le voci che ha prodotto»*. Facendo scrivere
+     * l'app con `POST /food-entries` ogni voce nascerebbe `manual`, e quella
+     * ricerca non sarebbe piu' possibile — cioe' il giorno che un modello
+     * peggiora non si saprebbe piu' quali voci rifare.
+     *
+     * E perche' un pasto e' **una cosa sola**: cinque `POST` separati possono
+     * fallire al terzo e lasciare in diario mezza cena, che nei totali e' un
+     * numero sbagliato senza nessun segno che lo sia. Qui si scrive in
+     * transazione: o tutto o niente.
+     *
+     * 🚨 **Non chiama il modello e NON consuma quota.** La chiamata e' gia'
+     * stata pagata da `foodFromText`/`foodFromPhoto` con `save: false`:
+     * rifiutare di salvare cio' che si e' gia' speso sarebbe far pagare due
+     * volte lo stesso pasto. Per la stessa ragione qui non c'e' `assertQuota()`.
+     *
+     * ⚠️ Sta comunque dietro `ai.consent`: la revoca del consenso deve fermare
+     * **tutto il flusso**, non solo il pezzo che parla con Anthropic. Una voce
+     * che entra in diario dopo la revoca farebbe sembrare che la revoca non
+     * abbia funzionato — ed e' esattamente il difetto #3 del 12/08.
+     */
+    public function confirm(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            // 🚨 Solo le due fonti AI: questo endpoint esiste per conservare
+            // l'origine, e accettare `manual` o `plan` vorrebbe dire lasciar
+            // marchiare come «dal piano» una voce che il piano non contiene.
+            'source' => ['required', Rule::in([FoodSource::AiText->value, FoodSource::AiPhoto->value])],
+            'meal' => ['nullable', Rule::enum(MealType::class)],
+            'eaten_at' => ['nullable', 'date'],
+            'items' => ['required', 'array', 'min:1', 'max:30'],
+            'items.*.name' => ['required', 'string', 'max:255'],
+            'items.*.qty' => ['nullable', 'numeric', 'min:0', 'max:10000'],
+            'items.*.unit' => ['nullable', 'string', 'max:16'],
+            'items.*.grams' => ['nullable', 'numeric', 'min:0', 'max:20000'],
+            'items.*.kcal' => ['nullable', 'numeric', 'min:0', 'max:20000'],
+            'items.*.protein' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'items.*.carbs' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'items.*.fat' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+        ]);
+
+        /*
+         * ⚠️ Si ricostruisce un `FoodEstimate` invece di scrivere dai dati
+         * grezzi: cosi' la conferma passa dalle stesse normalizzazioni della
+         * scrittura diretta — compresi i totali, che `normalizeTotals()`
+         * ricalcola quando mancano. Due strade che scrivono lo stesso pasto in
+         * due modi diversi e' come nascono i totali che non tornano.
+         */
+        $stima = FoodEstimate::fromArray(['items' => $dati['items']]);
+
+        $voci = $this->scriviVoci(
+            $request->user(),
+            $stima,
+            FoodSource::from($dati['source']),
+            $dati,
+        );
+
+        return response()->json(['data' => [
+            'estimate' => $stima->toArray(),
+            'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
+            'saved' => true,
+        ]], 201);
     }
 
     // ───────────────────────── consiglio ─────────────────────────
@@ -209,7 +280,42 @@ class AiController extends Controller
             ]]);
         }
 
-        $utente = $request->user();
+        $voci = $this->scriviVoci($request->user(), $stima, $fonte, $dati);
+
+        return response()->json(['data' => [
+            'estimate' => $stima->toArray(),
+            'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
+            'saved' => true,
+        ]], 201);
+    }
+
+    /**
+     * Scrive le voci di una stima. **L'unico punto che le crea**, usato sia da
+     * `save: true` sia dalla conferma.
+     *
+     * 🚨 Sta in un metodo solo perche' le due strade devono produrre voci
+     * **identiche**. Duplicare il `create()` significa che un campo aggiunto di
+     * la' non arriva di qua, e la differenza si vede settimane dopo come «certe
+     * voci AI non si ricalcolano» — che e' letteralmente il difetto #9 del
+     * 12/08, nato cosi'.
+     *
+     * ⚠️ **In transazione**: un pasto e' una cosa sola. Se la terza voce di
+     * cinque fallisce, mezza cena in diario e' un totale sbagliato che non
+     * dichiara di esserlo.
+     *
+     * @param  array<string, mixed>  $dati
+     * @return list<FoodEntry>
+     */
+    private function scriviVoci(
+        ?User $utente,
+        FoodEstimate $stima,
+        FoodSource $fonte,
+        array $dati,
+    ): array {
+        if ($utente === null) {
+            return [];
+        }
+
         $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : now();
 
         // Gli orari dei pasti sono quelli di questa persona, non soglie fisse:
@@ -217,34 +323,32 @@ class AiController extends Controller
         $pasto = (isset($dati['meal']) ? MealType::tryFrom((string) $dati['meal']) : null)
             ?? MealType::fromProfile($quando, $utente->profile?->meal_hours);
 
-        $voci = [];
+        return DB::transaction(static function () use ($utente, $stima, $fonte, $quando, $pasto): array {
+            $voci = [];
 
-        foreach ($stima->items as $item) {
-            $voci[] = FoodEntry::create([
-                'tenant_id' => $utente->tenant_id,
-                'user_id' => $utente->getKey(),
-                'eaten_at' => $quando,
-                'meal' => $pasto,
-                'description' => $item->name,
-                // 🚨 I grammi arrivano dal modello e vincono sulla tabella di
-                // FoodUnit: il modello sa che alimento e', la tabella no.
-                'grams' => $item->grams,
-                'qty' => $item->qty,
-                'unit' => $item->unit,
-                'kcal' => $item->kcal,
-                'protein' => $item->protein,
-                'carbs' => $item->carbs,
-                'fat' => $item->fat,
-                'source' => $fonte,
-                'ai_raw' => $item->toArray(),
-            ]);
-        }
+            foreach ($stima->items as $item) {
+                $voci[] = FoodEntry::create([
+                    'tenant_id' => $utente->tenant_id,
+                    'user_id' => $utente->getKey(),
+                    'eaten_at' => $quando,
+                    'meal' => $pasto,
+                    'description' => $item->name,
+                    // 🚨 I grammi arrivano dal modello e vincono sulla tabella di
+                    // FoodUnit: il modello sa che alimento e', la tabella no.
+                    'grams' => $item->grams,
+                    'qty' => $item->qty,
+                    'unit' => $item->unit,
+                    'kcal' => $item->kcal,
+                    'protein' => $item->protein,
+                    'carbs' => $item->carbs,
+                    'fat' => $item->fat,
+                    'source' => $fonte,
+                    'ai_raw' => $item->toArray(),
+                ]);
+            }
 
-        return response()->json(['data' => [
-            'estimate' => $stima->toArray(),
-            'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
-            'saved' => true,
-        ]], 201);
+            return $voci;
+        });
     }
 
     /**
