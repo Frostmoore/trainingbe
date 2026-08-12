@@ -20,6 +20,7 @@ use App\Services\Nutrition\DiaryService;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
@@ -122,7 +123,7 @@ class AiController extends Controller
 
         $contesto = $this->contestoConsiglio($request);
 
-        $cache = AiAdvice::cached($utente, $oggi, 'daily', $contesto);
+        $cache = AiAdvice::cached($utente, $oggi, 'daily', self::chiaveDiCache($contesto));
 
         if ($cache !== null) {
             return response()->json(['data' => [
@@ -144,7 +145,7 @@ class AiController extends Controller
             'user_id' => $utente->getKey(),
             'date' => $oggi->etichetta,
             'kind' => 'daily',
-            'context_hash' => AiAdvice::hashOf($contesto),
+            'context_hash' => AiAdvice::hashOf(self::chiaveDiCache($contesto)),
             'body' => $testo,
             'model' => $this->ai->modelFor(AiFeature::DailyAdvice),
         ]);
@@ -297,6 +298,51 @@ class AiController extends Controller
         ];
     }
 
+    /**
+     * Cosa il modello deve **sapere** ma che NON deve far rigenerare il consiglio.
+     *
+     * ── 🚨 Il difetto, riferito provando l'app il 12/08/2026 ─────────────────
+     *
+     * *«Sulla pagina Oggi non mi mostra sempre il consiglio del giorno. Io direi
+     * che una volta salvato lo dovrebbe mostrare sempre finché non cambia
+     * qualcosa (allenamento, calorie inserite a mano, sonno o pasti).»*
+     *
+     * `time` cambia **ogni minuto** e `day_progress_pct` quasi altrettanto:
+     * finché entravano nell'hash, **ogni apertura della schermata era una cache
+     * miss**, cioè una chiamata AI nuova. Il consiglio non era «a volte
+     * assente»: era ogni volta diverso, e quando la quota finiva o la chiamata
+     * tardava spariva del tutto.
+     *
+     * 💡 **Restano nel prompt.** L'ora serve al modello — 3.000 kcal alle dieci
+     * del mattino e 3.000 a fine giornata sono due situazioni opposte, e senza
+     * l'ora il consiglio è *sbagliato*, non generico. Ma sapere che ore sono e
+     * **rifare il consiglio perché è passato un minuto** sono due cose diverse.
+     *
+     * ⚠️ Quindi il consiglio si rigenera quando cambia qualcosa di **vero**:
+     * pasti, allenamenti, calorie bruciate dichiarate, obiettivo. Sono tutti
+     * dentro `totals`, `burned` e `targets`, che restano nell'hash.
+     *
+     * 🚨 **Il sonno NON può essere un innesco, ed è una conseguenza della
+     * decisione D9**: dopo S1 il server non riceve più i dati del sensore, e
+     * quello che non ha non può nemmeno accorgersi che è cambiato. Rigenerare
+     * per un sonno che il modello non vedrà comunque sarebbe una chiamata a
+     * vuoto.
+     *
+     * @var list<string>
+     */
+    private const VOLATILI = ['time', 'day_progress_pct', 'now'];
+
+    /**
+     * Il contesto ridotto a **ciò che deve invalidare la cache**.
+     *
+     * @param  array<string, mixed>  $contesto
+     * @return array<string, mixed>
+     */
+    private static function chiaveDiCache(array $contesto): array
+    {
+        return Arr::except($contesto, self::VOLATILI);
+    }
+
     private function contestoConsiglio(Request $request): array
     {
         $utente = $request->user();
@@ -324,10 +370,11 @@ class AiController extends Controller
              * (dalle 6 alle 23), che è il riferimento giusto per confrontare le
              * calorie assunte con il target.
              *
-             * ⚠️ Cambia durante il giorno, quindi entra nell'hash del contesto
-             * e il consiglio si rigenera. È voluto: un consiglio del mattino
-             * ripetuto la sera sarebbe fuori tempo. Il costo è contenuto dalla
-             * quota di palestra.
+             * ⚠️ **Ma NON entra nell'hash della cache** — vedi `VOLATILI`.
+             * Finché ci entrava, ogni apertura della schermata era una chiamata
+             * AI nuova, perché `time` cambia ogni minuto. Sapere che ore sono e
+             * **rifare il consiglio perché è passato un minuto** sono due cose
+             * diverse.
              */
             /*
              * ⚠️ **L'ora LOCALE** — A3. In UTC il modello riceveva «18:00» per

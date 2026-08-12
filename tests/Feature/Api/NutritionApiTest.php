@@ -238,27 +238,104 @@ class NutritionApiTest extends TestCase
     }
 
     /**
-     * ⚠️ Senza valori per 100 g non si inventa niente: meglio un numero vecchio
-     * e visibile che uno nuovo e sbagliato.
+     * 🚨 **I valori per 100 g si DERIVANO dagli assoluti** — difetto riferito
+     * provando l'app il 12/08/2026.
+     *
+     * ⚠️ Questo test diceva il contrario — *«senza valori per 100 g non si
+     * inventa niente»* — e passava. Ma lo schema dell'AI **non ha nessun campo
+     * `_100`**: chiede `grams`, `kcal` e i macro e basta. Quindi **ogni** voce
+     * creata dall'AI nasceva senza riferimento, e cambiarne la quantità lasciava
+     * i macro fermi ai valori di prima. È esattamente il sintomo riferito:
+     * *«quando vado a modificarle a mano non mi ricalcola nulla»*.
+     *
+     * 💡 Derivare non è inventare: se 300 g valgono 500 kcal, 100 g ne valgono
+     * 166,67. È l'informazione che c'era già, scritta in una forma riscalabile.
      */
     #[Test]
-    public function without_per_100_values_the_macros_are_left_alone(): void
+    public function the_per_100_values_are_derived_so_a_manual_edit_recomputes(): void
     {
         $voce = $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
             'user_id' => $this->iscritto->getKey(),
             'eaten_at' => now(),
             'meal' => MealType::Lunch,
             'description' => 'Piatto misto',
-            'qty' => 1,
+            'qty' => 300,
             'unit' => 'g',
             'grams' => 300,
             'kcal' => 500,
         ]));
 
+        $this->assertEqualsWithDelta(166.67, $voce->fresh()->kcal_100, 0.01);
+
+        // Metà porzione ⇒ metà calorie. Prima restavano 500.
         $this->comeIscritto()
-            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 2])
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['grams' => 150])
             ->assertOk()
-            ->assertJsonPath('data.kcal', 500.0);
+            ->assertJsonPath('data.kcal', 250.01);
+    }
+
+    /**
+     * 🚨 **«Pezzi» non è un'unità di misura** — difetto riferito il 12/08/2026:
+     * *«Ho scritto "Due cotolette di pollo" e me le segna come 2 pezzi»*.
+     *
+     * L'AI risponde con l'unità con cui la persona ha parlato, che non sta in
+     * `FoodUnit::FACTORS` e non si può convertire: un pezzo non ha un peso.
+     *
+     * 💡 Ma i grammi l'AI li ha già dati, perché sa di che alimento si parla:
+     * si tiene il peso e si riscrive la quantità in grammi.
+     *
+     * ⚠️ **La descrizione resta intatta**, quindi «erano due» non si perde.
+     */
+    #[Test]
+    public function an_unknown_unit_becomes_grams(): void
+    {
+        $voce = $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => MealType::Lunch,
+            'description' => 'Due cotolette di pollo',
+            'qty' => 2,
+            'unit' => 'pezzi',
+            'grams' => 300,
+            'kcal' => 480,
+        ]))->fresh();
+
+        $this->assertSame('g', $voce->unit);
+        $this->assertSame(300.0, $voce->qty);
+        $this->assertSame(300.0, $voce->grams);
+        $this->assertSame('Due cotolette di pollo', $voce->description);
+
+        // E adesso si può correggere a mano, che era il punto.
+        $this->comeIscritto()
+            ->patchJson("/api/v1/food-entries/{$voce->id}", ['qty' => 150])
+            ->assertOk()
+            ->assertJsonPath('data.grams', 150.0)
+            ->assertJsonPath('data.kcal', 240.0);
+    }
+
+    /**
+     * ⚠️ Senza grammi non si deriva niente, e va bene così: una voce scritta a
+     * mano senza peso non ha nessun riferimento da cui riscalare, e inventarne
+     * uno darebbe un numero plausibile e falso.
+     */
+    #[Test]
+    public function without_grams_nothing_is_invented(): void
+    {
+        $voce = $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
+            'user_id' => $this->iscritto->getKey(),
+            'eaten_at' => now(),
+            'meal' => MealType::Lunch,
+            'description' => 'Un piatto a occhio',
+            'unit' => 'pezzi',
+            'kcal' => 500,
+        ]))->fresh();
+
+        $this->assertNull($voce->grams);
+        $this->assertNull($voce->kcal_100);
+
+        // L'unità sconosciuta resta: senza peso non c'è niente in cui
+        // convertirla, e riscriverla in grammi sarebbe una bugia.
+        $this->assertSame('pezzi', $voce->unit);
     }
 
     #[Test]

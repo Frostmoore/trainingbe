@@ -16,6 +16,7 @@ use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Ai\Quota\MemberAiQuota;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -390,6 +391,55 @@ class AiApiTest extends TestCase
 
         $this->assertGreaterThan($primeChiamate, count($finta->calls));
         $this->assertSame(2, AiAdvice::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * 🚨 **Il passare del tempo NON rigenera il consiglio** — difetto riferito
+     * provando l'app il 12/08/2026.
+     *
+     * *«Sulla pagina Oggi non mi mostra sempre il consiglio del giorno. Io direi
+     * che una volta salvato lo dovrebbe mostrare sempre finché non cambia
+     * qualcosa.»*
+     *
+     * `time` cambia ogni minuto e `day_progress_pct` quasi altrettanto: finché
+     * entravano nell'hash, **ogni apertura della schermata era una chiamata AI
+     * nuova**. Il consiglio non era «a volte assente» — era ogni volta diverso,
+     * e spariva del tutto quando la quota finiva o la chiamata tardava.
+     *
+     * ⚠️ L'ora **resta nel prompt**: al modello serve. Quello che non deve fare
+     * è invalidare la cache.
+     */
+    #[Test]
+    public function time_passing_does_not_regenerate_the_advice(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-08-12 09:00:00', 'UTC'));
+
+        $finta = $this->aiFinta()->willReturnAdvice('Bevi piu\' acqua.');
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/advice')
+            ->assertOk()
+            ->assertJsonPath('data.cached', false);
+
+        $chiamate = count($finta->calls);
+
+        // Sei ore dopo, senza aver mangiato né allenato niente.
+        Carbon::setTestNow(Carbon::parse('2026-08-12 15:00:00', 'UTC'));
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/advice')
+            ->assertOk()
+            ->assertJsonPath('data.cached', true)
+            ->assertJsonPath('data.body', 'Bevi piu\' acqua.');
+
+        $this->assertSame(
+            $chiamate,
+            count($finta->calls),
+            'Il consiglio si e\' rigenerato solo perche\' e\' passato del tempo.',
+        );
+        $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());
+
+        Carbon::setTestNow();
     }
 
     /**

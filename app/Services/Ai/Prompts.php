@@ -64,13 +64,25 @@ final class Prompts
            Se la persona indica gia' i grammi, usali senza cambiarli.
 
         3. Se la quantita' non e' indicata, usa la porzione media italiana per quel tipo
-           di alimento e dichiarala in `qty` e `unit`. Non lasciare i grammi vuoti: una
-           voce senza grammi non entra in nessun totale ed e' come non averla scritta.
+           di alimento. Non lasciare i grammi vuoti: una voce senza grammi non entra in
+           nessun totale ed e' come non averla scritta.
 
-        4. Valori nutrizionali per la quantita' effettiva, non per 100 g. Usa tabelle di
+        4. `unit` PUO' ESSERE SOLO UNA DI QUESTE:
+           g, kg, mg, hg, ml, cl, dl, l, cucchiaio, cucchiaino, bicchiere, tazza, scoop.
+           NON usare mai «pezzo», «pezzi», «fetta», «porzione», «unita'» o simili.
+           Quando la persona conta a pezzi, TU sai quanto pesa un pezzo: convertilo.
+           - «due cotolette di pollo» -> qty 200, unit «g», grams 200 (100 g l'una);
+           - «due spinacine» -> qty 220, unit «g», grams 220 (110 g l'una);
+           - «una salsiccia» -> qty 80, unit «g», grams 80.
+           E' esattamente il lavoro per cui servi: un pezzo non ha un peso in astratto,
+           ma tu sai di che alimento si parla.
+           Se non sai stimare il peso di un pezzo, NON inventare l'unita': metti i
+           grammi della porzione media e `unit` a «g».
+
+        5. Valori nutrizionali per la quantita' effettiva, non per 100 g. Usa tabelle di
            composizione degli alimenti standard.
 
-        5. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
+        6. CONFIDENZA. Il campo `confidence` va da 0 a 1 e deve essere onesto:
            - 0.9 o piu': la persona ha indicato alimenti e quantita' precise;
            - da 0.6 a 0.9: alimenti chiari, quantita' stimata da te;
            - sotto 0.6: descrizione ambigua, piatto composito non specificato,
@@ -78,10 +90,10 @@ final class Prompts
            Una confidenza gonfiata e' peggio di una bassa: fa accettare in silenzio una
            stima sbagliata, che si scoprira' settimane dopo quando i totali non tornano.
 
-        6. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
+        7. Se la descrizione non contiene cibo, restituisci `items` vuoto, totali a zero
            e `confidence` 0, con una `note` che spiega il motivo. Non inventare un pasto.
 
-        7. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
+        8. Non aggiungere commenti, consigli o giudizi sull'alimentazione della persona.
            Non e' quello che ti e' stato chiesto e non e' il posto giusto per darli.
         TXT;
 

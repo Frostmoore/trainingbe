@@ -68,6 +68,9 @@ class FoodEntry extends Model
                 $voce->grams = FoodUnit::toGrams($voce->qty, $voce->unit);
             }
 
+            self::normalizzaUnitaSconosciuta($voce);
+            self::derivaValoriPer100($voce);
+
             // Se conosciamo i valori per 100 g ma non gli assoluti, si
             // calcolano. L'AI risponde spesso solo con i primi.
             if ($voce->grams !== null && $voce->kcal === null && $voce->kcal_100 !== null) {
@@ -79,6 +82,81 @@ class FoodEntry extends Model
                 $voce->fat ??= $voce->fat_100 !== null ? round($voce->fat_100 * $fattore, 2) : null;
             }
         });
+    }
+
+    /**
+     * Un'unita' che non sappiamo convertire diventa **grammi**.
+     *
+     * ── 🚨 Il difetto, riferito provando l'app il 12/08/2026 ──────────────
+     *
+     * *«Ho scritto "Due cotolette di pollo" e me le segna come 2 pezzi. Ma
+     * pezzi non è un'unità di misura, e quando vado a modificarle a mano non mi
+     * ricalcola nulla se seleziono grammi.»*
+     *
+     * L'AI risponde con l'unita' **con cui la persona ha parlato** — «pezzi»,
+     * «fette», «porzioni» — che non sta in `FoodUnit::FACTORS` e non si puo'
+     * convertire: un pezzo non ha un peso, dipende dal cibo.
+     *
+     * 💡 **Ma i grammi l'AI li ha gia' dati**, perche' sa di che alimento si
+     * parla. Quindi non si butta niente: si tiene il peso e si riscrive la
+     * quantita' in grammi, che e' l'unica unita' su cui il ricalcolo funziona
+     * sempre.
+     *
+     * ⚠️ **La descrizione resta intatta** («Due cotolette di pollo»), quindi
+     * l'informazione «erano due» non si perde: cambia solo il modo di misurarle.
+     * Il committente lo ha chiesto esplicitamente — *«comunque tutto va
+     * convertito in grammi, così può ricalcolare automaticamente»*.
+     */
+    private static function normalizzaUnitaSconosciuta(self $voce): void
+    {
+        if ($voce->grams === null || $voce->grams <= 0) {
+            return;
+        }
+
+        if (FoodUnit::valid($voce->unit) !== null) {
+            return;
+        }
+
+        $voce->unit = 'g';
+        $voce->qty = $voce->grams;
+    }
+
+    /**
+     * Dagli assoluti si ricavano i valori **per 100 g**.
+     *
+     * ── 🚨 La riga per cui la modifica a mano non ricalcolava niente ──────
+     *
+     * `DiaryController::ricalcolaSeCambiaLaQuantita()` esce subito quando
+     * `kcal_100` e' `null`, e **lo schema dell'AI non ha nessun campo `_100`**:
+     * chiede `grams`, `kcal`, `protein`, `carbs`, `fat` e basta. Quindi ogni
+     * voce creata dall'AI nasceva senza riferimento per 100 g, e cambiarne la
+     * quantita' lasciava i macro **fermi ai valori di prima**.
+     *
+     * 💡 Il conto e' esatto e non inventa niente: se 300 g valgono 480 kcal,
+     * 100 g ne valgono 160. E' l'informazione che c'era gia', scritta in una
+     * forma che si puo' riscalare.
+     *
+     * ⚠️ **Non sovrascrive quello che arriva**: chi manda gia' i valori per
+     * 100 g — l'inserimento manuale da un'etichetta — li ha piu' precisi di
+     * qualunque divisione.
+     */
+    private static function derivaValoriPer100(self $voce): void
+    {
+        if ($voce->grams === null || $voce->grams <= 0) {
+            return;
+        }
+
+        $fattore = 100 / $voce->grams;
+
+        foreach (['kcal', 'protein', 'carbs', 'fat'] as $macro) {
+            $per100 = $macro.'_100';
+
+            if ($voce->{$per100} !== null || $voce->{$macro} === null) {
+                continue;
+            }
+
+            $voce->{$per100} = round((float) $voce->{$macro} * $fattore, 2);
+        }
     }
 
     public function user(): BelongsTo
