@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\God\Resources\Users\Tables;
 
+use App\Enums\UserRole;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Tenant;
 use App\Models\User;
@@ -61,10 +62,13 @@ class UsersTable
                     // sul tenant corrente e qui il contesto e' vuoto, quindi
                     // sarebbe vuota per tutti. Si legge la pivot direttamente.
                     ->getStateUsing(fn (User $r): array => static::ruoliDi($r))
+                    // 💡 I due ruoli senza palestra restano `gray` come gli
+                    // iscritti: il colore qui serve a far saltare all'occhio
+                    // **chi ha poteri**, e loro non ne hanno sulla piattaforma.
                     ->color(fn (string $state): string => match ($state) {
-                        'super_admin' => 'danger',
-                        'gym_admin' => 'warning',
-                        'trainer' => 'info',
+                        UserRole::SuperAdmin->value => 'danger',
+                        UserRole::GymAdmin->value => 'warning',
+                        UserRole::Trainer->value, UserRole::FreeTrainer->value => 'info',
                         default => 'gray',
                     }),
 
@@ -107,14 +111,24 @@ class UsersTable
                     ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable(),
 
+                /*
+                 * ⚠️ **Le voci si generano dall'enum, non si scrivono a mano** — F2.3.
+                 *
+                 * Qui c'erano quattro righe scritte a mano. Aggiungendo
+                 * `FreeUser` e `FreeTrainer` sarebbero rimaste quattro: il
+                 * filtro avrebbe continuato a funzionare, semplicemente senza
+                 * i ruoli nuovi — e nessuno se ne sarebbe accorto, perché un
+                 * filtro incompleto non da' errore, da' meno risultati.
+                 *
+                 * 💡 È lo stesso principio già applicato al `RoleSeeder`:
+                 * `UserRole` è la fonte di verità, e aggiungere un ruolo deve
+                 * significare toccare **un file solo**.
+                 */
                 SelectFilter::make('ruolo')
                     ->label('Ruolo')
-                    ->options([
-                        'super_admin' => 'Amministratore piattaforma',
-                        'gym_admin' => 'Amministratore palestra',
-                        'trainer' => 'Trainer',
-                        'member' => 'Iscritto',
-                    ])
+                    ->options(fn (): array => collect(UserRole::cases())
+                        ->mapWithKeys(fn (UserRole $r): array => [$r->value => $r->label()])
+                        ->all())
                     ->query(function (Builder $query, array $data): Builder {
                         $ruolo = $data['value'] ?? null;
 

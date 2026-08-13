@@ -59,15 +59,15 @@ use Spatie\Permission\Models\Role;
  *    passare la **password**, e la firma del piano creava un utente che non
  *    avrebbe potuto accedere.
  *
- * ⏸ **`$ruolo` vale `Member` per ora, e non è la scelta definitiva.** I ruoli
- * `FreeUser` e `FreeTrainer` nascono in **F2.1**; finché non esistono, `Member`
- * è il segnaposto **sicuro** — è l'unico ruolo che `UserRole::canAccessAnyPanel()`
- * tiene fuori da ogni pannello. Un segnaposto più «alto» aprirebbe una porta che
- * poi qualcuno dovrebbe ricordarsi di chiudere.
+ * ✅ **`$ruolo` vale `FreeUser` da F2.1** (13/08/2026). Fino ad allora era
+ * `Member`, come segnaposto sicuro, perché i due ruoli senza palestra non
+ * esistevano ancora. 💡 Nessun dato è nato sbagliato nel frattempo: la
+ * registrazione senza codice palestra è **F3**, quindi quando il valore di serie
+ * è cambiato non esisteva ancora un solo utente creato da qui.
  *
- * 💡 E nessun dato nasce sbagliato nel frattempo: la registrazione senza codice
- * palestra è **F3**, quindi al momento in cui F2 cambierà il valore di serie non
- * esisterà ancora un solo utente creato da qui.
+ * ⚠️ Il parametro resta perché **la stessa strada serve a due nascite diverse**:
+ * una persona che si iscrive da sola (`FreeUser`) e un trainer indipendente
+ * (`FreeTrainer`, F6). È lo stesso tenant personale, cambia solo chi ci abita.
  */
 final class CreaTenantPersonale
 {
@@ -80,7 +80,7 @@ final class CreaTenantPersonale
         string $nome,
         string $email,
         array $attributi = [],
-        UserRole $ruolo = UserRole::Member,
+        UserRole $ruolo = UserRole::FreeUser,
     ): User {
         return DB::transaction(function () use ($nome, $email, $attributi, $ruolo): User {
             $tenant = Tenant::create([

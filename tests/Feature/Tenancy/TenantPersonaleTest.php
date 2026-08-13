@@ -73,6 +73,11 @@ class TenantPersonaleTest extends TestCase
      * ⚠️ I ruoli spatie devono nascere **dentro** il tenant, o `assignRole()`
      * non troverebbe niente: la modalità teams cerca il ruolo nel tenant
      * corrente.
+     *
+     * 💡 **Il ruolo atteso è cambiato in F2.1**, ed è la prova che il segnaposto
+     * ha funzionato come previsto: in F1 era `Member`, perché `FreeUser` non
+     * esisteva ancora, e questo test è l'unico punto che si è dovuto toccare —
+     * cioè il segnaposto era in un posto solo, come si voleva.
      */
     #[Test]
     public function it_gives_the_new_user_a_role_that_exists_in_their_own_tenant(): void
@@ -86,7 +91,7 @@ class TenantPersonaleTest extends TestCase
             return $fresco->getRoleNames()->all();
         });
 
-        $this->assertSame([UserRole::Member->value], $ruoli);
+        $this->assertSame([UserRole::FreeUser->value], $ruoli);
     }
 
     /**

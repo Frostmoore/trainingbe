@@ -310,14 +310,37 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     /**
      * Chi entra in quale pannello Filament.
      *
-     * Tre regole, in ordine di severita':
+     * 🚨 **E' il cancello vero**: lo chiama Filament a ogni richiesta.
+     * `UserRole::canAccessAnyPanel()` e' un riepilogo leggibile e **non** viene
+     * invocato da nessuno — i due sono tenuti allineati da `PanelAccessTest`,
+     * che li confronta ruolo per ruolo.
+     *
+     * Le regole, in ordine di severita':
      *  - `god`   → solo il super admin;
-     *  - `admin` → gym_admin e trainer, ma solo se l'utente e' attivo E la sua
-     *              palestra lo e' (un abbonamento scaduto chiude anche il
-     *              pannello, non solo l'app);
+     *  - `admin` → gym_admin, trainer e **trainer indipendente** (F2.3), ma solo
+     *              se l'utente e' attivo E il suo tenant lo e' (un abbonamento
+     *              scaduto chiude anche il pannello, non solo l'app);
      *  - gli ISCRITTI non entrano MAI in un pannello: usano solo l'app. E' un
      *    `false` esplicito e non una conseguenza dei ruoli, cosi' aggiungere un
      *    permesso per sbaglio non gli apre una porta.
+     *
+     * ── ⚠️ Il trainer indipendente entra, e per ora non vede NIENTE ────────
+     *
+     * E' voluto, non un lavoro lasciato a meta'. Ogni scoping del pannello
+     * palestra (`ScopedToTrainer`, `WorkoutPlanResource`, `NutritionPlanResource`,
+     * `GymOverview`) e' costruito sulla coppia gym_admin / trainer e ha, per
+     * chiunque non sia nessuno dei due, il ramo `return $query->whereRaw('1 = 0')`.
+     * Un ruolo che il pannello non conosce **fallisce chiuso**.
+     *
+     * 💡 Quindi la porta si apre qui in F2, e **F5.3 arreda la stanza** — i
+     * modelli di scheda e piano che un trainer indipendente compone per i suoi.
+     * L'ordine e' questo e non il contrario perche' aprire la porta e' una
+     * decisione sui ruoli, mentre cosa ci sia dentro e' una decisione di
+     * prodotto: mescolarle vorrebbe dire riaprire `canAccessPanel()` in F5 per
+     * una ragione che non c'entra con i permessi.
+     *
+     * ⚠️ **E nessuno resta chiuso fuori nel frattempo**: al 13/08/2026 non
+     * esiste ancora nessuna strada che crei un `FreeTrainer` (arriva in F6).
      */
     public function canAccessPanel(Panel $panel): bool
     {
@@ -327,7 +350,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 
         return match ($panel->getId()) {
             'god' => $this->isSuperAdmin(),
-            'admin' => ($this->isGymAdmin() || $this->isTrainer())
+            'admin' => ($this->isGymAdmin() || $this->isTrainer() || $this->isFreeTrainer())
                 && $this->tenant?->isActive() === true,
             default => false,
         };
@@ -446,6 +469,33 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     public function isMember(): bool
     {
         return $this->hasAppRole(UserRole::Member);
+    }
+
+    /**
+     * Un trainer indipendente — F2.1.
+     *
+     * 🚨 **Non e' un `isTrainer()`, e non deve diventarlo.** La tentazione e'
+     * far rispondere `true` anche a `isTrainer()` «perche' in fondo e' un
+     * trainer»: sarebbe un errore serio. Tutto il pannello palestra e' costruito
+     * sulla coppia `isGymAdmin()` / `isTrainer()`, e `isTrainer()` significa lì
+     * una cosa precisa — *«membro dello staff di questa palestra, che vede gli
+     * iscritti a lui assegnati»*. Un trainer indipendente non ha uno staff a cui
+     * appartenere e non ha assegnati **di una palestra**.
+     *
+     * 💡 Tenendoli separati, ogni scoping esistente lo tratta come «nessuno dei
+     * due» — e quel ramo, verificato in F2, restituisce sempre `1 = 0`. Cioe'
+     * il pannello **fallisce chiuso** su un ruolo che non conosce, che e' il
+     * comportamento che si vuole finche' F5.3 non gli dara' qualcosa da vedere.
+     */
+    public function isFreeTrainer(): bool
+    {
+        return $this->hasAppRole(UserRole::FreeTrainer);
+    }
+
+    /** Una persona iscritta da sola, senza codice palestra — F2.1. */
+    public function isFreeUser(): bool
+    {
+        return $this->hasAppRole(UserRole::FreeUser);
     }
 
     // ───────────────────────── utilita' ─────────────────────────
