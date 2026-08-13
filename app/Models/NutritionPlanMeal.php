@@ -46,13 +46,26 @@ class NutritionPlanMeal extends Model
     protected static function booted(): void
     {
         static::creating(static function (self $riga): void {
-            if ($riga->nutrition_plan_day_id !== null || $riga->nutrition_plan_id === null) {
+            // Verso 1: dal piano al giorno.
+            if ($riga->nutrition_plan_day_id === null && $riga->nutrition_plan_id !== null) {
+                $piano = NutritionPlan::withoutGlobalScopes()->find($riga->nutrition_plan_id);
+
+                $riga->nutrition_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+
                 return;
             }
 
-            $piano = NutritionPlan::withoutGlobalScopes()->find($riga->nutrition_plan_id);
+            /*
+             * 🚨 **Verso 2: dal giorno al piano.** Vedi la nota lunga su
+             * `PlanExercise::booted()`: un `Repeater` annidato scrive solo la
+             * chiave della relazione da cui pende, e `nutrition_plan_id` e'
+             * `NOT NULL`.
+             */
+            if ($riga->nutrition_plan_id === null && $riga->nutrition_plan_day_id !== null) {
+                $giorno = NutritionPlanDay::query()->find($riga->nutrition_plan_day_id);
 
-            $riga->nutrition_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+                $riga->nutrition_plan_id = $giorno?->nutrition_plan_id;
+            }
         });
     }
 

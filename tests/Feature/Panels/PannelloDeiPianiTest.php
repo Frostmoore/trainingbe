@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature\Panels;
 
 use App\Enums\MealType;
+use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Filament\Gym\Resources\NutritionPlans\Pages\CreateNutritionPlan;
+use App\Filament\Gym\Resources\WorkoutPlans\Pages\CreateWorkoutPlan;
+use App\Models\Exercise;
 use App\Models\NutritionPlan;
 use App\Models\NutritionPlanItem;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -45,6 +51,14 @@ final class PannelloDeiPianiTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'trainer@alfa.test');
+    }
+
+    private function esercizio(): Exercise
+    {
+        return Exercise::withoutGlobalScopes()->firstOrCreate(
+            ['tenant_id' => null, 'slug_normalized' => Exercise::normalize('Panca piana')],
+            ['name' => 'Panca piana', 'muscle_group' => 'chest', 'is_custom' => false],
+        );
     }
 
     private function pianoAlimentare(): NutritionPlan
@@ -95,6 +109,96 @@ final class PannelloDeiPianiTest extends TestCase
         $this->actingAs($this->trainer)
             ->get("/admin/nutrition-plans/{$piano->getKey()}/edit")
             ->assertOk();
+    }
+
+    #[Test]
+    public function the_create_pages_open(): void
+    {
+        /*
+         * 🚨 **La pagina che il primo test non provava.**
+         *
+         * `PannelloDeiPianiTest` apriva `/edit` e non `/create`, e sono due
+         * pagine diverse: su `/create` non c'e' nessun record, quindi i
+         * `Repeater` annidati partono da zero invece che da righe esistenti.
+         */
+        $this->actingAs($this->trainer)->get('/admin/nutrition-plans/create')->assertOk();
+        $this->actingAs($this->trainer)->get('/admin/workout-plans/create')->assertOk();
+    }
+
+    #[Test]
+    public function a_workout_plan_can_actually_be_saved_from_the_panel(): void
+    {
+        /*
+         * 🚨 **Aprire una pagina e salvarla sono due prove diverse**, e la prima
+         * non implica la seconda: sul `create` i `Repeater` annidati partono
+         * vuoti, e il problema nasce quando le righe si scrivono davvero.
+         */
+        // ⚠️ `Livewire::test()` non passa da `ResolveTenant`: il contesto va
+        // impostato a mano, o `BelongsToTenant` non riempie `tenant_id`. Vedi
+        // la nota in `RoleScopingTest::entraCome()`.
+        $this->actingAs($this->trainer);
+        app(TenantContext::class)->set($this->palestra);
+
+        Livewire::test(CreateWorkoutPlan::class)
+            ->fillForm([
+                'name' => 'Split',
+                'status' => PlanStatus::Draft->value,
+                'days' => [
+                    [
+                        'name' => 'Giorno A',
+                        'exercises' => [
+                            ['exercise_id' => $this->esercizio()->getKey(), 'sets' => 4, 'reps' => '8-10'],
+                        ],
+                    ],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $piano = WorkoutPlan::withoutGlobalScopes()->where('name', 'Split')->firstOrFail();
+
+        $this->assertSame(1, $piano->days()->count());
+        $this->assertSame(1, $piano->exercises()->count());
+    }
+
+    #[Test]
+    public function a_nutrition_plan_can_actually_be_saved_from_the_panel(): void
+    {
+        // 🚨 Stesso difetto, altra tabella: `nutrition_plan_meals.nutrition_plan_id`
+        // e' `NOT NULL`, e il `Repeater` annidato scrive solo il giorno.
+        $this->actingAs($this->trainer);
+        app(TenantContext::class)->set($this->palestra);
+
+        Livewire::test(CreateNutritionPlan::class)
+            ->fillForm([
+                'name' => 'Definizione',
+                'status' => PlanStatus::Draft->value,
+                'days' => [
+                    [
+                        'name' => 'Giorno 1',
+                        'meals' => [
+                            [
+                                'meal' => MealType::Lunch->value,
+                                'items' => [
+                                    ['description' => '120 g di petto di pollo', 'kcal' => 198],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $piano = NutritionPlan::withoutGlobalScopes()->where('name', 'Definizione')->firstOrFail();
+
+        $this->assertSame(1, $piano->days()->count());
+        $this->assertSame(1, $piano->meals()->count());
+        $this->assertSame(1, $piano->meals()->first()->items()->count());
+
+        // 💡 E le due colonne sono d'accordo: il pasto conosce sia il giorno sia
+        // il piano, che e' cio' che l'hook garantisce.
+        $this->assertSame($piano->getKey(), $piano->meals()->first()->nutrition_plan_id);
     }
 
     #[Test]

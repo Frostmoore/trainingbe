@@ -80,13 +80,43 @@ class PlanExercise extends Model
     protected static function booted(): void
     {
         static::creating(static function (self $riga): void {
-            if ($riga->workout_plan_day_id !== null || $riga->workout_plan_id === null) {
+            /*
+             * Verso 1: dal **piano** al giorno.
+             *
+             * Chi scrive conosce la scheda ma non i giorni — il controller
+             * dell'API nella forma piatta, i seeder, le fixture.
+             */
+            if ($riga->workout_plan_day_id === null && $riga->workout_plan_id !== null) {
+                $piano = WorkoutPlan::withoutGlobalScopes()->find($riga->workout_plan_id);
+
+                $riga->workout_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+
                 return;
             }
 
-            $piano = WorkoutPlan::withoutGlobalScopes()->find($riga->workout_plan_id);
+            /*
+             * 🚨 **Verso 2: dal giorno al piano — e questo mancava.**
+             *
+             * Un `Repeater` annidato di Filament scrive **solo** la chiave della
+             * relazione da cui pende, cioe' `workout_plan_day_id`. Ma
+             * `workout_plan_id` e' `NOT NULL`, quindi salvare una scheda dal
+             * pannello dava un **500**:
+             *
+             *     Field 'workout_plan_id' doesn't have a default value
+             *
+             * ⚠️ Il primo hook guardava solo il verso opposto perche' l'unico
+             * scrittore conosciuto era il controller dell'API, che il piano ce
+             * l'ha. Il pannello no — e la pagina si **apriva** benissimo, il che
+             * ha fatto sembrare che funzionasse.
+             *
+             * 💡 Le due colonne devono restare d'accordo, e adesso a tenerle
+             * d'accordo e' il modello: chiunque scriva, da qualunque lato.
+             */
+            if ($riga->workout_plan_id === null && $riga->workout_plan_day_id !== null) {
+                $giorno = WorkoutPlanDay::query()->find($riga->workout_plan_day_id);
 
-            $riga->workout_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+                $riga->workout_plan_id = $giorno?->workout_plan_id;
+            }
         });
     }
 
