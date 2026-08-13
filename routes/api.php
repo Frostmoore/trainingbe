@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
+use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\TrainerController;
@@ -324,6 +325,37 @@ Route::prefix('v1')->group(function (): void {
         Route::post('trainer/invites', [TrainerController::class, 'invite']);
         Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite');
         Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
+
+        /*
+         * ── I piani alimentari scritti da un trainer — G5.3 ───────────────
+         *
+         * 🚨 **Plurale**, e non e' un dettaglio: `/nutrition-plan` (singolare)
+         * esiste gia' ed e' il piano **dell'iscritto**. Singolare e plurale a un
+         * carattere di distanza sono un modo garantito di sbagliare rotta e non
+         * capire perche' — annotato qui perche' chi legge le rotte se ne
+         * accorga prima di scrivere il client.
+         *
+         * ⚠️ Il controllo di ruolo e' **dentro il controller**, come per
+         * `/trainer/*`: due sedi della stessa regola divergono.
+         */
+        /*
+         * D13 — la stima AI di un alimento, **a carico del trainer**.
+         *
+         * 🚨 Passa da `AiController` e non dal controller dei piani: il cancello
+         * commerciale (quota → gettoni → 402) deve avere **una sede sola**.
+         *
+         * ⚠️ E dalla catena `ai.plan` + `ai.consent` + `throttle:ai` come ogni
+         * altra chiamata: l'ordine non si cambia per una rotta.
+         */
+        Route::post('nutrition-plans/stima-alimento', [AiController::class, 'planFood'])
+            ->middleware(['ai.plan', 'ai.consent', 'throttle:ai']);
+
+        Route::get('nutrition-plans', [NutritionPlanController::class, 'index']);
+        Route::get('nutrition-plans/templates', [NutritionPlanController::class, 'templates']);
+        Route::get('nutrition-plans/{plan}', [NutritionPlanController::class, 'show'])->whereNumber('plan');
+        Route::post('nutrition-plans', [NutritionPlanController::class, 'store']);
+        Route::put('nutrition-plans/{plan}', [NutritionPlanController::class, 'update'])->whereNumber('plan');
+        Route::delete('nutrition-plans/{plan}', [NutritionPlanController::class, 'destroy'])->whereNumber('plan');
 
         // ── Chat (B8.4) ──────────────────────────────────────────────────
         //

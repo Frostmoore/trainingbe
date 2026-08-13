@@ -140,6 +140,9 @@ class WorkoutPlanImport extends Model implements HasMedia
                 'source' => PlanSource::PdfImport,
             ]);
 
+            // G4 — un giorno per la scheda che nasce dall'import.
+            $giorno = $piano->giornoPredefinito();
+
             $posizione = 1;
 
             foreach ($righe as $riga) {
@@ -152,6 +155,8 @@ class WorkoutPlanImport extends Model implements HasMedia
                 $esercizio = $matcher->match($nome, $this->tenant_id, $da);
 
                 $piano->exercises()->create([
+                    // G4 — la colonna e' NOT NULL: il giorno lo crea il piano.
+                    'workout_plan_day_id' => $giorno->getKey(),
                     'exercise_id' => $esercizio->getKey(),
                     'position' => $posizione++,
                     'sets' => $riga['sets'] ?? null,

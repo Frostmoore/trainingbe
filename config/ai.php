@@ -48,12 +48,24 @@ return [
             'workout_kcal' => env('AI_MODEL_WORKOUT_KCAL', 'claude-haiku-4-5'),
             'daily_advice' => env('AI_MODEL_ADVICE', 'claude-haiku-4-5'),
             'pdf_import' => env('AI_MODEL_PDF_IMPORT', 'claude-sonnet-5'),
+
+            /*
+             * D13 — la stima di un alimento mentre il trainer compone.
+             *
+             * 💡 Stesso modello di `food_text`: e' la stessa domanda,
+             * fatta da un'altra persona. Ha una chiave sua perche' il
+             * giorno che le due divergessero — un modello piu' preciso
+             * per chi scrive i piani — non serva una migrazione per
+             * accorgersene.
+             */
+            'plan_food' => env('AI_MODEL_PLAN_FOOD', 'claude-haiku-4-5'),
         ],
         'openai' => [
             'food_text' => env('AI_MODEL_OPENAI_FOOD_TEXT', 'gpt-4.1-mini'),
             'food_photo' => env('AI_MODEL_OPENAI_FOOD_PHOTO', 'gpt-4.1'),
             'workout_kcal' => env('AI_MODEL_OPENAI_WORKOUT_KCAL', 'gpt-4.1-mini'),
             'daily_advice' => env('AI_MODEL_OPENAI_ADVICE', 'gpt-4.1-mini'),
+            'plan_food' => env('AI_MODEL_OPENAI_PLAN_FOOD', 'gpt-4.1-mini'),
             'pdf_import' => env('AI_MODEL_OPENAI_PDF_IMPORT', 'gpt-4.1'),
         ],
     ],
@@ -99,19 +111,23 @@ return [
     | (conti in `STIMA-COSTI-AI.md`) bastava per tre o quattro persone, e la
     | quarta trovava le funzioni AI spente per il consumo di qualcun altro.
     |
-    | Il valore si risolve in tre passi, dal piu' specifico al piu' generale:
-    |   1. `users.ai_monthly_token_cap`         — l'eccezione per una persona
-    |   2. `tenants.ai_monthly_tokens_per_member` — la scelta della palestra
-    |   3. questo default
+    | 🆕 **Da G2 il tetto si conta in CHIAMATE, non in token** (D6), e i livelli
+    | sono cinque, non tre:
+    |   1. `users.ai_monthly_call_cap`            — l'eccezione per una persona
+    |   2. `tenants.ai_monthly_calls_per_member`  — la scelta della palestra
+    |   3. il trainer indipendente che segue quella persona
+    |   4. `plans.ai_monthly_calls_per_member`    — il piano in corso
+    |   5. questo default
     |
-    | In tutti e tre **`0` vale «illimitato»** e `null` vale «non impostato,
+    | In **tutti** i livelli `0` vale «illimitato» e `null` vale «non impostato,
     | scendi al livello successivo»: sono due cose diverse, e senza la
     | distinzione non si potrebbe sbloccare una persona sola.
     |
-    | ⚠️ **1.200.000 non e' un numero tondo a caso**: copre l'utente pesante
-    | del documento dei costi (5 pasti a testo, 3 foto, 10 aperture al giorno
-    | ≈ 1,07 M token/mese) con un margine. Chi lo supera sta usando l'app in un
-    | modo che vale la pena guardare, non assecondare in silenzio.
+    | ⚠️ E i contatori sono **due**: quello generale e il sotto-limite sulle
+    | chiamate con allegato, che costano fino a undici volte le altre (D7).
+    |
+    | ⛔ La chiave dei token qui sotto **non la legge piu' nessuno**: resta
+    | finche' `G2.5` non toglie anche le colonne.
     */
     'quota' => [
         /*

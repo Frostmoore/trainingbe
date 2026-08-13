@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\FoodSource;
+use App\Models\Concerns\PuoAvereAlternative;
 use App\Services\Nutrition\FoodUnit;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,10 +21,12 @@ use Illuminate\Support\Carbon;
 class NutritionPlanItem extends Model
 {
     use HasFactory;
+    use PuoAvereAlternative;
 
     protected $fillable = [
-        'nutrition_plan_meal_id', 'position', 'description',
+        'nutrition_plan_meal_id', 'alternativa_di_id', 'position', 'description',
         'qty', 'unit', 'grams', 'kcal', 'protein', 'carbs', 'fat', 'alternatives',
+        'origine_valori',
     ];
 
     protected function casts(): array

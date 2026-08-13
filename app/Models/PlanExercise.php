@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\PuoAvereAlternative;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,9 +31,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PlanExercise extends Model
 {
     use HasFactory;
+    use PuoAvereAlternative;
 
     protected $fillable = [
-        'workout_plan_id', 'exercise_id', 'position', 'sets', 'reps',
+        'workout_plan_id', 'workout_plan_day_id', 'alternativa_di_id',
+        'exercise_id', 'position', 'sets', 'reps',
         'rest_sec', 'target_weight', 'duration_sec', 'notes',
     ];
 
@@ -45,6 +48,51 @@ class PlanExercise extends Model
             'duration_sec' => 'integer',
             'target_weight' => 'float',
         ];
+    }
+
+    /**
+     * Il giorno a cui appartiene — G4.
+     *
+     * ⚠️ `workout_plan_id` resta e non e' ridondanza inutile: e' cio' che
+     * permette di trovare tutti gli esercizi di una scheda con una query sola,
+     * senza passare dai giorni. Le due colonne devono restare d'accordo, e a
+     * tenerle d'accordo e' il controller che scrive.
+     */
+    /**
+     * Il giorno si ricava dalla scheda quando chi scrive non lo dice — G4.
+     *
+     * ── 🚨 Perche' un hook e non «ricordarselo ogni volta» ────────────────
+     *
+     * `workout_plan_day_id` e' `NOT NULL` per una ragione forte: un esercizio
+     * senza giorno non lo mostra nessuna schermata. Ma i punti che scrivono
+     * esercizi sono sei — controller, import da PDF, comando di seed, copia dei
+     * modelli, factory, fixture dei test — e **pretendere che tutti se lo
+     * ricordino e' il modo di scoprire che uno non se l'e' ricordato**.
+     *
+     * 💡 Non e' magia che nasconde un errore: il giorno si ricava dalla
+     * **scheda che la riga dichiara gia'**, quindi non puo' finire su un piano
+     * sbagliato. E' la stessa forma di `BelongsToTenant`, che riempie
+     * `tenant_id` dal contesto invece di chiederlo a ogni chiamante.
+     *
+     * ⚠️ Il vincolo `NOT NULL` **resta**, ed e' la garanzia vera: questo hook
+     * fa in modo che non venga mai violato, non lo sostituisce.
+     */
+    protected static function booted(): void
+    {
+        static::creating(static function (self $riga): void {
+            if ($riga->workout_plan_day_id !== null || $riga->workout_plan_id === null) {
+                return;
+            }
+
+            $piano = WorkoutPlan::withoutGlobalScopes()->find($riga->workout_plan_id);
+
+            $riga->workout_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+        });
+    }
+
+    public function day(): BelongsTo
+    {
+        return $this->belongsTo(WorkoutPlanDay::class, 'workout_plan_day_id');
     }
 
     public function plan(): BelongsTo

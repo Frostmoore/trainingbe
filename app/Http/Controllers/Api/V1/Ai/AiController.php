@@ -320,6 +320,77 @@ class AiController extends Controller
         ]]);
     }
 
+    /**
+     * La stima di un alimento **mentre il trainer compone un piano** — G5.11, D13.
+     *
+     * ── 🚨 Perche' sta qui e non in `NutritionPlanController` ─────────────
+     *
+     * Perche' il cancello e' questo: quota inclusa, poi gettoni, poi `402`.
+     * Riscriverlo nel controller dei piani vorrebbe dire **due sedi della
+     * stessa regola commerciale** — e due sedi divergono. Quella che
+     * divergerebbe per prima sarebbe la copia, cioe' quella meno provata.
+     *
+     * ── 🚨 La paga il TRAINER, mai l'allievo ─────────────────────────────
+     *
+     * `$request->user()` e' chi sta componendo. Quando l'allievo ricevera' il
+     * piano, il costo e' gia' stato sostenuto da chi l'ha scritto.
+     *
+     * ── ⚠️ E i valori restano modificabili ────────────────────────────────
+     *
+     * Questa rotta **propone**, non decide: il trainer corregge quello che
+     * vuole, e la sua correzione vince sempre. Il campo `origine_valori`
+     * ricorda quale delle due l'ha scritto — serve a lui per vedere cosa ha
+     * gia' controllato, non a noi per discutere.
+     */
+    public function planFood(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            'text' => ['required', 'string', 'min:2', 'max:500'],
+        ]);
+
+        $utente = $request->user();
+
+        if (! ($utente->isTrainer() || $utente->isFreeTrainer() || $utente->isGymAdmin() || $utente->isSuperAdmin())) {
+            return response()->json([
+                'message' => __('Solo chi allena può usare la stima nei piani.'),
+                'code' => 'not_a_trainer',
+            ], 403);
+        }
+
+        $conGettoni = $this->assertQuota($utente, AiFeature::PlanFood);
+
+        [$stima, $avvisi] = $this->stimaValidata(
+            fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::PlanFood)->foodFromText(
+                $dati['text'].$appendice,
+                AiCallContext::for($utente, AiFeature::PlanFood),
+            ),
+        );
+
+        $this->consumaGettoniSeServe($utente, AiFeature::PlanFood, $conGettoni);
+
+        return response()->json(['data' => [
+            /*
+             * 💡 Si restituiscono gli alimenti nella forma che
+             * `NutritionPlanRequest` accetta, cosi' l'app puo' incollarli nel
+             * piano senza tradurre niente. Una forma diversa qui vorrebbe dire
+             * una conversione nell'app, cioe' un punto in piu' in cui i campi
+             * possono divergere.
+             */
+            'items' => array_map(static fn (FoodItem $i): array => [
+                'description' => $i->name,
+                'qty' => $i->qty,
+                'unit' => $i->unit,
+                'grams' => $i->grams,
+                'kcal' => $i->kcal,
+                'protein' => $i->protein,
+                'carbs' => $i->carbs,
+                'fat' => $i->fat,
+                'origine_valori' => 'ai',
+            ], $stima->items),
+            'warnings' => $avvisi,
+        ]]);
+    }
+
     // ───────────────────────── quota ─────────────────────────
 
     /**

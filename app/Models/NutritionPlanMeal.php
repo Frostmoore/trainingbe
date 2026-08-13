@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\MealType;
+use App\Models\Concerns\PuoAvereAlternative;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,8 +20,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class NutritionPlanMeal extends Model
 {
     use HasFactory;
+    use PuoAvereAlternative;
 
-    protected $fillable = ['nutrition_plan_id', 'meal', 'position', 'title', 'notes'];
+    protected $fillable = [
+        'nutrition_plan_id', 'nutrition_plan_day_id', 'alternativa_di_id',
+        'meal', 'position', 'title', 'notes',
+    ];
 
     protected function casts(): array
     {
@@ -30,12 +35,54 @@ class NutritionPlanMeal extends Model
         ];
     }
 
+    /**
+     * Il giorno si ricava dal piano quando chi scrive non lo dice — G4.
+     *
+     * 🚨 Stessa ragione di `PlanExercise::booted()`: la colonna e' `NOT NULL`
+     * perche' un pasto senza giorno non lo mostra nessuno, e i punti che
+     * scrivono pasti sono troppi perche' tutti se lo ricordino. Il giorno si
+     * ricava dal **piano che la riga dichiara gia'**.
+     */
+    protected static function booted(): void
+    {
+        static::creating(static function (self $riga): void {
+            if ($riga->nutrition_plan_day_id !== null || $riga->nutrition_plan_id === null) {
+                return;
+            }
+
+            $piano = NutritionPlan::withoutGlobalScopes()->find($riga->nutrition_plan_id);
+
+            $riga->nutrition_plan_day_id = $piano?->giornoPredefinito()?->getKey();
+        });
+    }
+
+    public function day(): BelongsTo
+    {
+        return $this->belongsTo(NutritionPlanDay::class, 'nutrition_plan_day_id');
+    }
+
     public function plan(): BelongsTo
     {
         return $this->belongsTo(NutritionPlan::class, 'nutrition_plan_id');
     }
 
+    /**
+     * Gli alimenti del pasto — **senza le alternative** (G4, D2).
+     *
+     * 🚨 Da qui passa anche `totals()`: contare le alternative nel totale
+     * gonfierebbe ogni pasto. Un pranzo con due alternative varrebbe tre
+     * pranzi, e nessuno se ne accorgerebbe finche' un trainer non fa il conto a
+     * mano e ci scrive.
+     */
     public function items(): HasMany
+    {
+        return $this->hasMany(NutritionPlanItem::class)
+            ->whereNull('alternativa_di_id')
+            ->orderBy('position');
+    }
+
+    /** Tutti gli alimenti, alternative comprese. */
+    public function itemsConAlternative(): HasMany
     {
         return $this->hasMany(NutritionPlanItem::class)->orderBy('position');
     }

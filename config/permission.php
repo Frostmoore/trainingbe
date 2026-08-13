@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\Tenancy\TenantTeamResolver;
 use Spatie\Permission\DefaultTeamResolver;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -167,7 +168,7 @@ return [
     // ricordarsi di impostare a ogni richiesta. Il nostro legge da TenantContext,
     // la stessa fonte del global scope: impostare il tenant limita insieme le
     // query e i ruoli, e non ci sono due verita' da tenere allineate.
-    'team_resolver' => \App\Support\Tenancy\TenantTeamResolver::class,
+    'team_resolver' => TenantTeamResolver::class,
 
     /*
      * Passport Client Credentials Grant

@@ -260,9 +260,13 @@ class SeedMemberPlans extends Command
         // questo file e non la somma delle due versioni.
         PlanExercise::where('workout_plan_id', $piano->getKey())->delete();
 
+        // G4 — la colonna del giorno e' NOT NULL.
+        $giorno = $piano->giornoPredefinito();
+
         foreach ($scheda['righe'] as $posizione => [$nome, $serie, $ripetizioni, $recupero, $peso, $note]) {
             PlanExercise::create([
                 'workout_plan_id' => $piano->getKey(),
+                'workout_plan_day_id' => $giorno->getKey(),
                 'exercise_id' => $esercizi[$nome]->getKey(),
                 'position' => $posizione,
                 'sets' => $serie,
