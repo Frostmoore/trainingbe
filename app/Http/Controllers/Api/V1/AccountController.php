@@ -6,9 +6,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
-use App\Services\Account\AccountEraser;
 use App\Models\User;
+use App\Services\Account\AccountEraser;
 use App\Services\Audit\AuditLogger;
+use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -29,7 +30,37 @@ class AccountController extends Controller
     public function __construct(
         private readonly AccountEraser $eraser,
         private readonly AuditLogger $audit,
+        private readonly UnisciAUnaPalestra $unisci,
     ) {}
+
+    /**
+     * Entra in una palestra, portandosi dietro la propria storia — B4.
+     *
+     * 🚨 **Il lavoro vero è in `UnisciAUnaPalestra`**, e il perché sta lì: non è
+     * un `UPDATE` su una colonna, è una **migrazione di dati**. Qui c'è solo la
+     * porta.
+     *
+     * ⚠️ **Si risponde con il branding nuovo**: l'app deve poter cambiare
+     * colori e nome subito, senza un secondo giro. Chi entra in una palestra si
+     * aspetta di vederla, e vedere ancora la schermata neutra farebbe pensare
+     * che non abbia funzionato.
+     */
+    public function joinGym(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            'join_code' => ['required', 'string', 'size:8'],
+        ]);
+
+        $palestra = ($this->unisci)(
+            $request->user(),
+            strtoupper(trim($dati['join_code'])),
+        );
+
+        return response()->json([
+            'message' => __('Sei entrato in :palestra.', ['palestra' => $palestra->name]),
+            'branding' => $palestra->branding(),
+        ]);
+    }
 
     /**
      * Cosa succede se si cancella: da mostrare **prima** del pulsante.

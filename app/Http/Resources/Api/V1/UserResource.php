@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Models\User;
+use App\Services\Billing\PianoAttivo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,7 +17,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * e `tenant_id` restano fuori — al client non servono e sono informazioni sulla
  * struttura della piattaforma.
  *
- * @property-read \App\Models\User $resource
+ * @property-read User $resource
  */
 class UserResource extends JsonResource
 {
@@ -52,6 +54,31 @@ class UserResource extends JsonResource
             'social' => $this->resource->socialIdentities
                 ->map(fn ($i): string => $i->provider->value)->values()->all(),
             'roles' => $this->resource->getRoleNames()->values()->all(),
+
+            /*
+             * 🚨 **Cosa comprende il piano** — F4, e il difetto riferito il
+             * 13/08/2026.
+             *
+             * *«La stima da testo mi dice correttamente che non ho le funzioni
+             * AI, ma me lo dovrebbe proprio mostrare come disattivato: quando
+             * cerco di inserire un alimento mi deve dire "non hai accesso alle
+             * funzioni AI, inserisci a mano" e mandarmi all'inserimento
+             * manuale.»*
+             *
+             * ⚠️ **Aveva ragione, e la causa era qui**: l'app non aveva **nessun
+             * modo** di sapere in anticipo cosa comprende il piano. Poteva solo
+             * provare e ricevere `403 plan_without_ai` — cioè far compilare un
+             * modulo e poi dire di no.
+             *
+             * 💡 Un `bool` e non l'intero piano: all'app serve **decidere se
+             * disegnare un pulsante**, non conoscere il listino. Il nome del
+             * piano e il prezzo stanno sul sito, dove servono a scegliere.
+             *
+             * 🚨 E resta un dato **informativo**: il cancello vero è
+             * `RequirePlanWithAi`, che risponde `403` anche a un'app che
+             * ignorasse questo campo. Un client non decide mai i permessi.
+             */
+            'ai_enabled' => app(PianoAttivo::class)->haLaAi($this->resource),
             /*
              * C7.2 — il profilo c'è **sempre**, anche vuoto.
              *

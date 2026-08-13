@@ -150,6 +150,21 @@ Route::prefix('v1')->group(function (): void {
         // spiegazione deve venire dal server: scritta solo nell'app, diventa
         // falsa il giorno che il server cambia politica.
         Route::get('account/deletion-preview', [AccountController::class, 'preview']);
+
+        /*
+         * 🆕 **Un utente senza palestra entra in una palestra** — requisito B4.
+         *
+         * 🚨 **Non è un `PATCH` su una colonna: è una migrazione di dati.**
+         * Diario, allenamenti, piani, foto e conversazioni sono tutti marcati
+         * con il tenant personale; spostando solo l'utente, il `TenantScope`
+         * gli renderebbe invisibile **tutta la sua storia** — non cancellata,
+         * invisibile, che è peggio perché non se ne accorge nessuno.
+         *
+         * ⚠️ Sotto `throttle:auth-login`: prova a prova, è un modo per
+         * indovinare codici palestra validi.
+         */
+        Route::post('account/join-gym', [AccountController::class, 'joinGym'])
+            ->middleware('throttle:auth-login');
         Route::delete('account', [AccountController::class, 'destroy']);
 
         // G8 — email e password si cambiano dall'app. Entrambe chiedono la
