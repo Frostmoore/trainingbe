@@ -10,6 +10,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
@@ -87,6 +88,7 @@ class TenantIsolationTest extends TestCase
 
             if (! $haTrait) {
                 $senzaTrait[] = $classe;
+
                 continue;
             }
 
@@ -111,11 +113,74 @@ class TenantIsolationTest extends TestCase
         $this->assertGreaterThan(0, $controllati, 'Nessun modello con tenant_id: il test non sta verificando nulla.');
 
         $this->assertSame([], $senzaTrait, sprintf(
-            "Questi modelli hanno la colonna tenant_id ma NON usano BelongsToTenant "
+            'Questi modelli hanno la colonna tenant_id ma NON usano BelongsToTenant '
             ."né BelongsToTenantOrGlobal:\n  - %s\n"
-            ."Senza il trait le loro query NON sono limitate alla palestra: "
+            .'Senza il trait le loro query NON sono limitate alla palestra: '
             .'ogni utente vedrebbe i dati di tutti i clienti.',
             implode("\n  - ", $senzaTrait),
+        ));
+    }
+
+    /**
+     * 🚨 Ogni modello scopato deve **davvero** filtrare, non solo avere il trait.
+     *
+     * ── Perché non basta il test qui sopra ──────────────────────────────────
+     *
+     * `it_scopes_every_tenant_owned_model()` verifica che il trait ci sia. È il
+     * 90% dei casi, ma controlla una **dichiarazione**, non un effetto: un
+     * modello che riscrivesse `booted()` senza chiamare `parent::booted()`, o
+     * che aggiungesse `withoutGlobalScopes()` in una `newQuery()` propria,
+     * avrebbe il trait e non filtrerebbe niente. Il primo test direbbe che è
+     * tutto a posto.
+     *
+     * ── 💡 Come fa a funzionare senza factory ───────────────────────────────
+     *
+     * Al 13/08/2026 esiste **una sola** factory (`UserFactory`), quindi «crea una
+     * riga per ogni modello in due palestre e confronta» non è scrivibile senza
+     * prima scrivere quindici factory. Ma la riga non serve: si guarda l'**SQL
+     * che il modello genera**.
+     *
+     * Il criterio è che la stessa query, compilata dentro due palestre diverse,
+     * **deve venire diversa**. Se viene identica, non c'è nessun filtro sul
+     * tenant — qualunque sia il motivo, e senza che il test debba conoscere la
+     * forma della `WHERE` (`= ?` per `BelongsToTenant`, `= ? OR IS NULL` per
+     * `BelongsToTenantOrGlobal`).
+     *
+     * 🚨 **Ed è il punto di tutta la fase F1**: un modello aggiunto in F4 (i
+     * piani) o in F6 (gli inviti) con lo scope sbagliato fa fallire un test che
+     * nessuno ha scritto per lui.
+     */
+    #[Test]
+    public function it_filters_every_scoped_model_by_the_current_tenant(): void
+    {
+        $senzaFiltro = [];
+        $controllati = 0;
+
+        foreach ($this->modelliApplicativi() as $classe) {
+            $model = new $classe;
+            $tabella = $model->getTable();
+
+            if (! Schema::hasTable($tabella) || ! Schema::hasColumn($tabella, 'tenant_id')) {
+                continue;
+            }
+
+            $controllati++;
+
+            $inAlfa = $this->context()->runAs($this->alfa, fn (): string => $classe::query()->toRawSql());
+            $inBeta = $this->context()->runAs($this->beta, fn (): string => $classe::query()->toRawSql());
+
+            if ($inAlfa === $inBeta || ! str_contains($inAlfa, 'tenant_id')) {
+                $senzaFiltro[] = $classe;
+            }
+        }
+
+        $this->assertGreaterThan(0, $controllati, 'Nessun modello con tenant_id: il test non sta verificando nulla.');
+
+        $this->assertSame([], $senzaFiltro, sprintf(
+            "Questi modelli hanno `tenant_id` ma la loro query NON cambia fra due palestre:\n  - %s\n"
+            .'Il trait potrebbe esserci lo stesso: quello che manca è il filtro. '
+            .'Ogni utente vedrebbe le righe di tutti i clienti.',
+            implode("\n  - ", $senzaFiltro),
         ));
     }
 
@@ -238,7 +303,7 @@ class TenantIsolationTest extends TestCase
             'name' => 'Mario', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,
         ]));
 
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->expectException(UniqueConstraintViolationException::class);
 
         $this->context()->runAs($this->alfa, fn () => User::create([
             'name' => 'Doppione', 'email' => 'mario@esempio.test', 'password' => self::FAKE_PASSWORD,

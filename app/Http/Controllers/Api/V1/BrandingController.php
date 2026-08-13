@@ -40,7 +40,25 @@ class BrandingController extends Controller
 
         $tenant = Tenant::where('join_code', $code)->first();
 
-        if ($tenant === null || ! $tenant->isActive()) {
+        /*
+         * 🚨 **I tenant personali non esistono, per questo endpoint** — F1.3.
+         *
+         * Dalla Parte B ogni persona senza palestra ha un tenant suo, e quel
+         * tenant ha un `join_code` solo perché la colonna è `unique` e NOT NULL.
+         *
+         * ⚠️ Qui la posta in gioco è più alta che altrove, perché questo
+         * endpoint è **pubblico e senza autenticazione**, e `branding()`
+         * restituisce `name` — che per un tenant personale **è il nome e cognome
+         * della persona**. Senza questa riga, un codice indovinato non darebbe
+         * «i colori di una palestra»: darebbe l'identità di un individuo, a
+         * chiunque, senza aver fatto l'accesso.
+         *
+         * 💡 Il rifiuto passa da `notFound()` come tutti gli altri: per chi
+         * chiama, un tenant personale è indistinguibile da un codice che non è
+         * mai esistito. È lo stesso principio già scritto qui sopra — non
+         * esistono risposte che dicano *perché* — applicato a un caso nuovo.
+         */
+        if ($tenant === null || $tenant->ePersonale() || ! $tenant->isActive()) {
             return $this->notFound();
         }
 

@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\SocialProvider;
+use App\Enums\TenantKind;
 use App\Enums\TenantStatus;
 use App\Services\Auth\Social\SocialTokenVerifier;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -35,6 +36,15 @@ class Tenant extends Model
      */
     protected $attributes = [
         'status' => 'trial',
+        /*
+         * ⚠️ Come `status`: senza questo, subito dopo `Tenant::create()` il
+         * campo sarebbe `null` in memoria e il cast su `TenantKind` andrebbe in
+         * fatale — mentre dopo un `fresh()` funzionerebbe, perché il default del
+         * DB si applica all'INSERT e non all'oggetto. È il tipo di guasto che
+         * passa i test e cade in produzione, e su questa colonna in particolare
+         * cadrebbe dentro `ePersonale()`, cioè dentro un controllo di sicurezza.
+         */
+        'kind' => 'gym',
         'plan' => 'starter',
         'color_primary' => '#111827',
         'color_secondary' => '#6B7280',
@@ -44,7 +54,7 @@ class Tenant extends Model
     ];
 
     protected $fillable = [
-        'name', 'slug', 'join_code', 'status', 'plan',
+        'name', 'slug', 'join_code', 'kind', 'status', 'plan',
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
         'ai_monthly_tokens_per_member', 'ai_driver', 'settings', 'trial_ends_at',
@@ -54,6 +64,7 @@ class Tenant extends Model
     {
         return [
             'status' => TenantStatus::class,
+            'kind' => TenantKind::class,
             'settings' => 'array',
             'trial_ends_at' => 'datetime',
             'ai_monthly_tokens_per_member' => 'integer',
@@ -65,6 +76,42 @@ class Tenant extends Model
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
+    }
+
+    // ───────────────────────── natura ─────────────────────────
+
+    /**
+     * È il tenant di una persona sola, e non una palestra cliente?
+     *
+     * 🚨 **È un controllo di sicurezza, non una comodità di visualizzazione.**
+     * Da questo dipende che il `join_code` di un tenant personale non apra
+     * niente: senza, uno sconosciuto che indovinasse quel codice si
+     * registrerebbe **dentro** lo spazio di un'altra persona, e da lì il
+     * `TenantScope` gli mostrerebbe i dati di quella persona — che è
+     * esattamente ciò che tutta la Parte B è costruita per impedire.
+     */
+    public function ePersonale(): bool
+    {
+        return $this->kind === TenantKind::Personal;
+    }
+
+    /**
+     * Solo le palestre clienti.
+     *
+     * ⚠️ **Va usato in ogni listato e in ogni conteggio commerciale** (F1.4).
+     * Dopo la Parte B `tenants` cresce come `users`, non come il numero di
+     * clienti: un `Tenant::count()` nudo risponderebbe «abbiamo diecimila
+     * palestre» il giorno in cui ne abbiamo dodici.
+     */
+    public function scopePalestre(Builder $query): Builder
+    {
+        return $query->where('kind', TenantKind::Gym->value);
+    }
+
+    /** Solo i tenant personali. Serve alle statistiche e alla manutenzione. */
+    public function scopePersonali(Builder $query): Builder
+    {
+        return $query->where('kind', TenantKind::Personal->value);
     }
 
     // ───────────────────────── stato ─────────────────────────
@@ -190,5 +237,33 @@ class Tenant extends Model
         } while (static::where('join_code', $code)->exists());
 
         return $code;
+    }
+
+    /**
+     * Lo `slug` di un tenant personale: unico, e **non indovinabile**.
+     *
+     * ⚠️ `slug` è `unique` e NOT NULL, quindi un valore ci deve essere; ma per
+     * un tenant personale non c'è nessun nome sensato da usare. Derivarlo dal
+     * nome della persona (`mario-rossi`, `mario-rossi-2`…) sarebbe la scelta
+     * ovvia ed è quella sbagliata due volte:
+     *
+     * 1. 🚨 `slug` **esce dal server**: `branding()` lo pubblica, e
+     *    `/api/v1/branding/lookup` è un endpoint **pubblico**. Uno slug derivato
+     *    dal nome renderebbe l'endpoint un modo per verificare se una certa
+     *    persona ha un account — con nome e cognome in chiaro nella richiesta.
+     * 2. La coda `-2`, `-3` per gestire gli omonimi direbbe pure **quanti**
+     *    Mario Rossi sono iscritti.
+     *
+     * 💡 ULID e non `Str::random()`: è ordinabile nel tempo, quindi un elenco di
+     * tenant personali si legge in ordine di creazione senza una colonna in più,
+     * e resta comunque privo di qualunque informazione sulla persona.
+     */
+    public static function generatePersonalSlug(): string
+    {
+        do {
+            $slug = 'p-'.Str::lower((string) Str::ulid());
+        } while (static::withTrashed()->where('slug', $slug)->exists());
+
+        return $slug;
     }
 }

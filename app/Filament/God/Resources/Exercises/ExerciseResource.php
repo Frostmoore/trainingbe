@@ -16,12 +16,12 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -120,9 +120,13 @@ class ExerciseResource extends Resource
                         ->step(0.1)
                         ->helperText('Dispendio metabolico. Vuoto: si usa il valore generico 5.0 del calcolo calorie.'),
 
+                    // 🚨 `->palestre()` (F1.4): un esercizio si attribuisce a una
+                    // palestra o a nessuno. Attribuirlo a un tenant **personale**
+                    // non vuol dire niente — lo vedrebbe una persona sola — e la
+                    // tendina esporrebbe i nomi di tutti gli iscritti.
                     Select::make('tenant_id')
                         ->label('Palestra')
-                        ->options(fn (): array => Tenant::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
                         ->placeholder('Nessuna — esercizio della piattaforma')
                         ->helperText('Vuoto = visibile a tutte le palestre.'),
@@ -184,9 +188,10 @@ class ExerciseResource extends Resource
                     ->label('Gruppo muscolare')
                     ->options(MuscleGroup::options()),
 
+                // Vedi la nota sul `Select` del modulo, qui sopra: solo palestre.
                 SelectFilter::make('tenant_id')
                     ->label('Palestra')
-                    ->options(fn (): array => Tenant::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable(),
 
                 Filter::make('globali')

@@ -226,12 +226,34 @@ class AuthController extends Controller
      *
      * Gira fuori dal contesto perché `tenants` è la tabella radice e non è
      * filtrata da nessuno scope.
+     *
+     * ── 🚨 Il terzo rifiuto: i tenant personali — F1.3 ──────────────────────
+     *
+     * Dalla Parte B `tenants` non contiene più solo palestre: ogni persona senza
+     * palestra ha un tenant suo (`kind = personal`). Quei tenant hanno un
+     * `join_code` **perché la colonna è `unique` e NOT NULL**, non perché serva
+     * a qualcuno — e un codice che funziona è una porta.
+     *
+     * ⚠️ Cosa succederebbe senza questa riga, per esteso: chi presentasse il
+     * codice di un tenant personale ci si **registrerebbe dentro**, diventando
+     * un secondo utente di quello spazio. Da lì `TenantScope` gli mostrerebbe
+     * diario, allenamenti e conversazioni di quella persona — non per un difetto
+     * dello scoping, ma perché lo scoping avrebbe fatto **esattamente il suo
+     * lavoro** su un tenant in cui non doveva entrare.
+     *
+     * 💡 Il codice è già generato a caso e imprendibile a forza bruta, ma non è
+     * su quello che ci si appoggia: un valore casuale è una difesa che dipende
+     * da quanto è lungo, questo controllo è una difesa che non dipende da niente.
+     * Due difese per la stessa porta, e la seconda regge da sola.
+     *
+     * 🚨 E il messaggio d'errore resta **identico** agli altri due: dire
+     * «questo è un account personale» confermerebbe che quel codice esiste.
      */
     private function resolveActiveTenant(string $joinCode): Tenant
     {
         $tenant = Tenant::where('join_code', $joinCode)->first();
 
-        if ($tenant === null || ! $tenant->isActive()) {
+        if ($tenant === null || $tenant->ePersonale() || ! $tenant->isActive()) {
             throw ValidationException::withMessages([
                 'join_code' => __('Codice palestra non valido.'),
             ]);

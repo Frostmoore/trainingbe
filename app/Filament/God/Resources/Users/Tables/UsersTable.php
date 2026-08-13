@@ -88,9 +88,23 @@ class UsersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                /*
+                 * 🚨 **Solo le palestre nella tendina** — F1.4.
+                 *
+                 * ⚠️ Qui il filtro `->palestre()` fa più che tenere corta una
+                 * lista: senza, questa tendina diventerebbe **l'elenco in chiaro
+                 * di tutte le persone iscritte** — il nome di un tenant
+                 * personale è il nome e cognome di chi ci sta dentro — offerto
+                 * per giunta con una ricerca incrementale.
+                 *
+                 * 💡 E non si perde niente: il filtro serviva a rispondere
+                 * «mostrami gli utenti della palestra X». Per trovare **una**
+                 * persona c'è già la ricerca per nome ed email, che è la strada
+                 * naturale e non passa da qui.
+                 */
                 SelectFilter::make('tenant_id')
                     ->label('Palestra')
-                    ->options(fn (): array => Tenant::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable(),
 
                 SelectFilter::make('ruolo')

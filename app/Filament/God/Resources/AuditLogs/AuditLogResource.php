@@ -11,14 +11,14 @@ use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Infolists\Components\KeyValueEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Filament\Infolists\Components\KeyValueEntry;
-use Filament\Infolists\Components\TextEntry;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -121,9 +121,24 @@ class AuditLogResource extends Resource
                     ->options(AuditAction::options())
                     ->multiple(),
 
+                /*
+                 * 🚨 Solo le palestre nella tendina (F1.4) — e qui con una
+                 * cautela in più da mettere agli atti.
+                 *
+                 * ⚠️ **Le righe del registro NON vengono filtrate**: si filtra
+                 * solo l'elenco delle scelte. Un'azione compiuta dentro un
+                 * tenant personale resta registrata e resta leggibile — sarebbe
+                 * grave il contrario, perché il registro è ciò che permette di
+                 * ricostruire chi ha fatto cosa, e un pezzo di storia
+                 * irraggiungibile è peggio di nessuna storia.
+                 *
+                 * 💡 Quello che si perde è solo la scorciatoia «filtra per
+                 * quella persona», e vale il prezzo: la tendina, senza filtro,
+                 * sarebbe l'elenco in chiaro di tutti gli iscritti.
+                 */
                 SelectFilter::make('tenant_id')
                     ->label('Palestra')
-                    ->options(fn (): array => Tenant::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable(),
 
                 Filter::make('solo_impersonazioni')

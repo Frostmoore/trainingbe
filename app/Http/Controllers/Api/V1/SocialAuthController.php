@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\SocialProvider;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\SocialLoginRequest;
@@ -337,11 +336,26 @@ class SocialAuthController extends Controller
         return $candidato;
     }
 
+    /**
+     * ⚠️ **Gemello di `AuthController::resolveActiveTenant()`, e va tenuto tale.**
+     *
+     * 🚨 `$tenant->ePersonale()` è il rifiuto aggiunto in F1.3: il `join_code` di
+     * un tenant personale esiste solo perché la colonna è `unique` e NOT NULL, e
+     * chi lo presentasse si registrerebbe **dentro** lo spazio di un'altra
+     * persona. Il perché per esteso sta in `AuthController`.
+     *
+     * 💡 Perché questa porta è **più** esposta dell'altra: qui non c'è una
+     * password da indovinare. Chi presenta un token Google valido è già
+     * autenticato **come sé stesso**, e il `join_code` è l'unica cosa che decide
+     * *dove* finisce. Sono le due sole strade che creano un utente, e il giorno
+     * in cui una delle due si dimenticasse questo controllo l'altra non
+     * proteggerebbe niente — per questo il test lo verifica su entrambe.
+     */
     private function resolveActiveTenant(string $joinCode): Tenant
     {
         $tenant = Tenant::where('join_code', $joinCode)->first();
 
-        if ($tenant === null || ! $tenant->isActive()) {
+        if ($tenant === null || $tenant->ePersonale() || ! $tenant->isActive()) {
             throw ValidationException::withMessages([
                 'join_code' => __('Codice palestra non valido.'),
             ]);

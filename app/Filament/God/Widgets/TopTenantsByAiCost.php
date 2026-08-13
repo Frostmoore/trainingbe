@@ -10,8 +10,6 @@ use App\Models\Tenant;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Le cinque palestre che consumano di piu' — B2.5.
@@ -38,6 +36,19 @@ class TopTenantsByAiCost extends TableWidget
         return $table
             ->query(
                 Tenant::query()
+                    /*
+                     * 🚨 **Solo le palestre** — F1.4. Il titolo dice «per
+                     * palestra» e deve restare vero: senza questo filtro, il
+                     * giorno in cui ci sono utenti gratuiti la classifica si
+                     * riempirebbe di **nomi di persone**, in un elenco pensato
+                     * per decidere a chi alzare o abbassare il tetto di token.
+                     *
+                     * ⏸ Il consumo AI dei tenant personali avrà una sua sede in
+                     * **F4**, quando esisteranno i piani: lì la domanda non è
+                     * «quale cliente mi costa» ma «il piano gratuito regge», e
+                     * sono due tabelle diverse, non una con dentro tutto.
+                     */
+                    ->palestre()
                     ->select('tenants.*')
                     ->selectSub(
                         AiUsageLog::query()

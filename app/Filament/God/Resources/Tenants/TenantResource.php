@@ -2,6 +2,7 @@
 
 namespace App\Filament\God\Resources\Tenants;
 
+use App\Enums\TenantStatus;
 use App\Filament\God\Resources\Tenants\Pages\CreateTenant;
 use App\Filament\God\Resources\Tenants\Pages\EditTenant;
 use App\Filament\God\Resources\Tenants\Pages\ListTenants;
@@ -48,8 +49,36 @@ class TenantResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return (string) Tenant::query()
-            ->where('status', \App\Enums\TenantStatus::Active->value)
+            ->palestre()
+            ->where('status', TenantStatus::Active->value)
             ->count();
+    }
+
+    /**
+     * 🚨 **L'elenco mostra solo le palestre** — F1.4.
+     *
+     * Dalla Parte B `tenants` contiene anche un tenant per ogni persona senza
+     * palestra (vedi `App\Enums\TenantKind`). Sono righe di servizio: non sono
+     * clienti, non si amministrano da qui, e sono destinate a essere **ordini di
+     * grandezza più numerose** delle palestre vere.
+     *
+     * ⚠️ Senza questo filtro il pannello diventerebbe illeggibile al centesimo
+     * utente gratuito — e ben prima di allora, inutile: chi apre questa pagina
+     * cerca un cliente, e glielo si seppellirebbe sotto un elenco di persone.
+     *
+     * 🚨 **Sta qui e non in `TenantsTable`**, ed è una scelta: `getEloquentQuery()`
+     * è la fonte di **tutte** le pagine della risorsa — elenco, modifica,
+     * cancellazione, azioni di gruppo. Un filtro messo solo sulla tabella
+     * nasconderebbe le righe dall'elenco lasciandole raggiungibili con un URL
+     * diretto, che è il tipo di mezza protezione che sembra fatta e non lo è.
+     *
+     * 💡 Un tenant personale resta comunque raggiungibile da chi ne ha davvero
+     * bisogno: `Tenant::personali()` esiste, e il pannello utenti mostra le
+     * persone senza passare da qui.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->palestre();
     }
 
     public static function form(Schema $schema): Schema

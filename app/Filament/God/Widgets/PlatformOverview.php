@@ -34,9 +34,31 @@ class PlatformOverview extends StatsOverviewWidget
 
     protected function getStats(): array
     {
-        $attive = Tenant::query()->where('status', TenantStatus::Active->value)->count();
-        $totali = Tenant::query()->count();
+        /*
+         * 🚨 **`->palestre()` non è cosmetico: senza, questi due numeri
+         * mentono** — F1.4.
+         *
+         * Dalla Parte B `tenants` contiene anche un tenant per **ogni persona
+         * senza palestra**. Un `Tenant::count()` nudo risponderebbe «abbiamo
+         * 10.000 palestre» il giorno in cui ne abbiamo dodici, e questo widget
+         * è il cruscotto su cui si guarda se l'attività va bene: un numero
+         * gonfio qui non è un difetto grafico, è una decisione commerciale presa
+         * su un dato falso.
+         */
+        $attive = Tenant::query()->palestre()->where('status', TenantStatus::Active->value)->count();
+        $totali = Tenant::query()->palestre()->count();
 
+        /*
+         * ⚠️ **Gli utenti invece si contano tutti, ed è voluto.** Una persona
+         * con un tenant personale è un utente della piattaforma a tutti gli
+         * effetti — usa l'app, occupa spazio, e (dal piano a pagamento in poi)
+         * può pagare. È il numero delle *palestre* che deve restare pulito,
+         * non quello delle persone.
+         *
+         * 💡 La descrizione della statistica dice ancora «su tutte le
+         * palestre»: va rivista in **F4**, quando i piani personali esisteranno
+         * e la distinzione avrà un senso da mostrare.
+         */
         $utenti = User::query()
             ->withoutGlobalScopes([TenantScope::class])
             ->whereNotNull('tenant_id')
