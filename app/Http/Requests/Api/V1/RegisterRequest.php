@@ -8,12 +8,27 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
 /**
- * Iscrizione di un nuovo membro tramite il codice della palestra.
+ * Iscrizione di una persona nuova — **con o senza** il codice di una palestra.
  *
  * Registra SEMPRE e SOLO un iscritto: il ruolo non è un dato in ingresso.
  * Se lo fosse, chiunque conosca un codice palestra potrebbe farsi amministratore
  * — e sarebbe un campo che nessuno nota finché non viene sfruttato.
  * Trainer e amministratori si creano dal pannello (B3).
+ *
+ * ── 🆕 `join_code` è facoltativo da F3.1 ────────────────────────────────────
+ *
+ * Con il codice si entra in quella palestra, come sempre. Senza, nasce un
+ * **tenant personale** (`TenantKind::Personal`) e la persona diventa un
+ * `UserRole::FreeUser`. Il ramo sta in `AuthController::register()`.
+ *
+ * 🚨 **Ciò che NON è diventato facoltativo: `age_confirmed` e `terms_accepted`.**
+ * Sono ancora `required|accepted`, ed è la regola §2.4 del piano della Parte B —
+ * *ogni porta d'ingresso nuova nasce già con lo sbarramento 18+*. Rendere
+ * opzionale il codice palestra e lasciarsi dietro anche i consensi sarebbe stato
+ * facilissimo: sono nello stesso array, a tre righe di distanza.
+ *
+ * ⚠️ Il test `RegistrazioneLiberaTest::the_age_gate_survives_the_optional_code`
+ * esiste esattamente perché quella distanza è di tre righe.
  */
 class RegisterRequest extends FormRequest
 {
@@ -26,7 +41,19 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'join_code' => ['required', 'string', 'size:8'],
+            /*
+             * 🆕 **Facoltativo da F3.1.** `nullable` e non `sometimes`: l'app in
+             * circolazione manda il campo **sempre**, e quando l'utente non
+             * scrive niente lo manda vuoto. Con `sometimes` una stringa vuota
+             * sarebbe entrata in validazione e avrebbe fallito `size:8`,
+             * bloccando l'iscrizione libera proprio dai telefoni già installati.
+             *
+             * ⚠️ `size:8` resta e vale **solo se il campo c'è**: un codice
+             * scritto male non deve diventare silenziosamente un'iscrizione
+             * senza palestra. Chi digita `ALFA234` (sette caratteri) ha sbagliato
+             * a copiare, e deve leggerlo — non ritrovarsi un account personale.
+             */
+            'join_code' => ['nullable', 'string', 'size:8'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
 
@@ -143,7 +170,22 @@ class RegisterRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if (is_string($this->join_code)) {
-            $this->merge(['join_code' => strtoupper(trim($this->join_code))]);
+            $codice = strtoupper(trim($this->join_code));
+
+            /*
+             * 🚨 **Vuoto diventa `null`, e senza questa riga F3 non funziona.**
+             *
+             * `nullable` salta le regole successive solo su `null` — una stringa
+             * vuota **non** è `null`, quindi `size:8` girerebbe lo stesso e
+             * fallirebbe. E l'app manda il campo **sempre**: un utente che non
+             * scrive il codice invia `''`, non l'assenza del campo.
+             *
+             * ⚠️ Il risultato sarebbe stato il peggiore possibile: l'iscrizione
+             * senza palestra respinta con «il codice deve essere di 8 caratteri»,
+             * cioè un errore su un campo che l'utente ha lasciato vuoto **di
+             * proposito**.
+             */
+            $this->merge(['join_code' => $codice === '' ? null : $codice]);
         }
         if (is_string($this->email)) {
             $this->merge(['email' => strtolower(trim($this->email))]);

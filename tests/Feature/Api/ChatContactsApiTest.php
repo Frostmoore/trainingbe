@@ -71,26 +71,59 @@ class ChatContactsApiTest extends TestCase
     }
 
     /**
-     * 🚨 Il test che impedisce all'endpoint di diventare una rubrica.
+     * 🚨 **Il test che impedisce all'endpoint di diventare una rubrica.**
      *
-     * Senza il legame non compare nessuno — nemmeno un trainer della stessa
-     * palestra, nemmeno un altro iscritto.
+     * ⚠️ **Riscritto il 13/08/2026 con F7**, e la parte che è cambiata è meno
+     * di quanto sembri. Prima diceva: *senza legame non compare nessuno —
+     * nemmeno un trainer della stessa palestra, nemmeno un altro iscritto*.
+     *
+     * Il requisito B8 ha spostato la prima metà: un iscritto **deve** poter
+     * scrivere a qualunque trainer della sua palestra, anche senza assegnazione.
+     * 🚨 **La seconda metà non si tocca, ed è quella che conta**: gli altri
+     * iscritti non compaiono, e non si può aprire una conversazione con loro.
+     *
+     * 💡 La distinzione è in una parola: i **trainer** sono personale della
+     * palestra, gli iscritti sono altri **clienti**.
      */
     #[Test]
-    public function senza_legame_non_compare_nessuno(): void
+    public function compaiono_i_trainer_della_palestra_ma_mai_gli_altri_iscritti(): void
     {
         $altroIscritto = $this->creaUtente($this->alfa, UserRole::Member, 'luca@alfa.test');
-        $this->creaUtente($this->alfa, UserRole::Trainer, 'bea@alfa.test');
+        $bea = $this->creaUtente($this->alfa, UserRole::Trainer, 'bea@alfa.test');
 
-        $this->comeApp($this->iscritto)
+        $r = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/conversations/contacts')
-            ->assertOk()
-            ->assertJsonCount(0, 'data');
+            ->assertOk();
+
+        $ids = array_column($r->json('data'), 'id');
+
+        // 🆕 I trainer della palestra ci sono, anche senza assegnazione.
+        $this->assertContains($this->trainer->getKey(), $ids);
+        $this->assertContains($bea->getKey(), $ids);
+
+        // 🚨 Gli altri iscritti no. Mai.
+        $this->assertNotContains($altroIscritto->getKey(), $ids);
 
         // E nemmeno provando ad aprirla a mano.
         $this->comeApp($this->iscritto)
             ->postJson('/api/v1/conversations', ['user_id' => $altroIscritto->getKey()])
             ->assertStatus(403);
+    }
+
+    /**
+     * ⚠️ E un trainer non trova **sé stesso** fra i contatti.
+     *
+     * Sembra ovvio e non lo è: `contacts()` cerca i trainer della palestra, e
+     * chi guarda può esserlo a sua volta.
+     */
+    #[Test]
+    public function un_trainer_non_trova_se_stesso(): void
+    {
+        $r = $this->comeApp($this->trainer)
+            ->getJson('/api/v1/conversations/contacts')
+            ->assertOk();
+
+        $this->assertNotContains($this->trainer->getKey(), array_column($r->json('data'), 'id'));
     }
 
     #[Test]

@@ -12,6 +12,8 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -72,10 +74,32 @@ class ConversationController extends Controller
      * esistono gia', e chi non ne aveva nessuna vedeva una schermata vuota
      * senza vie d'uscita — una chat in cui non si puo' cominciare a parlare.
      *
-     * ⚠️ **Sono solo le persone collegate**, le stesse che `open()` accetta: i
-     * propri trainer per un iscritto, i propri assegnati per un trainer. Un
-     * elenco di tutta la palestra sarebbe, per un iscritto, la rubrica di tutti
-     * gli altri iscritti — cioe' esattamente cio' che `coppia()` impedisce.
+     * ⚠️ **Non è la rubrica della palestra.** Un elenco di tutti gli iscritti
+     * sarebbe, per un iscritto, la rubrica di tutti gli altri clienti — cioe'
+     * esattamente cio' che `coppia()` impedisce.
+     *
+     * ── 🆕 F7 — un iscritto vede TUTTI i trainer della sua palestra ─────────
+     *
+     * Il requisito B8 chiede che un iscritto possa scrivere a **qualunque**
+     * trainer della propria palestra, non solo a quelli che gli sono stati
+     * assegnati. ⚠️ **Non contraddice la ragione scritta qui sopra**, e la
+     * distinzione è tutta in una parola: si aggiungono i **trainer**, che sono
+     * personale della palestra, non altri **clienti**.
+     *
+     * 🚨 **Le tre cose che restano vere, e vanno rilette prima di toccare questo
+     * metodo:**
+     *
+     * 1. un iscritto **continua a non vedere gli altri iscritti**. Mai;
+     * 2. si aggiungono solo i trainer del **proprio** tenant — ci pensa
+     *    `TenantScope`, ma il vincolo è scritto anche qui perché non dipenda da
+     *    uno stato ambientale;
+     * 3. 🚨 poter **scrivere** a un trainer non è poter **leggere** niente: i
+     *    messaggi restano illeggibili a chiunque non sia i due capi del filo,
+     *    e le palestre non li leggono nemmeno impersonando.
+     *
+     * 💡 **Solo dentro una palestra**: in un tenant personale i «trainer della
+     * palestra» sarebbero la persona stessa, e questo elenco le proporrebbe di
+     * scrivere a sé stessa.
      */
     public function contacts(Request $request): JsonResponse
     {
@@ -89,6 +113,7 @@ class ConversationController extends Controller
         // (un trainer che si allena ha a sua volta un trainer).
         $persone = $utente->assignedTrainers()->get()
             ->merge($utente->assignedMembers()->get())
+            ->merge($this->trainerDellaPalestra($utente))
             ->unique('id')
             ->values();
 
@@ -102,6 +127,59 @@ class ConversationController extends Controller
                 'is_trainer' => $p->hasAppRole(UserRole::Trainer),
             ])->all(),
         ]);
+    }
+
+    /**
+     * Il rapporto fra i due capi di questo filo è stato sospeso? — F6.4.
+     *
+     * ⚠️ Si guarda il **legame**, non l'utente: `users.is_active` chiuderebbe
+     * fuori quella persona dall'**app**, e una persona che paga anche un altro
+     * trainer si ritroverebbe l'account bloccato da un terzo.
+     *
+     * 💡 `withoutGlobalScopes()` sul pivot: il legame appartiene al tenant del
+     * trainer (F6.1), quindi letto dal contesto dell'**utente** — che ha un
+     * tenant personale suo — non si troverebbe. Non è un bypass: la coppia di
+     * id è già la chiave più stretta possibile.
+     */
+    private function canaleChiuso(Conversation $c): bool
+    {
+        return DB::table('trainer_member')
+            ->where('trainer_id', $c->trainer_id)
+            ->where('member_id', $c->member_id)
+            ->whereNotNull('disattivato_il')
+            ->exists();
+    }
+
+    /**
+     * Tutti i trainer della palestra di questa persona — F7.1.
+     *
+     * 🚨 **Solo se è una palestra vera.** In un tenant personale l'unico utente
+     * è la persona stessa: senza questo controllo l'app le proporrebbe di
+     * scrivere a sé stessa.
+     *
+     * ⚠️ E **mai** l'utente corrente nell'elenco, nemmeno quando è lui stesso un
+     * trainer di quella palestra: `whereKeyNot()`. Un trainer che apre «a chi
+     * posso scrivere» non deve trovarsi fra i contatti.
+     *
+     * 💡 La ricerca passa da `role()` di spatie, che filtra sul team corrente —
+     * ed è quello che serve, perché il contesto **è** la palestra dell'utente
+     * autenticato (`ResolveTenant`). Il `TenantScope` fa il resto.
+     *
+     * @return Collection<int, User>
+     */
+    private function trainerDellaPalestra(User $utente): Collection
+    {
+        $tenant = $utente->tenant;
+
+        if ($tenant === null || $tenant->ePersonale()) {
+            return collect();
+        }
+
+        return User::query()
+            ->whereKeyNot($utente->getKey())
+            ->where('is_active', true)
+            ->role(UserRole::Trainer->value)
+            ->get();
     }
 
     public function messages(Request $request, int $conversation): JsonResponse
@@ -135,6 +213,30 @@ class ConversationController extends Controller
 
         if ($c === null) {
             return $this->nonTrovata();
+        }
+
+        /*
+         * 🚨 **Il canale chiuso — F6.4, decisione D5.**
+         *
+         * Se il trainer ha disattivato questo utente, non si scrive più. ⚠️ È
+         * l'unico effetto della disattivazione, e da solo copre più di quanto
+         * sembri: dopo D11/D13 i piani viaggiano **dentro la chat**, quindi
+         * chiudere il canale chiude anche la consegna di piani nuovi.
+         *
+         * 💡 **403 e non 404**: la conversazione esiste e la persona ci sta
+         * dentro — nascondere il filo la farebbe pensare a un guasto, mentre il
+         * fatto è che il rapporto è sospeso. E la storia resta leggibile: si
+         * chiude la scrittura, non l'archivio.
+         *
+         * 🚨 **Vale in entrambe le direzioni.** Chiudere solo la penna
+         * dell'utente lascerebbe il trainer libero di scrivere a qualcuno che
+         * non può rispondere, che è peggio del silenzio.
+         */
+        if ($this->canaleChiuso($c)) {
+            return response()->json([
+                'message' => __('Questa conversazione è stata chiusa.'),
+                'code' => 'conversation_closed',
+            ], 403);
         }
 
         /*
@@ -240,6 +342,38 @@ class ConversationController extends Controller
         }
 
         if ($io->assignedTrainers()->where('users.id', $altro->getKey())->exists()) {
+            return [$altro, $io];
+        }
+
+        /*
+         * 🆕 **F7.1 — un iscritto può scrivere a un trainer della sua palestra
+         * anche senza essere stato assegnato a lui.**
+         *
+         * Senza questo ramo, `contacts()` avrebbe elencato dei trainer a cui
+         * `open()` avrebbe poi risposto **403**: un elenco di persone
+         * irraggiungibili, che è peggio di un elenco vuoto — l'utente prova, non
+         * funziona, e non capisce perché.
+         *
+         * ⚠️ **Le condizioni sono tre e servono tutte:**
+         *
+         * 1. l'altro è un `Trainer` — ⚠️ **non** un `GymAdmin` e **non** un
+         *    altro iscritto. Il requisito B8 parla di trainer;
+         * 2. stesso tenant — già garantito da `open()`, ripetuto qui perché
+         *    `coppia()` non dipenda da chi la chiama;
+         * 3. 🚨 **il tenant è una palestra vera.** In un tenant personale
+         *    l'unico utente è la persona stessa, e questo ramo le farebbe aprire
+         *    una conversazione con sé stessa.
+         *
+         * 💡 E resta vero ciò che conta: poter **scrivere** a un trainer non è
+         * poter **leggere** niente. La cifratura non cambia, e la palestra non
+         * legge i messaggi dei suoi trainer nemmeno impersonando.
+         */
+        $tenant = $io->tenant;
+
+        if ($tenant !== null
+            && ! $tenant->ePersonale()
+            && $io->tenant_id === $altro->tenant_id
+            && $altro->hasAppRole(UserRole::Trainer)) {
             return [$altro, $io];
         }
 

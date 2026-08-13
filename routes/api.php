@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
+use App\Http\Controllers\Api\V1\TrainerController;
 use App\Http\Controllers\Api\V1\Training\CalendarController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\SeriesController;
@@ -59,6 +60,20 @@ Route::prefix('v1')->group(function (): void {
 
         Route::post('login', [AuthController::class, 'login'])
             ->middleware('throttle:auth-login');
+
+        /*
+         * 🆕 **Iscrizione con l'invito di un trainer indipendente** — F6.2/F6.3.
+         *
+         * ⚠️ Sotto `auth-register` e non `auth-login`: è a tutti gli effetti una
+         * registrazione, e il limite deve essere quello stretto.
+         *
+         * 🚨 **Non serve un `join_code`, e non è una scorciatoia**: il token
+         * dell'invito è più forte di un codice palestra — è monouso, scade, ed è
+         * revocabile una persona per volta. Il codice palestra non è nessuna
+         * delle tre cose.
+         */
+        Route::post('register-with-invite', [AuthController::class, 'registerWithInvite'])
+            ->middleware('throttle:auth-register');
 
         /*
          * Accesso con Google o Apple — C17.
@@ -213,6 +228,21 @@ Route::prefix('v1')->group(function (): void {
         Route::get('targets', [DiaryController::class, 'targets']);
         Route::get('nutrition-plan', [DiaryController::class, 'plan']);
 
+        /*
+         * 🆕 **«Ho mangiato quello che c'era scritto», in un tocco** — F8.2.
+         *
+         * 🚨 Un endpoint apposta e non `POST /food-entries` in ciclo: cinque
+         * richieste separate possono fallire alla terza e lasciare **mezzo
+         * pasto** in diario. È la stessa ragione — e lo stesso errore già
+         * evitato — di `POST /ai/food/confirm` in A4.8.
+         *
+         * 💡 Le alternative («120 g di pollo *oppure* 150 g di merluzzo»)
+         * viaggiano nella **stessa** richiesta: vanno scelte al momento, non
+         * sepolte in una modifica successiva (F8.3).
+         */
+        Route::post('nutrition-plan/meals/{meal}/eaten', [DiaryController::class, 'eatMeal'])
+            ->whereNumber('meal');
+
         Route::post('food-entries', [DiaryController::class, 'store']);
         Route::patch('food-entries/{entry}', [DiaryController::class, 'update'])->whereNumber('entry');
         Route::delete('food-entries/{entry}', [DiaryController::class, 'destroy'])->whereNumber('entry');
@@ -235,7 +265,13 @@ Route::prefix('v1')->group(function (): void {
         // (art. 9(2)(a)) niente esce verso Anthropic. È un middleware e non un
         // `if` nel controller perché valga anche sulle rotte AI che non esistono
         // ancora — la prossima partirebbe scoperta, e funzionerebbe benissimo.
-        Route::middleware(['ai.consent', 'throttle:ai'])->group(function (): void {
+        //
+        // 🆕 **`ai.plan` prima di tutto** — F4.2, decisione D2. L'ordine è
+        // deliberato e va letto da sinistra: prima *hai diritto* (il piano), poi
+        // *hai acconsentito* (il consenso), poi *quanto ne resta* (la quota,
+        // dentro il controller). Un utente gratuito non deve arrivare nemmeno a
+        // vedersi chiedere il consenso per una funzione che non ha comprato.
+        Route::middleware(['ai.plan', 'ai.consent', 'throttle:ai'])->group(function (): void {
             Route::post('ai/food/text', [AiController::class, 'foodFromText']);
             Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
             Route::get('ai/advice', [AiController::class, 'advice']);
@@ -256,6 +292,23 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::get('ai/usage', [AiController::class, 'usage']);
+
+        /*
+         * ── «I miei utenti» — F5.1 / F6 ──────────────────────────────────
+         *
+         * ⚠️ Sta nell'app e non nel pannello web per la decisione D6: il
+         * **modello** di scheda si compone sul web, l'**assegnazione** a una
+         * persona passa dal telefono, perché è l'unico momento che tocca dati
+         * personali e deve viaggiare sul canale cifrato.
+         *
+         * 🚨 Il controllo di ruolo è **dentro il controller** e non qui: un
+         * middleware in più su queste cinque rotte sarebbe una seconda sede
+         * della stessa regola, e due sedi divergono.
+         */
+        Route::get('trainer/members', [TrainerController::class, 'members']);
+        Route::post('trainer/invites', [TrainerController::class, 'invite']);
+        Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite');
+        Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
 
         // ── Chat (B8.4) ──────────────────────────────────────────────────
         //

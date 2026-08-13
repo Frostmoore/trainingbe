@@ -7,6 +7,7 @@ namespace Tests\Feature\Api;
 use App\Enums\UserRole;
 use App\Events\MessageSent;
 use App\Models\Conversation;
+use App\Models\DeviceToken;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -77,16 +78,44 @@ class ChatApiTest extends TestCase
     }
 
     /**
-     * 🚨 Fuori dal legame trainer-iscritto non si apre niente.
+     * 🆕 **Da F7 un iscritto può scrivere a QUALUNQUE trainer della sua
+     * palestra**, anche senza essergli stato assegnato — requisito B8.
      *
-     * Una chat aperta verso chiunque della palestra sarebbe, per un iscritto, il
-     * modo per scrivere a tutti gli altri iscritti.
+     * ⚠️ **Questo test diceva il contrario fino al 13/08/2026**, e il perché
+     * merita di restare: la vecchia regola era *«fuori dal legame non si apre
+     * niente»*, con la motivazione che una chat verso chiunque sarebbe stata,
+     * per un iscritto, il modo di scrivere a **tutti gli altri iscritti**.
+     *
+     * 🚨 **Quella motivazione è ancora valida, ed è per questo che il test è
+     * cambiato solo a metà.** La distinzione è in una parola: si aprono i
+     * **trainer**, che sono personale della palestra, non altri **clienti**.
+     * Il caso «un iscritto verso un altro iscritto» resta 403, ed è provato
+     * dal test qui sotto.
      */
     #[Test]
-    public function there_is_no_chat_without_an_assignment(): void
+    public function a_member_can_write_to_any_trainer_of_their_gym(): void
     {
         $this->comeApp($this->iscritto)
             ->postJson('/api/v1/conversations', ['user_id' => $this->altroTrainer->id])
+            ->assertCreated();
+
+        $this->assertSame(1, Conversation::withoutGlobalScopes()->count());
+    }
+
+    /**
+     * 🚨 **Ma NON a un altro iscritto. Mai.**
+     *
+     * È la metà che F7 non ha toccato, ed è quella che tiene in piedi la
+     * riservatezza: senza, l'elenco dei contatti diventerebbe la rubrica di
+     * tutti i clienti di una palestra.
+     */
+    #[Test]
+    public function there_is_no_chat_between_two_members(): void
+    {
+        $altroIscritto = $this->creaUtente($this->alfa, UserRole::Member, 'luca@alfa.test');
+
+        $this->comeApp($this->iscritto)
+            ->postJson('/api/v1/conversations', ['user_id' => $altroIscritto->id])
             ->assertForbidden();
 
         $this->assertSame(0, Conversation::withoutGlobalScopes()->count());
@@ -341,7 +370,7 @@ class ChatApiTest extends TestCase
             unset($volta);
         }
 
-        $this->assertSame(1, \App\Models\DeviceToken::withoutGlobalScopes()->count());
+        $this->assertSame(1, DeviceToken::withoutGlobalScopes()->count());
     }
 
     // ───────────────────────── aiuti ─────────────────────────

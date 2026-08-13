@@ -11,7 +11,10 @@ use App\Http\Requests\Api\V1\RegisterRequest;
 use App\Http\Resources\Api\V1\UserResource;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Tenancy\CreaTenantPersonale;
+use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +38,10 @@ use Laravel\Sanctum\PersonalAccessToken;
  */
 class AuthController extends Controller
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly CreaTenantPersonale $creaTenantPersonale,
+    ) {}
 
     /**
      * Iscrizione tramite codice palestra.
@@ -44,7 +50,14 @@ class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
-        $tenant = $this->resolveActiveTenant($request->string('join_code')->toString());
+        $codice = $request->input('join_code');
+
+        // 🆕 F3.2 — nessun codice, nessuna palestra: nasce un tenant personale.
+        if ($codice === null) {
+            return $this->registraSenzaPalestra($request);
+        }
+
+        $tenant = $this->resolveActiveTenant((string) $codice);
 
         return $this->context->runAs($tenant, function () use ($request, $tenant): JsonResponse {
             // L'unicità è per palestra: qui siamo già nel contesto, quindi il
@@ -104,7 +117,14 @@ class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $tenant = $this->resolveActiveTenant($request->string('join_code')->toString());
+        $codice = $request->input('join_code');
+
+        // 🆕 F3 — senza codice si entra nel proprio account personale.
+        if ($codice === null) {
+            return $this->accediSenzaPalestra($request);
+        }
+
+        $tenant = $this->resolveActiveTenant((string) $codice);
 
         return $this->context->runAs($tenant, function () use ($request, $tenant): JsonResponse {
             // Email **o** nome utente. Qui siamo già dentro il contesto della
@@ -213,6 +233,220 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => __('Dispositivo disconnesso.')]);
+    }
+
+    /**
+     * Iscrizione con l'invito di un trainer indipendente — F6.2, F6.3.
+     *
+     * 🚨 **Riusa `RegisterRequest`**, e quindi eredita **tutte** le sue regole:
+     * la password confermata, il nome utente nel formato giusto, e soprattutto
+     * `age_confirmed` e `terms_accepted` `required|accepted`. È il modo di far
+     * valere §2.4 — *ogni porta nuova nasce con lo sbarramento 18+* — senza
+     * doverselo ricordare: la porta nuova passa dallo stesso modulo.
+     *
+     * ⚠️ `join_code` viene **ignorato** anche se presente: chi arriva da un
+     * invito entra dal trainer che l'ha invitato, non da una palestra. Un codice
+     * accettato qui vorrebbe dire che un invito può essere dirottato altrove.
+     */
+    public function registerWithInvite(RegisterRequest $request, InvitiDelTrainer $inviti): JsonResponse
+    {
+        $token = (string) $request->input('token');
+
+        $utente = $inviti->riscatta(
+            $token,
+            $request->string('name')->toString(),
+            $request->string('email')->toString(),
+            [
+                'username' => $request->string('username')->toString(),
+                'password' => $request->string('password')->toString(),
+                'phone' => $request->input('phone'),
+                'locale' => 'it',
+            ],
+            $request->boolean('age_confirmed'),
+            $request->boolean('terms_accepted'),
+        );
+
+        // ⚠️ Dentro il contesto: i ruoli si leggono lì (vedi `registraSenzaPalestra`).
+        return $this->context->runAs(
+            $utente->tenant,
+            fn (): JsonResponse => $this->tokenResponse($utente, $utente->tenant, $request, 201),
+        );
+    }
+
+    // ──────────────────── 🆕 F3 — senza palestra ────────────────────
+
+    /**
+     * Iscrizione **senza** codice palestra: nasce un tenant personale.
+     *
+     * ── 🚨 L'unicità dell'email, qui, è un'altra cosa ──────────────────────
+     *
+     * Nel ramo con la palestra l'email è unica **per palestra**, e va bene:
+     * `mario@esempio.it` può essere iscritto in due palestre ed essere due
+     * persone diverse. Senza palestra quel ragionamento non regge più, perché
+     * **ogni account personale ha un tenant tutto suo**: il vincolo
+     * `UNIQUE(tenant_id, email)` non impedirebbe **niente**, e la stessa persona
+     * potrebbe iscriversi dieci volte creando dieci account.
+     *
+     * ⚠️ E il guasto sarebbe silenzioso nel modo peggiore: alla seconda
+     * iscrizione la persona crederebbe di essere rientrata nel proprio account e
+     * lo troverebbe **vuoto**, con dentro il nulla al posto del suo diario.
+     *
+     * 💡 Quindi qui il controllo è esplicito e **cerca fra i soli tenant
+     * personali**: chi ha un account in una palestra può comunque farsene uno
+     * personale con lo stesso indirizzo, che è legittimo — sono due cose diverse
+     * e il codice palestra dice quale delle due si vuole.
+     *
+     * 🚨 **Il messaggio d'errore è identico a quello del ramo con la palestra.**
+     * Un messaggio diverso — «hai già un account personale» — direbbe a chiunque
+     * se un certo indirizzo è iscritto al servizio.
+     *
+     * ── ⚠️ Il residuo che resta, e perché si accetta ───────────────────────
+     *
+     * Due registrazioni **nello stesso istante** con lo stesso indirizzo possono
+     * passare entrambe: fra il controllo e la scrittura non c'è un lucchetto.
+     * La strada per chiuderlo sarebbe una colonna denormalizzata con un indice
+     * unico — e andrebbe tenuta allineata a **ogni** cambio di email, per
+     * sempre. Un vincolo che può mentire è peggio di un controllo che può
+     * correre, e in quel caso il danno è due account con la stessa email, non
+     * un accesso indebito. 💡 Il `username` resta unico su tutta la
+     * piattaforma, quindi anche nel caso peggiore ciascuno dei due ha un modo
+     * non ambiguo per entrare.
+     */
+    private function registraSenzaPalestra(RegisterRequest $request): JsonResponse
+    {
+        $email = $request->string('email')->toString();
+
+        if ($this->esisteGiaUnAccountPersonale($email)) {
+            throw ValidationException::withMessages([
+                'email' => __('Non è stato possibile completare la registrazione con questi dati.'),
+            ]);
+        }
+
+        $utente = DB::transaction(function () use ($request, $email): User {
+            $utente = ($this->creaTenantPersonale)(
+                $request->string('name')->toString(),
+                $email,
+                [
+                    'username' => $request->string('username')->toString(),
+                    'password' => $request->string('password')->toString(),
+                    'phone' => $request->input('phone'),
+                    'locale' => 'it',
+                ],
+            );
+
+            /*
+             * 🚨 **Gli stessi due timbri del ramo con la palestra** (S9.2).
+             *
+             * `RegisterRequest` ha già preteso `accepted`; qui si **conserva** il
+             * momento in cui la dichiarazione è stata data, perché l'art. 7(1)
+             * chiede di poterlo dimostrare.
+             *
+             * ⚠️ `forceFill` e non `$fillable`: un `age_confirmed_at` assegnabile
+             * in massa vorrebbe dire dichiararsi maggiorenni con un `PATCH`.
+             */
+            $utente->forceFill([
+                'age_confirmed_at' => now(),
+                'terms_accepted_at' => now(),
+            ])->save();
+
+            return $utente;
+        });
+
+        /*
+         * ⚠️ **La risposta si costruisce DENTRO il contesto del tenant.**
+         *
+         * `UserResource` include i ruoli, e spatie gira in modalità teams: fuori
+         * dal contesto la relazione `roles` è filtrata su un tenant che non c'è,
+         * quindi torna **vuota**. Il ramo con la palestra non ha il problema
+         * perché tutto il metodo gira già dentro `runAs()`.
+         *
+         * 💡 Il difetto era invisibile a occhio — l'utente veniva creato bene, il
+         * token era valido, solo `data.roles` arrivava `[]` — e un'app che
+         * decide cosa mostrare in base al ruolo si sarebbe comportata come se
+         * quella persona non ne avesse nessuno.
+         */
+        return $this->context->runAs(
+            $utente->tenant,
+            fn (): JsonResponse => $this->tokenResponse($utente, $utente->tenant, $request, 201),
+        );
+    }
+
+    /**
+     * Accesso **senza** codice palestra: si entra nel proprio account personale.
+     *
+     * 🚨 **Non era nel piano, ed è stato aggiunto perché senza sarebbe stata una
+     * funzione rotta.** `plan_parte_b.md` §5.3 descriveva solo la registrazione;
+     * ma `LoginRequest` pretendeva il `join_code`, quindi F3 avrebbe creato
+     * persone in grado di iscriversi e **non di rientrare**. Una porta d'ingresso
+     * senza serratura di ritorno non è metà funzione: è una funzione che non c'è.
+     *
+     * ── Come si trova la persona, senza un tenant che la delimiti ──────────
+     *
+     * `User::findByIdentifier()` non va bene qui: cerca ovunque e, a parità di
+     * email fra due palestre, **sceglie**. Qui si vuole il contrario — si guarda
+     * fra i **soli account personali**, e se l'indirizzo è ambiguo si rifiuta
+     * invece di indovinare.
+     *
+     * ⚠️ L'ambiguità può nascere solo dal residuo descritto in
+     * `registraSenzaPalestra()`. Rifiutare invece di scegliere significa che, in
+     * quel caso, la persona non entra con l'email ma entra con il **nome utente**
+     * — che è unico su tutta la piattaforma. Sbagliare account sarebbe peggio:
+     * troverebbe un diario vuoto e penserebbe di aver perso i propri dati.
+     *
+     * 💡 **ADR-04 non è violato**, come per il ramo con la palestra: il tenant
+     * non arriva dal client: si legge da `$user->tenant_id` dopo aver verificato
+     * la password. L'assenza del codice non *indica* un tenant, ne esclude una
+     * categoria.
+     */
+    private function accediSenzaPalestra(LoginRequest $request): JsonResponse
+    {
+        $identificativo = $request->identifier();
+
+        $candidati = User::withoutGlobalScopes()
+            ->whereHas('tenant', fn (Builder $q): Builder => $q->personali())
+            ->where(fn (Builder $q): Builder => $q
+                ->where('email', $identificativo)
+                ->orWhere('username', $identificativo)
+            )
+            ->get();
+
+        $user = $candidati->count() === 1 ? $candidati->first() : null;
+
+        /*
+         * ⚠️ `Hash::check` su un hash finto quando non c'è nessun candidato: la
+         * stessa cautela del ramo con la palestra. Senza, la risposta tornerebbe
+         * molto più in fretta per gli indirizzi che non esistono, e i **tempi**
+         * direbbero chi è iscritto al servizio e chi no.
+         */
+        $hash = $user?->password ?? '$2y$12$'.str_repeat('0', 53);
+
+        if (! Hash::check($request->string('password')->toString(), $hash) || $user === null) {
+            throw ValidationException::withMessages([
+                'login' => __('Credenziali non valide.'),
+            ]);
+        }
+
+        if (! $user->is_active) {
+            throw ValidationException::withMessages([
+                'login' => __('Questo account non è attivo.'),
+            ]);
+        }
+
+        $user->forceFill(['last_login_at' => now()])->saveQuietly();
+
+        return $this->context->runAs(
+            $user->tenant,
+            fn (): JsonResponse => $this->tokenResponse($user, $user->tenant, $request),
+        );
+    }
+
+    /** C'è già un account **personale** con questo indirizzo? */
+    private function esisteGiaUnAccountPersonale(string $email): bool
+    {
+        return User::withoutGlobalScopes()
+            ->where('email', $email)
+            ->whereHas('tenant', fn (Builder $q): Builder => $q->personali())
+            ->exists();
     }
 
     // ───────────────────────── privati ─────────────────────────

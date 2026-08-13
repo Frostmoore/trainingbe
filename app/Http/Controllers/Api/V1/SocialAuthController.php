@@ -14,7 +14,9 @@ use App\Models\User;
 use App\Services\Auth\Social\Exceptions\InvalidSocialTokenException;
 use App\Services\Auth\Social\SocialTokenVerifier;
 use App\Services\Auth\Social\VerifiedSocialUser;
+use App\Services\Tenancy\CreaTenantPersonale;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -53,6 +55,7 @@ class SocialAuthController extends Controller
     public function __construct(
         private readonly TenantContext $context,
         private readonly SocialTokenVerifier $verifier,
+        private readonly CreaTenantPersonale $creaTenantPersonale,
     ) {}
 
     public function store(SocialLoginRequest $request): JsonResponse
@@ -139,23 +142,20 @@ class SocialAuthController extends Controller
     /**
      * Identita' mai vista: o si collega a un account esistente, o se ne crea uno.
      *
-     * In entrambi i casi serve il `join_code`, perche' senza non si sa di quale
-     * palestra si parli — e l'email da sola non basta: la stessa email puo'
-     * essere iscritta a due palestre diverse, ed e' una situazione prevista.
+     * Con il `join_code` si entra in quella palestra. **Senza, da F3, nasce un
+     * tenant personale**: e' la stessa scelta della registrazione con email, e
+     * deve valere qui perche' questa e' l'**altra** porta d'ingresso. Se ne
+     * valesse solo in una, il primo utente gratuito che arriva da Google
+     * troverebbe una porta chiusa senza motivo.
      */
     private function primoAccesso(VerifiedSocialUser $identita, SocialLoginRequest $request): JsonResponse
     {
+        $this->pretendiIConsensi($request);
+
         $joinCode = $request->string('join_code')->toString();
 
         if ($joinCode === '') {
-            // 422 con un codice riconoscibile: l'app deve poter capire che
-            // serve il codice palestra e chiederlo, invece di mostrare un
-            // errore generico su una schermata senza campi.
-            return response()->json([
-                'message' => __('Per il primo accesso serve il codice della tua palestra.'),
-                'code' => 'join_code_required',
-                'errors' => ['join_code' => [__('Per il primo accesso serve il codice della tua palestra.')]],
-            ], 422);
+            return $this->primoAccessoSenzaPalestra($identita, $request);
         }
 
         $tenant = $this->resolveActiveTenant($joinCode);
@@ -272,6 +272,128 @@ class SocialAuthController extends Controller
 
             return $utente;
         });
+    }
+
+    // ──────────────────── 🆕 F3 — senza palestra ────────────────────
+
+    /**
+     * 🚨 **Lo sbarramento 18+ a ogni primo accesso, con palestra o senza.**
+     *
+     * `SocialLoginRequest` non puo' farlo da solo: la sua regola
+     * `exclude_without:join_code` si reggeva sull'equivalenza *«niente codice ⇒
+     * non e' un primo accesso»*, che **da F3 non vale piu'** — senza codice
+     * nasce un utente gratuito, che e' un'iscrizione a tutti gli effetti.
+     *
+     * ⚠️ E il modulo non puo' sapere se l'identita' e' nota: lo si scopre solo
+     * dopo aver verificato il token. Quindi il controllo sta qui, dove
+     * l'informazione c'e'.
+     *
+     * 💡 Il codice `consents_required` e' riconoscibile dall'app, che deve poter
+     * mostrare le due caselle invece di un errore generico su una schermata dove
+     * non c'e' niente da correggere.
+     */
+    private function pretendiIConsensi(SocialLoginRequest $request): void
+    {
+        $accettato = static fn (mixed $v): bool => in_array($v, [true, 1, '1', 'true', 'on', 'yes'], true);
+
+        if ($accettato($request->input('age_confirmed')) && $accettato($request->input('terms_accepted'))) {
+            return;
+        }
+
+        abort(response()->json([
+            'message' => __('Per iscriverti devi dichiarare di essere maggiorenne e accettare le condizioni.'),
+            'code' => 'consents_required',
+            'errors' => [
+                'age_confirmed' => [__('Devi dichiarare di essere maggiorenne.')],
+                'terms_accepted' => [__('Devi accettare le condizioni d\'uso.')],
+            ],
+        ], 422));
+    }
+
+    /**
+     * Primo accesso con un fornitore esterno, **senza codice palestra**: nasce
+     * un tenant personale.
+     *
+     * ⚠️ **Qui NON si collega mai a un account esistente per email**, al
+     * contrario di `collegaOCrea()`. Il motivo e' che li' il collegamento
+     * avviene dentro una palestra, dove `UNIQUE(tenant_id, email)` garantisce
+     * che quell'indirizzo sia **una persona sola**. Fuori da una palestra non
+     * c'e' niente di equivalente, e collegare per email vorrebbe dire decidere
+     * quale dei possibili account personali sia «il suo».
+     *
+     * 🚨 Chi ha gia' un account personale con quell'indirizzo viene quindi
+     * **respinto**, con il messaggio generico di sempre. Entra con email e
+     * password — che ha — e da li' potra' collegare l'identita' quando esistera'
+     * un modo per farlo.
+     */
+    private function primoAccessoSenzaPalestra(VerifiedSocialUser $identita, SocialLoginRequest $request): JsonResponse
+    {
+        $email = $identita->email;
+
+        if ($email === null || ! $identita->emailVerified) {
+            /*
+             * ⚠️ Senza un'email verificata non si crea un account personale.
+             * Nel ramo con la palestra un'email finta e' tollerabile — c'e' una
+             * palestra che conosce quella persona e un amministratore che puo'
+             * sistemare. Qui non c'e' nessuno: resterebbe un account senza un
+             * indirizzo vero, quindi senza recupero della password e senza
+             * possibilita' di dimostrare che e' suo.
+             */
+            throw ValidationException::withMessages([
+                'id_token' => __('Non è stato possibile completare l\'accesso.'),
+            ]);
+        }
+
+        $giaPresente = User::withoutGlobalScopes()
+            ->where('email', $email)
+            ->whereHas('tenant', fn (EloquentBuilder $q): EloquentBuilder => $q->personali())
+            ->exists();
+
+        if ($giaPresente) {
+            Log::warning('Accesso social senza palestra rifiutato: esiste gia un account personale', [
+                'provider' => $identita->provider->value,
+            ]);
+
+            throw ValidationException::withMessages([
+                'id_token' => __('Non è stato possibile completare l\'accesso.'),
+            ]);
+        }
+
+        $utente = DB::transaction(function () use ($identita, $email): User {
+            $utente = ($this->creaTenantPersonale)(
+                $identita->name ?? $this->nomeDaEmail($email),
+                $email,
+                [
+                    'username' => $this->usernameLibero($identita),
+                    // 🚨 Come in `collegaOCrea()`: una password casuale che
+                    // nessuno conosce, non una colonna vuota.
+                    'password' => Str::password(32),
+                    'password_is_set' => false,
+                    'locale' => 'it',
+                ],
+            );
+
+            $utente->forceFill([
+                'age_confirmed_at' => now(),
+                'terms_accepted_at' => now(),
+            ])->save();
+
+            SocialIdentity::create([
+                'user_id' => $utente->getKey(),
+                'provider' => $identita->provider->value,
+                'provider_user_id' => $identita->providerUserId,
+                'email' => $identita->email,
+                'name' => $identita->name,
+                'last_login_at' => now(),
+            ]);
+
+            return $utente;
+        });
+
+        return $this->context->runAs(
+            $utente->tenant,
+            fn (): JsonResponse => $this->tokenResponse($utente, $utente->tenant, $request, 201),
+        );
     }
 
     // ───────────────────────── privati ─────────────────────────

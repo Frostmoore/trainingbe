@@ -147,7 +147,25 @@ class Tenant extends Model
     public function branding(): array
     {
         return [
-            'name' => $this->name,
+            /*
+             * 🚨 **Un tenant personale non ha un nome da mostrare** — F3.
+             *
+             * Per una palestra `name` è l'insegna, e l'app la scrive in cima
+             * alla schermata. Per un tenant personale `name` è **il nome e
+             * cognome della persona**: mostrarlo lì vorrebbe dire scrivere
+             * «Mario Rossi» nel posto dove ci si aspetta la propria palestra,
+             * come se si fosse iscritti a sé stessi.
+             *
+             * ⚠️ E non è solo brutto: `branding()` è anche il corpo
+             * dell'endpoint **pubblico** `/branding/lookup`. Quello ignora già i
+             * tenant personali (F1.3), ma se un giorno qualcuno allentasse quel
+             * filtro, questo `null` sarebbe la seconda serratura.
+             *
+             * 💡 `null` e non una stringa vuota: la stringa vuota si disegna
+             * comunque, come una riga alta zero che sposta tutto. `null` è
+             * un'assenza che l'app può decidere di non disegnare affatto.
+             */
+            'name' => $this->ePersonale() ? null : $this->name,
             'slug' => $this->slug,
             'logo_url' => $this->logo_path ? url($this->logo_path) : null,
             'colors' => [

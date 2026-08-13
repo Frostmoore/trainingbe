@@ -36,6 +36,26 @@ class NutritionPlanItem extends Model
             'protein' => 'float',
             'carbs' => 'float',
             'fat' => 'float',
+
+            /*
+             * 🚨 **Il cast mancava, e senza di lui le alternative non erano
+             * usabili da nessuno** — trovato scrivendo F8.3, 13/08/2026.
+             *
+             * La colonna è `text` e contiene JSON, ma senza cast Eloquent la
+             * restituiva **come stringa**. ⚠️ Il difetto era silenzioso in tutte
+             * e due le direzioni:
+             *
+             * - in **lettura**, `GET /nutrition-plan` pubblicava una stringa
+             *   dove l'app si aspettava un elenco: nessun errore lato server,
+             *   solo alternative che non comparivano mai;
+             * - in **scrittura**, assegnare un array faceva fallire l'INSERT con
+             *   `Array to string conversion`.
+             *
+             * 💡 `array` e non `json`: sono lo stesso cast in Laravel, ma
+             * `array` dice che ci si aspetta un elenco — ed è un elenco, non un
+             * oggetto libero.
+             */
+            'alternatives' => 'array',
         ];
     }
 

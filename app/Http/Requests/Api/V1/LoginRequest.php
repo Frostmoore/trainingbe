@@ -45,7 +45,20 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'join_code' => ['required', 'string', 'size:8'],
+            /*
+             * 🆕 **Facoltativo da F3.** Senza codice si accede al proprio
+             * account **personale** (`TenantKind::Personal`).
+             *
+             * 🚨 Non era nel piano, ed è stato aggiunto perché senza F3 sarebbe
+             * stata una funzione rotta: la registrazione libera avrebbe creato
+             * persone che **non riescono più a entrare**. Il dettaglio in
+             * `AuthController::login()`.
+             *
+             * ⚠️ Come in `RegisterRequest`, il vuoto diventa `null` in
+             * `prepareForValidation()`: `nullable` non basta, perché l'app manda
+             * il campo sempre e `''` non è `null`.
+             */
+            'join_code' => ['nullable', 'string', 'size:8'],
             'login' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:100'],
@@ -65,7 +78,11 @@ class LoginRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         if (is_string($this->join_code)) {
-            $this->merge(['join_code' => strtoupper(trim($this->join_code))]);
+            $codice = strtoupper(trim($this->join_code));
+
+            // Vedi la nota gemella in `RegisterRequest`: `nullable` salta le
+            // regole solo su `null`, e l'app manda il campo anche quando è vuoto.
+            $this->merge(['join_code' => $codice === '' ? null : $codice]);
         }
 
         // 🚨 Compatibilità all'indietro: le versioni dell'app già installate

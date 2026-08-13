@@ -14,6 +14,7 @@ use App\Services\Auth\Social\Exceptions\InvalidSocialTokenException;
 use App\Services\Auth\Social\SocialTokenVerifier;
 use App\Services\Auth\Social\VerifiedSocialUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -84,7 +85,6 @@ class SocialAuthApiTest extends TestCase
         });
     }
 
-
     private function verificaFallisce(): void
     {
         $this->app->instance(SocialTokenVerifier::class, new class implements SocialTokenVerifier
@@ -102,7 +102,7 @@ class SocialAuthApiTest extends TestCase
     }
 
     /** @param array<string, mixed> $extra */
-    private function accedi(array $extra = []): \Illuminate\Testing\TestResponse
+    private function accedi(array $extra = []): TestResponse
     {
         return $this->postJson('/api/v1/auth/social', array_merge([
             'provider' => 'google',
@@ -143,13 +143,54 @@ class SocialAuthApiTest extends TestCase
     }
 
     /**
-     * 🚨 Senza codice palestra non si puo' sapere DOVE creare l'account.
+     * 🆕 **Senza codice palestra nasce un account personale** — F3.
      *
-     * L'email e' unica per palestra, non sulla piattaforma: la stessa persona
-     * puo' essere iscritta a due palestre, ed e' una situazione prevista.
+     * ⚠️ **Questo test diceva il contrario fino al 13/08/2026**, e il perché
+     * merita di restare scritto. La vecchia regola era: *«senza codice non si
+     * può sapere DOVE creare l'account, perché l'email è unica per palestra»* —
+     * e rispondeva `422 join_code_required`.
+     *
+     * 🚨 Era giusta finché **ogni** utente doveva stare in una palestra. Da F3
+     * «nessuna palestra» è una risposta valida alla domanda «dove?»: si crea un
+     * tenant personale. Il presupposto è cambiato, non il ragionamento.
      */
     #[Test]
-    public function al_primo_accesso_senza_codice_palestra_lo_chiede_in_modo_riconoscibile(): void
+    public function al_primo_accesso_senza_codice_palestra_nasce_un_account_personale(): void
+    {
+        $this->verificaRestituisce(new VerifiedSocialUser(
+            provider: SocialProvider::Google,
+            providerUserId: 'google-sub-1',
+            email: 'nuovo@esempio.it',
+            emailVerified: true,
+            name: 'Nuovo Libero',
+        ));
+
+        $r = $this->accedi()->assertCreated();
+
+        $this->assertIsString($r->json('token'));
+        $this->assertSame([UserRole::FreeUser->value], $r->json('data.roles'));
+
+        $utente = User::withoutGlobalScopes()->where('email', 'nuovo@esempio.it')->firstOrFail();
+
+        $this->assertNotNull($utente->tenant_id, 'Senza tenant sarebbe un super admin di fatto.');
+        $this->assertTrue($utente->tenant->ePersonale());
+        $this->assertSame(1, SocialIdentity::count());
+    }
+
+    /**
+     * 🚨 **Lo sbarramento 18+ vale anche di qui, e da F3 non lo fa più il modulo.**
+     *
+     * `SocialLoginRequest` ha `exclude_without:join_code` sui consensi, una
+     * regola che si reggeva sull'equivalenza *«niente codice ⇒ non è un primo
+     * accesso»*. Da F3 quell'equivalenza **è falsa**: senza codice si può nascere.
+     *
+     * ⚠️ Senza il controllo in `SocialAuthController::pretendiIConsensi()`,
+     * tutte le iscrizioni con Google senza codice — che nella Parte B saranno la
+     * maggioranza — avrebbero saltato la dichiarazione di maggiore età. Nessun
+     * errore, nessun test rosso: solo una casella che smette di essere chiesta.
+     */
+    #[Test]
+    public function senza_codice_i_consensi_restano_obbligatori(): void
     {
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Google,
@@ -158,10 +199,35 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi()
+        $this->accedi(['age_confirmed' => false])
             ->assertStatus(422)
-            ->assertJsonPath('code', 'join_code_required')
-            ->assertJsonValidationErrors('join_code');
+            ->assertJsonPath('code', 'consents_required');
+
+        $this->assertSame(0, SocialIdentity::count());
+        $this->assertSame(0, User::withoutGlobalScopes()->whereNotNull('tenant_id')
+            ->whereHas('tenant', fn ($q) => $q->personali())->count());
+    }
+
+    /**
+     * ⚠️ Senza un'email **verificata** non si crea un account personale.
+     *
+     * Nel ramo con la palestra un indirizzo segnaposto è tollerabile: c'è una
+     * palestra che conosce quella persona e un amministratore che può
+     * sistemare. Qui non c'è nessuno — resterebbe un account senza un indirizzo
+     * vero, quindi senza recupero della password e senza modo di dimostrare che
+     * è suo.
+     */
+    #[Test]
+    public function senza_codice_serve_un_email_verificata(): void
+    {
+        $this->verificaRestituisce(new VerifiedSocialUser(
+            provider: SocialProvider::Google,
+            providerUserId: 'google-sub-1',
+            email: 'nuovo@esempio.it',
+            emailVerified: false,
+        ));
+
+        $this->accedi()->assertStatus(422);
 
         $this->assertSame(0, SocialIdentity::count());
     }

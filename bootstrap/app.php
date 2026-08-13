@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Middleware\EnsureTenantActive;
+use App\Http\Middleware\RequireAiConsent;
+use App\Http\Middleware\RequirePlanWithAi;
+use App\Http\Middleware\ResolveTenant;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -24,13 +28,19 @@ return Application::configure(basePath: dirname(__DIR__))
         // contesto che `tenant` imposta. Invertirli non darebbe errore: darebbe
         // silenziosamente nessun filtro.
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\ResolveTenant::class,
-            'tenant.active' => \App\Http\Middleware\EnsureTenantActive::class,
+            'tenant' => ResolveTenant::class,
+            'tenant.active' => EnsureTenantActive::class,
 
             // 🚨 S9.1 — senza consenso esplicito niente esce verso Anthropic.
             // Va **dopo** `auth:sanctum`: ha bisogno dell'utente per sapere
             // cosa ha acconsentito.
-            'ai.consent' => \App\Http\Middleware\RequireAiConsent::class,
+            'ai.consent' => RequireAiConsent::class,
+
+            // 🚨 F4.2 (D2) — «hai diritto all'AI?» è una domanda diversa da
+            // «quanti token ti restano», e va risolta **prima**. Nella catena
+            // della quota `0` significa *illimitato*: non esiste un numero che
+            // voglia dire «niente AI», quindi serve un cancello a parte.
+            'ai.plan' => RequirePlanWithAi::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

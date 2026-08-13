@@ -6,6 +6,8 @@ namespace Tests\Concerns;
 
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Models\Plan;
+use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -50,6 +52,50 @@ trait CreaAmbiente
                 ]);
             }
         });
+
+        /*
+         * 🚨 **Una palestra creata qui è una palestra che PAGA** — F4.
+         *
+         * Da F4 l'AI passa da `RequirePlanWithAi`, che la nega a chi non ha un
+         * abbonamento con `ai_enabled`. Una palestra di prova senza abbonamento
+         * non è «una palestra normale»: è una palestra **morosa**, e provare
+         * l'AI contro di lei vorrebbe dire provarla nell'unico stato in cui è
+         * giusto che non funzioni.
+         *
+         * ⚠️ Il piano si cerca **se esiste**: molti test non seminano il
+         * listino, e pretenderlo qui li farebbe fallire tutti con un errore che
+         * non c'entra niente con quello che stanno verificando.
+         *
+         * 💡 Un test che vuole provare il caso «senza piano» toglie
+         * l'abbonamento — `PlanSubscription::withoutGlobalScopes()->delete()` —
+         * ed è la strada esplicita: chi la legge capisce che sta costruendo una
+         * palestra in difetto, invece di ottenerla per omissione.
+         */
+        $gym = Plan::query()->where('code', Plan::GYM)->first();
+
+        if ($gym !== null) {
+            PlanSubscription::withoutGlobalScopes()->create([
+                'tenant_id' => $tenant->id,
+                'plan_id' => $gym->id,
+
+                /*
+                 * 🚨 **Cinque anni fa, e non «da ieri».**
+                 *
+                 * Con `subDay()` questa riga rompeva `AiApiTest`: quel test
+                 * torna indietro a `2026-08-12 09:00` con `Carbon::setTestNow()`
+                 * per provare che il consiglio del giorno non si rigenera, e
+                 * un abbonamento cominciato «ieri» rispetto all'ora **vera**
+                 * risultava non ancora iniziato rispetto all'ora **finta**.
+                 * Effetto: `403 plan_without_ai` in un test che parla d'altro.
+                 *
+                 * ⚠️ Non è una toppa: è anche più realistico. Una palestra di
+                 * prova rappresenta un cliente di vecchia data, non uno che ha
+                 * firmato ieri — e una data lontana rende questo helper immune
+                 * a qualunque viaggio nel tempo di qualunque test futuro.
+                 */
+                'starts_at' => now()->subYears(5),
+            ]);
+        }
 
         return $tenant;
     }

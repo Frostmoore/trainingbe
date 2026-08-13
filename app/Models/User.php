@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\TenantScope;
 use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
@@ -363,11 +364,39 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasOne(Profile::class);
     }
 
-    /** Gli iscritti seguiti da questo trainer. */
+    /**
+     * Gli iscritti seguiti da questo trainer.
+     *
+     * ── 🚨 Perché toglie il `TenantScope` — F6 della Parte B ────────────────
+     *
+     * Dentro una palestra trainer e iscritto stanno nello **stesso** tenant, e
+     * lo scope non dava fastidio. Con i trainer indipendenti non è più vero: il
+     * trainer ha il **suo** tenant personale e ogni suo utente ha il **proprio**
+     * (F1). Lo scope confrontava `users.tenant_id` con il tenant del contesto —
+     * cioè quello del trainer — e la relazione tornava **vuota**.
+     *
+     * ⚠️ Il difetto si vedeva così: un trainer indipendente invitava una
+     * persona, la persona si iscriveva davvero, il legame veniva scritto, e
+     * «i miei utenti» restava **vuoto**. Nessun errore da nessuna parte.
+     *
+     * ── 💡 Perché toglierlo non allarga niente ─────────────────────────────
+     *
+     * 🚨 **L'autorizzazione qui non è il contesto: è la riga di legame.**
+     * `trainer_member` esiste solo perché qualcuno l'ha creata passando dai
+     * flussi di assegnazione, che sono scopati; e `wherePivot('tenant_id')`
+     * rimette lo stesso vincolo in modo **esplicito** invece che ambientale.
+     *
+     * ⚠️ Per una palestra il risultato è identico a prima — il pivot ha il
+     * `tenant_id` della palestra, che è anche quello dei suoi utenti. Cambia
+     * solo il **perché** la riga è visibile: non più «siamo nello stesso
+     * tenant», ma «esiste un legame che ti appartiene».
+     */
     public function assignedMembers(): BelongsToMany
     {
         return $this->belongsToMany(self::class, 'trainer_member', 'trainer_id', 'member_id')
-            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by'])
+            ->withoutGlobalScopes([TenantScope::class])
+            ->wherePivot('tenant_id', $this->tenant_id)
+            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il'])
             ->withTimestamps();
     }
 
@@ -393,11 +422,24 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasMany(NutritionPlan::class, 'member_id');
     }
 
-    /** I trainer che seguono questo iscritto. */
+    /**
+     * I trainer che seguono questo iscritto.
+     *
+     * 🚨 **Qui NON si filtra sul `tenant_id` del pivot**, al contrario di
+     * `assignedMembers()`, e la differenza è la stessa asimmetria di F6.1: il
+     * legame appartiene al **trainer**, quindi il pivot porta il tenant *suo*.
+     * Confrontarlo con quello di chi guarda — l'utente — non troverebbe mai
+     * niente, ed è esattamente il caso del trainer indipendente.
+     *
+     * ⚠️ La chiave resta stretta: `member_id = io`. Una riga con il mio id ci
+     * può essere solo se qualcuno mi ha assegnato a un trainer, e quelle strade
+     * sono tutte scopate.
+     */
     public function assignedTrainers(): BelongsToMany
     {
         return $this->belongsToMany(self::class, 'trainer_member', 'member_id', 'trainer_id')
-            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by'])
+            ->withoutGlobalScopes([TenantScope::class])
+            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il'])
             ->withTimestamps();
     }
 

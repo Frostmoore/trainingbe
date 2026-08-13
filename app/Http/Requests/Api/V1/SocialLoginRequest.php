@@ -60,6 +60,24 @@ class SocialLoginRequest extends FormRequest
              * 💡 **Questa e' la porta che si dimentica**: chi entra con Google
              * non passa da `RegisterRequest`. Metterlo solo sul modulo di
              * registrazione lascerebbe scoperta meta' delle iscrizioni.
+             *
+             * ── 🚨 F3 ha rotto il presupposto di questa regola ──────────────
+             *
+             * `exclude_without:join_code` si reggeva su un'equivalenza che da
+             * F3 **non vale piu'**: *«niente codice ⇒ non e' un primo accesso»*.
+             * Da F3 il codice mancante significa anche **«primo accesso senza
+             * palestra»**, cioe' l'iscrizione di un utente gratuito.
+             *
+             * ⚠️ Lasciata com'era, questa riga avrebbe fatto **saltare lo
+             * sbarramento 18+ a tutte le iscrizioni con Google senza codice** —
+             * che nella Parte B sono la maggioranza. Nessun errore, nessun test
+             * rosso: solo una casella che smette di essere chiesta.
+             *
+             * 💡 La regola qui resta **permissiva di proposito**, perche' questo
+             * modulo non puo' sapere se l'identita' e' gia' nota: lo si scopre
+             * solo dopo aver verificato il token. Il controllo vero e' quindi in
+             * `SocialAuthController::pretendiIConsensi()`, chiamato **all'inizio
+             * di ogni primo accesso**, con la palestra o senza.
              */
             'age_confirmed' => ['exclude_without:join_code', 'required', 'accepted'],
             'terms_accepted' => ['exclude_without:join_code', 'required', 'accepted'],

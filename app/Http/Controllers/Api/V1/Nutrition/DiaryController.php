@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Nutrition;
 
+use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
+use App\Models\NutritionPlanItem;
 use App\Models\User;
 use App\Services\Nutrition\DiaryService;
 use App\Services\Nutrition\FoodUnit;
@@ -16,6 +18,7 @@ use App\Support\Tempo\GiornoLocale;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -291,6 +294,148 @@ class DiaryController extends Controller
         ]]);
     }
 
+    /**
+     * «Ho mangiato quello che c'era scritto» — F8.2, **in un tocco**.
+     *
+     * ── 🚨 Perché un endpoint apposta, e non `POST /food-entries` in ciclo ──
+     *
+     * Perché il requisito è letteralmente *«in un tocco»*, e con N richieste
+     * separate non lo è: cinque `POST` possono fallire al terzo e lasciare mezzo
+     * pasto in diario. ⚠️ È lo stesso ragionamento — e lo stesso errore già
+     * evitato — di `AiController::confirm()` in A4.8.
+     *
+     * 💡 **Se costa quanto scriverlo a mano, il piano non lo usa nessuno.** È il
+     * motivo per cui questa funzione esiste: un piano alimentare che richiede di
+     * ridigitare sei alimenti a ogni pasto viene abbandonato in una settimana, e
+     * con lui il lavoro del trainer che l'ha scritto.
+     *
+     * ── Le alternative — F8.3 ─────────────────────────────────────────────
+     *
+     * `sostituzioni` è una mappa `id della voce → indice dell'alternativa`.
+     * ⚠️ **Le alternative sono ciò che rende un piano praticabile**: «120 g di
+     * pollo *oppure* 150 g di merluzzo». Vanno scelte **al momento**, non
+     * sepolte in un dettaglio — quindi arrivano nella stessa richiesta, non con
+     * una modifica successiva.
+     *
+     * ── ⚠️ Cosa NON fa, e va detto ────────────────────────────────────────
+     *
+     * Non controlla che il pasto sia «di oggi» né che non sia già stato
+     * registrato: **si può registrare due volte**. È deliberato — capita di
+     * mangiare due colazioni, e un server che lo impedisce costringe a
+     * combattere con l'app invece che con la fame. 💡 L'app mostra il pasto come
+     * già registrato guardando il diario, ed è lì che va risolto.
+     */
+    public function eatMeal(Request $request, int $meal): JsonResponse
+    {
+        $piano = NutritionPlan::activeFor($request->user());
+
+        if ($piano === null) {
+            return response()->json(['message' => __('Non hai un piano attivo.')], 404);
+        }
+
+        $pasto = $piano->meals()->with('items')->whereKey($meal)->first();
+
+        if ($pasto === null) {
+            return response()->json(['message' => __('Pasto non trovato.')], 404);
+        }
+
+        $dati = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'sostituzioni' => ['nullable', 'array'],
+            'sostituzioni.*' => ['integer', 'min:0'],
+        ]);
+
+        $giorno = $this->giorno($request);
+        $sostituzioni = $dati['sostituzioni'] ?? [];
+
+        $voci = DB::transaction(function () use ($pasto, $giorno, $sostituzioni, $request): array {
+            $create = [];
+
+            foreach ($pasto->items as $voce) {
+                $scelta = $this->vocePrescelta($voce, $sostituzioni[$voce->id] ?? null);
+
+                $create[] = FoodEntry::create([
+                    'tenant_id' => $request->user()->tenant_id,
+                    'user_id' => $request->user()->getKey(),
+
+                    /*
+                     * ⚠️ **L'ora è quella del pasto nel piano, non `now()`.**
+                     * `GiornoLocale::inizio()` è la mezzanotte **locale** di
+                     * quel giorno (A3); sommandoci l'ora del pasto la voce
+                     * finisce nella fascia giusta anche se la si registra la
+                     * sera. Registrare la colazione alle 22 con `now()` la
+                     * metterebbe fra le cene.
+                     */
+                    'eaten_at' => $this->oraDelPasto($giorno, $pasto->meal, $request->user()),
+                    'meal' => $pasto->meal,
+                    'description' => $scelta['description'],
+                    'qty' => $scelta['qty'],
+                    'unit' => $scelta['unit'],
+                    'grams' => $scelta['grams'],
+                    'kcal' => $scelta['kcal'],
+                    'protein' => $scelta['protein'],
+                    'carbs' => $scelta['carbs'],
+                    'fat' => $scelta['fat'],
+
+                    /*
+                     * 🚨 La provenienza si conserva, come per le stime AI: il
+                     * giorno in cui si vorrà sapere «quanto seguono davvero i
+                     * piani» la risposta deve essere una query, non una stima.
+                     */
+                    'source' => FoodSource::Plan,
+                    'nutrition_plan_id' => $pasto->nutrition_plan_id,
+                ]);
+            }
+
+            return $create;
+        });
+
+        return response()->json([
+            'data' => ['create' => count($voci)],
+            'message' => __('Pasto registrato.'),
+        ], 201);
+    }
+
+    /**
+     * La voce così com'è, oppure l'alternativa scelta — F8.3.
+     *
+     * ⚠️ **Un indice fuori intervallo non è un errore**: si registra la voce
+     * principale. Un 422 in mezzo a un pasto costringerebbe a ricominciare per
+     * colpa di un'alternativa che magari il trainer ha appena tolto dal piano.
+     *
+     * @return array<string, mixed>
+     */
+    private function vocePrescelta(NutritionPlanItem $voce, ?int $indice): array
+    {
+        $principale = [
+            'description' => $voce->description,
+            'qty' => $voce->qty,
+            'unit' => $voce->unit,
+            'grams' => $voce->grams,
+            'kcal' => $voce->kcal,
+            'protein' => $voce->protein,
+            'carbs' => $voce->carbs,
+            'fat' => $voce->fat,
+        ];
+
+        if ($indice === null) {
+            return $principale;
+        }
+
+        $alternative = is_array($voce->alternatives) ? array_values($voce->alternatives) : [];
+
+        if (! isset($alternative[$indice]) || ! is_array($alternative[$indice])) {
+            return $principale;
+        }
+
+        $scelta = $alternative[$indice];
+
+        // 💡 Si parte dalla principale e si sovrascrive **solo** ciò che
+        // l'alternativa dichiara: un'alternativa che indica il nome e i grammi
+        // ma non i macro non deve azzerarli.
+        return array_merge($principale, array_intersect_key($scelta, $principale));
+    }
+
     // ───────────────────────── interni ─────────────────────────
 
     /**
@@ -330,6 +475,36 @@ class DiaryController extends Controller
      * riga in cui la voce compare, e sembra una scelta discutibile del prodotto
      * invece che un errore.
      */
+    /**
+     * A che ora si colloca un pasto del piano, nel giorno scelto — F8.2.
+     *
+     * 🚨 **Non `now()`.** Registrare la colazione alle 22 con l'ora corrente la
+     * farebbe finire fra le cene, e `MealType::fromProfile()` — che deduce il
+     * pasto dall'ora — la classificherebbe di conseguenza in ogni schermata che
+     * ricalcola.
+     *
+     * 💡 L'ora si prende dagli **orari dei pasti di quella persona**, che sono
+     * già il modo in cui il sistema sa che «colazione» per lei è alle 7 e non
+     * alle 9. Quando non li ha impostati si ricade su un'ora di mezzo giornata,
+     * che non sposta niente in nessuna direzione.
+     */
+    private function oraDelPasto(GiornoLocale $giorno, MealType $pasto, User $utente): Carbon
+    {
+        $orari = $utente->profile?->meal_hours ?? [];
+        $ora = $orari[$pasto->value] ?? null;
+
+        $inizio = $giorno->inizio()->copy()->setTimezone($utente->fusoOrario())->startOfDay();
+
+        if (is_string($ora) && preg_match('/^(\d{1,2}):(\d{2})$/', $ora, $m) === 1) {
+            return $inizio->addHours((int) $m[1])->addMinutes((int) $m[2]);
+        }
+
+        // ⚠️ Mezzogiorno e non mezzanotte: la mezzanotte del giorno **locale**,
+        // convertita in UTC, può cadere nel giorno prima — ed è la stessa
+        // trappola del fuso già pagata in A3.
+        return $inizio->addHours(12);
+    }
+
     private function pasto(?string $valore, ?Carbon $quando, User $utente): MealType
     {
         $tipo = $valore !== null ? MealType::tryFrom($valore) : null;

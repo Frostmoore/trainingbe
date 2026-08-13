@@ -1,12 +1,32 @@
 <?php
 
+use App\Http\Controllers\SitoController;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Support\Impersonation\Impersonator;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+/*
+| Il sito pubblico — F9.
+|
+| 🚨 Qui c'era ancora `view('welcome')`, la pagina di benvenuto di Laravel mai
+| toccata: l'indirizzo principale del prodotto mostrava il logo del framework.
+|
+| ⚠️ **Il listino si legge dal database**, non è scritto nel template: un prezzo
+| in una vista è un prezzo che un giorno dirà una cosa diversa da quella che il
+| sistema fattura.
+*/
+Route::get('/', [SitoController::class, 'home'])->name('sito.home');
+
+/*
+| L'atterraggio di un invito personale — F6.2.
+|
+| 🚨 **È un `GET` e NON riscatta niente.** Il riscatto ha bisogno di un modulo
+| (nome, email, password); e un `GET` che consumasse l'invito lo brucerebbe al
+| primo servizio di messaggistica che apre il link per fare l'anteprima.
+*/
+Route::get('/invito/{token}', [SitoController::class, 'invito'])
+    ->where('token', '[A-Za-z0-9]{32}')
+    ->name('sito.invito');
 
 /*
 | Un solo indirizzo di accesso.
