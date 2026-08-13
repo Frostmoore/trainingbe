@@ -25,7 +25,7 @@ class NutritionPlanItem extends Model
 
     protected $fillable = [
         'nutrition_plan_meal_id', 'alternativa_di_id', 'position', 'description',
-        'qty', 'unit', 'grams', 'kcal', 'protein', 'carbs', 'fat', 'alternatives',
+        'qty', 'unit', 'grams', 'kcal', 'protein', 'carbs', 'fat',
         'origine_valori',
     ];
 
@@ -41,24 +41,19 @@ class NutritionPlanItem extends Model
             'fat' => 'float',
 
             /*
-             * 🚨 **Il cast mancava, e senza di lui le alternative non erano
-             * usabili da nessuno** — trovato scrivendo F8.3, 13/08/2026.
+             * ⚠️ **La colonna `alternatives` non esiste più** — G4.5 l'ha
+             * convertita in righe, e la migrazione `2026_08_14_150000` l'ha
+             * tolta.
              *
-             * La colonna è `text` e contiene JSON, ma senza cast Eloquent la
-             * restituiva **come stringa**. ⚠️ Il difetto era silenzioso in tutte
-             * e due le direzioni:
+             * 🚨 Il cast era stato aggiunto il 13/08/2026, poche ore prima,
+             * perché mancava del tutto e senza di lui le alternative uscivano
+             * dall'API **come stringa**. È durato mezza giornata: la vera
+             * risposta non era un cast, era che un'alternativa senza macro
+             * proprie non è usabile — e quindi deve essere una riga.
              *
-             * - in **lettura**, `GET /nutrition-plan` pubblicava una stringa
-             *   dove l'app si aspettava un elenco: nessun errore lato server,
-             *   solo alternative che non comparivano mai;
-             * - in **scrittura**, assegnare un array faceva fallire l'INSERT con
-             *   `Array to string conversion`.
-             *
-             * 💡 `array` e non `json`: sono lo stesso cast in Laravel, ma
-             * `array` dice che ci si aspetta un elenco — ed è un elenco, non un
-             * oggetto libero.
+             * 💡 Le alternative si leggono ora da `alternative()`, il trait
+             * `PuoAvereAlternative`.
              */
-            'alternatives' => 'array',
         ];
     }
 

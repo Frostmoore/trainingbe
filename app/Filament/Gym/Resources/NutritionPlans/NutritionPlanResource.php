@@ -39,11 +39,30 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * L'editor dei piani alimentari — B5.4.
+ * L'editor dei piani alimentari — B5.4, esteso in G6.2.
  *
- * Tre livelli annidati (piano → pasti → alimenti) e non un campo libero, perche'
- * il piano deve essere **calcolabile**: senza struttura non si puo' dire quanto
- * l'iscritto vi abbia aderito, che e' la domanda per cui la palestra paga.
+ * **Quattro** livelli annidati (piano → giorni → pasti → alimenti) e non un
+ * campo libero, perche' il piano deve essere **calcolabile**.
+ *
+ * ── 🚨 La motivazione che era scritta qui, e non vale piu' ────────────────
+ *
+ * Diceva: *«senza struttura non si puo' dire quanto l'iscritto vi abbia aderito,
+ * che e' la domanda per cui la palestra paga»*.
+ *
+ * ⚠️ **Da D4 quella domanda il server non se la pone piu'.** I piani si
+ * consegnano via chat cifrata e restano anonimi: `member_id` non viene
+ * valorizzato, quindi non c'e' nessun «l'iscritto» di cui misurare l'aderenza.
+ * Il calcolo si fa **sul telefono**, dove ci sono sia il piano sia il diario, e
+ * l'allievo decide se mostrarlo.
+ *
+ * 💡 **La struttura serve ancora, per due ragioni diverse e piu' forti**: perche'
+ * i totali si calcolino a ogni livello (D14), e perche' un alimento — o
+ * un'alternativa — possa essere **importato nel diario con un tocco**. Un campo
+ * libero non si importa.
+ *
+ * 🚨 E' la forma di errore che questo progetto incontra di continuo: una
+ * motivazione giusta che resta scritta mentre il presupposto e' gia' cambiato.
+ * Qui e' stata corretta il 13/08/2026, lo stesso giorno in cui D4 l'ha smentita.
  */
 class NutritionPlanResource extends Resource
 {
@@ -102,6 +121,49 @@ class NutritionPlanResource extends Resource
                         ->searchable()
                         ->placeholder('Nessuno — e\' un modello riutilizzabile'),
 
+                    /*
+                     * D3 — il promemoria privato di chi scrive il piano.
+                     *
+                     * 🚨 **Lo vede solo chi l'ha scritto** (R4), e **non entra
+                     * mai nella busta cifrata**: e' l'etichetta del trainer,
+                     * mandarla vorrebbe dire mostrare all'allievo come lo si
+                     * chiama negli appunti.
+                     *
+                     * ⚠️ Il suggerimento alle iniziali non e' cortesia: il
+                     * campo sta **in chiaro sul server**, e da un piano si
+                     * capisce molto di chi lo segue. Scriverci il nome per
+                     * esteso rimette sul server esattamente il legame che
+                     * l'anonimato dei piani serve a togliere.
+                     */
+                    /*
+                     * 🚨 **`visible()` non basta, e il test l\'ha dimostrato.**
+                     *
+                     * Livewire serializza lo **stato del modulo** dentro la
+                     * pagina: un campo nascosto ma **idratato** manda il suo
+                     * valore al browser lo stesso, dentro lo snapshot. Il primo
+                     * tentativo usava solo `visible()`, e il valore compariva
+                     * nell\'HTML di un altro trainer.
+                     *
+                     * 💡 `formatStateUsing()` interviene **sull\'idratazione**:
+                     * per chi non e\' l\'autore lo stato diventa `null`, quindi
+                     * non c\'e\' niente da serializzare. `visible()` resta, ma per
+                     * non mostrare un campo vuoto — non e\' piu\' lui la difesa.
+                     *
+                     * ⚠️ La regola generale: nascondere non e\' non mandare.
+                     */
+                    TextInput::make('rif_allievo')
+                        ->label('Rif. Allievo')
+                        ->maxLength(120)
+                        ->placeholder('M.R. spalla dx')
+                        ->helperText(
+                            'Un tuo promemoria, per ritrovare il piano. '
+                            .'Meglio le iniziali: lo vedi solo tu, ma resta scritto sul server.'
+                        )
+                        ->formatStateUsing(fn (?string $state, ?NutritionPlan $record): ?string => $record !== null
+                            && $record->created_by !== auth()->id() ? null : $state)
+                        ->visible(fn (?NutritionPlan $record): bool => $record === null
+                            || $record->created_by === auth()->id()),
+
                     Select::make('status')
                         ->label('Stato')
                         ->options(PlanStatus::options())
@@ -141,63 +203,191 @@ class NutritionPlanResource extends Resource
                     TextInput::make('target_fat_g')->label('Grassi (g)')->numeric()->minValue(0),
                 ]),
 
-            Section::make('Pasti')
+            Section::make('Giorni')
+                ->description(
+                    'Un piano puo\' avere piu\' giorni, e ogni giorno puo\' avere un\'alternativa. '
+                    .'Un piano a un solo giorno si scrive lasciando il nome vuoto.'
+                )
                 ->schema([
-                    Repeater::make('meals')
+                    Repeater::make('days')
                         ->label('')
                         ->relationship()
                         ->orderColumn('position')
                         ->reorderable()
                         ->collapsible()
-                        ->addActionLabel('Aggiungi pasto')
-                        ->itemLabel(fn (array $state): ?string => isset($state['meal'])
-                            ? (MealType::tryFrom($state['meal'])?->label() ?? 'Pasto')
-                            : null)
-                        ->defaultItems(0)
+                        ->addActionLabel('Aggiungi giorno')
+                        ->itemLabel(fn (array $state): ?string => $state['name'] ?? 'Giorno')
+                        ->defaultItems(1)
                         ->schema([
-                            Select::make('meal')
-                                ->label('Pasto')
-                                ->options(MealType::options())
-                                ->required()
-                                ->native(false),
+                            TextInput::make('name')
+                                ->label('Nome del giorno')
+                                ->maxLength(120)
+                                ->placeholder('Giorno A - lasciare vuoto se il piano ha un giorno solo')
+                                ->columnSpanFull(),
 
-                            TextInput::make('title')->label('Titolo')->maxLength(160),
+                            ...self::pastiDelGiorno(),
 
-                            Repeater::make('items')
-                                ->label('Alimenti')
+                            /*
+                             * D2 - le alternative di giornata.
+                             *
+                             * 🚨 **Un livello solo**: dentro un giorno alternativo
+                             * non ci sono altre alternative. Se ci fossero, «quale
+                             * piano sto seguendo» smetterebbe di avere una risposta
+                             * unica - e il modulo diventerebbe un albero infinito.
+                             */
+                            Repeater::make('alternative')
+                                ->label('Giorni alternativi')
                                 ->relationship()
                                 ->orderColumn('position')
-                                ->reorderable()
-                                ->addActionLabel('Aggiungi alimento')
+                                ->collapsible()
+                                ->collapsed()
+                                ->addActionLabel('Aggiungi un giorno alternativo')
+                                ->maxItems(3)
                                 ->defaultItems(0)
-                                ->columns(6)
+                                ->itemLabel(fn (array $state): ?string => $state['name'] ?? 'Alternativa')
+                                ->helperText('Al massimo tre. L\'allievo ne segue uno al posto di questo.')
                                 ->schema([
-                                    TextInput::make('description')
-                                        ->label('Alimento')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->columnSpan(3),
+                                    TextInput::make('name')->label('Nome')->maxLength(120)->columnSpanFull(),
+                                    ...self::pastiDelGiorno(conAlternative: false),
+                                ])
+                                ->columnSpanFull(),
 
-                                    TextInput::make('qty')->label('Quantita')->numeric()->minValue(0),
-
-                                    Select::make('unit')
-                                        ->label('Unita')
-                                        ->options(FoodUnit::options())
-                                        ->native(false),
-
-                                    TextInput::make('kcal')->label('kcal')->numeric()->minValue(0),
-
-                                    Textarea::make('alternatives')
-                                        ->label('Alternative ammesse')
-                                        ->rows(2)
-                                        ->columnSpanFull()
-                                        ->helperText('«oppure 150 g di merluzzo». Senza questo campo finirebbe nelle note, dove nessun calcolo lo legge.'),
-                                ]),
-
-                            Textarea::make('notes')->label('Note del pasto')->rows(2)->columnSpanFull(),
+                            Textarea::make('notes')->label('Note del giorno')->rows(2)->columnSpanFull(),
                         ]),
                 ]),
+
         ]);
+    }
+
+    /**
+     * I pasti di un giorno - G6.2.
+     *
+     * 💡 Scritti una volta e riusati per i giorni veri **e** per quelli
+     * alternativi: un pasto e\' un pasto. Due copie divergerebbero, e la prima a
+     * divergere sarebbe quella dei giorni alternativi, cioe\' quella che nessuno
+     * prova.
+     *
+     * @param  bool  $conAlternative  se generare anche i pasti alternativi
+     *                                (⚠️ `false` dentro un giorno alternativo:
+     *                                le alternative si fermano a un livello, D2)
+     * @return list<mixed>
+     */
+    private static function pastiDelGiorno(bool $conAlternative = true): array
+    {
+        return [
+            Repeater::make('meals')
+                ->label('Pasti')
+                ->relationship()
+                ->orderColumn('position')
+                ->reorderable()
+                ->collapsible()
+                ->addActionLabel('Aggiungi pasto')
+                ->itemLabel(fn (array $state): ?string => isset($state['meal'])
+                    ? (MealType::tryFrom($state['meal'])?->label() ?? 'Pasto')
+                    : null)
+                ->defaultItems(0)
+                ->schema(array_values(array_filter([
+                    Select::make('meal')
+                        ->label('Pasto')
+                        ->options(MealType::options())
+                        ->required()
+                        ->native(false),
+
+                    TextInput::make('title')->label('Titolo')->maxLength(160),
+
+                    self::alimenti(),
+
+                    $conAlternative
+                        ? Repeater::make('alternative')
+                            ->label('Pasti alternativi')
+                            ->relationship()
+                            ->orderColumn('position')
+                            ->collapsible()
+                            ->collapsed()
+                            ->addActionLabel('Aggiungi un pasto alternativo')
+                            ->maxItems(3)
+                            ->defaultItems(0)
+                            ->helperText('Al massimo tre. Sostituiscono questo pasto per intero.')
+                            ->schema([
+                                Select::make('meal')
+                                    ->label('Pasto')
+                                    ->options(MealType::options())
+                                    ->required()
+                                    ->native(false),
+                                TextInput::make('title')->label('Titolo')->maxLength(160),
+                                self::alimenti(conAlternative: false),
+                            ])
+                            ->columnSpanFull()
+                        : null,
+
+                    Textarea::make('notes')->label('Note del pasto')->rows(2)->columnSpanFull(),
+                ])))
+                ->columnSpanFull(),
+        ];
+    }
+
+    /**
+     * Gli alimenti di un pasto, con le loro alternative - G6.2 (D2).
+     *
+     * 🚨 **Il campo `alternatives` come `Textarea` non esiste piu\'.** Era una
+     * colonna `text` con dentro JSON, e un\'alternativa scritta cosi\' **non ha
+     * macro proprie**: sceglierla non diceva al diario cosa scrivere. Da G4 e\'
+     * una riga con gli stessi campi dell\'alimento che sostituisce.
+     *
+     * ⚠️ Questo modulo era **rotto** fino a G6: puntava a una colonna tolta
+     * dalla migrazione `2026_08_14_150000`.
+     */
+    private static function alimenti(bool $conAlternative = true): Repeater
+    {
+        $campi = [
+            TextInput::make('description')
+                ->label('Alimento')
+                ->required()
+                ->maxLength(255)
+                ->columnSpan(3),
+
+            TextInput::make('qty')->label('Quantita')->numeric()->minValue(0),
+
+            Select::make('unit')
+                ->label('Unita')
+                ->options(FoodUnit::options())
+                ->native(false),
+
+            TextInput::make('kcal')->label('kcal')->numeric()->minValue(0),
+        ];
+
+        if ($conAlternative) {
+            $campi[] = Repeater::make('alternative')
+                ->label('Oppure')
+                ->relationship()
+                ->orderColumn('position')
+                ->addActionLabel('Aggiungi un\'alternativa')
+                ->maxItems(3)
+                ->defaultItems(0)
+                ->columns(6)
+                ->columnSpanFull()
+                ->helperText(
+                    'Al massimo tre. 🚨 Vanno messe anche le kcal: senza, '
+                    .'sceglierla non dice al diario dell\'allievo cosa scrivere.'
+                )
+                ->schema([
+                    TextInput::make('description')->label('Alimento')->required()->maxLength(255)->columnSpan(3),
+                    TextInput::make('qty')->label('Quantita')->numeric()->minValue(0),
+                    Select::make('unit')->label('Unita')->options(FoodUnit::options())->native(false),
+                    TextInput::make('kcal')->label('kcal')->numeric()->minValue(0),
+                ]);
+        }
+
+        return Repeater::make('items')
+            ->label('Alimenti')
+            ->relationship()
+            ->orderColumn('position')
+            ->reorderable()
+            ->addActionLabel('Aggiungi alimento')
+            ->defaultItems(0)
+            ->columns(6)
+            ->columnSpanFull()
+            ->schema($campi);
     }
 
     public static function table(Table $table): Table

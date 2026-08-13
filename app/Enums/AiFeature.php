@@ -71,16 +71,30 @@ enum AiFeature: string
     /**
      * Quanto costa questa chiamata a chi ha comprato i gettoni — D16.
      *
-     * 🚨 **Il 6 non e' arrotondato a caso**: `STIMA-COSTI-AI.md` misura
-     * 0,0146 $ per una stima da foto contro 0,0024 $ per una da testo. Se un
-     * giorno cambia il modello, cambia questo numero — ed e' il solo posto in
-     * cui va cambiato.
+     * 🚨 **7, e il numero e' misurato** — `STIMA-COSTI-AI.md` §3.7.
+     *
+     * Un gettone rappresenta **una chiamata ordinaria**, e una chiamata
+     * ordinaria costa 0,00318 $ (media pesata sull'uso reale: 3 stime da testo,
+     * 6 consigli, 0,57 calorie allenamento). Una foto costa 0,0225 $, cioe'
+     * **7,1 volte**.
+     *
+     * ⚠️ **Era 6, e sbagliava due volte**: era tarato sul rapporto con la stima
+     * da testo invece che con la chiamata ordinaria, **e** su costi vecchi di
+     * tre giorni — `FOOD_SYSTEM` era cresciuto del 329% con il classificatore
+     * alimentare e nessuno aveva rimisurato.
+     *
+     * 💡 Si arrotonda **per eccesso**: il margine del documento e' ±15%, e sul
+     * bordo basso ci perdiamo noi. Su un prezzo si sbaglia dal lato che non fa
+     * danno.
+     *
+     * Se cambia il modello o il prompt, cambia questo numero — ed e' il solo
+     * posto in cui va cambiato.
      *
      * ⚠️ **Il listino dice «di cui con foto», il codice conta i multimodali**, e
      * non e' la stessa cosa: `PdfImport` non e' una foto ma passa da `sonnet-5`
      * con un documento allegato, quindi costa come una foto. Contarlo insieme
      * alle stime da testo vorrebbe dire vendere a 1 gettone una chiamata che ne
-     * costa 6.
+     * costa 7.
      *
      * 💡 La differenza fra il nome commerciale e il criterio tecnico e'
      * accettabile perche' va nella direzione giusta: chi compra vede un limite
@@ -89,7 +103,7 @@ enum AiFeature: string
      */
     public function costoInGettoni(): int
     {
-        return $this->isMultimodal() ? 6 : 1;
+        return $this->isMultimodal() ? 7 : 1;
     }
 
     /** @return array<string, string> */

@@ -57,7 +57,7 @@ class Tenant extends Model
         'name', 'slug', 'join_code', 'kind', 'status', 'plan',
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
-        'ai_monthly_tokens_per_member', 'ai_driver', 'settings', 'trial_ends_at',
+        'ai_driver', 'settings', 'trial_ends_at',
         // G2 — la quota in chiamate (D6/D7).
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
         /*
@@ -76,7 +76,6 @@ class Tenant extends Model
             'kind' => TenantKind::class,
             'settings' => 'array',
             'trial_ends_at' => 'datetime',
-            'ai_monthly_tokens_per_member' => 'integer',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
             'ai_credits' => 'integer',
@@ -232,26 +231,26 @@ class Tenant extends Model
     }
 
     /**
-     * ⚠️ **La quota non e' piu' della palestra** — C20.
+     * ⚠️ **La quota non e' piu' della palestra** — C20, e da G2 si conta in
+     * **chiamate**.
      *
-     * Era un pozzo comune: con 2 milioni di token a palestra e un consumo medio
-     * di 551.000 a testa bastava per tre o quattro persone, e la quarta restava
-     * senza AI per il consumo di qualcun altro. Adesso il tetto e' di ciascuno
-     * (`MemberAiQuota`), e la palestra lo governa decidendo quanto dare a ognuno
-     * dei suoi: `ai_monthly_tokens_per_member`.
+     * Era un pozzo comune: bastava per tre o quattro persone, e la quarta
+     * restava senza AI per il consumo di qualcun altro. Adesso il tetto e' di
+     * ciascuno (`MemberAiQuota`), e la palestra lo governa decidendo quanto dare
+     * a ognuno dei suoi: `ai_monthly_calls_per_member`.
      *
      * Il costo del mese resta visibile dal pannello (`aiCostThisMonth()`): e'
      * la palestra a pagare, e vederlo serve — ma non e' piu' cio' che blocca.
      */
-    public function tokensPerMember(): ?int
+    public function chiamatePerMember(): ?int
     {
-        $suo = $this->ai_monthly_tokens_per_member;
+        $suo = $this->ai_monthly_calls_per_member;
 
         if ($suo !== null) {
             return $suo > 0 ? $suo : null;
         }
 
-        $default = (int) config('ai.quota.default_monthly_tokens_per_user');
+        $default = (int) config('ai.quota.default_monthly_calls_per_user');
 
         return $default > 0 ? $default : null;
     }

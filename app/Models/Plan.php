@@ -58,7 +58,7 @@ class Plan extends Model
 
     protected $fillable = [
         'code', 'name', 'kind', 'ai_enabled',
-        'ai_monthly_tokens_per_member', 'max_members', 'price_cents', 'is_public',
+        'max_members', 'price_cents', 'is_public',
         // G1 — D5, D6, D7.
         'max_trainers', 'max_members_per_trainer',
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
@@ -81,7 +81,6 @@ class Plan extends Model
             'kind' => PlanKind::class,
             'ai_enabled' => 'boolean',
             'is_public' => 'boolean',
-            'ai_monthly_tokens_per_member' => 'integer',
             'max_members' => 'integer',
             'price_cents' => 'integer',
             'max_trainers' => 'integer',

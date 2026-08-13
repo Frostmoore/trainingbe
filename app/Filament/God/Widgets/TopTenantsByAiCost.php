@@ -100,14 +100,14 @@ class TopTenantsByAiCost extends TableWidget
                 TextColumn::make('per_iscritto')
                     ->label('Token per iscritto')
                     ->getStateUsing(function (Tenant $r): string {
-                        $tetto = $r->tokensPerMember();
+                        $tetto = $r->chiamatePerMember();
 
                         return $tetto === null
                             ? 'illimitato'
                             : number_format($tetto, 0, ',', '.');
                     })
                     ->badge()
-                    ->color(fn (Tenant $r): string => $r->tokensPerMember() === null ? 'warning' : 'gray')
+                    ->color(fn (Tenant $r): string => $r->chiamatePerMember() === null ? 'warning' : 'gray')
                     ->alignEnd(),
             ])
             ->paginated(false)

@@ -11,10 +11,16 @@ use Illuminate\Database\Seeder;
 /**
  * Il listino — F4.1 della Parte B (D4), esteso a tre livelli in G1 (D5-D8).
  *
- * 🚨 **Il pavimento del prezzo è già misurato**: `STIMA-COSTI-AI.md` dice
- * ≈ 1,15 $/mese per utente attivo che usa l'AI, ≈ 57 $/mese per una palestra da
- * 50 iscritti. Qualunque piano **con** AI deve stare sopra quel numero, e il
- * gratuito **senza** AI ci sta sotto per costruzione.
+ * 🚨 **Il pavimento del prezzo è misurato**: `STIMA-COSTI-AI.md` (rimisurato il
+ * 13/08/2026) dice ≈ **1,58 $/mese** per utente attivo che usa l'AI, ≈ **79 $/mese**
+ * per una palestra da 50 iscritti. Qualunque piano **con** AI deve stare sopra
+ * quel numero, e il gratuito **senza** AI ci sta sotto per costruzione.
+ *
+ * ⚠️ **Quei numeri sono quasi raddoppiati il 13/08**, e non perché sia cambiato
+ * un listino: perché `FOOD_SYSTEM` era cresciuto del **329%** con il
+ * classificatore alimentare (`v7.1.0`) e nessuno aveva rimisurato. Il documento
+ * dei costi non aveva un errore — aveva **smesso di essere aggiornato**, e ha
+ * continuato a rispondere come se sapesse.
  *
  * 💡 È la ragione per cui B2 («il gratuito non ha l'AI») non è solo una scelta
  * commerciale: è ciò che rende il gratuito sostenibile per sempre invece che
@@ -27,7 +33,11 @@ use Illuminate\Database\Seeder;
  * **400 di cui 40 con foto** — sopra il medio, sotto il pesante — e costa nel
  * caso peggiore:
  *
- *     360 × 0,0024 $ + 40 × 0,0146 $ ≈ 1,45 $/mese per persona
+ *     405 × 0,0051 $ + 45 × 0,0225 $ ≈ **3,08 $/mese** per persona
+ *
+ * 🚨 **450 di cui 45 è una decisione del committente del 13/08/2026**, non un
+ * calcolo: il tetto precedente era 400/40. Alza il costo per persona del 13%, e
+ * quindi il pavimento di ogni tier.
  *
  * ⚠️ **I prezzi restano segnaposto**, e vanno decisi dal committente prima di
  * pubblicare il sito (F9). Ciò che **non** è un segnaposto è `ai_enabled`:
@@ -60,9 +70,9 @@ class PlanSeeder extends Seeder
      * compra più allievi, non allievi migliori — ed è più facile da spiegare e
      * da fatturare.
      */
-    private const CHIAMATE = 400;
+    private const CHIAMATE = 450;
 
-    private const CHIAMATE_FOTO = 40;
+    private const CHIAMATE_FOTO = 45;
 
     public function run(): void
     {
@@ -82,7 +92,6 @@ class PlanSeeder extends Seeder
                 'kind' => PlanKind::Person,
                 // 🚨 Il `false` che regge il modello commerciale. Vedi sopra.
                 'ai_enabled' => false,
-                'ai_monthly_tokens_per_member' => null,
                 'ai_monthly_calls_per_member' => null,
                 'ai_monthly_photo_calls_per_member' => null,
                 'price_cents' => 0,
@@ -93,7 +102,6 @@ class PlanSeeder extends Seeder
                 'name' => 'Plus',
                 'kind' => PlanKind::Person,
                 'ai_enabled' => true,
-                'ai_monthly_tokens_per_member' => null,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
                 'price_cents' => 499,
@@ -120,7 +128,7 @@ class PlanSeeder extends Seeder
                 'max_members' => 10,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                // Costo nel caso peggiore: 10 × 1,45 $ ≈ 14,5 $.
+                // Costo nel caso peggiore: 10 × 3,08 $ ≈ 31 $.
                 'price_cents' => 2999,
                 'is_public' => true,
             ],
@@ -132,7 +140,7 @@ class PlanSeeder extends Seeder
                 'max_members' => 30,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                // Costo nel caso peggiore: 30 × 1,45 $ ≈ 43,5 $.
+                // Costo nel caso peggiore: 30 × 3,08 $ ≈ 92 $.
                 'price_cents' => 6999,
                 'is_public' => true,
             ],
@@ -158,19 +166,21 @@ class PlanSeeder extends Seeder
                 'ai_enabled' => true,
                 // ⚠️ NON `max_members`: per una palestra il limite è per trainer.
                 'max_trainers' => 5,
-                'max_members_per_trainer' => 40,
+                'max_members_per_trainer' => 50,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
                 /*
-                 * 5 × 40 = 200 persone. Pavimento misurato: ≈ 87 €/mese di AI
-                 * al 30% di utilizzo pieno.
+                 * 5 × 40 = 200 persone. Pavimento **rimisurato il 13/08**:
+                 * 200 × 2,72 $ × 30% ≈ **163 €/mese** di AI.
                  *
-                 * ⚠️ Il segnaposto era 99,99 € — sopra il pavimento di appena
-                 * il 13%. Alzato a 199,99 € per avere il margine che hanno i
-                 * tier trainer. Vedi la nota di `every_paid_plan_stays_above_
-                 * the_measured_cost`.
+                 * ⚠️ Il segnaposto era 99,99 € (sotto), poi 199,99 € (sopra di
+                 * appena il 22%). 🚨 Il pavimento e' raddoppiato quando i costi
+                 * sono stati rimisurati: `FOOD_SYSTEM` era cresciuto del 329%
+                 * col classificatore alimentare e nessuno aveva rifatto i conti.
+                 *
+                 * 💡 A 349,99 € il margine sull'AI e' ~2×, come i tier trainer.
                  */
-                'price_cents' => 19999,
+                'price_cents' => 34999,
                 'is_public' => true,
             ],
             [
@@ -179,24 +189,32 @@ class PlanSeeder extends Seeder
                 'kind' => PlanKind::Gym,
                 'ai_enabled' => true,
                 'max_trainers' => 15,
-                'max_members_per_trainer' => 40,
+                'max_members_per_trainer' => 50,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
                 /*
-                 * 🚨 **Qui il test ha trovato un prezzo che perdeva soldi.**
+                 * 🚨 **Qui il test ha trovato un prezzo che perdeva soldi. Due
+                 * volte.**
                  *
-                 * 15 × 40 = 600 persone, pavimento ≈ 261 €/mese di AI: il
-                 * segnaposto era **249,99 €**, cioe' **sotto il costo**. Non
-                 * sarebbe stato un errore visibile da nessuna parte — nel
-                 * codice tutto tornava, nei dati pure. Si sarebbe visto solo
-                 * nella fattura del fornitore, mesi dopo, sul cliente piu'
-                 * grande.
+                 * 15 × 40 = **600 persone**. Col pavimento vecchio (1,45 $) il
+                 * segnaposto di 249,99 € stava **sotto il costo**, e il test
+                 * l'ha bocciato. Alzato a 499,99 €. Poi i costi sono stati
+                 * **rimisurati** (2,72 $) e il pavimento e' salito a ≈ 490 €:
+                 * quel 499,99 € tornava sopra di appena il **2%**.
                  *
-                 * ⚠️ Il numero resta un segnaposto commerciale: quello che il
-                 * test difende non e' il prezzo, e' il fatto che stia sopra il
-                 * costo misurato.
+                 * ⚠️ Il test passava. Un margine del 2% su un numero con ±15%
+                 * di incertezza **non e' un margine**: e' un pareggio con la
+                 * virgola dalla parte fortunata.
+                 *
+                 * 💡 999,99 € porta il margine a ~2×, come gli altri tier.
+                 *
+                 * 🚨 **E c'e' una leva alternativa che non e' mia da tirare**:
+                 * 600 persone con 400 chiamate ciascuna sono tante. Abbassare
+                 * `max_members_per_trainer` o il tetto di chiamate ridurrebbe il
+                 * pavimento invece del prezzo — ed e' una decisione commerciale
+                 * del committente, non un ritocco tecnico.
                  */
-                'price_cents' => 49999,
+                'price_cents' => 99999,
                 'is_public' => true,
             ],
             [

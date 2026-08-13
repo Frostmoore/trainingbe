@@ -59,22 +59,27 @@ final class PortafoglioGettoniTest extends TestCase
     // ───────────────────── il costo ─────────────────────
 
     #[Test]
-    public function a_photo_costs_six_times_a_text_estimate(): void
+    public function a_photo_costs_seven_ordinary_calls(): void
     {
         /*
-         * 🚨 Il 6 viene dai costi misurati: 0,0146 $ per una stima da foto
-         * contro 0,0024 $ da testo (`STIMA-COSTI-AI.md`). Se cambia il modello
-         * cambia questo numero, e questo test dice dove.
+         * 🚨 **7, misurato** (`STIMA-COSTI-AI.md` §3.7): una foto costa
+         * 0,0225 $, una chiamata ordinaria 0,00318 $ — media pesata sull'uso
+         * reale. Rapporto 7,1.
+         *
+         * ⚠️ **Era 6, e sbagliava due volte**: tarato sul rapporto con la stima
+         * da testo invece che con la chiamata ordinaria, e su costi vecchi di
+         * tre giorni. Se cambia il modello o il prompt cambia questo numero, e
+         * questo test dice dove.
          */
         $this->assertSame(1, AiFeature::FoodText->costoInGettoni());
         $this->assertSame(1, AiFeature::WorkoutKcal->costoInGettoni());
         $this->assertSame(1, AiFeature::DailyAdvice->costoInGettoni());
         $this->assertSame(1, AiFeature::PlanFood->costoInGettoni());
 
-        $this->assertSame(6, AiFeature::FoodPhoto->costoInGettoni());
+        $this->assertSame(7, AiFeature::FoodPhoto->costoInGettoni());
 
         // ⚠️ E l'import PDF costa come una foto: stesso modello, stesso allegato.
-        $this->assertSame(6, AiFeature::PdfImport->costoInGettoni());
+        $this->assertSame(7, AiFeature::PdfImport->costoInGettoni());
     }
 
     // ───────────────────── l'ordine di consumo ─────────────────────
@@ -273,7 +278,7 @@ final class PortafoglioGettoniTest extends TestCase
 
         $this->expectException(GettoniEsauritiException::class);
 
-        // ⚠️ Una foto costa 6 e il saldo e' 3: non si va sotto zero nemmeno qui.
+        // ⚠️ Una foto costa 7 e il saldo e' 3: non si va sotto zero nemmeno qui.
         $this->portafoglio()->consuma($utente->fresh(), AiFeature::FoodPhoto);
     }
 

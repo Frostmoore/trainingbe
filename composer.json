@@ -9,6 +9,7 @@
         "php": "^8.4",
         "anthropic-ai/sdk": "^0.41",
         "filament/filament": "^5.7",
+        "filament/spatie-laravel-media-library-plugin": "^5.0",
         "laravel/framework": "^13.8",
         "laravel/reverb": "^1.11",
         "laravel/sanctum": "^4.0",

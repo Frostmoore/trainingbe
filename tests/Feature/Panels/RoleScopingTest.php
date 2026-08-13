@@ -348,7 +348,7 @@ class RoleScopingTest extends TestCase
             Livewire::test(GymSettings::class)->get('data'),
         );
 
-        foreach (['status', 'plan', 'ai_monthly_token_cap', 'trial_ends_at'] as $vietato) {
+        foreach (['status', 'plan', 'ai_monthly_call_cap', 'trial_ends_at'] as $vietato) {
             $this->assertStringNotContainsString(
                 $vietato,
                 (string) $componenti,

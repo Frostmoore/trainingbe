@@ -7,6 +7,7 @@ namespace Tests\Feature\Nutrition;
 use App\Enums\AiFeature;
 use App\Enums\UserRole;
 use App\Models\AiUsageLog;
+use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use Database\Seeders\PlanSeeder;
@@ -139,7 +140,7 @@ final class StimaNelPianoTest extends TestCase
     public function without_a_paying_plan_it_is_refused_before_the_call(): void
     {
         // La palestra smette di pagare.
-        \App\Models\PlanSubscription::withoutGlobalScopes()
+        PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $this->palestra->id)->delete();
 
         $this->actingAs($this->trainer->fresh(), 'sanctum')

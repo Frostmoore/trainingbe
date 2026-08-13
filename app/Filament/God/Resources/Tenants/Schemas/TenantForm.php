@@ -116,14 +116,24 @@ class TenantForm
                         ->label('Fine del periodo di prova')
                         ->helperText('Scaduto, il login è negato anche se lo stato è ancora «in prova».'),
 
-                    TextInput::make('ai_monthly_tokens_per_member')
-                        ->label('Token AI al mese, per iscritto')
+                    TextInput::make('ai_monthly_calls_per_member')
+                        ->label('Chiamate AI al mese, per iscritto')
                         ->numeric()
                         ->minValue(0)
                         ->helperText(
                             'Il tetto vale per OGNI iscritto, non per la palestra: '
                             .'il costo massimo del mese è iscritti × questo numero. '
                             .'Vuoto = default di sistema. 0 = nessun limite.'
+                        ),
+
+                    TextInput::make('ai_monthly_photo_calls_per_member')
+                        ->label('...di cui con foto')
+                        ->numeric()
+                        ->minValue(0)
+                        ->helperText(
+                            'È un SOTTO-LIMITE del numero qui sopra, non un budget a parte: '
+                            .'una foto consuma entrambi i contatori. '
+                            .'Costa circa sette volte una chiamata normale.'
                         ),
 
                     Select::make('locale')

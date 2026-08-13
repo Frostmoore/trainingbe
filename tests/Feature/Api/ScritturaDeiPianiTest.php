@@ -10,6 +10,7 @@ use App\Models\NutritionPlan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -275,7 +276,7 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function an_independent_trainer_can_write_them_too(): void
     {
-        $libero = app(\App\Services\Tenancy\CreaTenantPersonale::class)(
+        $libero = app(CreaTenantPersonale::class)(
             'Trainer libero',
             'libero@esempio.test',
             ['password' => self::FAKE_PASSWORD],

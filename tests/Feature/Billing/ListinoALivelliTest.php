@@ -52,8 +52,8 @@ final class ListinoALivelliTest extends TestCase
 
         // 🚨 Il cuore di D5: la palestra limita **per trainer**.
         $this->assertSame(5, $palestra->max_trainers);
-        $this->assertSame(40, $palestra->max_members_per_trainer);
-        $this->assertSame(40, $palestra->tettoAllieviPerTrainer());
+        $this->assertSame(50, $palestra->max_members_per_trainer);
+        $this->assertSame(50, $palestra->tettoAllieviPerTrainer());
 
         /*
          * ⚠️ E **non** tocca `max_members`, che significa un'altra cosa. Se un
@@ -176,8 +176,14 @@ final class ListinoALivelliTest extends TestCase
     public function every_paid_plan_stays_above_the_measured_cost(): void
     {
         /*
-         * 🚨 **Il pavimento del prezzo, come test.** `STIMA-COSTI-AI.md` misura
-         * ≈ 1,45 $/mese per persona al tetto di 400 chiamate di cui 40 con foto.
+         * 🚨 **Il pavimento del prezzo, come test.** `STIMA-COSTI-AI.md` §4 misura
+         * ≈ **3,08 $/mese** per persona al tetto di **450 chiamate di cui 45**
+         * con allegato — il tetto deciso dal committente il 13/08/2026.
+         *
+         * ⚠️ **Era 1,45, ed era vecchio di tre giorni**: il prompt del cibo era
+         * cresciuto del 329% con il classificatore alimentare e nessuno aveva
+         * rimisurato. Il documento non aveva un errore — aveva **smesso di
+         * essere aggiornato**, che e' peggio perche' continua a rispondere.
          * Un piano che sta sotto quel numero perde soldi a ogni cliente, per
          * sempre — ed e' un errore che non si vede nel codice ne' nei dati:
          * si vede solo nella fattura del fornitore, mesi dopo.
@@ -185,7 +191,7 @@ final class ListinoALivelliTest extends TestCase
          * ⚠️ I prezzi sono segnaposto e cambieranno. Questo test non fissa i
          * prezzi: fissa la **regola** che li lega al costo.
          */
-        $costoPerPersonaCent = 145;
+        $costoPerPersonaCent = 308;
 
         foreach (Plan::query()->pubblici()->where('ai_enabled', true)->get() as $piano) {
             $persone = match ($piano->kind) {

@@ -75,17 +75,27 @@ class PianoInUnToccoTest extends TestCase
                 'title' => 'Colazione',
             ]);
 
-            NutritionPlanItem::create([
+            $pollo = NutritionPlanItem::create([
                 'nutrition_plan_meal_id' => $this->colazione->id,
                 'position' => 1,
                 'description' => '120 g di petto di pollo',
                 'qty' => 120, 'unit' => 'g', 'grams' => 120,
                 'kcal' => 198, 'protein' => 37, 'carbs' => 0, 'fat' => 4,
+            ]);
 
-                // ⚠️ Le alternative sono ciò che rende un piano praticabile.
-                'alternatives' => [
-                    ['description' => '150 g di merluzzo', 'grams' => 150, 'kcal' => 123, 'protein' => 27, 'fat' => 1],
-                ],
+            /*
+             * ⚠️ Le alternative sono ciò che rende un piano praticabile.
+             *
+             * 🚨 **Da G4 sono righe, non più JSON** in una colonna: hanno gli
+             * stessi campi dell'alimento che sostituiscono, ed è l'unico modo
+             * perché scegliendone una il diario sappia cosa scrivere.
+             */
+            NutritionPlanItem::create([
+                'nutrition_plan_meal_id' => $this->colazione->id,
+                'alternativa_di_id' => $pollo->getKey(),
+                'position' => 0,
+                'description' => '150 g di merluzzo',
+                'grams' => 150, 'kcal' => 123, 'protein' => 27, 'fat' => 1,
             ]);
 
             NutritionPlanItem::create([

@@ -288,7 +288,24 @@ class DiaryController extends Controller
                     'protein' => $i->protein,
                     'carbs' => $i->carbs,
                     'fat' => $i->fat,
-                    'alternatives' => $i->alternatives,
+                    /*
+                     * G4 — le alternative sono **righe**, non piu' JSON.
+                     *
+                     * 💡 La forma verso l'app **non cambia**: resta una lista di
+                     * oggetti con gli stessi campi. Cambiare anche il contratto
+                     * mentre si cambia lo schema vorrebbe dire rompere l'app
+                     * installata per una ragione che all'app non interessa.
+                     */
+                    'alternatives' => $i->alternative->map(fn ($a): array => [
+                        'description' => $a->description,
+                        'qty' => $a->qty,
+                        'unit' => $a->unit,
+                        'grams' => $a->grams,
+                        'kcal' => $a->kcal,
+                        'protein' => $a->protein,
+                        'carbs' => $a->carbs,
+                        'fat' => $a->fat,
+                    ])->values()->all(),
                 ])->all(),
             ])->all(),
         ]]);
@@ -422,18 +439,40 @@ class DiaryController extends Controller
             return $principale;
         }
 
-        $alternative = is_array($voce->alternatives) ? array_values($voce->alternatives) : [];
+        // G4 — le alternative sono righe della stessa tabella, ordinate per
+        // `position`: l'indice che manda l'app e' la posizione in quella lista.
+        $alternative = $voce->alternative()->orderBy('position')->get()->values();
 
-        if (! isset($alternative[$indice]) || ! is_array($alternative[$indice])) {
+        $scelta = $alternative->get($indice);
+
+        if ($scelta === null) {
+            // ⚠️ Un indice sconosciuto ricade sul principale invece di dare
+            // errore: l'app puo' avere in mano un piano di ieri, e rifiutare un
+            // pasto intero per un'alternativa sparita sarebbe sproporzionato.
             return $principale;
         }
 
-        $scelta = $alternative[$indice];
+        /*
+         * 💡 Si parte dalla principale e si sovrascrive **solo** ciò che
+         * l'alternativa dichiara: un'alternativa che indica il nome e i grammi
+         * ma non i macro non deve azzerarli.
+         *
+         * 🚨 Con le righe questo conta **più** di prima: una colonna non
+         * valorizzata è `null`, e `null` sovrascriverebbe un macro buono con
+         * niente. Si filtrano i `null` prima di sovrascrivere.
+         */
+        $campi = array_filter([
+            'description' => $scelta->description,
+            'qty' => $scelta->qty,
+            'unit' => $scelta->unit,
+            'grams' => $scelta->grams,
+            'kcal' => $scelta->kcal,
+            'protein' => $scelta->protein,
+            'carbs' => $scelta->carbs,
+            'fat' => $scelta->fat,
+        ], static fn ($v): bool => $v !== null);
 
-        // 💡 Si parte dalla principale e si sovrascrive **solo** ciò che
-        // l'alternativa dichiara: un'alternativa che indica il nome e i grammi
-        // ma non i macro non deve azzerarli.
-        return array_merge($principale, array_intersect_key($scelta, $principale));
+        return array_merge($principale, $campi);
     }
 
     // ───────────────────────── interni ─────────────────────────
