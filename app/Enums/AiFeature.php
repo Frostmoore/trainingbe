@@ -26,6 +26,20 @@ enum AiFeature: string
     case DailyAdvice = 'daily_advice';
     case PdfImport = 'pdf_import';
 
+    /**
+     * La stima di un alimento **mentre il trainer compone un piano** — D13.
+     *
+     * 🚨 **Etichetta propria anche se il contatore e' lo stesso** di `FoodText`.
+     * `ai_usage_logs.feature` e' la contabilita': senza un valore suo, «quanto
+     * ci costa far comporre i piani» e «quanto ci costa farli usare» diventano
+     * lo stesso numero — e a quel punto non si puo' piu' dare un prezzo a
+     * nessuno dei due.
+     *
+     * ⚠️ **La paga il trainer**, mai l'allievo: quando l'allievo riceve il
+     * piano, il costo e' gia' stato sostenuto da chi l'ha scritto.
+     */
+    case PlanFood = 'plan_food';
+
     public function label(): string
     {
         return match ($this) {
@@ -34,6 +48,7 @@ enum AiFeature: string
             self::WorkoutKcal => 'Calorie allenamento',
             self::DailyAdvice => 'Consiglio del giorno',
             self::PdfImport => 'Import scheda PDF',
+            self::PlanFood => 'Alimento nel piano del trainer',
         };
     }
 
@@ -42,10 +57,39 @@ enum AiFeature: string
      *
      * Serve a due decisioni pratiche: il limite di dimensione da imporre prima
      * dell'invio, e l'esclusione dei modelli senza visione.
+     *
+     * 🆕 E da G2 a una terza: e' il discriminatore del **sotto-limite** e del
+     * **costo in gettoni** (D7, D16). Non serviva inventare una tabella di pesi:
+     * la distinzione fra «una chiamata di testo» e «una chiamata con un
+     * allegato» era gia' nel dominio, ed e' la stessa che decide il costo.
      */
     public function isMultimodal(): bool
     {
         return $this === self::FoodPhoto || $this === self::PdfImport;
+    }
+
+    /**
+     * Quanto costa questa chiamata a chi ha comprato i gettoni — D16.
+     *
+     * 🚨 **Il 6 non e' arrotondato a caso**: `STIMA-COSTI-AI.md` misura
+     * 0,0146 $ per una stima da foto contro 0,0024 $ per una da testo. Se un
+     * giorno cambia il modello, cambia questo numero — ed e' il solo posto in
+     * cui va cambiato.
+     *
+     * ⚠️ **Il listino dice «di cui con foto», il codice conta i multimodali**, e
+     * non e' la stessa cosa: `PdfImport` non e' una foto ma passa da `sonnet-5`
+     * con un documento allegato, quindi costa come una foto. Contarlo insieme
+     * alle stime da testo vorrebbe dire vendere a 1 gettone una chiamata che ne
+     * costa 6.
+     *
+     * 💡 La differenza fra il nome commerciale e il criterio tecnico e'
+     * accettabile perche' va nella direzione giusta: chi compra vede un limite
+     * **piu' generoso** di quello che il codice applica alle chiamate care, mai
+     * il contrario.
+     */
+    public function costoInGettoni(): int
+    {
+        return $this->isMultimodal() ? 6 : 1;
     }
 
     /** @return array<string, string> */

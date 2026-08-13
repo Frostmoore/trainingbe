@@ -58,6 +58,15 @@ class Tenant extends Model
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
         'ai_monthly_tokens_per_member', 'ai_driver', 'settings', 'trial_ends_at',
+        // G2 — la quota in chiamate (D6/D7).
+        'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
+        /*
+         * 🚨 **`ai_credits` NON e' qui, ed e' voluto.** Il saldo dei gettoni si
+         * muove **solo** attraverso `PortafoglioGettoni`, che scrive anche il
+         * movimento nel registro. Renderlo assegnabile in massa vorrebbe dire
+         * che una `update()` qualsiasi puo' cambiare un saldo senza lasciare
+         * traccia — e un saldo senza traccia non si puo' contestare (D16).
+         */
     ];
 
     protected function casts(): array
@@ -68,6 +77,9 @@ class Tenant extends Model
             'settings' => 'array',
             'trial_ends_at' => 'datetime',
             'ai_monthly_tokens_per_member' => 'integer',
+            'ai_monthly_calls_per_member' => 'integer',
+            'ai_monthly_photo_calls_per_member' => 'integer',
+            'ai_credits' => 'integer',
         ];
     }
 

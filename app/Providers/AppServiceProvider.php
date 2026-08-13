@@ -7,12 +7,14 @@ namespace App\Providers;
 use App\Http\ResponseFactory;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Services\Ai\AiManager;
-use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
+use App\Services\Auth\Social\JwksSocialTokenVerifier;
+use App\Services\Auth\Social\SocialTokenVerifier;
 use App\Support\Impersonation\Impersonator;
 use App\Support\Tenancy\TenantContext;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -40,8 +42,8 @@ class AppServiceProvider extends ServiceProvider
          * ha un test suo, che parte da una chiave generata al volo.
          */
         $this->app->bind(
-            \App\Services\Auth\Social\SocialTokenVerifier::class,
-            \App\Services\Auth\Social\JwksSocialTokenVerifier::class,
+            SocialTokenVerifier::class,
+            JwksSocialTokenVerifier::class,
         );
 
         /**

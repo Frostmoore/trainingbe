@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\UserRole;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\Schema;
  * Gli altri tre ruoli restano ruoli spatie, perché sono davvero per-palestra:
  * lo stesso utente può essere trainer in una e iscritto in un'altra.
  *
- * @see \App\Enums\UserRole::isPlatformLevel()
+ * @see UserRole::isPlatformLevel()
  */
 return new class extends Migration
 {

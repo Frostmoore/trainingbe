@@ -252,10 +252,10 @@ class PianiEQuotaTest extends TestCase
     public function the_personal_cap_wins_over_everything(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $palestra->update(['ai_monthly_tokens_per_member' => 111]);
+        $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
-        $iscritto->forceFill(['ai_monthly_token_cap' => 999])->save();
+        $iscritto->forceFill(['ai_monthly_call_cap' => 999])->save();
 
         $this->assertSame(999, app(MemberAiQuota::class)->capFor($iscritto->fresh()));
     }
@@ -265,7 +265,7 @@ class PianiEQuotaTest extends TestCase
     public function then_the_gym_decides(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $palestra->update(['ai_monthly_tokens_per_member' => 111]);
+        $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
 
@@ -277,14 +277,14 @@ class PianiEQuotaTest extends TestCase
      *
      * ⚠️ L'ordine inverso sembrerebbe altrettanto sensato, e non lo è: se un
      * iscritto di una palestra si fa seguire **anche** da un trainer
-     * indipendente, non deve poter drenare il monte token di quel trainer — che
+     * indipendente, non deve poter drenare il monte chiamate di quel trainer — che
      * se lo paga di tasca sua per i **suoi** utenti.
      */
     #[Test]
     public function the_gym_comes_before_the_independent_trainer(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $palestra->update(['ai_monthly_tokens_per_member' => 111]);
+        $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
 
@@ -293,7 +293,7 @@ class PianiEQuotaTest extends TestCase
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
         );
-        $trainer->forceFill(['ai_monthly_token_cap' => 5])->save();
+        $trainer->forceFill(['ai_monthly_call_cap' => 5])->save();
 
         $iscritto->assignedTrainers()->attach($trainer->id, [
             'tenant_id' => $trainer->tenant_id, 'assigned_at' => now(),
@@ -302,7 +302,7 @@ class PianiEQuotaTest extends TestCase
         $this->assertSame(
             111,
             app(MemberAiQuota::class)->capFor($iscritto->fresh()),
-            'Un iscritto di una palestra sta drenando il monte token di un trainer indipendente.',
+            'Un iscritto di una palestra sta drenando il monte chiamate di un trainer indipendente.',
         );
     }
 
@@ -319,7 +319,7 @@ class PianiEQuotaTest extends TestCase
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
         );
-        $trainer->forceFill(['ai_monthly_token_cap' => 4242])->save();
+        $trainer->forceFill(['ai_monthly_call_cap' => 4242])->save();
 
         $utente->assignedTrainers()->attach($trainer->id, [
             'tenant_id' => $trainer->tenant_id, 'assigned_at' => now(),
@@ -336,7 +336,7 @@ class PianiEQuotaTest extends TestCase
             'password' => self::FAKE_PASSWORD,
         ]);
 
-        $this->piano(Plan::PLUS)->update(['ai_monthly_tokens_per_member' => 7777]);
+        $this->piano(Plan::PLUS)->update(['ai_monthly_calls_per_member' => 7777]);
         $this->abbona($utente->tenant, Plan::PLUS);
 
         $this->assertSame(7777, app(MemberAiQuota::class)->capFor($utente->fresh()));
@@ -346,7 +346,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function and_finally_the_system_default(): void
     {
-        config(['ai.quota.default_monthly_tokens_per_user' => 1234]);
+        config(['ai.quota.default_monthly_calls_per_user' => 1234]);
 
         $utente = app(CreaTenantPersonale::class)('Mario', 'mario@esempio.test', [
             'password' => self::FAKE_PASSWORD,
@@ -368,7 +368,7 @@ class PianiEQuotaTest extends TestCase
         $utente = app(CreaTenantPersonale::class)('Mario', 'mario@esempio.test', [
             'password' => self::FAKE_PASSWORD,
         ]);
-        $utente->forceFill(['ai_monthly_token_cap' => 0])->save();
+        $utente->forceFill(['ai_monthly_call_cap' => 0])->save();
 
         $this->assertNull(app(MemberAiQuota::class)->capFor($utente->fresh()));
     }
@@ -405,12 +405,33 @@ class PianiEQuotaTest extends TestCase
     {
         $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
 
+        /*
+         * ⚠️ **Si confronta dentro con fuori, non con un numero scritto a mano.**
+         *
+         * Questo test diceva `assertSame(5, …)` ed è diventato rosso in G1, che
+         * ha aggiunto quattro tier al listino — senza che niente di ciò che il
+         * test vuole provare fosse cambiato. Un numero letterale trasformava
+         * «il listino non sparisce dentro una palestra» in «il listino ha
+         * cinque righe», che è un'altra affermazione e invecchia a ogni
+         * decisione commerciale.
+         */
+        $fuori = Plan::query()->count();
+
+        $this->assertGreaterThan(0, $fuori, 'il listino è vuoto: il seeder non ha girato');
+
         $this->assertSame(
-            5,
+            $fuori,
             $this->ctx()->runAs($alfa, fn (): int => Plan::query()->count()),
             'Il listino sparisce dentro il contesto di una palestra.',
         );
 
-        $this->assertSame(2, Plan::query()->diTipo(PlanKind::Trainer)->count());
+        // 💡 E ogni tipo è rappresentato: il listino copre i tre livelli (D5).
+        foreach (PlanKind::cases() as $tipo) {
+            $this->assertGreaterThan(
+                0,
+                Plan::query()->diTipo($tipo)->count(),
+                "nessun piano di tipo {$tipo->value}",
+            );
+        }
     }
 }

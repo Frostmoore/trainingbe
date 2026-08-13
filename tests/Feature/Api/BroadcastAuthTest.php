@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -56,7 +57,7 @@ class BroadcastAuthTest extends TestCase
             fn () => Conversation::between($this->trainer, $this->iscritto));
     }
 
-    private function autorizza(User $utente): \Illuminate\Testing\TestResponse
+    private function autorizza(User $utente): TestResponse
     {
         return $this->comeApp($utente)->postJson('/api/v1/broadcasting/auth', [
             'channel_name' => 'private-conversation.'.$this->conversazione->id,

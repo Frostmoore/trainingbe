@@ -6,6 +6,7 @@ namespace Tests\Feature\Api;
 
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Models\Exercise;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
@@ -130,7 +131,7 @@ class PlanTemplatesApiTest extends TestCase
         $modello = $this->modello('Push');
 
         $this->ctx()->runAs($this->alfa, function () use ($modello): void {
-            $esercizio = \App\Models\Exercise::create([
+            $esercizio = Exercise::create([
                 'tenant_id' => $this->alfa->id,
                 'name' => 'Panca piana',
                 'muscle_group' => 'chest',

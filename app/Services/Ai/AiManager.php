@@ -81,8 +81,8 @@ class AiManager
      * Il modello da usare per questa funzione.
      *
      * @throws InvalidArgumentException se la configurazione non lo dichiara —
-     *         meglio un errore chiaro che una chiamata a un modello vuoto, che
-     *         il fornitore rifiuta con un messaggio che non dice niente.
+     *                                  meglio un errore chiaro che una chiamata a un modello vuoto, che
+     *                                  il fornitore rifiuta con un messaggio che non dice niente.
      */
     public function modelFor(AiFeature $feature, ?string $driver = null): string
     {

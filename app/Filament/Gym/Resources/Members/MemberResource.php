@@ -13,6 +13,7 @@ use App\Filament\Gym\Resources\Members\RelationManagers\WorkoutPlansRelationMana
 use App\Filament\Gym\Resources\Members\Schemas\MemberForm;
 use App\Filament\Gym\Resources\Members\Tables\MembersTable;
 use App\Models\User;
+use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -82,7 +83,7 @@ class MemberResource extends Resource
         return DB::table('model_has_roles')
             ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
             ->where('roles.name', $ruolo->value)
-            ->where('model_has_roles.tenant_id', app(\App\Support\Tenancy\TenantContext::class)->id())
+            ->where('model_has_roles.tenant_id', app(TenantContext::class)->id())
             ->select('model_has_roles.model_id');
     }
 

@@ -8,14 +8,13 @@ use App\Enums\MealType;
 use App\Enums\UserRole;
 use App\Models\Conversation;
 use App\Models\FoodEntry;
-use App\Models\Media;
 use App\Models\Message;
+use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutSession;
 use App\Services\Account\AccountEraser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -66,11 +65,6 @@ class AccountAndPhotoApiTest extends TestCase
     }
 
     // ───────────────── C5: foto legate all'allenamento ─────────────────
-
-
-
-
-
 
     // ─────────────── C6: eliminazione dell'account ───────────────
 
@@ -125,7 +119,7 @@ class AccountAndPhotoApiTest extends TestCase
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->where('user_id', $id)->count());
         $this->assertSame(0, WorkoutSession::withoutGlobalScopes()->where('user_id', $id)->count());
-        $this->assertSame(0, \App\Models\Profile::withoutGlobalScopes()->where('user_id', $id)->count());
+        $this->assertSame(0, Profile::withoutGlobalScopes()->where('user_id', $id)->count());
     }
 
     /**
@@ -197,7 +191,6 @@ class AccountAndPhotoApiTest extends TestCase
             ->getJson('/api/v1/profile')
             ->assertUnauthorized();
     }
-
 
     // ─────────────── C7: rifiniture del contratto ───────────────
 

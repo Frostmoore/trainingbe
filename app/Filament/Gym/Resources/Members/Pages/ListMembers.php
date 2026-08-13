@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\Members\Pages;
 
 use App\Filament\Gym\Resources\Members\MemberResource;
-use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 
 class ListMembers extends ListRecords

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Dev;
 
 use App\Enums\UserRole;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 
@@ -93,7 +94,7 @@ final class QuickLogin
     {
         $context = app(TenantContext::class);
 
-        foreach (\App\Models\Tenant::query()->orderBy('id')->get() as $tenant) {
+        foreach (Tenant::query()->orderBy('id')->get() as $tenant) {
             $u = $context->runAs($tenant, fn () => User::role($ruolo->value)->first());
 
             if ($u !== null) {

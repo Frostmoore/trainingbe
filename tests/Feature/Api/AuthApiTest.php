@@ -9,6 +9,8 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Laravel\Sanctum\PersonalAccessToken;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Role;
@@ -179,12 +181,12 @@ class AuthApiTest extends TestCase
     #[Test]
     public function it_refuses_a_malformed_username(): void
     {
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         foreach (['ab', 'con spazi', 'con@chiocciola', '.punto', 'punto.'] as $sbagliato) {
             $this->postJson('/api/v1/auth/register', [
                 'join_code' => 'ALFA2345', 'name' => 'X', 'email' => 'x'.md5($sbagliato).'@esempio.it',
-            'age_confirmed' => true, 'terms_accepted' => true,
+                'age_confirmed' => true, 'terms_accepted' => true,
                 'username' => $sbagliato,
                 'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             ])->assertStatus(422)->assertJsonValidationErrors('username');
@@ -372,7 +374,7 @@ class AuthApiTest extends TestCase
         $this->assertSame(
             $passwordErrata->json('errors'),
             $emailIgnota->json('errors'),
-            "I due errori sono distinguibili: si può scoprire chi è iscritto provando indirizzi.",
+            'I due errori sono distinguibili: si può scoprire chi è iscritto provando indirizzi.',
         );
     }
 
@@ -501,7 +503,7 @@ class AuthApiTest extends TestCase
             ->deleteJson('/api/v1/auth/devices/'.$tokenDiBruno->id)
             ->assertNotFound();
 
-        $this->assertNotNull(\Laravel\Sanctum\PersonalAccessToken::find($tokenDiBruno->id));
+        $this->assertNotNull(PersonalAccessToken::find($tokenDiBruno->id));
     }
 
     // ─────────────────────────────────────────────────────────────

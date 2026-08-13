@@ -17,6 +17,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Carbon;
 
 /**
  * L'elenco delle palestre.
@@ -74,7 +75,7 @@ class TenantsTable
                     ->placeholder('—')
                     // Rosso se il periodo di prova è già scaduto: è il caso in
                     // cui l'abbonamento sembra attivo ma nessuno può entrare.
-                    ->color(fn (?\Illuminate\Support\Carbon $state): string => $state !== null && $state->isPast()
+                    ->color(fn (?Carbon $state): string => $state !== null && $state->isPast()
                         ? 'danger'
                         : 'gray')
                     ->sortable(),

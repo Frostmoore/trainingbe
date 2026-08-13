@@ -9,14 +9,18 @@ use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Models\AiAdvice;
+use App\Models\AiCreditMovement;
 use App\Models\FoodEntry;
 use App\Models\User;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\FoodItem;
+use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Billing\Exceptions\GettoniEsauritiException;
+use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tenancy\TenantContext;
@@ -47,6 +51,7 @@ class AiController extends Controller
         private readonly DiaryService $diary,
         private readonly DashboardService $dashboard,
         private readonly MealValidator $validatore,
+        private readonly PortafoglioGettoni $portafoglio,
     ) {}
 
     // ───────────────────────── cibo ─────────────────────────
@@ -63,7 +68,7 @@ class AiController extends Controller
             'save' => ['nullable', 'boolean'],
         ]);
 
-        $this->assertQuota($request->user());
+        $conGettoni = $this->assertQuota($request->user(), AiFeature::FoodText);
 
         $utente = $request->user();
 
@@ -82,6 +87,8 @@ class AiController extends Controller
             ),
         );
 
+        $this->consumaGettoniSeServe($utente, AiFeature::FoodText, $conGettoni);
+
         return $this->rispostaStima($request, $stima, FoodSource::AiText, $dati, $avvisi);
     }
 
@@ -94,7 +101,7 @@ class AiController extends Controller
             'save' => ['nullable', 'boolean'],
         ]);
 
-        $this->assertQuota($request->user());
+        $conGettoni = $this->assertQuota($request->user(), AiFeature::FoodPhoto);
 
         $utente = $request->user();
         $file = $request->file('photo');
@@ -122,6 +129,8 @@ class AiController extends Controller
                 $appendice,
             ),
         );
+
+        $this->consumaGettoniSeServe($utente, AiFeature::FoodPhoto, $conGettoni);
 
         return $this->rispostaStima($request, $stima, FoodSource::AiPhoto, $dati, $avvisi);
     }
@@ -285,12 +294,14 @@ class AiController extends Controller
             ]]);
         }
 
-        $this->assertQuota($request->user());
+        $conGettoni = $this->assertQuota($request->user(), AiFeature::DailyAdvice);
 
         $testo = $this->ai->for(AiFeature::DailyAdvice)->dailyAdvice(
             $contesto,
             AiCallContext::for($utente, AiFeature::DailyAdvice),
         );
+
+        $this->consumaGettoniSeServe($utente, AiFeature::DailyAdvice, $conGettoni);
 
         $riga = AiAdvice::create([
             'tenant_id' => $utente->tenant_id,
@@ -324,22 +335,145 @@ class AiController extends Controller
         $utente = $request->user();
 
         return response()->json(['data' => [
+            /*
+             * ⚠️ **Le chiavi `*_tokens` restano, e adesso portano chiamate.**
+             *
+             * Rinominarle romperebbe l'app gia' installata sui telefoni, che le
+             * legge per disegnare la barra: quella barra sparirebbe finche' ogni
+             * utente non aggiorna. 🚨 Il numero cambia scala — 400 invece di
+             * 1.200.000 — ma la barra e' una percentuale, e la percentuale resta
+             * giusta.
+             *
+             * 💡 I nomi nuovi affiancano i vecchi. `G2.5` toglie i vecchi
+             * **dopo** che l'app aggiornata e' in giro, non prima.
+             */
             'used_tokens' => $this->quota->usedThisMonth($utente),
             'cap_tokens' => $this->quota->capFor($utente),
             'remaining_tokens' => $this->quota->remaining($utente),
             'used_percent' => $this->quota->usedPercent($utente),
+
+            // 🆕 G2 — i nomi veri, e il secondo contatore (D7).
+            'used_calls' => $this->quota->usedThisMonth($utente),
+            'cap_calls' => $this->quota->capFor($utente),
+            'remaining_calls' => $this->quota->remaining($utente),
+            'used_photo_calls' => $this->quota->usedThisMonth($utente, conFoto: true),
+            'cap_photo_calls' => $this->quota->capFor($utente, conFoto: true),
+            'remaining_photo_calls' => $this->quota->remaining($utente, conFoto: true),
+
+            // 🆕 D16 — quanto resta nel portafoglio di chi paga per questa persona.
+            'ai_credits' => $this->portafoglio->saldo($utente),
         ]]);
     }
 
     // ───────────────────────── interni ─────────────────────────
 
-    private function assertQuota(?User $utente): void
+    /**
+     * Il cancello prima di ogni chiamata all'AI — G2, D8 + D16.
+     *
+     * ── 🚨 L'ordine, che e' tutto ─────────────────────────────────────────
+     *
+     *     1. la quota inclusa del mese  (MemberAiQuota)
+     *     2. se e' finita, i gettoni     (PortafoglioGettoni)
+     *     3. se non bastano, 402
+     *
+     * ⚠️ **Un gettone speso mentre la quota e' ancora piena e' un gettone
+     * rubato**, e nessuno se ne accorge: il servizio funziona, la chiamata
+     * riesce, il saldo cala. Si vedrebbe solo dalla fattura di qualcun altro.
+     * Per questo la quota si guarda **per prima**, sempre.
+     *
+     * 💡 E se i gettoni ci sono, `AiQuotaExceededException` **non viene mai
+     * lanciata**: chi ha ricaricato non deve nemmeno sapere che la quota
+     * inclusa era finita.
+     *
+     * ── 🚨 Perche' RESTITUISCE la decisione invece di ricontrollarla dopo ──
+     *
+     * La prima versione di questo metodo non tornava niente, e un secondo metodo
+     * richiamava `hasQuotaLeft()` **dopo** la chiamata per decidere se scalare un
+     * gettone. Era sbagliato, e in un modo che si vede solo sul bordo:
+     *
+     *     tetto 400, gia' usate 399  →  prima della chiamata la quota BASTA
+     *     la chiamata scrive la sua riga in ai_usage_logs  →  usate 400
+     *     dopo la chiamata la quota NON basta piu'  →  scala un gettone
+     *
+     * ⚠️ **Quella chiamata era coperta dalla quota inclusa**, e si sarebbe fatta
+     * pagare lo stesso. Una volta al mese per ogni cliente, in silenzio.
+     *
+     * 💡 La decisione si prende **una volta sola, prima**, e viaggia fino al
+     * consumo. Ricontrollare uno stato che nel frattempo e' cambiato per colpa
+     * nostra e' il modo classico di contare due volte la stessa cosa.
+     *
+     * @return bool se questa chiamata andra' pagata con i gettoni
+     *
+     * @throws AiQuotaExceededException
+     * @throws GettoniEsauritiException
+     */
+    private function assertQuota(?User $utente, AiFeature $funzione): bool
     {
         if ($utente === null) {
+            return false;
+        }
+
+        if ($this->quota->hasQuotaLeft($utente, $funzione)) {
+            return false;
+        }
+
+        /*
+         * 🚨 **Si guarda soltanto**, non si scala. Il consumo avviene dopo che
+         * la chiamata e' andata a buon fine (`consumaGettoniSeServe()`): scalare
+         * qui vorrebbe dire far pagare anche le chiamate che il fornitore ha
+         * rifiutato — cioe' far pagare i nostri guasti al cliente.
+         */
+        if ($this->portafoglio->bastanoPer($utente, $funzione)) {
+            return true;
+        }
+
+        /*
+         * ⚠️ **Chi non ha mai comprato gettoni riceve il messaggio di quota**,
+         * non quello dei gettoni: dirgli «ricarica i gettoni» a chi non sa
+         * nemmeno che esistano e' un errore che non spiega niente.
+         */
+        if ($this->portafoglio->saldo($utente) === 0
+            && ! AiCreditMovement::withoutGlobalScopes()
+                ->where('tenant_id', $utente->tenant_id)
+                ->exists()) {
+            $this->quota->assertWithinQuota($utente, $funzione);
+        }
+
+        throw new GettoniEsauritiException(
+            saldo: $this->portafoglio->saldo($utente),
+            servivano: $funzione->costoInGettoni(),
+        );
+    }
+
+    /**
+     * Scala i gettoni **dopo** che la chiamata e' riuscita.
+     *
+     * 🚨 **`$conGettoni` arriva da `assertQuota()`, non si ricalcola.** Vedi la
+     * nota li' sopra: ricalcolarlo qui farebbe pagare la chiamata che ha
+     * esaurito la quota, che invece era coperta.
+     *
+     * ⚠️ **Dopo e non prima**: scalare prima vorrebbe dire far pagare anche le
+     * chiamate che il fornitore ha rifiutato — cioe' far pagare i nostri guasti
+     * al cliente.
+     */
+    private function consumaGettoniSeServe(?User $utente, AiFeature $funzione, bool $conGettoni): void
+    {
+        if ($utente === null || ! $conGettoni) {
             return;
         }
 
-        $this->quota->assertWithinQuota($utente);
+        try {
+            $this->portafoglio->consuma($utente, $funzione);
+        } catch (GettoniEsauritiException) {
+            /*
+             * ⚠️ **Non si rilancia, e la scelta e' deliberata.** Arrivare qui
+             * vuol dire che i gettoni sono finiti **fra** il controllo e la
+             * risposta — cioe' una corsa fra due chiamate della stessa persona.
+             * La chiamata al fornitore e' gia' stata pagata da noi: negare la
+             * risposta ora vorrebbe dire buttarla e far arrabbiare il cliente
+             * per un centesimo. Si passa, e il saldo resta dov'e'.
+             */
+        }
     }
 
     /**

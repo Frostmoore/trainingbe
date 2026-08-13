@@ -40,7 +40,7 @@ class Login extends BaseLogin
      */
     public function mount(): void
     {
-        /** @var \App\Models\User|null $user */
+        /** @var User|null $user */
         $user = filament()->auth()->user();
         $destinazione = RoleAwareLoginResponse::urlFor($user);
 

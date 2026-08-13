@@ -13,9 +13,11 @@ use App\Models\Exercise;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlanImport;
+use App\Services\Ai\AiManager;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Training\ExerciseMatcher;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -129,8 +131,8 @@ class PdfImportTest extends TestCase
         $import = $this->importConPdf();
 
         (new ParseWorkoutPdf($import->id))->handle(
-            app(\App\Services\Ai\AiManager::class),
-            app(\App\Support\Tenancy\TenantContext::class),
+            app(AiManager::class),
+            app(TenantContext::class),
         );
 
         $import->refresh();
@@ -162,8 +164,8 @@ class PdfImportTest extends TestCase
         $import = $this->importConPdf();
 
         (new ParseWorkoutPdf($import->id))->handle(
-            app(\App\Services\Ai\AiManager::class),
-            app(\App\Support\Tenancy\TenantContext::class),
+            app(AiManager::class),
+            app(TenantContext::class),
         );
 
         $import->refresh();
@@ -184,8 +186,8 @@ class PdfImportTest extends TestCase
         $import = $this->importConPdf();
 
         (new ParseWorkoutPdf($import->id))->handle(
-            app(\App\Services\Ai\AiManager::class),
-            app(\App\Support\Tenancy\TenantContext::class),
+            app(AiManager::class),
+            app(TenantContext::class),
         );
 
         $import->refresh();

@@ -6,6 +6,7 @@ namespace App\Filament\God\Resources\Tenants\Schemas;
 
 use App\Enums\TenantStatus;
 use App\Models\Tenant;
+use Filament\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
@@ -62,7 +63,7 @@ class TenantForm
                         ->default(fn () => Tenant::generateJoinCode())
                         ->helperText('È il codice che l\'iscritto digita nell\'app.')
                         ->suffixAction(
-                            \Filament\Actions\Action::make('rigenera')
+                            Action::make('rigenera')
                                 ->icon('heroicon-m-arrow-path')
                                 ->label('Rigenera')
                                 // 🚨 Rigenerarlo invalida il codice che la

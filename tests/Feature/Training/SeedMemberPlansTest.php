@@ -13,6 +13,7 @@ use App\Models\WorkoutPlan;
 use App\Support\Tenancy\TenantContext;
 use Database\Seeders\ExerciseLibrarySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -48,8 +49,8 @@ class SeedMemberPlansTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
-    /** @return \Illuminate\Support\Collection<int, WorkoutPlan> */
-    private function schede(): \Illuminate\Support\Collection
+    /** @return Collection<int, WorkoutPlan> */
+    private function schede(): Collection
     {
         return app(TenantContext::class)->runAs(
             $this->alfa,

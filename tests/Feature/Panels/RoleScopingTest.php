@@ -6,12 +6,17 @@ namespace Tests\Feature\Panels;
 
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Filament\Gym\Pages\Chat;
+use App\Filament\Gym\Pages\GymSettings;
 use App\Filament\Gym\Resources\Members\Pages\ListMembers;
 use App\Filament\Gym\Resources\Trainers\TrainerResource;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\ListWorkoutPlans;
+use App\Models\Conversation;
+use App\Models\Exercise;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -91,7 +96,7 @@ class RoleScopingTest extends TestCase
         $this->flushSession();
         $this->actingAs($utente);
 
-        app(\App\Support\Tenancy\TenantContext::class)->set($utente->tenant);
+        app(TenantContext::class)->set($utente->tenant);
     }
 
     private function assegna(User $trainer, User $membro): void
@@ -285,7 +290,7 @@ class RoleScopingTest extends TestCase
     public function the_gym_owner_gets_no_signal_about_other_peoples_chats(): void
     {
         $conversazione = $this->ctx()->runAs($this->alfa,
-            fn () => \App\Models\Conversation::between($this->trainerA, $this->mioIscritto));
+            fn () => Conversation::between($this->trainerA, $this->mioIscritto));
 
         $this->ctx()->runAs($this->alfa, fn () => $conversazione->messages()->create([
             'sender_id' => $this->mioIscritto->id,
@@ -296,12 +301,12 @@ class RoleScopingTest extends TestCase
 
         $this->assertSame(
             0,
-            Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('nonLetti'),
+            Livewire::test(Chat::class)->get('nonLetti'),
             'Il titolare conta i messaggi non letti delle chat dei suoi trainer.',
         );
 
         $this->assertNull(
-            \App\Filament\Gym\Pages\Chat::getNavigationBadge(),
+            Chat::getNavigationBadge(),
             'Il badge nel menù rivela al titolare l\'attività delle chat altrui.',
         );
 
@@ -311,9 +316,9 @@ class RoleScopingTest extends TestCase
 
         $this->assertSame(
             1,
-            Livewire::test(\App\Filament\Gym\Pages\Chat::class)->get('nonLetti'),
+            Livewire::test(Chat::class)->get('nonLetti'),
         );
-        $this->assertSame('1', \App\Filament\Gym\Pages\Chat::getNavigationBadge());
+        $this->assertSame('1', Chat::getNavigationBadge());
     }
 
     // ───────────────────────── impostazioni ─────────────────────────
@@ -340,7 +345,7 @@ class RoleScopingTest extends TestCase
         $this->entraCome($this->admin);
 
         $componenti = json_encode(
-            Livewire::test(\App\Filament\Gym\Pages\GymSettings::class)->get('data'),
+            Livewire::test(GymSettings::class)->get('data'),
         );
 
         foreach (['status', 'plan', 'ai_monthly_token_cap', 'trial_ends_at'] as $vietato) {
@@ -365,7 +370,7 @@ class RoleScopingTest extends TestCase
 
     private function esercizio(): int
     {
-        return $this->ctx()->runWithoutTenant(fn () => \App\Models\Exercise::create([
+        return $this->ctx()->runWithoutTenant(fn () => Exercise::create([
             'name' => 'Panca piana',
         ]))->getKey();
     }

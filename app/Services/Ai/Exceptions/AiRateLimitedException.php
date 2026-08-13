@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Ai\Exceptions;
 
+use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -29,7 +30,7 @@ class AiRateLimitedException extends RuntimeException
         );
     }
 
-    public function render(): \Illuminate\Http\JsonResponse
+    public function render(): JsonResponse
     {
         return response()->json([
             'error' => 'ai_rate_limited',

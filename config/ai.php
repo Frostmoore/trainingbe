@@ -114,7 +114,29 @@ return [
     | modo che vale la pena guardare, non assecondare in silenzio.
     */
     'quota' => [
+        /*
+         * ⚠️ **Non lo legge piu' nessuno da G2.** La quota si conta in chiamate
+         * (D6). La chiave resta finche' `G2.5` non toglie anche le colonne dei
+         * token: cancellarla adesso vorrebbe dire che un `.env` di staging o di
+         * produzione, ancora popolato, smette di corrispondere a qualcosa senza
+         * che nessuno se ne accorga.
+         */
         'default_monthly_tokens_per_user' => (int) env('AI_DEFAULT_MONTHLY_TOKENS_PER_USER', 1_200_000),
+
+        /*
+         * Il livello 5 della catena — G2, D6/D7.
+         *
+         * 💡 **400 di cui 40 con allegato**: sono i numeri dei piani a pagamento
+         * (`PlanSeeder::CHIAMATE`), ricavati dai consumi misurati in
+         * `STIMA-COSTI-AI.md` — l'utente medio fa ≈ 320 chiamate al mese di cui
+         * ≈ 30 con foto.
+         *
+         * 🚨 Questo default si applica solo a chi arriva in fondo alla catena
+         * **avendo gia' superato `RequirePlanWithAi`**: chi non ha diritto
+         * all'AI e' stato fermato prima e non arriva mai qui.
+         */
+        'default_monthly_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_CALLS_PER_USER', 400),
+        'default_monthly_photo_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_PHOTO_CALLS_PER_USER', 40),
     ],
 
     /*

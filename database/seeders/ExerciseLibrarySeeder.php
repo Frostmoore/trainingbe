@@ -45,6 +45,13 @@ class ExerciseLibrarySeeder extends Seeder
         ['Chest press', MuscleGroup::Chest, 'macchina', 4.0],
         ['Piegamenti', MuscleGroup::Chest, 'corpo libero', 3.8],
         ['Dips', MuscleGroup::Chest, 'corpo libero', 5.0],
+        // G3
+        ['Panca piana con manubri', MuscleGroup::Chest, 'manubri', 5.0],
+        ['Panca inclinata con manubri', MuscleGroup::Chest, 'manubri', 5.0],
+        ['Pectoral machine', MuscleGroup::Chest, 'macchina', 4.0],
+        ['Croci ai cavi alti', MuscleGroup::Chest, 'cavi', 3.5],
+        ['Piegamenti su rialzo', MuscleGroup::Chest, 'corpo libero', 3.8],
+        ['Pullover', MuscleGroup::Chest, 'manubri', 4.0],
 
         // Schiena
         ['Lat machine', MuscleGroup::Back, 'macchina', 4.5],
@@ -55,6 +62,15 @@ class ExerciseLibrarySeeder extends Seeder
         ['Stacco da terra', MuscleGroup::Back, 'bilanciere', 6.0],
         ['Stacco rumeno', MuscleGroup::Back, 'bilanciere', 5.5],
         ['Iperestensioni', MuscleGroup::Back, 'corpo libero', 3.5],
+        // G3
+        ['Rematore presa inversa', MuscleGroup::Back, 'bilanciere', 5.0],
+        ['Rematore T-bar', MuscleGroup::Back, 'macchina', 5.0],
+        ['Lat machine presa inversa', MuscleGroup::Back, 'macchina', 4.5],
+        ['Lat machine presa stretta', MuscleGroup::Back, 'macchina', 4.5],
+        ['Pulldown a braccia tese', MuscleGroup::Back, 'cavi', 3.5],
+        ['Trazioni assistite', MuscleGroup::Back, 'macchina', 5.0],
+        ['Rematore a un braccio ai cavi', MuscleGroup::Back, 'cavi', 4.5],
+        ['Good morning', MuscleGroup::Back, 'bilanciere', 5.0],
 
         // Spalle
         ['Lento avanti', MuscleGroup::Shoulders, 'bilanciere', 5.0],
@@ -63,6 +79,13 @@ class ExerciseLibrarySeeder extends Seeder
         ['Alzate frontali', MuscleGroup::Shoulders, 'manubri', 3.5],
         ['Alzate posteriori', MuscleGroup::Shoulders, 'manubri', 3.5],
         ['Tirate al mento', MuscleGroup::Shoulders, 'bilanciere', 4.0],
+        // G3
+        ['Arnold press', MuscleGroup::Shoulders, 'manubri', 4.5],
+        ['Alzate laterali ai cavi', MuscleGroup::Shoulders, 'cavi', 3.5],
+        ['Face pull', MuscleGroup::Shoulders, 'cavi', 3.5],
+        ['Military press', MuscleGroup::Shoulders, 'bilanciere', 5.0],
+        ['Shoulder press a macchina', MuscleGroup::Shoulders, 'macchina', 4.0],
+        ['Scrollate', MuscleGroup::Shoulders, 'bilanciere', 4.0],
 
         // Braccia
         ['Curl bicipiti', MuscleGroup::Biceps, 'manubri', 3.5],
@@ -73,6 +96,30 @@ class ExerciseLibrarySeeder extends Seeder
         ['French press', MuscleGroup::Triceps, 'bilanciere', 3.5],
         ['Estensioni sopra la testa', MuscleGroup::Triceps, 'manubri', 3.5],
         ['Panca stretta', MuscleGroup::Triceps, 'bilanciere', 5.0],
+        // G3
+        ['Curl ai cavi', MuscleGroup::Biceps, 'cavi', 3.5],
+        ['Curl concentrato', MuscleGroup::Biceps, 'manubri', 3.5],
+        ['Curl inverso', MuscleGroup::Biceps, 'bilanciere', 3.5],
+        ['Chin up', MuscleGroup::Biceps, 'corpo libero', 8.0],
+        ['Push down con corda', MuscleGroup::Triceps, 'cavi', 3.5],
+        ['Dips alle parallele', MuscleGroup::Triceps, 'corpo libero', 5.0],
+        ['Kickback tricipiti', MuscleGroup::Triceps, 'manubri', 3.5],
+        ['Estensioni ai cavi sopra la testa', MuscleGroup::Triceps, 'cavi', 3.5],
+
+        /*
+         * Avambracci — G3.
+         *
+         * 🚨 **Il gruppo era completamente vuoto.** `G0.2` l'ha misurato: zero
+         * esercizi su `MuscleGroup::Forearms`. Un gruppo a zero non e' «meno
+         * scelta»: e' un trainer che apre la tendina, non trova niente, e
+         * smette di fidarsi del catalogo — e da li' in poi scrive tutto a mano.
+         */
+        ['Curl ai polsi', MuscleGroup::Forearms, 'bilanciere', 3.0],
+        ['Curl ai polsi inverso', MuscleGroup::Forearms, 'bilanciere', 3.0],
+        ['Camminata del contadino', MuscleGroup::Forearms, 'manubri', 5.0],
+        ['Sospensione alla sbarra', MuscleGroup::Forearms, 'corpo libero', 3.5],
+        // ⚠️ MET non noto per questo attrezzo: `null`, non un numero inventato.
+        ['Rullo per avambracci', MuscleGroup::Forearms, 'attrezzo', null],
 
         // Gambe
         ['Squat', MuscleGroup::Quads, 'bilanciere', 6.0],
@@ -85,12 +132,44 @@ class ExerciseLibrarySeeder extends Seeder
         ['Abduzioni', MuscleGroup::Glutes, 'macchina', 3.5],
         ['Calf in piedi', MuscleGroup::Calves, 'macchina', 3.5],
         ['Calf da seduto', MuscleGroup::Calves, 'macchina', 3.5],
+        // G3 — quadricipiti
+        ['Squat bulgaro', MuscleGroup::Quads, 'manubri', 5.5],
+        ['Hack squat', MuscleGroup::Quads, 'macchina', 5.0],
+        ['Goblet squat', MuscleGroup::Quads, 'manubri', 5.0],
+        ['Affondi camminati', MuscleGroup::Quads, 'manubri', 5.0],
+        ['Step up', MuscleGroup::Quads, 'manubri', 5.0],
+        ['Sissy squat', MuscleGroup::Quads, 'corpo libero', 4.0],
+        ['Pressa orizzontale', MuscleGroup::Quads, 'macchina', 5.0],
+        // G3 — femorali: ⚠️ `G0.2` ne ha contato **uno**, per tutta la catena posteriore.
+        ['Leg curl in piedi', MuscleGroup::Hamstrings, 'macchina', 4.0],
+        ['Leg curl sdraiato', MuscleGroup::Hamstrings, 'macchina', 4.0],
+        ['Stacco a gambe tese', MuscleGroup::Hamstrings, 'bilanciere', 5.5],
+        ['Nordic curl', MuscleGroup::Hamstrings, 'corpo libero', 5.0],
+        ['Glute ham raise', MuscleGroup::Hamstrings, 'macchina', 5.0],
+        // G3 — glutei
+        ['Ponte glutei', MuscleGroup::Glutes, 'corpo libero', 3.5],
+        ['Kickback ai cavi', MuscleGroup::Glutes, 'cavi', 3.5],
+        ['Abduzioni in piedi ai cavi', MuscleGroup::Glutes, 'cavi', 3.5],
+        ['Hip thrust a una gamba', MuscleGroup::Glutes, 'corpo libero', 4.0],
+        ['Affondi laterali', MuscleGroup::Glutes, 'manubri', 5.0],
+        // G3 — polpacci
+        ['Calf alla pressa', MuscleGroup::Calves, 'macchina', 3.5],
+        ['Calf a una gamba', MuscleGroup::Calves, 'corpo libero', 3.5],
+        ['Salti sul posto', MuscleGroup::Calves, 'corpo libero', 8.0],
 
         // Core
         ['Crunch', MuscleGroup::Abs, 'corpo libero', 3.0],
         ['Plank', MuscleGroup::Abs, 'corpo libero', 3.0],
         ['Russian twist', MuscleGroup::Abs, 'corpo libero', 3.5],
         ['Sollevamento gambe', MuscleGroup::Abs, 'corpo libero', 3.5],
+        // G3
+        ['Crunch ai cavi', MuscleGroup::Abs, 'cavi', 3.5],
+        ['Crunch inverso', MuscleGroup::Abs, 'corpo libero', 3.5],
+        ['Plank laterale', MuscleGroup::Abs, 'corpo libero', 3.0],
+        ['Hollow hold', MuscleGroup::Abs, 'corpo libero', 3.5],
+        ['Ruota per addominali', MuscleGroup::Abs, 'attrezzo', 4.0],
+        ['Mountain climber', MuscleGroup::Abs, 'corpo libero', 8.0],
+        ['Sollevamento gambe alla sbarra', MuscleGroup::Abs, 'corpo libero', 4.0],
 
         // Cardio
         ['Tapis roulant', MuscleGroup::Cardio, 'macchina', 7.0],
@@ -99,6 +178,19 @@ class ExerciseLibrarySeeder extends Seeder
         ['Vogatore', MuscleGroup::Cardio, 'macchina', 7.0],
         ['Corda', MuscleGroup::Cardio, 'corpo libero', 11.0],
         ['Burpees', MuscleGroup::FullBody, 'corpo libero', 8.0],
+        // G3 — cardio
+        ['Camminata in salita', MuscleGroup::Cardio, 'macchina', 6.0],
+        ['Corsa', MuscleGroup::Cardio, 'corpo libero', 9.8],
+        ['Scala', MuscleGroup::Cardio, 'macchina', 9.0],
+        ['Air bike', MuscleGroup::Cardio, 'macchina', 8.0],
+        ['Sci indoor', MuscleGroup::Cardio, 'macchina', 7.0],
+        // G3 — full body
+        ['Kettlebell swing', MuscleGroup::FullBody, 'kettlebell', 9.8],
+        ['Thruster', MuscleGroup::FullBody, 'bilanciere', 8.0],
+        ['Girata', MuscleGroup::FullBody, 'bilanciere', 6.0],
+        ['Strappo', MuscleGroup::FullBody, 'bilanciere', 6.0],
+        ['Battle rope', MuscleGroup::FullBody, 'attrezzo', 8.0],
+        ['Slam ball', MuscleGroup::FullBody, 'attrezzo', 8.0],
     ];
 
     public function run(): void

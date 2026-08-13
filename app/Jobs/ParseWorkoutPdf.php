@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\WorkoutPlanImport;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
+use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -117,7 +118,7 @@ class ParseWorkoutPdf implements ShouldQueue
         string $percorso,
         AiCallContext $ctx,
         ?string $errorePrecedente,
-        ?\App\Services\Ai\Data\ParsedWorkoutPlan $ripiego = null,
+        ?ParsedWorkoutPlan $ripiego = null,
     ): void {
         $ai = app(AiManager::class);
         $modello = $ai->escalationModel();

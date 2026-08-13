@@ -237,16 +237,28 @@ class AiApiTest extends TestCase
     }
 
     /**
-     * 🚨 **La quota conta tutti e quattro i tipi di token.**
+     * 🚨 **La contabilità conta tutti e quattro i tipi di token.**
      *
      * Fino al 13/08/2026 `billableTokens()` faceva `input + output`: ignorava sia
-     * la lettura sia — molto peggio — la **creazione** della cache. Non era solo
-     * un contatore ottimista: da lì passa il tetto mensile, cioè la cosa che
-     * protegge la fattura. Una chiamata con un prompt da cinquemila token
-     * risultava costata dodici, e il tetto non la vedeva quasi.
+     * la lettura sia — molto peggio — la **creazione** della cache. Una chiamata
+     * con un prompt da cinquemila token risultava costata dodici.
+     *
+     * ⚠️ **G2 ha cambiato il presupposto di questo test, non la sua unità.**
+     * Prima diceva «il *tetto mensile* deve vedere i token della cache», e la
+     * ragione era che da lì passava ciò che protegge la fattura. Da G2 il tetto
+     * conta **chiamate** (D6): i token non lo toccano più.
+     *
+     * 🚨 Ma la ragione originale **non è sparita, si è spostata**: chi protegge
+     * la fattura adesso è la contabilità, `AiUsageLog::tokensForUser()`, ed è lì
+     * che i token della cache devono continuare a comparire. Un `billableTokens()`
+     * che li ignorasse renderebbe di nuovo invisibile la parte più cara — solo
+     * che invece di sballare un tetto sballerebbe i costi.
+     *
+     * 💡 Quindi verifica **entrambe** le cose, che ora sono due: i token per la
+     * contabilità, le chiamate per la quota.
      */
     #[Test]
-    public function the_quota_counts_the_cache_tokens_too(): void
+    public function the_accounting_counts_the_cache_tokens_and_the_quota_counts_calls(): void
     {
         $riga = AiUsageLog::create([
             'tenant_id' => $this->alfa->id,
@@ -268,9 +280,12 @@ class AiApiTest extends TestCase
 
         $this->assertSame(
             5230,
-            app(MemberAiQuota::class)->usedThisMonth($this->iscritto),
-            'La quota deve vedere i token della cache: sono quelli che si pagano di piu\'.',
+            AiUsageLog::tokensForUser((int) $this->iscritto->getKey()),
+            'La contabilita\' non vede i token della cache: sono quelli che si pagano di piu\'.',
         );
+
+        // 🚨 La quota, invece, vede **una** chiamata — quanti che siano i suoi token.
+        $this->assertSame(1, app(MemberAiQuota::class)->usedThisMonth($this->iscritto));
     }
 
     /** Il contatore di una palestra non vede quello di un'altra. */
@@ -299,16 +314,16 @@ class AiApiTest extends TestCase
      * rifiutando di concedere.
      */
     #[Test]
-    public function it_refuses_when_the_member_ran_out_of_tokens(): void
+    public function it_refuses_when_the_member_ran_out_of_calls(): void
     {
         $finta = $this->aiFinta();
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => 1000]);
+        $this->alfa->update(['ai_monthly_calls_per_member' => 2]);
 
-        // Prima chiamata: 620 token, sotto il tetto.
+        // Prima chiamata: una su due.
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
 
-        // Seconda: si arriva a 1240, sopra.
+        // Seconda: il tetto e' raggiunto.
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertCreated();
 
         $chiamateFinora = count($finta->calls);
@@ -336,14 +351,14 @@ class AiApiTest extends TestCase
         $quota = app(MemberAiQuota::class);
         $iscritto = $this->iscritto->refresh();
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => 0]);
+        $this->alfa->update(['ai_monthly_calls_per_member' => 0]);
         $this->assertNull($quota->capFor($iscritto->refresh()));
         $this->assertNull($quota->remaining($iscritto));
         $this->assertNull($quota->usedPercent($iscritto));
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => null]);
+        $this->alfa->update(['ai_monthly_calls_per_member' => null]);
         $this->assertSame(
-            (int) config('ai.quota.default_monthly_tokens_per_user'),
+            (int) config('ai.quota.default_monthly_calls_per_user'),
             $quota->capFor($iscritto->refresh()),
         );
     }
@@ -360,13 +375,13 @@ class AiApiTest extends TestCase
     {
         $quota = app(MemberAiQuota::class);
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => 5_000]);
-        $this->iscritto->forceFill(['ai_monthly_token_cap' => 50_000])->save();
+        $this->alfa->update(['ai_monthly_calls_per_member' => 50]);
+        $this->iscritto->forceFill(['ai_monthly_call_cap' => 500])->save();
 
-        $this->assertSame(50_000, $quota->capFor($this->iscritto->refresh()));
+        $this->assertSame(500, $quota->capFor($this->iscritto->refresh()));
 
         // E `0` sulla persona vale «illimitato», anche se la palestra ha un tetto.
-        $this->iscritto->forceFill(['ai_monthly_token_cap' => 0])->save();
+        $this->iscritto->forceFill(['ai_monthly_call_cap' => 0])->save();
 
         $this->assertNull($quota->capFor($this->iscritto->refresh()));
     }
@@ -379,11 +394,11 @@ class AiApiTest extends TestCase
      * spente per il consumo delle prime tre.
      */
     #[Test]
-    public function one_member_burning_tokens_does_not_starve_another(): void
+    public function one_member_burning_calls_does_not_starve_another(): void
     {
         $this->aiFinta();
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => 1000]);
+        $this->alfa->update(['ai_monthly_calls_per_member' => 2]);
 
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
         $altro->registraConsenso('ai_consent_at', true);
@@ -404,16 +419,24 @@ class AiApiTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->alfa->update(['ai_monthly_tokens_per_member' => 10_000]);
+        $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
 
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/usage')
             ->assertOk()
-            ->assertJsonPath('data.cap_tokens', 10_000)
-            ->assertJsonPath('data.used_tokens', 620)
-            ->assertJsonPath('data.remaining_tokens', 9380);
+            // ⚠️ Le chiavi `*_tokens` restano per l'app gia' installata, e da
+            // G2 portano **chiamate**: rinominarle spegnerebbe la barra dei
+            // consumi su ogni telefono non ancora aggiornato.
+            ->assertJsonPath('data.cap_tokens', 10)
+            ->assertJsonPath('data.used_tokens', 1)
+            ->assertJsonPath('data.remaining_tokens', 9)
+            // 🆕 E i nomi veri, che l'app nuova legge.
+            ->assertJsonPath('data.cap_calls', 10)
+            ->assertJsonPath('data.used_calls', 1)
+            ->assertJsonPath('data.remaining_calls', 9)
+            ->assertJsonPath('data.ai_credits', 0);
     }
 
     // ───────────────────────── consiglio ─────────────────────────

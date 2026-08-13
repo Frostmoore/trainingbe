@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Enums\KcalSource;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\Exercise;
@@ -297,7 +296,6 @@ class WorkoutApiTest extends TestCase
     }
 
     // ───────────────────────── misure ─────────────────────────
-
 
     // ───────────────────────── esercizi ─────────────────────────
 

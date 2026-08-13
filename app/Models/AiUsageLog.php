@@ -122,6 +122,40 @@ class AiUsageLog extends Model
             ->sum(DB::raw(self::COLONNE_TOKEN));
     }
 
+    /**
+     * Le **chiamate** fatte da una persona nel mese — G2, D6.
+     *
+     * 🚨 **Da G2 e' questa la base della quota, non `tokensForUser()`.** I token
+     * sono l'unita' del fornitore: nessuno compra «due milioni di token» e
+     * nessuno sa dire se gli bastano. Una riga qui e' una chiamata, e le
+     * chiamate le si conta da soli.
+     *
+     * ⚠️ **`tokensForUser()` resta e serve ancora**: e' quello che dice quanto
+     * abbiamo speso davvero, cioe' la contabilita'. Quello che non fa piu' e'
+     * decidere chi si ferma.
+     *
+     * 💡 Il filtro sui multimodali usa `AiFeature::isMultimodal()` invece di un
+     * elenco scritto qui: il giorno che nasce una funzione con un allegato,
+     * entra nel conteggio giusto senza che nessuno debba ricordarsene.
+     *
+     * @param  bool  $soloConAllegato  conta solo le chiamate multimodali (D7)
+     */
+    public static function callsForUser(int $userId, bool $soloConAllegato = false, ?Carbon $month = null): int
+    {
+        $query = static::withoutGlobalScopes()
+            ->where('user_id', $userId)
+            ->inMonth($month);
+
+        if ($soloConAllegato) {
+            $query->whereIn('feature', array_map(
+                static fn (AiFeature $f): string => $f->value,
+                array_filter(AiFeature::cases(), static fn (AiFeature $f): bool => $f->isMultimodal()),
+            ));
+        }
+
+        return $query->count();
+    }
+
     public static function costForTenant(int $tenantId, ?Carbon $month = null): int
     {
         return (int) static::withoutGlobalScopes()

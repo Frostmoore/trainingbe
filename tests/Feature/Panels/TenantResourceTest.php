@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Panels;
 
+use App\Enums\AuditAction;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
 use App\Filament\God\Resources\Tenants\Pages\CreateTenant;
 use App\Filament\God\Resources\Tenants\Pages\EditTenant;
 use App\Filament\God\Resources\Tenants\Pages\ListTenants;
 use App\Filament\God\Resources\Tenants\TenantResource;
+use App\Models\AuditLog;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -223,8 +225,8 @@ class TenantResourceTest extends TestCase
         Livewire::test(ListTenants::class)
             ->callTableAction('sospendi', $this->palestra);
 
-        $riga = \App\Models\AuditLog::withoutGlobalScopes()
-            ->ofAction(\App\Enums\AuditAction::TenantSuspended)
+        $riga = AuditLog::withoutGlobalScopes()
+            ->ofAction(AuditAction::TenantSuspended)
             ->first();
 
         $this->assertNotNull($riga);

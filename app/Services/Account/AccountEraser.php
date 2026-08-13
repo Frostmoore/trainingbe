@@ -11,7 +11,6 @@ use App\Models\DeviceToken;
 use App\Models\FoodEntry;
 use App\Models\FoodFavorite;
 use App\Models\Media;
-use App\Models\Message;
 use App\Models\RecoveryKey;
 use App\Models\SocialIdentity;
 use App\Models\User;

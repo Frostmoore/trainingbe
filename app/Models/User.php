@@ -113,6 +113,19 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'ai_monthly_token_cap' => 'integer',
 
             /*
+             * 🆕 G2 — lo stesso tetto, in **chiamate** (D6/D7).
+             *
+             * ⚠️ Anche questi fuori da `$fillable`, e per la stessa ragione: una
+             * concessione non si assegna in massa da una richiesta HTTP.
+             *
+             * 🚨 `ai_monthly_photo_call_cap` e' un **sotto-limite** di
+             * `ai_monthly_call_cap`, non un budget a parte: una foto consuma
+             * entrambi.
+             */
+            'ai_monthly_call_cap' => 'integer',
+            'ai_monthly_photo_call_cap' => 'integer',
+
+            /*
              * S9 — i consensi.
              *
              * 🚨 **Sono date, non booleani.** L'art. 7(1) chiede di poter

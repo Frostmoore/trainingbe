@@ -7,7 +7,6 @@ namespace App\Filament\Gym\Widgets;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\User;
-use App\Models\WorkoutPlan;
 use App\Models\WorkoutSession;
 use App\Support\Tenancy\TenantContext;
 use Filament\Widgets\StatsOverviewWidget;

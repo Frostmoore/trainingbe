@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Ai\Quota;
 
+use App\Enums\AiFeature;
 use App\Models\AiUsageLog;
 use App\Models\User;
 use App\Services\Ai\Exceptions\AiQuotaExceededException;
@@ -11,40 +12,48 @@ use App\Services\Billing\PianoAttivo;
 use Illuminate\Support\Carbon;
 
 /**
- * Il tetto mensile di token **di ciascun iscritto** — C20.
+ * Il tetto mensile di **chiamate** di ciascun iscritto — C20, riscritto in G2.
  *
  * 🚨 **Il limite si controlla PRIMA della chiamata, non dopo.** Controllarlo
- * dopo vorrebbe dire aver gia' pagato i token che si sta rifiutando di
- * concedere: il tetto servirebbe a dire «hai sforato», non a impedire di
- * sforare.
+ * dopo vorrebbe dire aver gia' pagato cio' che si sta rifiutando di concedere:
+ * il tetto servirebbe a dire «hai sforato», non a impedire di sforare.
  *
  * 🚨 **Per iscritto e non per palestra, ed e' un cambio di rotta voluto.**
- * Il tetto per palestra era un pozzo comune: con 2 milioni di token a palestra
- * e un consumo medio di 551.000 a testa, bastava per tre o quattro persone, e
- * la quarta restava senza AI per il consumo di qualcun altro. Chi consumava di
+ * Il tetto per palestra era un pozzo comune: bastava per tre o quattro persone,
+ * e la quarta restava senza AI per il consumo di qualcun altro. Chi consumava di
  * piu' non pagava di piu': pagavano gli altri, restando fuori. Con un tetto di
  * ciascuno, un utente pesante esaurisce **il proprio** e nessun altro se ne
  * accorge.
  *
- * ⚠️ La palestra continua a pagare il conto, ma lo governa decidendo **quanto
- * dare a ognuno** (`tenants.ai_monthly_tokens_per_member`), che e' una leva
- * prevedibile: il costo massimo di un mese e' iscritti × tetto, un numero che
- * si puo' calcolare prima di venderlo.
+ * ── 🆕 G2 — da token a chiamate (D6), con due contatori (D7) ───────────────
+ *
+ * I token sono l'unita' del fornitore, non del cliente: nessuno compra «due
+ * milioni di token» e nessuno sa dire se gli bastano. Le chiamate le si conta da
+ * soli.
+ *
+ * ⚠️ **Ma una chiamata non vale una chiamata**: `STIMA-COSTI-AI.md` misura
+ * 0,0146 $ per una stima da foto contro 0,0013 $ per le calorie di un
+ * allenamento — **undici volte**. Quindi i contatori sono **due**: quello
+ * generale e il sotto-limite sulle chiamate con allegato.
+ *
+ * 🚨 **Il secondo e' un sotto-limite, non un budget a parte.** Una foto consuma
+ * **entrambi** i contatori: chi ha 400 chiamate di cui 40 con foto, dopo 40 foto
+ * ha 360 chiamate rimaste, non 400.
  */
 class MemberAiQuota
 {
     /**
-     * Il tetto di questa persona, in token al mese. `null` = illimitato.
+     * Il tetto di questa persona, in chiamate al mese. `null` = illimitato.
      *
      * ── 🚨 Cinque livelli, dal piu' specifico al piu' generale — F4.3, D3 ──
      *
      * | # | Livello | Chi lo decide |
      * |---|---|---|
-     * | 1 | `users.ai_monthly_token_cap` | l'eccezione per **una persona** |
-     * | 2 | `tenants.ai_monthly_tokens_per_member` | **la palestra**, se ce n'e' una |
+     * | 1 | `users.ai_monthly_call_cap` | l'eccezione per **una persona** |
+     * | 2 | `tenants.ai_monthly_calls_per_member` | **la palestra**, se ce n'e' una |
      * | 3 | il trainer indipendente che l'ha invitata | solo se non c'e' una palestra |
-     * | 4 | `plans.ai_monthly_tokens_per_member` | il **piano** in corso |
-     * | 5 | `ai.quota.default_monthly_tokens_per_user` | il default di sistema |
+     * | 4 | `plans.ai_monthly_calls_per_member` | il **piano** in corso |
+     * | 5 | `ai.quota.default_monthly_calls_per_user` | il default di sistema |
      *
      * 🚨 In **tutti** i livelli, `0` vale «illimitato» e `null` vale «non
      * impostato, scendi al livello successivo». Sono due cose diverse: senza la
@@ -57,19 +66,21 @@ class MemberAiQuota
      *
      * ── 🚨 La palestra PRIMA del trainer, non viceversa ────────────────────
      *
-     * E' la decisione D3, e il motivo va tenuto a mente perche' l'ordine
-     * inverso sembrerebbe altrettanto sensato: se un iscritto di una palestra si
-     * fa seguire **anche** da un trainer indipendente, non deve poter drenare il
-     * monte token di quel trainer — che se lo paga di tasca sua per i **suoi**
-     * utenti. Chi paga per quella persona e' la palestra, e il tetto e' suo.
+     * E' la decisione D3. Se un iscritto di una palestra si fa seguire **anche**
+     * da un trainer indipendente, non deve poter drenare il monte di quel
+     * trainer, che se lo paga di tasca sua per i **suoi** utenti. Chi paga per
+     * quella persona e' la palestra, e il tetto e' suo.
      *
      * 💡 Il livello 3 si guarda **solo** se il tenant non e' una palestra: e' la
      * stessa condizione detta al contrario, e tenerla esplicita evita che
      * qualcuno, un giorno, «semplifichi» togliendo il controllo su `ePersonale()`.
+     *
+     * @param  bool  $conFoto  se si chiede il sotto-limite delle chiamate con allegato
      */
-    public function capFor(User $utente): ?int
+    public function capFor(User $utente, bool $conFoto = false): ?int
     {
-        $suo = $utente->ai_monthly_token_cap;
+        // 1. L'eccezione per una persona.
+        $suo = $conFoto ? $utente->ai_monthly_photo_call_cap : $utente->ai_monthly_call_cap;
 
         if ($suo !== null) {
             return $suo > 0 ? $suo : null;
@@ -80,7 +91,9 @@ class MemberAiQuota
         // 2. La palestra. ⚠️ Solo se e' una palestra vera: il tetto di un tenant
         // personale sarebbe il tetto che una persona si e' data da sola.
         if ($tenant !== null && ! $tenant->ePersonale()) {
-            $dallaPalestra = $tenant->ai_monthly_tokens_per_member;
+            $dallaPalestra = $conFoto
+                ? $tenant->ai_monthly_photo_calls_per_member
+                : $tenant->ai_monthly_calls_per_member;
 
             if ($dallaPalestra !== null) {
                 return $dallaPalestra > 0 ? $dallaPalestra : null;
@@ -88,21 +101,24 @@ class MemberAiQuota
         }
 
         // 3. Il trainer indipendente che l'ha invitata, se non c'e' una palestra.
-        $dalTrainer = $this->tettoDalTrainerIndipendente($utente);
+        $dalTrainer = $this->tettoDalTrainerIndipendente($utente, $conFoto);
 
         if ($dalTrainer !== null) {
             return $dalTrainer > 0 ? $dalTrainer : null;
         }
 
         // 4. Il piano in corso.
-        $dalPiano = app(PianoAttivo::class)->per($utente)->ai_monthly_tokens_per_member;
+        $piano = app(PianoAttivo::class)->per($utente);
+        $dalPiano = $conFoto ? $piano->chiamateConFotoAlMese() : $piano->chiamateAlMese();
 
         if ($dalPiano !== null) {
             return $dalPiano > 0 ? $dalPiano : null;
         }
 
         // 5. Il default di sistema.
-        $default = (int) config('ai.quota.default_monthly_tokens_per_user');
+        $default = (int) config($conFoto
+            ? 'ai.quota.default_monthly_photo_calls_per_user'
+            : 'ai.quota.default_monthly_calls_per_user');
 
         return $default > 0 ? $default : null;
     }
@@ -121,7 +137,7 @@ class MemberAiQuota
      * piu' basso vorrebbe dire che farsi seguire da un secondo trainer
      * *peggiora* il servizio.
      */
-    private function tettoDalTrainerIndipendente(User $utente): ?int
+    private function tettoDalTrainerIndipendente(User $utente, bool $conFoto): ?int
     {
         $tenant = $utente->tenant;
 
@@ -131,7 +147,7 @@ class MemberAiQuota
 
         $tetti = $utente->assignedTrainers()
             ->get()
-            ->map(static fn (User $t): ?int => $t->ai_monthly_token_cap)
+            ->map(static fn (User $t): ?int => $conFoto ? $t->ai_monthly_photo_call_cap : $t->ai_monthly_call_cap)
             ->filter(static fn (?int $v): bool => $v !== null);
 
         if ($tetti->isEmpty()) {
@@ -147,42 +163,78 @@ class MemberAiQuota
         return (int) $tetti->max();
     }
 
-    public function usedThisMonth(User $utente, ?Carbon $month = null): int
+    /**
+     * Quante chiamate ha gia' fatto questa persona nel mese.
+     *
+     * 🚨 **Righe, non token.** Da G2 la quota conta le **chiamate**: una riga di
+     * `ai_usage_logs` e' una chiamata, indipendentemente da quanto e' costata.
+     */
+    public function usedThisMonth(User $utente, bool $conFoto = false, ?Carbon $month = null): int
     {
-        return AiUsageLog::tokensForUser((int) $utente->getKey(), $month);
+        return AiUsageLog::callsForUser((int) $utente->getKey(), $conFoto, $month);
     }
 
-    /** Quanti token restano. `null` = illimitato. */
-    public function remaining(User $utente): ?int
+    /** Quante chiamate restano. `null` = illimitato. */
+    public function remaining(User $utente, bool $conFoto = false): ?int
     {
-        $cap = $this->capFor($utente);
+        $cap = $this->capFor($utente, $conFoto);
 
         if ($cap === null) {
             return null;
         }
 
-        return max(0, $cap - $this->usedThisMonth($utente));
+        return max(0, $cap - $this->usedThisMonth($utente, $conFoto));
     }
 
-    public function hasQuotaLeft(User $utente): bool
+    /**
+     * C'e' ancora spazio per **questa** chiamata?
+     *
+     * 🚨 **Prende la funzione, e non e' un dettaglio di comodita'.** Il limite
+     * dipende da *quale* chiamata si sta per fare: una firma che non lo chiede
+     * non puo' applicare D7 — sarebbe un metodo che si legge come una regola e
+     * non ne applica nessuna, che e' il difetto ricorrente gia' annotato due
+     * volte in questo progetto.
+     *
+     * ⚠️ Una chiamata con allegato deve passare **entrambi** i controlli: il
+     * sotto-limite e quello generale. Controllare solo il primo lascerebbe
+     * sforare il totale a chi ha ancora foto disponibili.
+     */
+    public function hasQuotaLeft(User $utente, AiFeature $funzione): bool
     {
-        $rimasti = $this->remaining($utente);
+        if ($funzione->isMultimodal()) {
+            $foto = $this->remaining($utente, conFoto: true);
 
-        return $rimasti === null || $rimasti > 0;
+            if ($foto !== null && $foto <= 0) {
+                return false;
+            }
+        }
+
+        $generale = $this->remaining($utente);
+
+        return $generale === null || $generale > 0;
     }
 
     /**
      * @throws AiQuotaExceededException
      */
-    public function assertWithinQuota(User $utente): void
+    public function assertWithinQuota(User $utente, AiFeature $funzione): void
     {
-        if ($this->hasQuotaLeft($utente)) {
+        if ($this->hasQuotaLeft($utente, $funzione)) {
             return;
         }
 
+        /*
+         * 💡 Si dice **quale** dei due tetti si e' esaurito. «Hai finito le
+         * chiamate» a chi ne ha ancora 300 ma ha finito le foto e' un messaggio
+         * che sembra un guasto: la persona sa di non averle finite.
+         */
+        $eraLaFoto = $funzione->isMultimodal()
+            && ($this->remaining($utente, conFoto: true) ?? 1) <= 0;
+
         throw new AiQuotaExceededException(
             resetsAt: Carbon::now()->addMonthNoOverflow()->startOfMonth(),
-            capTokens: $this->capFor($utente),
+            capCalls: $this->capFor($utente, $eraLaFoto),
+            soloFoto: $eraLaFoto,
         );
     }
 
@@ -192,14 +244,14 @@ class MemberAiQuota
      * `null` quando non c'e' tetto: mostrare «0%» a chi e' illimitato darebbe
      * l'impressione di avere un limite enorme invece di non averne.
      */
-    public function usedPercent(User $utente): ?float
+    public function usedPercent(User $utente, bool $conFoto = false): ?float
     {
-        $cap = $this->capFor($utente);
+        $cap = $this->capFor($utente, $conFoto);
 
         if ($cap === null || $cap === 0) {
             return null;
         }
 
-        return round(min(100, $this->usedThisMonth($utente) / $cap * 100), 1);
+        return round(min(100, $this->usedThisMonth($utente, $conFoto) / $cap * 100), 1);
     }
 }

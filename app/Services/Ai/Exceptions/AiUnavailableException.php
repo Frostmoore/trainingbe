@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Ai\Exceptions;
 
+use Illuminate\Http\JsonResponse;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -26,7 +27,7 @@ class AiUnavailableException extends RuntimeException
         parent::__construct($message, Response::HTTP_BAD_GATEWAY, $previous);
     }
 
-    public function render(): \Illuminate\Http\JsonResponse
+    public function render(): JsonResponse
     {
         return response()->json([
             'error' => $this->errorCode,
