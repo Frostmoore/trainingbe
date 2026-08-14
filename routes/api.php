@@ -245,19 +245,26 @@ Route::prefix('v1')->group(function (): void {
         Route::get('nutrition-plan', [DiaryController::class, 'plan']);
 
         /*
-         * 🆕 **«Ho mangiato quello che c'era scritto», in un tocco** — F8.2.
+         * ⛔ **`POST /nutrition-plan/meals/{meal}/eaten` — RITIRATO in G9.4.**
          *
-         * 🚨 Un endpoint apposta e non `POST /food-entries` in ciclo: cinque
-         * richieste separate possono fallire alla terza e lasciare **mezzo
-         * pasto** in diario. È la stessa ragione — e lo stesso errore già
-         * evitato — di `POST /ai/food/confirm` in A4.8.
+         * Leggeva il piano **assegnato sul server** (`NutritionPlan::activeFor`)
+         * e ne scriveva i pasti nel diario in un tocco. Scritto il 13/08/2026,
+         * ritirato il giorno dopo.
          *
-         * 💡 Le alternative («120 g di pollo *oppure* 150 g di merluzzo»)
-         * viaggiano nella **stessa** richiesta: vanno scelte al momento, non
-         * sepolte in una modifica successiva (F8.3).
+         * 🚨 **Non e' stato tolto perche' funzionasse male: perche' D4 gli ha
+         * tolto il dato sotto i piedi.** I piani si consegnano via chat cifrata
+         * e restano anonimi — `member_id` non viene piu' valorizzato — quindi
+         * `activeFor()` non trova niente per nessuno, e l'endpoint avrebbe
+         * risposto `404 Non hai un piano attivo` per sempre.
+         *
+         * 💡 Il gesto **esiste ancora**, ma sul telefono: `DalPianoTab` legge il
+         * piano dall'archivio locale e scrive con `POST /food-entries`. Vedi
+         * §29 dell'atlante app.
+         *
+         * ⚠️ La ragione per cui era un endpoint solo — cinque richieste separate
+         * possono fallire alla terza e lasciare mezzo pasto in diario — resta
+         * vera, ed e' un debito che il ritiro riapre: §7.6 del piano.
          */
-        Route::post('nutrition-plan/meals/{meal}/eaten', [DiaryController::class, 'eatMeal'])
-            ->whereNumber('meal');
 
         Route::post('food-entries', [DiaryController::class, 'store']);
         Route::patch('food-entries/{entry}', [DiaryController::class, 'update'])->whereNumber('entry');
