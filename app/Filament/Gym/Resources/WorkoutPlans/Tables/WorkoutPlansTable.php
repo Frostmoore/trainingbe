@@ -4,24 +4,19 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\WorkoutPlans\Tables;
 
-use App\Enums\AuditAction;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Models\WorkoutPlan;
-use App\Services\Audit\AuditLogger;
 use App\Support\Tenancy\TenantContext;
-use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ReplicateAction;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -81,87 +76,41 @@ class WorkoutPlansTable
                         ->mapWithKeys(fn (PlanSource $s) => [$s->value => $s->label()])
                         ->all()),
 
-                Filter::make('modelli')
-                    ->label('Solo modelli')
-                    ->query(fn (Builder $q): Builder => $q->whereNull('member_id')),
-
-                Filter::make('assegnate')
-                    ->label('Solo assegnate')
-                    ->query(fn (Builder $q): Builder => $q->whereNotNull('member_id')),
+                /*
+                 * ⛔ **I filtri «modelli» e «assegnate» sono spariti** —
+                 * 14/08/2026.
+                 *
+                 * 🚨 Dopo che la palestra non puo' piu' assegnare, tutto quello
+                 * che si vede qui **e' un modello**: due filtri per separare una
+                 * cosa da una che non esiste sono due modi di non trovare
+                 * niente.
+                 *
+                 * ⚠️ Le schede con `member_id` valorizzato esistono ancora, ma
+                 * sono quelle che **l'iscritto scrive per se'** dall'app, e
+                 * questa tabella non le mostra.
+                 */
             ])
             ->recordActions([
                 EditAction::make(),
 
                 /*
-                 * 🚨 Assegnare **copia**, non condivide.
+                 * ⛔ **L'azione «Assegna» e' stata tolta** — 14/08/2026, come
+                 * sui piani alimentari.
                  *
-                 * Se venti persone puntassero alla stessa riga, la prima
-                 * personalizzazione — un peso diverso, un esercizio tolto per un
-                 * infortunio — le cambierebbe tutte. Il modello e' un punto di
-                 * partenza, non un contratto vincolante.
+                 * 🚨 Il ragionamento che stava scritto qui — «assegnare copia,
+                 * non condivide, perche' altrimenti la prima personalizzazione
+                 * cambierebbe la scheda di venti persone» — **era giusto e resta
+                 * giusto**: e' il motivo per cui `assignTo()` duplica, e quel
+                 * metodo non e' stato toccato.
+                 *
+                 * ⚠️ Quello che e' cambiato e' un livello sopra: non e' piu' la
+                 * **palestra** a creare il legame fra una persona e un
+                 * programma. Da un programma post-infortunio si capisce cos'e'
+                 * successo a chi lo esegue, e quel dato sul server non lo
+                 * teniamo.
+                 *
+                 * 🎯 La scheda si consegna via chat cifrata (D4).
                  */
-                /*
-                 * 🚨 **«Assegna» non c'e' piu': si manda dall'app — S7.**
-                 *
-                 * Da S6 la chat e' cifrata da un telefono all'altro, e cifrare
-                 * richiede la chiave privata del trainer — che sta **solo sul
-                 * suo telefono**. Questo pannello e' reso dal server, e il
-                 * server non ha nessuna chiave: non puo' produrre una scheda
-                 * cifrata, e una scheda non cifrata lascerebbe scritto nel
-                 * database **chi segue quale programma**.
-                 *
-                 * 💡 Non e' una funzione persa, e' una funzione spostata: il
-                 * trainer apre la chat dell'iscritto nell'app, tocca l'icona
-                 * della scheda e sceglie il modello. Da li' viaggia cifrata, e
-                 * l'iscritto la aggiunge alle proprie con un tocco.
-                 *
-                 * ⚠️ **`WorkoutPlan::assignTo()` esiste ancora** e non e' stata
-                 * cancellata: la usa `NutritionPlanResource`, e resta valida per
-                 * il giorno in cui servisse duplicare un modello dentro il
-                 * pannello. Quello che non c'e' piu' e' **questa strada**.
-                 */
-                Action::make('come_si_assegna')
-                    ->label('Come si assegna')
-                    ->icon('heroicon-m-device-phone-mobile')
-                    ->color('gray')
-                    ->visible(fn (WorkoutPlan $r): bool => $r->isTemplate())
-                    ->modalDescription(
-                        'Le schede si mandano dall\'app, dalla chat con l\'iscritto: '
-                        .'tocca l\'icona della scheda accanto al campo del messaggio e '
-                        .'scegli questo modello. Viaggia cifrata, e nessun altro puo\' '
-                        .'vedere chi segue quale programma — nemmeno noi.'
-                    )
-                    ->modalSubmitAction(false)
-                    ->action(fn () => null),
-
-                Action::make('pubblica')
-                    ->label(fn (WorkoutPlan $r): string => $r->status === PlanStatus::Published ? 'Archivia' : 'Pubblica')
-                    ->icon(fn (WorkoutPlan $r): string => $r->status === PlanStatus::Published
-                        ? 'heroicon-m-archive-box'
-                        : 'heroicon-m-paper-airplane')
-                    ->color(fn (WorkoutPlan $r): string => $r->status === PlanStatus::Published ? 'warning' : 'success')
-                    // Un modello non si pubblica: non e' di nessuno.
-                    ->visible(fn (WorkoutPlan $r): bool => ! $r->isTemplate())
-                    ->requiresConfirmation()
-                    ->modalDescription(fn (WorkoutPlan $r): string => $r->status === PlanStatus::Published
-                        ? 'L\'iscritto non la vedra\' piu\' nell\'app. Gli allenamenti gia\' fatti restano.'
-                        : 'Da questo momento l\'iscritto la vede nell\'app e comincia a seguirla.')
-                    ->action(function (WorkoutPlan $r): void {
-                        if ($r->status === PlanStatus::Published) {
-                            $r->archive();
-
-                            return;
-                        }
-
-                        $r->publish();
-
-                        app(AuditLogger::class)->log(
-                            AuditAction::WorkoutPlanPublished,
-                            $r,
-                            ['member_id' => $r->member_id, 'name' => $r->name],
-                            tenant: $r->tenant_id,
-                        );
-                    }),
 
                 ReplicateAction::make()
                     ->label('Duplica')

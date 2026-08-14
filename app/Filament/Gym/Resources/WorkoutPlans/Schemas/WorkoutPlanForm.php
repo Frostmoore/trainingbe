@@ -56,12 +56,28 @@ class WorkoutPlanForm
                         )
                         ->columnSpanFull(),
 
-                    Select::make('member_id')
-                        ->label('Assegnata a')
-                        ->options(fn (): array => static::iscritti())
-                        ->searchable()
-                        ->placeholder('Nessuno — e\' un modello riutilizzabile')
-                        ->helperText('Vuoto = modello della palestra: si assegna dopo, e assegnarlo ne fa una copia.'),
+                    /*
+                     * ⛔ **«Assegnata a» NON esiste piu'** — 14/08/2026.
+                     *
+                     * 🚨 Assegnare una scheda a una persona **sul server**
+                     * significa scrivere in tabella che quella persona segue
+                     * quel programma. Da un programma post-infortunio si capisce
+                     * cos'e' successo a chi lo esegue: e' dato sanitario, e la
+                     * decisione del committente e' che **non lo teniamo**.
+                     *
+                     * 💡 Al suo posto c'e' il «Rif. Allievo» qui sotto: una
+                     * pseudonimizzazione che sceglie il trainer, che vede solo
+                     * lui, e che non dice al server chi sia quella persona.
+                     *
+                     * ⚠️ La colonna `member_id` **resta** in tabella, e non e'
+                     * un'incoerenza: serve alle schede che **l'iscritto scrive
+                     * per se'** dall'app, dove il legame lo crea lui con i propri
+                     * dati. Quello che non esiste piu' e' che sia **la palestra**
+                     * a crearlo.
+                     *
+                     * 🎯 La scheda si consegna via **chat cifrata** (D4), dove il
+                     * server instrada una busta che non sa leggere.
+                     */
 
                     /*
                      * D3 - il promemoria privato di chi scrive la scheda.

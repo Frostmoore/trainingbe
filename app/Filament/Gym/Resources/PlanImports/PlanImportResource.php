@@ -15,7 +15,6 @@ use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -79,12 +78,16 @@ class PlanImportResource extends Resource
                 ->helperText('Massimo 20 MB. I PDF scansionati funzionano peggio: se possibile usare l\'originale digitale.')
                 ->columnSpanFull(),
 
-            Select::make('member_id')
-                ->label('Per quale iscritto')
-                ->options(fn (): array => static::iscritti())
-                ->searchable()
-                ->placeholder('Nessuno — ne faro\' un modello')
-                ->columnSpanFull(),
+            /*
+             * ⛔ **«Per quale iscritto» e' stato tolto** — 14/08/2026.
+             *
+             * 🚨 Era l'ultima porta rimasta aperta: caricare il PDF della scheda
+             * di una persona e legarlo a lei **sul server**. Il file e' gia'
+             * dato sanitario; legarlo a un nome lo rende identificabile.
+             *
+             * 💡 Da qui esce sempre un **modello**, che il trainer poi manda in
+             * chat a chi vuole — e li' il legame lo vede solo lui.
+             */
         ]);
     }
 

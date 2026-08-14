@@ -254,6 +254,52 @@ final class PannelloDeiPianiTest extends TestCase
     }
 
     #[Test]
+    public function the_panel_cannot_tie_a_plan_to_a_person(): void
+    {
+        /*
+         * 🚨 **La regola del 14/08/2026, resa verificabile.**
+         *
+         * «Il campo assegnato a non ha senso: non dobbiamo mantenere cose
+         * mediche. Deve diventare un Rif. Allievo in cui il trainer puo'
+         * pseudonimizzare l'allievo.»
+         *
+         * ⚠️ Legare un piano a una persona **sul server** significa scrivere in
+         * tabella che quella persona segue quel programma — e da un programma
+         * post-infortunio si capisce cos'e' successo a chi lo esegue.
+         *
+         * 💡 Questo test guarda **il modulo**, non il database: la colonna
+         * `member_id` resta e serve alle schede che l'iscritto scrive per se'.
+         * Quello che non deve esistere e' il campo con cui la palestra crea quel
+         * legame.
+         */
+        $this->actingAs($this->trainer);
+        app(TenantContext::class)->set($this->palestra);
+
+        foreach ([CreateNutritionPlan::class, CreateWorkoutPlan::class] as $pagina) {
+            $campi = array_keys(Livewire::test($pagina)->instance()->form->getFlatFields());
+
+            $this->assertNotContains(
+                'member_id',
+                $campi,
+                $pagina.": il modulo puo' ancora legare un piano a una persona",
+            );
+
+            // 💡 E al suo posto c'e' la pseudonimizzazione.
+            $this->assertContains('rif_allievo', $campi, $pagina.': manca il Rif. Allievo');
+        }
+    }
+
+    #[Test]
+    public function a_plan_written_from_the_panel_is_always_anonymous(): void
+    {
+        $piano = $this->pianoAlimentare();
+
+        // 🚨 D4 — nessun allievo sul server. È la forma che si può mandare in
+        // chat, ed è l'unica che il pannello sa produrre.
+        $this->assertNull($piano->fresh()->member_id);
+    }
+
+    #[Test]
     public function the_private_note_is_hidden_from_the_other_trainers(): void
     {
         $piano = $this->pianoAlimentare();

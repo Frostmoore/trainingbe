@@ -25,7 +25,9 @@ class ListPlanImports extends ListRecords
                 ->using(function (array $data): WorkoutPlanImport {
                     $import = WorkoutPlanImport::create([
                         'uploaded_by' => auth()->id(),
-                        'member_id' => $data['member_id'] ?? null,
+                        // ⛔ Sempre `null`: da un import esce un **modello**.
+                        // Vedi la nota in `PlanImportResource`.
+                        'member_id' => null,
                     ]);
 
                     // Il file arriva come oggetto caricato (`storeFiles(false)`)

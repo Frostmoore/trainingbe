@@ -26,7 +26,6 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -115,11 +114,15 @@ class NutritionPlanResource extends Resource
                 ->schema([
                     TextInput::make('name')->label('Nome')->required()->maxLength(160)->columnSpanFull(),
 
-                    Select::make('member_id')
-                        ->label('Assegnato a')
-                        ->options(fn (): array => static::iscritti())
-                        ->searchable()
-                        ->placeholder('Nessuno — e\' un modello riutilizzabile'),
+                    /*
+                     * ⛔ **«Assegnato a» NON esiste piu'** — 14/08/2026. Vedi la
+                     * nota gemella in `WorkoutPlanForm`: un piano legato a una
+                     * persona **sul server** e' dato sanitario, e la decisione
+                     * del committente e' che non lo teniamo.
+                     *
+                     * 💡 Al suo posto il «Rif. Allievo»: pseudonimizzazione
+                     * scelta dal trainer, visibile solo a lui.
+                     */
 
                     /*
                      * D3 — il promemoria privato di chi scrive il piano.
@@ -396,12 +399,23 @@ class NutritionPlanResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('Piano')->searchable()->sortable()->weight('bold'),
 
-                TextColumn::make('member.name')
-                    ->label('Assegnato a')
-                    ->placeholder('Modello')
-                    ->badge()
-                    ->color(fn (?string $state): string => $state === null ? 'gray' : 'info')
-                    ->searchable(),
+                /*
+                 * 💡 **Il «Rif. Allievo» al posto di «Assegnato a».**
+                 *
+                 * E' la sola cosa che distingue due piani che si chiamano
+                 * uguale, ed e' anche l'unica che il trainer puo' usare per
+                 * ritrovare il proprio: il server non sa a chi sia stato
+                 * mandato niente.
+                 *
+                 * 🚨 `visible()` sull'utente e non sulla riga: la colonna
+                 * sparisce per chi non e' l'autore, e comunque lo scoping mostra
+                 * solo i piani suoi. R4.
+                 */
+                TextColumn::make('rif_allievo')
+                    ->label('Rif. Allievo')
+                    ->placeholder('—')
+                    ->searchable()
+                    ->wrap(),
 
                 TextColumn::make('status')
                     ->label('Stato')
@@ -421,34 +435,22 @@ class NutritionPlanResource extends Resource
             ->recordActions([
                 EditAction::make(),
 
-                Action::make('assegna')
-                    ->label('Assegna')
-                    ->icon('heroicon-m-user-plus')
-                    ->color('success')
-                    ->visible(fn (NutritionPlan $r): bool => $r->isTemplate())
-                    ->schema([
-                        Select::make('member_id')
-                            ->label('A chi')
-                            ->options(fn (): array => static::iscritti())
-                            ->searchable()
-                            ->required(),
-                    ])
-                    ->modalDescription('Ne verra\' creata una copia sua: le modifiche successive non toccheranno il modello.')
-                    ->action(function (NutritionPlan $r, array $data): void {
-                        $membro = User::find($data['member_id']);
-
-                        if ($membro === null) {
-                            return;
-                        }
-
-                        $r->assignTo($membro, auth()->user());
-
-                        Notification::make()
-                            ->title("Copiato su {$membro->name}")
-                            ->body('E\' una bozza: pubblicalo quando e\' pronto.')
-                            ->success()
-                            ->send();
-                    }),
+                /*
+                 * ⛔ **L'azione «Assegna» e' stata tolta** — 14/08/2026.
+                 *
+                 * Creava una copia del piano **addosso a una persona**, con
+                 * `member_id` valorizzato: esattamente il legame
+                 * persona-programma che D4 ha deciso di non tenere sul server.
+                 *
+                 * 🎯 Al suo posto c'e' la **chat cifrata**: il trainer apre la
+                 * conversazione e manda il piano, che viaggia dentro una busta
+                 * che il server instrada senza poterla leggere.
+                 *
+                 * 💡 `WorkoutPlan::assignTo()` e `NutritionPlan::assignTo()`
+                 * **restano nel codice**: servono ancora a duplicare un piano, e
+                 * duplicare non e' assegnare. Quello che non c'e' piu' e' il
+                 * pulsante che lo faceva verso una persona.
+                 */
 
                 Action::make('pubblica')
                     ->label(fn (NutritionPlan $r): string => $r->status === PlanStatus::Published ? 'Archivia' : 'Pubblica')
