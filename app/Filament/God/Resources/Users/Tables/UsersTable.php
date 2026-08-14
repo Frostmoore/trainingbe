@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\God\Resources\Users\Tables;
 
+use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Audit\AuditLogger;
 use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -85,6 +88,29 @@ class UsersTable
                     ->sortable()
                     ->toggleable(),
 
+                /*
+                 * La quota AI **effettiva** — 14/08/2026.
+                 *
+                 * 🚨 Non e' la colonna `ai_monthly_call_cap`, ed e' la ragione
+                 * per cui c'e': quella colonna e' vuota per quasi tutti, e una
+                 * tabella di caselle vuote farebbe concludere «nessuno ha
+                 * quota» — il contrario del vero. Qui si legge cosa risponde la
+                 * **catena intera** (`MemberAiQuota`).
+                 *
+                 * ⚠️ Costa una query per riga, percio' e' spenta di default:
+                 * chi fa supporto la accende quando gli serve.
+                 */
+                TextColumn::make('quota_ai')
+                    ->label('Quota AI')
+                    ->badge()
+                    ->getStateUsing(fn (User $r): string => static::quotaDi($r))
+                    ->color(fn (string $state): string => match (true) {
+                        $state === 'illimitata' => 'danger',
+                        str_starts_with($state, 'sua:') => 'warning',
+                        default => 'gray',
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('created_at')
                     ->label('Iscritto il')
                     ->date('d/m/Y')
@@ -161,6 +187,78 @@ class UsersTable
             ->recordActions([
                 EditAction::make(),
 
+                /*
+                 * «AI illimitata» — l'interruttore per le prove, 14/08/2026.
+                 *
+                 * ── 🚨 Perche' un'azione e non solo il campo nel modulo ────
+                 *
+                 * Il campo c'e' gia' (`UserForm`, sezione «Quota AI»), e da solo
+                 * basterebbe. ⚠️ Ma il gesto vero e' «sblocca questi cinque
+                 * amici perche' provino l'app», e farlo dal modulo vuol dire
+                 * cinque volte: apri, scorri, scrivi `0` in due caselle
+                 * ricordandosi che **zero vuol dire illimitato**, salva, torna
+                 * indietro.
+                 *
+                 * 💡 Qui e' un tocco, e la convenzione controintuitiva
+                 * (`0` = illimitato) resta dentro il codice invece di essere una
+                 * cosa da ricordare a mano ogni volta.
+                 *
+                 * 🚨 **Ed e' un interruttore, non un pulsante**: sulla stessa
+                 * riga toglie quello che ha messo. Una concessione che si da' e
+                 * non si toglie dallo stesso posto e' una concessione che
+                 * rimane accesa per sempre — su un ambiente di prova diventa la
+                 * bolletta del mese dopo.
+                 */
+                Action::make('ai_illimitata')
+                    ->label(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'Togli illimitata' : 'AI illimitata')
+                    ->icon('heroicon-m-sparkles')
+                    ->color(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'gray' : 'warning')
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r): string => $r->ai_monthly_call_cap === 0
+                        ? "Togliere l'AI illimitata a {$r->name}?"
+                        : "Dare l'AI illimitata a {$r->name}?")
+                    ->modalDescription(fn (User $r): string => $r->ai_monthly_call_cap === 0
+                        ? 'Tornera\' al tetto che le spetta per palestra, trainer o piano.'
+                        : 'Nessun tetto mensile, foto comprese. Il costo lo paghiamo noi: '
+                          .'e\' pensata per le prove, non per i clienti. Finisce nel registro.')
+                    ->modalSubmitActionLabel(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'Togli' : 'Dai illimitata')
+                    ->action(function (User $record): void {
+                        $prima = $record->ai_monthly_call_cap;
+                        $illimitata = $prima !== 0;
+
+                        /*
+                         * 🚨 `forceFill` perche' i due tetti sono **fuori da
+                         * `$fillable`** di proposito (vedi `User`): una
+                         * concessione non si assegna in massa da una richiesta
+                         * HTTP. ⚠️ Senza, questa riga non salverebbe niente **e
+                         * non darebbe errore**.
+                         */
+                        $record->forceFill([
+                            // ⚠️ `0` = illimitato, `null` = «come le altre».
+                            // Sono opposti, e qui si usano entrambi.
+                            'ai_monthly_call_cap' => $illimitata ? 0 : null,
+                            'ai_monthly_photo_call_cap' => $illimitata ? 0 : null,
+                        ])->save();
+
+                        app(AuditLogger::class)->log(
+                            AuditAction::AiQuotaChanged,
+                            $record,
+                            [
+                                'email' => $record->email,
+                                'da' => 'elenco utenti',
+                                'dopo' => $illimitata ? 'ILLIMITATO' : 'come le altre',
+                            ],
+                            tenant: $record->tenant_id,
+                        );
+
+                        Notification::make()
+                            ->title($illimitata
+                                ? $record->name.' ha l\'AI illimitata'
+                                : $record->name.' e\' tornato al tetto normale')
+                            ->success()
+                            ->send();
+                    }),
+
                 // ───────────────────── impersonazione ─────────────────────
                 //
                 // 🚨 Il controllo sta in `Impersonator::can()`, non qui: qui c'e'
@@ -204,6 +302,30 @@ class UsersTable
     }
 
     /** @return list<string> */
+    /**
+     * La quota **effettiva**, in forma corta per un badge.
+     *
+     * 💡 Distingue «gliel'abbiamo data noi» da «le spetta»: `sua:` marca il
+     * tetto scritto **su questa persona**, che e' l'unico che qualcuno ha
+     * deciso a mano e l'unico che abbia senso andare a togliere.
+     */
+    private static function quotaDi(User $utente): string
+    {
+        if ($utente->ai_monthly_call_cap === 0) {
+            return 'illimitata';
+        }
+
+        if ($utente->ai_monthly_call_cap !== null) {
+            return 'sua: '.$utente->ai_monthly_call_cap;
+        }
+
+        $tetto = app(MemberAiQuota::class)->capFor($utente);
+
+        // ⚠️ `null` da `capFor()` vuol dire **illimitato**: la catena e' gia'
+        // stata risolta, e lo `0` di un livello superiore e' gia' tradotto.
+        return $tetto === null ? 'illimitata' : (string) $tetto;
+    }
+
     private static function ruoliDi(User $user): array
     {
         $ruoli = DB::table('model_has_roles')

@@ -40,6 +40,19 @@ enum AuditAction: string
     case EmailChanged = 'user.email_changed';
     case PasswordChanged = 'user.password_changed';
 
+    /*
+     * La quota AI concessa a mano dalla piattaforma — 14/08/2026.
+     *
+     * 🚨 **E' una concessione, e le concessioni si tracciano.** Da qui si puo'
+     * mettere una persona a **illimitato**: chi guarda il costo del mese dopo
+     * deve poter risalire a chi gliel'ha dato e quando, senza doverlo dedurre
+     * dai consumi.
+     *
+     * ⚠️ E' anche l'unico campo del pannello che puo' far spendere denaro vero
+     * **senza che nessuno compri niente**.
+     */
+    case AiQuotaChanged = 'user.ai_quota_changed';
+
     public function label(): string
     {
         return match ($this) {
@@ -55,6 +68,7 @@ enum AuditAction: string
             self::NutritionPlanPublished => 'Piano alimentare pubblicato',
             self::EmailChanged => 'Email modificata',
             self::PasswordChanged => 'Password modificata',
+            self::AiQuotaChanged => 'Quota AI modificata',
         };
     }
 
@@ -63,7 +77,8 @@ enum AuditAction: string
     {
         return match ($this) {
             self::ImpersonationStarted, self::UserDeleted, self::TenantSuspended => 'danger',
-            self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged => 'warning',
+            self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged,
+            self::AiQuotaChanged => 'warning',
             default => 'gray',
         };
     }

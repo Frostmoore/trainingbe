@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\God\Resources\Users\Schemas;
 
 use App\Models\User;
+use App\Services\Ai\Quota\MemberAiQuota;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -84,6 +85,59 @@ class UserForm
                         ->content(fn (?User $record): string => static::ruoliDi($record)),
                 ]),
 
+            /*
+             * La quota AI di questa persona — 14/08/2026.
+             *
+             * ── 🚨 Tre valori, e sono TRE cose diverse ─────────────────────
+             *
+             * | Valore | Significato |
+             * |---|---|
+             * | **vuoto** | «non decide questo livello» → si scende al successivo |
+             * | **`0`** | **illimitato** |
+             * | **`N`** | esattamente N chiamate al mese |
+             *
+             * ⚠️ Vuoto e `0` sembrano la stessa cosa e sono opposti: senza la
+             * distinzione non si potrebbe sbloccare **una persona sola**
+             * lasciando il default a tutte le altre — si potrebbe solo alzare
+             * il tetto a tutti. E' la stessa convenzione di tutti e cinque i
+             * livelli della catena (`MemberAiQuota::capFor()`).
+             *
+             * 🚨 **Qui non si decide se l'AI spetti**, e non esiste un valore
+             * che voglia dire «niente AI»: quella domanda ha un cancello suo,
+             * `RequirePlanWithAi`, che gira **prima** (D2). Mettere `0` a chi ha
+             * un piano senza AI non gliela accende.
+             */
+            Section::make('Quota AI')
+                ->description(
+                    'Vale solo per questa persona e scavalca palestra, trainer e piano. '
+                    .'Lasciare vuoto per usare il tetto che le spetterebbe.'
+                )
+                ->columns(2)
+                ->schema([
+                    TextInput::make('ai_monthly_call_cap')
+                        ->label('Chiamate AI al mese')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100000)
+                        ->helperText('Vuoto = come le altre. 0 = ILLIMITATO. Altrimenti il numero di chiamate.'),
+
+                    TextInput::make('ai_monthly_photo_call_cap')
+                        ->label('...di cui con foto')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100000)
+                        ->helperText(
+                            'SOTTO-LIMITE del numero qui sopra, non un budget a parte: '
+                            .'una foto consuma entrambi i contatori, e costa circa sette volte '
+                            .'una chiamata normale. Vuoto = come le altre. 0 = illimitato.'
+                        ),
+
+                    Placeholder::make('quota_effettiva')
+                        ->label('Quanto le spetta adesso')
+                        ->columnSpanFull()
+                        ->content(fn (?User $record): string => static::quotaEffettiva($record)),
+                ]),
+
             Section::make('Stato')
                 ->columns(2)
                 ->schema([
@@ -96,6 +150,40 @@ class UserForm
                         ->content(fn (?User $record): string => $record?->last_login_at?->format('d/m/Y H:i') ?? 'mai'),
                 ]),
         ]);
+    }
+
+    /**
+     * Quanto le spetta **davvero**, con il consumo del mese.
+     *
+     * ── 🚨 Perche' questa riga vale piu' dei due campi sopra ───────────────
+     *
+     * I campi dicono cosa e' stato scritto **a questo livello**; questa riga
+     * dice cosa risponde la catena intera (`MemberAiQuota`). ⚠️ Sono due cose
+     * diverse tutte le volte che il campo e' vuoto — cioe' quasi sempre — e
+     * senza questa riga chi guarda il modulo vede due caselle vuote e conclude
+     * «non ha quota», che e' esattamente il contrario del vero.
+     *
+     * 💡 Mostra anche il **consumato**: un tetto senza il consumo non dice se
+     * serva alzarlo.
+     */
+    private static function quotaEffettiva(?User $record): string
+    {
+        if ($record === null) {
+            return '—';
+        }
+
+        $quota = app(MemberAiQuota::class);
+
+        $descrivi = static function (?int $tetto, int $usate): string {
+            // ⚠️ `null` qui vuol dire **illimitato**, non «non impostato»:
+            // `capFor()` ha gia' risolto la catena e ha gia' tradotto lo `0`.
+            return $tetto === null
+                ? "illimitato ({$usate} usate questo mese)"
+                : "{$usate} / {$tetto} questo mese";
+        };
+
+        return 'Chiamate: '.$descrivi($quota->capFor($record), $quota->usedThisMonth($record))
+            .' · con foto: '.$descrivi($quota->capFor($record, true), $quota->usedThisMonth($record, true));
     }
 
     /**
