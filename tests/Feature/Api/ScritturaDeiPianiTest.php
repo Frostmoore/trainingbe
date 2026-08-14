@@ -366,4 +366,130 @@ final class ScritturaDeiPianiTest extends TestCase
 
         $this->assertSame('cedimento', $piano->exercises()->first()->reps);
     }
+
+    // ────────── il round-trip: quello che si scrive si rilegge — G7 ──────────
+
+    /**
+     * 🚨 **Il difetto che bloccava G7.2, e che nessun test vedeva.**
+     *
+     * La scrittura annidata c'era da `G5.2`, ma `dettaglio()` tornava **solo la
+     * lista piatta**: i test di scrittura guardavano il *database* e passavano,
+     * mentre l'API raccontava una scheda a un giorno solo.
+     *
+     * ⚠️ Un compositore costruito su quella risposta avrebbe riaperto una scheda
+     * a tre giorni mostrandone uno, e al primo salvataggio avrebbe **cancellato
+     * gli altri due**. Un round-trip che perde dati e' peggio di una funzione
+     * mancante: distrugge invece di rifiutarsi.
+     */
+    #[Test]
+    public function what_the_app_writes_it_can_read_back(): void
+    {
+        $creata = $this->actingAs($this->iscritto, 'sanctum')
+            ->postJson('/api/v1/workout-plans', [
+                'name' => 'Split',
+                'days' => [
+                    [
+                        'name' => 'Giorno A',
+                        'exercises' => [[
+                            'name' => 'Panca piana',
+                            'sets' => 4,
+                            'reps' => '8-10',
+                            'notes' => 'fermo un secondo al petto',
+                            'alternatives' => [['name' => 'Panca con manubri', 'sets' => 4, 'reps' => '10']],
+                        ]],
+                    ],
+                    ['name' => 'Giorno B', 'exercises' => [['name' => 'Trazioni', 'sets' => 4]]],
+                ],
+            ])
+            ->assertCreated();
+
+        $r = $this->actingAs($this->iscritto, 'sanctum')
+            ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
+            ->assertOk();
+
+        $r->assertJsonCount(2, 'data.days')
+            ->assertJsonPath('data.days.0.name', 'Giorno A')
+            ->assertJsonPath('data.days.1.name', 'Giorno B')
+            ->assertJsonCount(1, 'data.days.0.exercises')
+            ->assertJsonPath('data.days.0.exercises.0.name', 'Panca piana')
+            ->assertJsonPath('data.days.0.exercises.0.notes', 'fermo un secondo al petto')
+            // 🚨 L'alternativa e' li' dentro, e **non** fra gli esercizi da fare.
+            ->assertJsonCount(1, 'data.days.0.exercises.0.alternatives')
+            ->assertJsonPath('data.days.0.exercises.0.alternatives.0.name', 'Panca con manubri');
+
+        /*
+         * 💡 **E il `name` in cima all'esercizio, non solo dentro `exercise`.**
+         * `WorkoutPlanRequest` vuole il **nome** in scrittura, non l'id: senza
+         * questo campo il compositore dovrebbe risalire al catalogo per poter
+         * risalvare quello che ha appena letto.
+         */
+        $this->assertSame('Trazioni', $r->json('data.days.1.exercises.0.name'));
+    }
+
+    /**
+     * ⚠️ **`exercises` piatto resta, e resta corretto.**
+     *
+     * E' quello che l'app gia' installata legge. Toglierlo — o riempirlo di
+     * alternative adesso che ci sono — spegnerebbe la scheda su ogni telefono
+     * non aggiornato, ed e' un guasto che nessun altro test vedrebbe.
+     */
+    #[Test]
+    public function the_flat_list_still_answers_and_still_excludes_the_alternatives(): void
+    {
+        $creata = $this->actingAs($this->iscritto, 'sanctum')
+            ->postJson('/api/v1/workout-plans', [
+                'name' => 'Split',
+                'days' => [[
+                    'exercises' => [[
+                        'name' => 'Panca piana',
+                        'alternatives' => [['name' => 'Panca con manubri']],
+                    ]],
+                ]],
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->iscritto, 'sanctum')
+            ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
+            ->assertOk()
+            // Un esercizio da fare, non due: l'alternativa e' una scelta, non
+            // una riga in piu' da eseguire.
+            ->assertJsonCount(1, 'data.exercises')
+            ->assertJsonPath('data.exercises.0.exercise.name', 'Panca piana');
+    }
+
+    /**
+     * 🚨 R4 vale anche sulle schede, e adesso che il campo si legge **si vede**.
+     *
+     * ⚠️ Prima di G7 `dettaglio()` non tornava mai `rif_allievo`: la regola era
+     * rispettata **per assenza**, non per difesa. Aggiungerlo alla risposta
+     * senza la guardia lo avrebbe consegnato a chiunque potesse aprire la
+     * scheda.
+     */
+    #[Test]
+    public function the_private_note_of_a_workout_plan_is_only_for_its_author(): void
+    {
+        $creata = $this->actingAs($this->trainer, 'sanctum')
+            ->postJson('/api/v1/workout-plans', [
+                'name' => 'Riatletizzazione',
+                'rif_allievo' => 'M.R. spalla dx',
+                'days' => [['exercises' => [['name' => 'Curl']]]],
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->trainer, 'sanctum')
+            ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
+            ->assertOk()
+            ->assertJsonPath('data.rif_allievo', 'M.R. spalla dx');
+
+        // 💡 La chiave **sparisce**, non arriva vuota: presente e a volte piena
+        // direbbe comunque *che un riferimento esiste*.
+        $altrui = $this->actingAs($this->iscritto, 'sanctum')
+            ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'));
+
+        if ($altrui->status() === 200) {
+            $this->assertArrayNotHasKey('rif_allievo', $altrui->json('data'));
+        } else {
+            $altrui->assertStatus(404);
+        }
+    }
 }

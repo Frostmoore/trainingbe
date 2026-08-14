@@ -455,31 +455,158 @@ class WorkoutPlanController extends Controller
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function dettaglio(WorkoutPlan $p): array
+    /**
+     * Il «Rif. Allievo», **solo a chi l'ha scritto** — R4, G7.
+     *
+     * 🚨 **La chiave sparisce, non arriva vuota.** Una chiave sempre presente e
+     * a volte piena direbbe comunque *che un riferimento esiste*, e su un elenco
+     * di modelli anonimi anche solo questo e' un'informazione sul lavoro di un
+     * collega.
+     *
+     * ⚠️ Gemella di `NutritionPlanController::rifAllievo()`. Sono due perche' i
+     * due controller non condividono niente, e la duplicazione e' **voluta**:
+     * un metodo comune in una classe base renderebbe possibile toglierlo da un
+     * lato solo senza che niente se ne accorga.
+     *
+     * @return array<string, mixed>
+     */
+    private function rifAllievo(WorkoutPlan $p, ?User $chiGuarda): array
     {
+        return $chiGuarda !== null && $chiGuarda->getKey() === $p->created_by
+            ? ['rif_allievo' => $p->rif_allievo]
+            : [];
+    }
+
+    /**
+     * Una scheda per intero.
+     *
+     * ── 🚨 `exercises` E `days`: due viste della stessa cosa, e servono entrambe ──
+     *
+     * `exercises` e' la lista **piatta** dei soli esercizi principali, ed e' la
+     * forma che l'app gia' installata sa leggere: toglierla spegnerebbe la
+     * scheda su ogni telefono non ancora aggiornato. ⚠️ E' la stessa ragione per
+     * cui `WorkoutPlanRequest` continua ad accettare `exercises` piatto in
+     * scrittura — le due compatibilita' vanno tenute **insieme**, o si finisce
+     * con un'app che sa scrivere una forma e leggerne un'altra.
+     *
+     * `days` e' l'albero vero: giorni, alternative dei giorni, esercizi e loro
+     * alternative. E' quello che serve al compositore (G7.2).
+     *
+     * 💡 **Senza `days` il compositore non poteva esistere.** La scrittura
+     * annidata c'era da `G5.2`, ma questo metodo tornava solo la lista piatta:
+     * riaprire una scheda a tre giorni ne avrebbe mostrato uno solo, e il primo
+     * salvataggio avrebbe **cancellato gli altri due**. Un round-trip che perde
+     * dati e' peggio di una funzione mancante, perche' distrugge invece di
+     * rifiutarsi.
+     *
+     * @return array<string, mixed>
+     */
+    private function dettaglio(WorkoutPlan $p, ?User $chiGuarda = null): array
+    {
+        $giorni = $p->days()
+            ->with(['exercisesConAlternative.exercise', 'alternative.exercisesConAlternative.exercise'])
+            ->orderBy('position')
+            ->get();
+
         return array_merge($this->riassunto($p), [
-            'exercises' => $p->exercises->map(fn ($r): array => [
-                'id' => $r->id,
-                'position' => $r->position,
-                'exercise' => [
-                    'id' => $r->exercise?->id,
-                    'name' => $r->exercise?->name,
-                    'muscle_group' => $r->exercise?->muscle_group?->value,
-                    'equipment' => $r->exercise?->equipment,
-                    // C23 — la miniatura accanto all'esercizio, nella scheda e
-                    // nel player: durante l'allenamento un'immagine dice quale
-                    // movimento e' molto piu' in fretta di un nome.
-                    'image_url' => $r->exercise?->imageUrl(),
-                ],
-                'sets' => $r->sets,
-                'reps' => $r->reps,
-                'rest_sec' => $r->rest_sec,
-                'duration_sec' => $r->duration_sec,
-                'target_weight' => $r->target_weight,
-                'notes' => $r->notes,
-                'prescription' => $r->prescription(),
-            ])->all(),
+            ...$this->rifAllievo($p, $chiGuarda ?? request()->user()),
+
+            // D15 — l'identita' stabile. 💡 E' cio' che permette al telefono di
+            // chi riceve di riconoscere una **versione nuova** della stessa
+            // scheda e sostituirla, invece di affiancarla.
+            'origine_id' => $p->origine_id,
+
+            'exercises' => $p->exercises->map(fn ($r): array => $this->esercizio($r))->all(),
+            'days' => $giorni->map(fn (WorkoutPlanDay $g): array => $this->giorno($g))->values()->all(),
         ]);
+    }
+
+    /**
+     * Un giorno, con i suoi esercizi e le sue alternative — D2.
+     *
+     * 💡 **Un solo livello di ricorsione, e non e' una svista**: un giorno
+     * alternativo ha i propri esercizi, ma non ha a sua volta altri giorni
+     * alternativi. Se li avesse, «quale giorno sto seguendo» smetterebbe di
+     * avere una risposta unica.
+     *
+     * @return array<string, mixed>
+     */
+    private function giorno(WorkoutPlanDay $g): array
+    {
+        return [
+            'id' => $g->getKey(),
+            'name' => $g->name,
+            'notes' => $g->notes,
+            'position' => $g->position,
+
+            // ⚠️ `exercisesConAlternative` e poi si separa **qui**: la relazione
+            // `exercises()` esclude le alternative (G4), quindi caricando quella
+            // le alternative non arriverebbero mai — e sparirebbero al primo
+            // salvataggio fatto dal compositore.
+            'exercises' => $g->exercisesConAlternative
+                ->whereNull('alternativa_di_id')
+                ->map(fn ($r): array => $this->esercizio($r, $g))
+                ->values()
+                ->all(),
+
+            'alternatives' => $g->alternative->map(fn (WorkoutPlanDay $a): array => [
+                'id' => $a->getKey(),
+                'name' => $a->name,
+                'notes' => $a->notes,
+                'position' => $a->position,
+                'exercises' => $a->exercisesConAlternative
+                    ->whereNull('alternativa_di_id')
+                    ->map(fn ($r): array => $this->esercizio($r, $a))
+                    ->values()
+                    ->all(),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Un esercizio, ovunque compaia.
+     *
+     * 🚨 **Il `name` in cima e' quello dell'esercizio del catalogo**, ed e' il
+     * campo che il compositore rimanda indietro in scrittura: `WorkoutPlanRequest`
+     * vuole il **nome**, non l'id, perche' la riconciliazione la fa
+     * `ExerciseMatcher`. Tornare solo l'id costringerebbe l'app a tenersi una
+     * copia del catalogo per poter risalvare quello che ha appena letto.
+     *
+     * @return array<string, mixed>
+     */
+    private function esercizio(PlanExercise $r, ?WorkoutPlanDay $giorno = null): array
+    {
+        return [
+            'id' => $r->id,
+            'position' => $r->position,
+            'name' => $r->exercise?->name,
+            'exercise' => [
+                'id' => $r->exercise?->id,
+                'name' => $r->exercise?->name,
+                'muscle_group' => $r->exercise?->muscle_group?->value,
+                'equipment' => $r->exercise?->equipment,
+                // C23 — la miniatura accanto all'esercizio, nella scheda e
+                // nel player: durante l'allenamento un'immagine dice quale
+                // movimento e' molto piu' in fretta di un nome.
+                'image_url' => $r->exercise?->imageUrl(),
+            ],
+            'sets' => $r->sets,
+            'reps' => $r->reps,
+            'rest_sec' => $r->rest_sec,
+            'duration_sec' => $r->duration_sec,
+            'target_weight' => $r->target_weight,
+            'notes' => $r->notes,
+            'prescription' => $r->prescription(),
+
+            // Le alternative arrivano solo quando l'esercizio sta dentro un
+            // giorno: nella lista piatta non c'e' il giorno da cui prenderle.
+            'alternatives' => $giorno === null
+                ? []
+                : $giorno->exercisesConAlternative
+                    ->where('alternativa_di_id', $r->getKey())
+                    ->map(fn ($a): array => $this->esercizio($a))
+                    ->values()
+                    ->all(),
+        ];
     }
 }
