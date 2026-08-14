@@ -1,8 +1,13 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\AdminPanelProvider;
+use App\Providers\Filament\GodPanelProvider;
+use App\Providers\RateLimitServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\Filament\AdminPanelProvider::class,
-    App\Providers\Filament\GodPanelProvider::class,
-    App\Providers\RateLimitServiceProvider::class,
+    AppServiceProvider::class,
+    AdminPanelProvider::class,
+    GodPanelProvider::class,
+    RateLimitServiceProvider::class,
 ];

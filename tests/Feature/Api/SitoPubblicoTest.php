@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Enums\PlanKind;
 use App\Enums\UserRole;
 use App\Models\Plan;
 use App\Services\Tenancy\CreaTenantPersonale;
@@ -83,6 +84,69 @@ class SitoPubblicoTest extends TestCase
         $this->get('/')->assertOk()->assertDontSee(// ⚠️ Senza l'apostrofo: Blade lo scrive come `&#039;`, e cercarlo in
             // chiaro farebbe fallire un test che sta verificando tutt'altro.
             'Niente funzioni con l', escape: false);
+    }
+
+    /**
+     * 🚨 **I numeri della quota vengono dalle stesse colonne del cancello** — G10.2.
+     *
+     * ⚠️ È la stessa classe di errore del prezzo, un piano più in là: «quota AI
+     * inclusa» non è una promessa verificabile, **«400 richieste al mese» sì** —
+     * e il giorno in cui il listino dicesse 400 e `MemberAiQuota` ne concedesse
+     * 200, il cliente lo scoprirebbe alla duecentounesima.
+     */
+    #[Test]
+    public function the_price_list_says_how_many_ai_calls_are_included(): void
+    {
+        Plan::query()->where('kind', PlanKind::Gym->value)->update([
+            'ai_enabled' => true,
+            'ai_monthly_calls_per_member' => 373,
+            'ai_monthly_photo_calls_per_member' => 41,
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('373')
+            ->assertSee('41');
+    }
+
+    /**
+     * 💡 **I due tetti di una palestra sono due, e si moltiplicano** — D5.
+     *
+     * Chi legge solo «fino a 10 trainer» si fa il conto sbagliato: quello che
+     * compra sono 10 × il tetto per trainer.
+     */
+    #[Test]
+    public function a_gym_sees_both_of_its_caps(): void
+    {
+        Plan::query()->where('kind', PlanKind::Gym->value)->update([
+            'max_trainers' => 7,
+            'max_members_per_trainer' => 23,
+        ]);
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Fino a 7 trainer')
+            ->assertSee('Fino a 23 iscritti per trainer');
+    }
+
+    /**
+     * 🚨 **Il sito non promette una funzione che non esiste più** — 14/08/2026.
+     *
+     * ⚠️ Diceva «li assegni dal telefono», e dal 14/08 dal pannello **non si
+     * assegna più niente**: un programma si consegna via chat cifrata (D4). Una
+     * promessa che il prodotto non mantiene è peggio di una funzione mancante,
+     * perché si scopre dopo aver pagato.
+     */
+    #[Test]
+    public function the_site_does_not_promise_assignment(): void
+    {
+        $r = $this->get('/')->assertOk();
+
+        $r->assertDontSee('li assegni');
+
+        // 💡 E dice la cosa che al trainer interessa davvero sapere prima di
+        // pagare: R8 — un programma consegnato non gli si può togliere.
+        $r->assertSee('non spariscono', escape: false);
     }
 
     // ─────────────────── L'atterraggio di un invito — F6.2 ───────────────────

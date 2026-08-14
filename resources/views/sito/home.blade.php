@@ -42,6 +42,19 @@
                             ? 'Stima da testo e da foto, consiglio del giorno'
                             : 'Niente funzioni con l\'AI' }}
                     </li>
+                    {{-- 💡 **Il numero, non l'aggettivo** — G10.2. «Quota AI
+                         inclusa» non dice niente; «400 richieste al mese, di cui
+                         40 con foto» dice esattamente cosa si compra, e viene
+                         dalle stesse colonne che il cancello legge per dire di
+                         no. --}}
+                    @if ($piano->ai_enabled && $piano->chiamateAlMese())
+                        <li>
+                            {{ $piano->chiamateAlMese() }} richieste all'AI al mese
+                            @if ($piano->chiamateConFotoAlMese())
+                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
+                            @endif
+                        </li>
+                    @endif
                 </ul>
             </div>
         @endforeach
@@ -50,8 +63,16 @@
     {{-- ── I trainer indipendenti ─────────────────────────────────────── --}}
     <h2>Per i trainer indipendenti</h2>
     <p class="nota">
-        Componi schede e piani dal computer, li assegni dal telefono. I tuoi
+        Componi schede e piani dal computer, li mandi dal telefono. I tuoi
         utenti entrano con un link tuo — non serve una palestra.
+    </p>
+    {{-- 🚨 «li mandi», non «li assegni» — 14/08/2026. Non è una sfumatura di
+         copy: dal pannello **non si assegna più niente**, un programma si
+         consegna via chat cifrata (D4). Una promessa sul sito che il prodotto
+         non mantiene è la peggiore delle due cose. --}}
+    <p class="nota">
+        I programmi viaggiano cifrati e restano sul telefono di chi li riceve:
+        <strong>non spariscono</strong> se un giorno smettete di lavorare insieme.
     </p>
 
     <div class="griglia">
@@ -68,6 +89,14 @@
                     <li class="{{ $piano->ai_enabled ? '' : 'no' }}">
                         {{ $piano->ai_enabled ? 'Quota AI condivisa con i tuoi' : 'Niente funzioni con l\'AI' }}
                     </li>
+                    @if ($piano->ai_enabled && $piano->chiamateAlMese())
+                        <li>
+                            {{ $piano->chiamateAlMese() }} richieste al mese <em>per ogni utente</em>
+                            @if ($piano->chiamateConFotoAlMese())
+                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
+                            @endif
+                        </li>
+                    @endif
                 </ul>
             </div>
         @endforeach
@@ -90,7 +119,26 @@
                 <ul class="elenco">
                     <li>App white-label con il tuo marchio</li>
                     <li>Pannello per lo staff, schede e piani</li>
-                    <li>Quota AI inclusa per ogni iscritto</li>
+                    {{-- 🚨 **I due tetti che una palestra deve sapere prima di
+                         firmare** — D5. Sono due numeri diversi e si moltiplicano
+                         fra loro: quanti trainer, e quanti allievi ciascuno. Chi
+                         legge solo il primo si fa il conto sbagliato. --}}
+                    @if ($piano->max_trainers)
+                        <li>Fino a {{ $piano->max_trainers }} trainer</li>
+                    @endif
+                    @if ($piano->tettoAllieviPerTrainer())
+                        <li>Fino a {{ $piano->tettoAllieviPerTrainer() }} iscritti per trainer</li>
+                    @endif
+                    @if ($piano->chiamateAlMese())
+                        <li>
+                            {{ $piano->chiamateAlMese() }} richieste all'AI al mese <em>per iscritto</em>
+                            @if ($piano->chiamateConFotoAlMese())
+                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
+                            @endif
+                        </li>
+                    @else
+                        <li>Quota AI inclusa per ogni iscritto</li>
+                    @endif
                 </ul>
             </div>
         @endforeach
