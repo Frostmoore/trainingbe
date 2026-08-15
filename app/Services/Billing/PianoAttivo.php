@@ -40,7 +40,10 @@ use App\Support\Tenancy\TenantContext;
  */
 class PianoAttivo
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly PortafoglioGettoni $portafoglio,
+    ) {}
 
     /**
      * Il piano in corso per questa persona. Mai `null`.
@@ -82,6 +85,52 @@ class PianoAttivo
         );
 
         return $abbonamento?->plan ?? $this->piadinoDiRiserva();
+    }
+
+    /**
+     * 🎯 **L'AI si puo' usare?** — la domanda del cancello, 15/08/2026.
+     *
+     * ── 🚨 Diversa da `haLaAi()`, e la differenza vale soldi ───────────────
+     *
+     * `haLaAi()` risponde «il piano la comprende». Questa risponde «questa
+     * persona puo' fare una chiamata», e sono due cose diverse dal momento in
+     * cui **i gettoni si comprano**: chi ha pagato deve poter usare cio' che ha
+     * comprato, anche se il suo piano l'AI non ce l'ha.
+     *
+     * ⚠️ **Era il difetto**: `RequirePlanWithAi` chiedeva `haLaAi()`, quindi
+     * rispondeva `403` **prima** che il portafoglio venisse interrogato. Chi
+     * comprava cento gettoni su un piano `free` non otteneva niente — e non
+     * c'era nessun modo di accorgersene dal codice del portafoglio, che
+     * funzionava benissimo e non veniva mai raggiunto.
+     *
+     * ── L'ordine, che non e' arbitrario ────────────────────────────────────
+     *
+     * | # | Condizione | Esito |
+     * |---|---|---|
+     * | 1 | `ai_enabled_override === false` | 🚨 **no**, e vince su tutto |
+     * | 2 | il piano (o l'override `true`) la comprende | si |
+     * | 3 | il portafoglio ha almeno un gettone | si |
+     *
+     * 🚨 **Lo spegnimento esplicito vince anche sui gettoni**, ed e' voluto: chi
+     * ha spento l'AI a una persona dal pannello non deve vedersela riaccendere
+     * perche' la palestra ha ricaricato. Un interruttore che si riaccende da
+     * solo non e' un interruttore.
+     *
+     * 💡 Qui basta **un** gettone: se non bastano per *questa* chiamata lo dice
+     * il controller, con `402` e il numero esatto che serve. Il cancello decide
+     * se l'AI esista per questa persona, non se sia sufficiente il credito.
+     */
+    public function aiUtilizzabile(User $utente): bool
+    {
+        if ($utente->ai_enabled_override === false) {
+            return false;
+        }
+
+        if ($this->haLaAi($utente)) {
+            return true;
+        }
+
+        return $this->portafoglio->saldo($utente) > 0;
     }
 
     /**

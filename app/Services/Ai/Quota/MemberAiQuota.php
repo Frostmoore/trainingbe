@@ -201,6 +201,31 @@ class MemberAiQuota
      */
     public function hasQuotaLeft(User $utente, AiFeature $funzione): bool
     {
+        /*
+         * 🚨 **Chi ha l'AI SOLO dai gettoni non ha nessuna quota inclusa** —
+         * 15/08/2026.
+         *
+         * ⚠️ Senza questa riga si apriva una falla che costava piu' del difetto
+         * che si stava correggendo. Il piano `free` ha
+         * `ai_monthly_calls_per_member = null`, cioe' «non decide questo
+         * livello»: la catena scendeva fino al **default di sistema, 400
+         * chiamate**. Risultato: chi comprava **un** gettone si portava a casa
+         * 400 chiamate gratis prima di spenderlo.
+         *
+         * 🎯 La regola giusta e' semplice e va detta a parole: **la quota
+         * inclusa esiste solo se il piano comprende l'AI**. Chi l'AI ce l'ha
+         * perche' ha comprato dei gettoni, paga ogni chiamata con quelli — che
+         * e' esattamente cio' per cui li ha comprati.
+         *
+         * 💡 `haLaAi()` e non `aiUtilizzabile()`: qui serve sapere se l'AI
+         * spetti **per contratto**, non se sia usabile in qualunque modo.
+         * Chiamare la seconda darebbe sempre `true` a chi ha gettoni, cioe'
+         * rimetterebbe in piedi la falla.
+         */
+        if (! app(PianoAttivo::class)->haLaAi($utente)) {
+            return false;
+        }
+
         if ($funzione->isMultimodal()) {
             $foto = $this->remaining($utente, conFoto: true);
 

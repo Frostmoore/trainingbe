@@ -51,7 +51,20 @@ class RequirePlanWithAi
     {
         $utente = $request->user();
 
-        if ($utente instanceof User && ! $this->piano->haLaAi($utente)) {
+        /*
+         * 🚨 `aiUtilizzabile()` e non `haLaAi()` — 15/08/2026.
+         *
+         * `haLaAi()` chiede «il piano la comprende»; qui serve «questa persona
+         * puo' fare una chiamata», e dal momento in cui i gettoni si comprano
+         * sono due domande diverse.
+         *
+         * ⚠️ **Era il difetto**: chi comprava cento gettoni su un piano senza AI
+         * si vedeva rispondere `403` **prima** che il portafoglio fosse
+         * interrogato. Il codice del portafoglio era corretto e non veniva mai
+         * raggiunto — il tipo di guasto che non si trova leggendo la parte che
+         * non funziona.
+         */
+        if ($utente instanceof User && ! $this->piano->aiUtilizzabile($utente)) {
             return response()->json([
                 'message' => __('Le funzioni con l\'AI non sono comprese nel tuo piano.'),
                 'code' => 'plan_without_ai',

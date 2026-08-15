@@ -78,7 +78,20 @@ class UserResource extends JsonResource
              * `RequirePlanWithAi`, che risponde `403` anche a un'app che
              * ignorasse questo campo. Un client non decide mai i permessi.
              */
-            'ai_enabled' => app(PianoAttivo::class)->haLaAi($this->resource),
+            /*
+             * 🚨 `aiUtilizzabile()` e non `haLaAi()` — 15/08/2026.
+             *
+             * ⚠️ Deve dire la **stessa cosa del cancello**, o le due risposte
+             * divergono: con `haLaAi()` chi aveva comprato gettoni su un piano
+             * senza AI si vedeva l'app **senza pulsanti**, mentre il server
+             * avrebbe accettato la chiamata. Aveva pagato e non trovava dove
+             * usare quello che aveva comprato.
+             *
+             * 💡 La regola generale: questa bandierina e `RequirePlanWithAi`
+             * rispondono alla stessa domanda e devono chiamare lo **stesso**
+             * metodo. Due implementazioni della stessa regola divergono sempre.
+             */
+            'ai_enabled' => app(PianoAttivo::class)->aiUtilizzabile($this->resource),
             /*
              * C7.2 — il profilo c'è **sempre**, anche vuoto.
              *
