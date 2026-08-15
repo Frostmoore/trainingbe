@@ -29,7 +29,7 @@ class EditUser extends EditRecord
      * si veniva non permette di capire se sia stata una concessione o un
      * ritocco.
      *
-     * @var array{chiamate: ?int, foto: ?int}|null
+     * @var array{chiamate: ?int, foto: ?int, accesa: ?bool}|null
      */
     private ?array $quotaPrima = null;
 
@@ -68,6 +68,7 @@ class EditUser extends EditRecord
         $this->quotaPrima = [
             'chiamate' => $record->ai_monthly_call_cap,
             'foto' => $record->ai_monthly_photo_call_cap,
+            'accesa' => $record->ai_enabled_override,
         ];
 
         return $data;
@@ -96,9 +97,14 @@ class EditUser extends EditRecord
         $tetti = [
             'ai_monthly_call_cap' => $this->interoONiente($data['ai_monthly_call_cap'] ?? null),
             'ai_monthly_photo_call_cap' => $this->interoONiente($data['ai_monthly_photo_call_cap'] ?? null),
+            'ai_enabled_override' => $this->treStati($data['ai_enabled_override'] ?? null),
         ];
 
-        unset($data['ai_monthly_call_cap'], $data['ai_monthly_photo_call_cap']);
+        unset(
+            $data['ai_monthly_call_cap'],
+            $data['ai_monthly_photo_call_cap'],
+            $data['ai_enabled_override'],
+        );
 
         $record->fill($data);
         $record->forceFill($tetti);
@@ -125,6 +131,27 @@ class EditUser extends EditRecord
         }
 
         return (int) $valore;
+    }
+
+    /**
+     * La tendina a **tre** stati del cancello AI.
+     *
+     * 🚨 `''` non e' `false`: e' «decide il piano». Sono tre valori e vanno
+     * distinti fino in fondo — un `(bool)` su questa stringa direbbe `false`
+     * per **due** dei tre, cioe' spegnerebbe l'AI a chi voleva solo lasciare le
+     * cose come stavano.
+     *
+     * ⚠️ E' lo stesso errore di `interoONiente()`, sull'altro campo e con
+     * l'altro tipo: quando un modulo ha un valore che significa «non decido»,
+     * il pericolo e' sempre che il cast lo trasformi in una decisione.
+     */
+    private function treStati(mixed $valore): ?bool
+    {
+        return match ((string) $valore) {
+            '1' => true,
+            '0' => false,
+            default => null,
+        };
     }
 
     protected function afterSave(): void
@@ -165,6 +192,7 @@ class EditUser extends EditRecord
         $dopo = [
             'chiamate' => $record->ai_monthly_call_cap,
             'foto' => $record->ai_monthly_photo_call_cap,
+            'accesa' => $record->ai_enabled_override,
         ];
 
         if ($prima === $dopo) {
@@ -176,20 +204,39 @@ class EditUser extends EditRecord
             $record,
             [
                 'email' => $record->email,
-                'prima' => array_map($this->leggibile(...), $prima),
-                'dopo' => array_map($this->leggibile(...), $dopo),
+                'prima' => $this->leggibili($prima),
+                'dopo' => $this->leggibili($dopo),
             ],
             tenant: $record->tenant_id,
         );
     }
 
-    /** ⚠️ `0` nel registro non si legge: va scritto per quello che significa. */
-    private function leggibile(?int $valore): string
+    /**
+     * I tre valori scritti per quello che **significano**.
+     *
+     * ⚠️ Un registro che dice «0» si legge come «niente», cioe' il contrario
+     * di quello che `0` vuol dire qui. E uno che dice «null» non si legge
+     * affatto.
+     *
+     * @param  array{chiamate: ?int, foto: ?int, accesa: ?bool}  $stato
+     * @return array<string, string>
+     */
+    private function leggibili(array $stato): array
     {
-        return match (true) {
-            $valore === null => 'come le altre',
-            $valore === 0 => 'ILLIMITATO',
-            default => (string) $valore,
+        $tetto = static fn (?int $v): string => match (true) {
+            $v === null => 'come le altre',
+            $v === 0 => 'ILLIMITATO',
+            default => (string) $v,
         };
+
+        return [
+            'chiamate' => $tetto($stato['chiamate']),
+            'foto' => $tetto($stato['foto']),
+            'ai' => match ($stato['accesa']) {
+                true => 'ACCESA',
+                false => 'SPENTA',
+                null => 'come dice il piano',
+            },
+        ];
     }
 }

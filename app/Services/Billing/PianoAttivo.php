@@ -84,9 +84,44 @@ class PianoAttivo
         return $abbonamento?->plan ?? $this->piadinoDiRiserva();
     }
 
-    /** L'AI è compresa nel piano di questa persona? */
+    /**
+     * L'AI spetta a questa persona?
+     *
+     * ── 🚨 L'eccezione per una persona sola viene PRIMA del piano ──────────
+     *
+     * `users.ai_enabled_override` (15/08/2026) e' l'unico modo di accendere o
+     * spegnere l'AI a **una** persona senza toccare il piano di nessun altro.
+     *
+     * | Valore | Cosa succede |
+     * |---|---|
+     * | `null` | decide il piano — il comportamento di sempre |
+     * | `true` | accesa, qualunque cosa dica il piano |
+     * | `false` | **spenta**, anche se il piano ce l'ha |
+     *
+     * ⚠️ **Perche' serviva.** Dal 14/08 il pannello sapeva dare una quota
+     * illimitata, e non bastava: la quota dice *quante* chiamate, questo metodo
+     * dice *se*. Chi si registra da solo prende un tenant personale sul piano
+     * `free`, che l'AI non ce l'ha — il tetto era un rubinetto senza acqua.
+     *
+     * 🚨 **Il `false` non e' simmetria decorativa**: e' il solo modo di provare
+     * cosa vede chi non ha l'AI senza smontare il piano di una palestra intera.
+     * L'app deve funzionare **interamente** senza AI, ed e' una meta' di
+     * prodotto che va guardata ogni tanto.
+     *
+     * 💡 `=== true` e `=== false` e non un `??`: `null` qui e' un **terzo**
+     * valore con un significato suo, non «falso non impostato». Scriverlo con
+     * `??` funzionerebbe per caso e si romperebbe alla prima modifica.
+     */
     public function haLaAi(User $utente): bool
     {
+        if ($utente->ai_enabled_override === true) {
+            return true;
+        }
+
+        if ($utente->ai_enabled_override === false) {
+            return false;
+        }
+
         return $this->per($utente)->ai_enabled;
     }
 

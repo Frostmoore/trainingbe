@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Audit\AuditLogger;
+use App\Services\Billing\PianoAttivo;
 use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -105,6 +106,7 @@ class UsersTable
                     ->badge()
                     ->getStateUsing(fn (User $r): string => static::quotaDi($r))
                     ->color(fn (string $state): string => match (true) {
+                        $state === 'AI spenta' => 'gray',
                         $state === 'illimitata' => 'danger',
                         str_starts_with($state, 'sua:') => 'warning',
                         default => 'gray',
@@ -234,6 +236,21 @@ class UsersTable
                          * non darebbe errore**.
                          */
                         $record->forceFill([
+                            /*
+                             * 🚨 **Il cancello, non solo il tetto** — 15/08/2026.
+                             *
+                             * Il 14/08 qui si scrivevano solo i due tetti, e
+                             * l'azione **non funzionava**: la quota dice
+                             * *quante* chiamate, `ai_enabled_override` dice
+                             * *se* l'AI spetti. Chi si registra da solo sta sul
+                             * piano `free`, che l'AI non ce l'ha — il tetto era
+                             * un rubinetto senza acqua.
+                             *
+                             * 💡 Il pulsante promette «AI illimitata»: deve
+                             * consegnare **entrambe** le cose, o il nome mente.
+                             */
+                            'ai_enabled_override' => $illimitata ? true : null,
+
                             // ⚠️ `0` = illimitato, `null` = «come le altre».
                             // Sono opposti, e qui si usano entrambi.
                             'ai_monthly_call_cap' => $illimitata ? 0 : null,
@@ -246,7 +263,7 @@ class UsersTable
                             [
                                 'email' => $record->email,
                                 'da' => 'elenco utenti',
-                                'dopo' => $illimitata ? 'ILLIMITATO' : 'come le altre',
+                                'dopo' => $illimitata ? 'AI ACCESA + ILLIMITATO' : 'come le altre',
                             ],
                             tenant: $record->tenant_id,
                         );
@@ -311,6 +328,13 @@ class UsersTable
      */
     private static function quotaDi(User $utente): string
     {
+        // 🚨 Prima il cancello: un tetto su un'AI spenta e' un numero che non
+        // vuol dire niente, ed e' l'equivoco su cui il 14/08 e' andato perso un
+        // giro intero.
+        if (! app(PianoAttivo::class)->haLaAi($utente)) {
+            return 'AI spenta';
+        }
+
         if ($utente->ai_monthly_call_cap === 0) {
             return 'illimitata';
         }

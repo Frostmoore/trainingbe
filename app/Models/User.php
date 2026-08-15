@@ -114,6 +114,21 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'ai_monthly_photo_call_cap' => 'integer',
 
             /*
+             * 🆕 15/08/2026 — l'AI accesa o spenta per **una persona sola**.
+             *
+             * ⚠️ **Tre valori, non due**: `null` = decide il piano, `true` =
+             * accesa, `false` = spenta anche se il piano ce l'ha. Il cast a
+             * `boolean` lascia passare `null` — ed e' esattamente quello che
+             * serve, perche' `PianoAttivo::haLaAi()` lo legge con `=== true` e
+             * `=== false`.
+             *
+             * 🚨 Fuori da `$fillable` come i due tetti qui sopra: e' una
+             * concessione, e una concessione non si assegna in massa da una
+             * richiesta HTTP.
+             */
+            'ai_enabled_override' => 'boolean',
+
+            /*
              * S9 — i consensi.
              *
              * 🚨 **Sono date, non booleani.** L'art. 7(1) chiede di poter

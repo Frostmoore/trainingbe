@@ -12,6 +12,8 @@ use App\Models\AuditLog;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Billing\PianoAttivo;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -211,29 +213,142 @@ final class QuotaDalPannelloTest extends TestCase
 
     // ───────────────────── quello che NON deve fare ─────────────────────
 
-    #[Test]
-    public function unlimited_does_not_turn_the_ai_on_for_a_plan_without_it(): void
+    /**
+     * 🚨 **Il difetto del 14/08, e la ragione per cui questo test e' cambiato.**
+     *
+     * Il giorno prima questo test si chiamava
+     * `unlimited_does_not_turn_the_ai_on_for_a_plan_without_it` e fissava che
+     * «illimitata» toccasse **solo** la quota. Era coerente con il codice, ed
+     * era **il difetto**: su dati veri l'utente #13 dello staging aveva quota
+     * illimitata e `ai=no`, quindi il pulsante non serviva a niente.
+     *
+     * ⚠️ Un test puo' fissare con precisione un comportamento sbagliato. Questo
+     * lo faceva, ed e' il motivo per cui la suite era verde mentre la funzione
+     * non funzionava.
+     *
+     * 💡 Adesso l'azione consegna **entrambe** le cose, perche' e' quello che il
+     * suo nome promette. Restano due domande distinte — e il test qui sotto
+     * (`the_gate_and_the_cap_stay_two_separate_questions`) difende proprio
+     * quella distinzione, che continua a valere.
+     */
+    /**
+     * ⚠️ **Serve chi si registra da solo, non un iscritto di palestra.**
+     *
+     * La palestra di prova ha un piano **con** l'AI, quindi i suoi iscritti ce
+     * l'hanno gia': su di loro questo test non proverebbe niente. Chi si
+     * registra per conto proprio prende un tenant personale sul piano `free`,
+     * che l'AI non ce l'ha — ed e' esattamente lo stato in cui si trovava
+     * l'utente #13 dello staging.
+     */
+    private function utenteLibero(string $email = 'libero@esempio.test'): User
     {
-        /*
-         * 🚨 **Qui non si decide se l'AI spetti**, e non esiste un valore che
-         * voglia dire «niente AI»: quella domanda ha un cancello suo,
-         * `RequirePlanWithAi`, che gira **prima** (D2).
-         *
-         * ⚠️ Senza questo test, «illimitata» sembrerebbe un interruttore
-         * generale dell'AI — ed e' la lettura sbagliata piu' naturale che si
-         * possa dare a quel pulsante.
-         */
-        $this->palestra->forceFill(['ai_driver' => 'none'])->save();
+        return app(CreaTenantPersonale::class)(
+            'Persona Libera',
+            $email,
+            ['password' => self::FAKE_PASSWORD],
+            UserRole::FreeUser,
+        );
+    }
+
+    #[Test]
+    public function unlimited_also_turns_the_ai_on(): void
+    {
+        $libero = $this->utenteLibero();
+
+        // Un piano senza AI: e' il caso di chiunque si registri da solo.
+        $this->assertFalse(app(PianoAttivo::class)->haLaAi($libero));
 
         Livewire::test(ListUsers::class)
-            ->callTableAction('ai_illimitata', $this->iscritto);
+            ->callTableAction('ai_illimitata', $libero);
 
-        $this->assertSame(0, $this->iscritto->fresh()->ai_monthly_call_cap);
+        $fresco = $libero->fresh();
 
-        // La quota e' illimitata, ma il cancello resta quello che era: questo
-        // test fissa che le due cose siano **separate**, non che l'una implichi
-        // l'altra.
-        $this->assertNull(app(MemberAiQuota::class)->capFor($this->iscritto->fresh()));
+        $this->assertTrue($fresco->ai_enabled_override);
+        $this->assertSame(0, $fresco->ai_monthly_call_cap);
+
+        // 🎯 La riga che conta: il **cancello** la lascia passare.
+        $this->assertTrue(app(PianoAttivo::class)->haLaAi($fresco));
+    }
+
+    #[Test]
+    public function removing_it_gives_back_the_plan_and_does_not_switch_the_ai_off(): void
+    {
+        Livewire::test(ListUsers::class)->callTableAction('ai_illimitata', $this->iscritto);
+        Livewire::test(ListUsers::class)->callTableAction('ai_illimitata', $this->iscritto->fresh());
+
+        /*
+         * 🚨 Torna a `null` — «come dice il piano» — e **non** a `false`.
+         * ⚠️ Sono tre valori: `false` **spegnerebbe** l'AI anche a chi il piano
+         * gliela darebbe, cioe' toglierebbe piu' di quello che era stato dato.
+         */
+        $this->assertNull($this->iscritto->fresh()->ai_enabled_override);
+        $this->assertNull($this->iscritto->fresh()->ai_monthly_call_cap);
+    }
+
+    #[Test]
+    public function the_gate_and_the_cap_stay_two_separate_questions(): void
+    {
+        /*
+         * 💡 L'azione le accende insieme perche' e' comodo, **ma restano due
+         * domande**: dal modulo si puo' dare il tetto senza il cancello, ed e'
+         * giusto che si possa — e' come si prepara una persona che avra' l'AI
+         * dal piano il mese prossimo.
+         */
+        $libero = $this->utenteLibero();
+
+        Livewire::test(EditUser::class, ['record' => $libero->getKey()])
+            ->fillForm(['ai_monthly_call_cap' => 0, 'ai_enabled_override' => ''])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $fresco = $libero->fresh();
+
+        $this->assertSame(0, $fresco->ai_monthly_call_cap);
+        $this->assertNull($fresco->ai_enabled_override);
+
+        // Tetto illimitato, cancello chiuso: e' esattamente lo stato in cui si
+        // trovava l'utente #13 dello staging il 14/08.
+        $this->assertFalse(app(PianoAttivo::class)->haLaAi($fresco));
+    }
+
+    #[Test]
+    public function the_ai_can_also_be_switched_off_for_one_person(): void
+    {
+        /*
+         * 🚨 **Il terzo valore, e non e' simmetria decorativa.** E' il solo modo
+         * di guardare cosa vede chi **non** ha l'AI senza smontare il piano di
+         * una palestra intera — e il percorso «senza AI» e' meta' del prodotto.
+         */
+        $conAi = $this->creaUtente($this->palestra, UserRole::Member, 'conai@alfa.test');
+        $conAi->forceFill(['ai_enabled_override' => true])->save();
+
+        $this->assertTrue(app(PianoAttivo::class)->haLaAi($conAi->fresh()));
+
+        Livewire::test(EditUser::class, ['record' => $conAi->getKey()])
+            ->fillForm(['ai_enabled_override' => '0'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertFalse($conAi->fresh()->ai_enabled_override);
+        $this->assertFalse(app(PianoAttivo::class)->haLaAi($conAi->fresh()));
+    }
+
+    #[Test]
+    public function an_empty_gate_is_null_not_false(): void
+    {
+        $this->iscritto->forceFill(['ai_enabled_override' => true])->save();
+
+        Livewire::test(EditUser::class, ['record' => $this->iscritto->getKey()])
+            ->fillForm(['ai_enabled_override' => ''])
+            ->call('save');
+
+        /*
+         * ⚠️ **Lo stesso errore di `an_empty_field_is_null_not_zero`, sull'altro
+         * campo e con l'altro tipo.** Un `(bool)` sulla stringa vuota darebbe
+         * `false`, cioe' **spegnerebbe** l'AI a chi voleva solo togliere
+         * l'eccezione e tornare a quello che dice il piano.
+         */
+        $this->assertNull($this->iscritto->fresh()->ai_enabled_override);
     }
 
     #[Test]

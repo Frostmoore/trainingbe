@@ -6,7 +6,9 @@ namespace App\Filament\God\Resources\Users\Schemas;
 
 use App\Models\User;
 use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Billing\PianoAttivo;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -107,13 +109,47 @@ class UserForm
              * `RequirePlanWithAi`, che gira **prima** (D2). Mettere `0` a chi ha
              * un piano senza AI non gliela accende.
              */
-            Section::make('Quota AI')
+            Section::make('AI')
                 ->description(
                     'Vale solo per questa persona e scavalca palestra, trainer e piano. '
-                    .'Lasciare vuoto per usare il tetto che le spetterebbe.'
+                    .'Lasciare tutto vuoto per usare quello che le spetterebbe.'
                 )
                 ->columns(2)
                 ->schema([
+                    /*
+                     * 🚨 **Il cancello, che e' una domanda diversa dal tetto.**
+                     *
+                     * Fino al 15/08 qui c'erano solo i due tetti, e non
+                     * bastavano: la quota dice *quante* chiamate, questo dice
+                     * *se* l'AI spetti. ⚠️ Su dati veri l'utente #13 dello
+                     * staging aveva quota illimitata e `ai=no` — il tetto era un
+                     * rubinetto senza acqua.
+                     *
+                     * 💡 `false` non e' simmetria decorativa: e' il solo modo di
+                     * guardare cosa vede chi **non** ha l'AI senza smontare il
+                     * piano di una palestra intera.
+                     */
+                    Select::make('ai_enabled_override')
+                        ->label('Funzioni AI')
+                        ->columnSpanFull()
+                        ->native(false)
+                        ->options([
+                            '' => 'Come dice il piano',
+                            '1' => 'Accese per questa persona',
+                            '0' => 'Spente per questa persona',
+                        ])
+                        // ⚠️ `null` deve restare distinguibile da «spente»: sono
+                        // tre valori, e la tendina ne mostra tre.
+                        ->formatStateUsing(fn (?bool $state): string => match ($state) {
+                            true => '1',
+                            false => '0',
+                            null => '',
+                        })
+                        ->helperText(
+                            'Accenderle non da\' anche la quota: il tetto sono i due campi qui sotto. '
+                            .'Sono due domande diverse — SE l\'AI spetti, e QUANTE chiamate.'
+                        ),
+
                     TextInput::make('ai_monthly_call_cap')
                         ->label('Chiamate AI al mese')
                         ->numeric()
@@ -181,6 +217,13 @@ class UserForm
                 ? "illimitato ({$usate} usate questo mese)"
                 : "{$usate} / {$tetto} questo mese";
         };
+
+        // 🚨 Prima il cancello, poi il tetto: un tetto su un'AI spenta e' un
+        // numero che non vuol dire niente, ed e' esattamente l'equivoco in cui
+        // si e' caduti il 14/08.
+        if (! app(PianoAttivo::class)->haLaAi($record)) {
+            return 'AI SPENTA per questa persona: il tetto qui sotto non si applica.';
+        }
 
         return 'Chiamate: '.$descrivi($quota->capFor($record), $quota->usedThisMonth($record))
             .' · con foto: '.$descrivi($quota->capFor($record, true), $quota->usedThisMonth($record, true));
