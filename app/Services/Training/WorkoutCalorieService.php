@@ -4,16 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\Training;
 
-use App\Enums\AiFeature;
 use App\Enums\KcalSource;
 use App\Models\DailyBurn;
 use App\Models\User;
 use App\Models\WorkoutSession;
-use App\Services\Ai\AiCallContext;
-use App\Services\Ai\AiManager;
-use App\Services\Ai\Data\WorkoutAiContext;
 use App\Support\Tempo\GiornoLocale;
-use Throwable;
 
 /**
  * Le calorie bruciate — B4.3.
@@ -49,19 +44,12 @@ class WorkoutCalorieService
     /** Il peso usato quando non se ne conosce nessuno. */
     public const FALLBACK_WEIGHT_KG = 75.0;
 
-    /**
-     * Il tetto oltre il quale una stima non e' credibile.
-     *
-     * 3.000 kcal e' piu' di quanto bruci una maratona: nessuna seduta in
-     * palestra ci arriva, e un numero simile e' certamente un errore del
-     * modello. Serve come rete anche quando non c'e' una formula con cui
-     * confrontare.
+    /*
+     * 🚨 **Nessuna dipendenza**, dal 15/08/2026: qui dentro non si chiama piu'
+     * niente che stia fuori. Era `AiManager`, e la sua sparizione e' la prova
+     * piu' corta che il calcolo e' diventato quello che era sempre stato — una
+     * moltiplicazione.
      */
-    public const MAX_PLAUSIBLE_KCAL = 3000;
-
-    public function __construct(
-        private readonly AiManager $ai,
-    ) {}
 
     // ───────────────────────── ingredienti ─────────────────────────
 
@@ -172,16 +160,38 @@ class WorkoutCalorieService
     // ───────────────────────── la stima ─────────────────────────
 
     /**
-     * Chiede all'AI una stima e la salva, con la formula come rete di sicurezza.
+     * Calcola le calorie e le salva. **Senza AI** — 15/08/2026.
      *
-     * 🚨 **Idempotente e rispettosa del manuale.** Non tocca niente se il valore
-     * e' stato scritto da una persona; se e' gia' stata fatta una stima non la
-     * rifa', perche' la chiamerebbe ogni volta che si riapre una sessione — e
-     * ogni chiamata costa.
+     * ── 🚨 Perche' l'AI e' stata tolta da qui ─────────────────────────────
      *
-     * **Non lascia uscire eccezioni.** Se l'AI non risponde si scrive il valore
-     * della formula: l'utente ha appena finito di allenarsi e deve vedere un
-     * numero, non un errore che riguarda un fornitore di cui non sa niente.
+     * *«Per stimare le calorie di un allenamento non serve l'AI, e' un calcolo
+     * matematico quindi offloadiamolo al server. Sarebbe uno spreco perche' i
+     * dati li abbiamo tutti.»* — committente, 15/08/2026. Aveva ragione, e i
+     * numeri lo dicono meglio di quanto sembrasse:
+     *
+     * | | |
+     * |---|---|
+     * | La formula era gia' qui | girava **su ogni sessione**, prima di chiamare il modello |
+     * | E non era rozza | `metOf()` legge il MET del **singolo esercizio**: 120 esercizi su 121 ce l'hanno, da 3.0 a 11.0 |
+     * | Il peso c'e' | lo manda l'app nella richiesta (`$kgDaRichiesta`), senza che il server lo conservi |
+     * | Costo misurato | **0,00077 USD** a sessione, e mai cacheato: il prompt e' sotto la soglia |
+     *
+     * 🚨 **E c'era di peggio di uno spreco.** Il controllo di plausibilita'
+     * accettava la risposta del modello fino a **quattro volte** il valore della
+     * formula: l'AI non stava rifinendo un calcolo: poteva sostituirlo con un
+     * numero quattro volte piu' grande, e lo scrivevamo.
+     *
+     * 💡 Quindi togliere l'AI non toglie precisione — toglie **l'unica fonte di
+     * incoerenza** da un numero che sappiamo gia' calcolare, e lo rende
+     * riproducibile: due volte lo stesso allenamento, due volte lo stesso
+     * numero.
+     *
+     * ⚠️ **Idempotente e rispettosa del manuale**, come prima: non tocca niente
+     * se il valore l'ha scritto una persona.
+     *
+     * 📌 `$user` resta nella firma anche se non serve piu': lo passano tre
+     * chiamanti, e toglierlo sarebbe una modifica piu' grande di quella che
+     * questo metodo sta facendo. Vedi il debito in fondo all'atlante.
      */
     public function estimateAndStore(WorkoutSession $session, ?User $user = null, ?float $kgDaRichiesta = null): void
     {
@@ -189,41 +199,45 @@ class WorkoutCalorieService
             return;
         }
 
-        if ($session->kcal_burned !== null && $session->kcal_source === KcalSource::Ai) {
-            return;
-        }
+        $kg = $kgDaRichiesta ?? $this->bodyweight($user ?? $session->user);
 
-        $user ??= $session->user;
-
-        // ⚠️ Il peso mandato dall'app vince sul ripiego: e' l'unico modo che il
-        // server ha di stimare bene, adesso che non conserva piu' i pesi.
-        $kg = $kgDaRichiesta ?? $this->bodyweight($user);
-
-        $formula = $this->formulaKcal($session, $kg);
-
-        try {
-            $stima = $this->ai->for(AiFeature::WorkoutKcal)->workoutCalories(
-                $this->contextFor($session, $kg),
-                AiCallContext::for($user, AiFeature::WorkoutKcal),
-            );
-
-            if ($stima > 0 && $this->plausibile($stima, $formula)) {
-                $session->forceFill([
-                    'kcal_burned' => $stima,
-                    'kcal_source' => KcalSource::Ai,
-                ])->save();
-
-                return;
-            }
-        } catch (Throwable) {
-            // Silenzio voluto: il provider ha gia' registrato l'errore nel
-            // proprio log di consumo, e qui la cosa giusta e' andare avanti.
-        }
-
+        /*
+         * ⚠️ Niente `try`/`catch`: non c'e' piu' niente che possa fallire. Era
+         * li' perche' il fornitore poteva non rispondere — un problema che una
+         * moltiplicazione non ha.
+         */
         $session->forceFill([
-            'kcal_burned' => $formula,
+            'kcal_burned' => $this->formulaKcal($session, $kg),
             'kcal_source' => KcalSource::Formula,
         ])->save();
+    }
+
+    /**
+     * Il MET medio della seduta, letto **esercizio per esercizio**.
+     *
+     * 🚨 **E' il motivo per cui l'AI qui non serviva.** Non e' un valore fisso:
+     * ogni esercizio del catalogo ha il proprio MET — 120 su 121 ce l'hanno, da
+     * 3.0 a 11.0 — quindi una seduta di squat e stacchi pesa gia' piu' di una di
+     * bicipiti, senza chiedere niente a nessuno.
+     *
+     * ⚠️ `self::MET` e' il ripiego per una seduta di soli esercizi senza MET —
+     * cioe' custom scritti dall'utente. Prudente di proposito: sovrastimare le
+     * calorie bruciate porta la persona a mangiare di piu' credendo di essere in
+     * deficit.
+     */
+    private function metOf(WorkoutSession $session): float
+    {
+        $met = $session->sets()
+            ->with('exercise')
+            ->get()
+            ->map(fn ($s) => $s->exercise?->met)
+            ->filter(fn (?float $m): bool => $m !== null && $m > 0);
+
+        if ($met->isEmpty()) {
+            return self::MET;
+        }
+
+        return (float) $met->avg();
     }
 
     /**
@@ -249,63 +263,4 @@ class WorkoutCalorieService
 
     // ───────────────────────── interni ─────────────────────────
 
-    /**
-     * Una stima assurda si scarta: un modello che risponde 12.000 kcal per
-     * un'ora di pesi ha sbagliato, e scriverlo comunque manderebbe in negativo
-     * il bilancio calorico della giornata.
-     *
-     * 🚨 **Due controlli e non uno, e il secondo va condizionato.** Il confronto
-     * con la formula funziona solo se la formula ha prodotto qualcosa: su una
-     * sessione senza durata misurabile — aperta e chiusa subito, o sincronizzata
-     * male dall'app — la formula vale 0, e `stima < 0 × 4` scarterebbe **ogni**
-     * stima. Il risultato sarebbe una sessione a zero calorie, che sembra un
-     * errore dell'AI e invece e' il nostro controllo. Percio' quando non c'e'
-     * niente con cui confrontare resta solo il tetto assoluto.
-     */
-    private function plausibile(int $stima, int $formula): bool
-    {
-        if ($stima > self::MAX_PLAUSIBLE_KCAL) {
-            return false;
-        }
-
-        return $formula <= 0 || $stima < $formula * 4;
-    }
-
-    private function metOf(WorkoutSession $session): float
-    {
-        $met = $session->sets()
-            ->with('exercise')
-            ->get()
-            ->map(fn ($s) => $s->exercise?->met)
-            ->filter(fn (?float $m): bool => $m !== null && $m > 0);
-
-        if ($met->isEmpty()) {
-            return self::MET;
-        }
-
-        return (float) $met->avg();
-    }
-
-    private function contextFor(WorkoutSession $session, float $kg): WorkoutAiContext
-    {
-        $esercizi = [];
-
-        foreach ($session->sets()->with('exercise')->get()->groupBy('exercise_id') as $serie) {
-            $primo = $serie->first();
-
-            $esercizi[] = [
-                'name' => $primo->exercise?->name ?? 'Esercizio',
-                'sets' => $serie->count(),
-                'reps' => $primo->reps,
-                'weight' => $primo->weight,
-            ];
-        }
-
-        return new WorkoutAiContext(
-            durationMinutes: $session->durationMinutes(),
-            bodyweightKg: $kg,
-            exercises: $esercizi,
-            planName: $session->plan?->name,
-        );
-    }
 }

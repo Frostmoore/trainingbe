@@ -137,8 +137,12 @@ class WorkoutApiTest extends TestCase
     #[Test]
     public function it_opens_and_closes_a_session(): void
     {
-        $this->aiFinta()->willReturnKcal(310);
-
+        /*
+         * 🚨 **Niente piu' AI qui** — 15/08/2026. Le calorie di un allenamento
+         * sono una moltiplicazione: MET dell'esercizio x peso x ore. Il modello
+         * non aggiungeva precisione, e la sua risposta veniva accettata fino a
+         * **quattro volte** il valore della formula.
+         */
         $creata = $this->comeIscritto()
             ->postJson('/api/v1/workout-sessions', [])
             ->assertCreated()
@@ -150,8 +154,9 @@ class WorkoutApiTest extends TestCase
             ->postJson("/api/v1/workout-sessions/{$id}/finish", [])
             ->assertOk()
             ->assertJsonPath('data.is_open', false)
-            ->assertJsonPath('data.kcal', 310)
-            ->assertJsonPath('data.kcal_source', 'ai');
+            // Sessione senza serie e senza peso: MET 5.0 x 75 kg (ripiego) x 0 h.
+            // 💡 Conta la **fonte**: il numero dipende dalla durata, la fonte no.
+            ->assertJsonPath('data.kcal_source', 'formula');
     }
 
     /**
@@ -237,8 +242,6 @@ class WorkoutApiTest extends TestCase
     #[Test]
     public function clearing_the_manual_value_gives_the_estimate_back(): void
     {
-        $this->aiFinta()->willReturnKcal(275);
-
         $sessione = $this->sessioneAperta();
         $sessione->forceFill(['ended_at' => now()])->save();
 
@@ -247,8 +250,9 @@ class WorkoutApiTest extends TestCase
         $this->comeIscritto()
             ->patchJson("/api/v1/workout-sessions/{$sessione->id}/kcal", ['kcal' => null])
             ->assertOk()
-            ->assertJsonPath('data.kcal', 275)
-            ->assertJsonPath('data.kcal_source', 'ai');
+            // 🚨 Torna alla **formula**, non a una stima: e' l'unica cosa che
+            // resta quando si toglie la correzione a mano.
+            ->assertJsonPath('data.kcal_source', 'formula');
     }
 
     /**
@@ -281,18 +285,32 @@ class WorkoutApiTest extends TestCase
         $this->assertSame(400, $risposta->json('data.kcal'));
     }
 
-    /** Una stima assurda si scarta: non deve mandare in negativo la giornata. */
+    /**
+     * 🚨 Un numero assurdo non puo' piu' nemmeno **arrivare**.
+     *
+     * Questo test scartava una stima di 50.000 kcal del modello. ⚠️ La difesa
+     * serviva perche' la risposta veniva da fuori: adesso il numero lo produce
+     * una moltiplicazione con un MET fra 3.0 e 11.0, e non esiste input che la
+     * porti a un valore fuori scala.
+     *
+     * 💡 Resta come **prova che il tetto e' strutturale**, non piu' un
+     * controllo: un'ora di allenamento non puo' superare le poche centinaia di
+     * kcal, qualunque cosa succeda.
+     */
     #[Test]
-    public function an_absurd_estimate_is_discarded(): void
+    public function the_number_cannot_go_out_of_scale(): void
     {
         $this->aiFinta()->willReturnKcal(50_000);
 
         $sessione = $this->sessioneAperta(startedMinutesAgo: 60);
 
-        $this->comeIscritto()
-            ->postJson("/api/v1/workout-sessions/{$sessione->id}/finish", [])
+        $risposta = $this->comeIscritto()
+            ->postJson("/api/v1/workout-sessions/{$sessione->id}/finish", ['weight_kg' => 80])
             ->assertOk()
             ->assertJsonPath('data.kcal_source', 'formula');
+
+        // MET 5.0 x 80 kg x 1 h = 400, e nessun percorso porta altrove.
+        $this->assertSame(400, $risposta->json('data.kcal'));
     }
 
     // ───────────────────────── misure ─────────────────────────
