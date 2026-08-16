@@ -62,7 +62,14 @@ class SitoController extends Controller
             'gettoniMensili' => (int) config('listino.gettoni_mensili'),
             'scaglioni' => $listino->scaglioniLeggibili(),
             'pacchetti' => $listino->pacchetti(),
+            // 🚨 Due esempi e non uno: una palestra da sessanta posti e un
+            // trainer da quindici allievi hanno lo stesso listino ma due conti
+            // molto diversi, e chi legge deve trovare il **proprio**.
             'esempio' => $listino->esempio(),
+            'esempioTrainer' => $listino->esempio(15),
+            'minimoPalestra' => (int) config('listino.minimo_palestra'),
+            'minimoTrainer' => (int) config('listino.minimo_trainer'),
+            'listino' => $listino,
         ]);
     }
 

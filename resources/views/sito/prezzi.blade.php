@@ -1,24 +1,62 @@
+{{--
+    La pagina dei prezzi — divisa in tre il 16/08/2026, sera.
+
+    ── 🚨 Perché in tre sezioni e non in tre schede affiancate ────────────────
+
+    Perché le tre platee **non comprano la stessa cosa**: una palestra e un
+    trainer pagano a numero di persone, chi si allena da solo paga a numero di
+    gettoni. Tre schede una accanto all'altra costringono a leggere tutto per
+    capire quale riga riguarda chi legge, e a confrontare grandezze diverse
+    come se fossero la stessa.
+
+    ⚠️ Qui invece si sceglie in cima **chi si è**, e si legge una sezione sola.
+    Le altre due restano sotto per chi vuole confrontarle davvero.
+
+    💡 **L'esempio con i margini sta qui e non sulla home**: questa è la pagina
+    dove una palestra li sta cercando apposta. Sulla home sarebbe la cosa che
+    fa chiudere la scheda a chi voleva solo scaricare un'app.
+--}}
 @extends('sito.layout')
 
 @section('titolo', 'Prezzi — Training Companion')
-@section('descrizione', 'L\'app è gratis. Si paga solo l\'AI, e solo per le persone a cui la accendi.')
+@section('descrizione', 'L\'app è gratis. Si paga solo l\'AI: a persona per palestre e trainer, a gettoni per chi si allena da solo.')
 
 @section('contenuto')
 
-    <section style="padding-bottom: var(--sp-4);">
+    <section style="padding-bottom: var(--sp-3);">
         <div class="contenitore stretto" style="text-align: center;">
             <div class="occhiello">Prezzi</div>
             <h1>Si paga solo quello che si accende.</h1>
             <p class="guida" style="margin: 0 auto;">
-                Nessun canone. L'app resta gratis per tutti gli iscritti: paghi solo i posti
-                a cui hai acceso l'intelligenza artificiale, e li spegni quando vuoi.
+                L'app resta gratis per tutti: diario, allenamenti, schede e chat non hanno
+                un costo né una scadenza. Si paga soltanto l'intelligenza artificiale.
             </p>
         </div>
     </section>
 
-    {{-- 💡 Una fascia sola, larga, sotto il titolo: la pagina dei prezzi deve
-         restare una pagina di numeri, e un'immagine per scheda distrarrebbe da
-         quello che si è venuti a leggere. --}}
+    {{-- 🚨 La scelta in cima: tre porte, e chi legge ne apre una sola. --}}
+    <section style="padding-top: 0; padding-bottom: var(--sp-3);">
+        <div class="contenitore">
+            <div class="griglia" style="gap: var(--sp-2);">
+                <a href="#palestre" class="scheda porta">
+                    <div class="occhiello">Sei una palestra</div>
+                    <h3>Paghi a iscritto</h3>
+                    <p class="nota">Da {{ $formatta($listino->costoMensile($minimoPalestra)) }} al mese, minimo {{ $minimoPalestra }} posti</p>
+                </a>
+                <a href="#trainer" class="scheda porta">
+                    <div class="occhiello">Sei un trainer</div>
+                    <h3>Paghi ad allievo</h3>
+                    <p class="nota">Da {{ $formatta($listino->costoMensile($minimoTrainer)) }} al mese, minimo {{ $minimoTrainer }} allievi</p>
+                </a>
+                <a href="#solo" class="scheda porta">
+                    <div class="occhiello">Ti alleni da solo</div>
+                    <h3>Paghi a gettoni</h3>
+                    <p class="nota">Da {{ $formatta($pacchetti[0]['prezzo']) }}, e non scadono per 24 mesi</p>
+                </a>
+            </div>
+        </div>
+    </section>
+
     <section style="padding-top: 0; padding-bottom: var(--sp-4);">
         <div class="contenitore">
             <x-sito.figura
@@ -28,91 +66,43 @@
         </div>
     </section>
 
-    {{-- ═══════════════════ i tre modi ═══════════════════ --}}
-    <section style="padding-top: 0;">
-        <div class="contenitore">
-            <div class="griglia" style="grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: var(--sp-3);">
-
-                <div class="scheda scheda-prezzo">
-                    <h3>Da solo</h3>
-                    <p class="nota" style="min-height: 44px;">Ti registri e cominci. Non serve nessuna palestra.</p>
-                    <div class="prezzo">{{ $formatta($prezzoSingolo) }} <small>/mese</small></div>
-                    <p class="nota">{{ number_format($gettoniMensili, 0, ',', '.') }} gettoni al mese</p>
-                    <ul class="elenco" style="flex: 1;">
-                        <li>Diario e allenamenti, gratis per sempre</li>
-                        <li>Stima da testo e da foto</li>
-                        <li>Spunto del giorno</li>
-                        <li class="no">Niente trainer, niente schede da altri</li>
-                    </ul>
-                    <a href="/#come-funziona" class="bottone bottone-vuoto" style="margin-top: var(--sp-2);">Come funziona</a>
-                </div>
-
-                {{-- 🚨 La palestra è la scheda evidenziata perché è **il cliente**:
-                     il singolo e il trainer sono le due estremità, la palestra è
-                     dove il prodotto guadagna. --}}
-                <div class="scheda scheda-prezzo scelta">
-                    <span class="etichetta">Per le palestre</span>
-                    <h3>A posto</h3>
-                    <p class="nota" style="min-height: 44px;">Paghi per gli iscritti a cui accendi l'AI. Minimo cinque.</p>
-                    <div class="prezzo">{{ $formatta($primoScaglione) }} <small>/posto al mese</small></div>
-                    <p class="nota">Da {{ $formatta($primoScaglione * 5) }} al mese</p>
-                    <ul class="elenco" style="flex: 1;">
-                        <li>App con il tuo marchio</li>
-                        <li>Pannello per lo staff</li>
-                        <li>I posti spenti non si pagano</li>
-                        <li>Il prezzo scende crescendo</li>
-                    </ul>
-                    <a href="#scaglioni" class="bottone bottone-pieno" style="margin-top: var(--sp-2);">Vedi gli scaglioni</a>
-                </div>
-
-                <div class="scheda scheda-prezzo">
-                    <h3>Trainer indipendente</h3>
-                    <p class="nota" style="min-height: 44px;">I tuoi allievi entrano con un link tuo. Minimo tre.</p>
-                    <div class="prezzo">{{ $formatta($primoScaglione) }} <small>/allievo al mese</small></div>
-                    <p class="nota">Da {{ $formatta($primoScaglione * 3) }} al mese</p>
-                    <ul class="elenco" style="flex: 1;">
-                        <li>Schede e piani alimentari</li>
-                        <li>Chat cifrata con i tuoi allievi</li>
-                        <li>Gettoni tuoi per comporre</li>
-                        <li>Quello che mandi resta loro</li>
-                    </ul>
-                    <a href="/#come-funziona" class="bottone bottone-vuoto" style="margin-top: var(--sp-2);">Come funziona</a>
-                </div>
-
-            </div>
-        </div>
-    </section>
-
-    {{-- ═══════════════════ gli scaglioni ═══════════════════ --}}
-    <section id="scaglioni" class="tenue">
+    {{-- ═══════════════════ 1 · le palestre ═══════════════════ --}}
+    <section id="palestre" class="tenue">
         <div class="contenitore stretto">
             <div class="intestazione-sezione">
-                <div class="occhiello">Più cresci, più ti resta</div>
-                <h2>Il prezzo per posto scende da solo.</h2>
+                <div class="occhiello">Sei una palestra</div>
+                <h2>Paghi per gli iscritti a cui accendi l'AI.</h2>
                 <p class="guida">
-                    Non c'è niente da contrattare e nessuna soglia da chiedere: gli scaglioni
-                    si applicano da soli, mese per mese, su quanti posti hai acceso.
+                    Tutti gli altri usano l'app gratis, con il tuo marchio. I posti spenti non
+                    si pagano, e il conteggio del mese guarda il <strong>massimo raggiunto</strong>.
                 </p>
             </div>
 
             <div class="scheda" style="padding: 0; overflow: hidden;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 16px;">
+                <table class="tabella-prezzi">
                     <thead>
-                        <tr style="background: var(--superficie);">
-                            <th style="text-align: left; padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo);">Posti accesi</th>
-                            <th style="text-align: right; padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo);">Prezzo per posto</th>
+                        <tr>
+                            <th>Iscritti con l'AI accesa</th>
+                            <th style="text-align: right;">Prezzo per persona</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach ($scaglioni as $s)
                             <tr>
-                                <td style="padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo);">{{ $s['etichetta'] }}</td>
-                                <td style="padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo); text-align: right; font-weight: 700;">{{ $formatta($s['prezzo']) }}</td>
+                                <td>{{ $s['etichetta'] }}</td>
+                                <td style="text-align: right; font-weight: 700;">{{ $formatta($s['prezzo']) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
             </div>
+
+            <p class="nota" style="margin-top: var(--sp-2);">
+                🚨 Gli scaglioni sono <strong>progressivi</strong>, come le aliquote: i primi
+                {{ $scaglioni[0]['etichetta'] }} costano {{ $formatta($scaglioni[0]['prezzo']) }} anche
+                a chi ne ha trecento. Non c'è nessuna soglia che fa saltare la fattura.
+                Minimo {{ $minimoPalestra }} posti.
+            </p>
 
             {{--
                 💡 **L'esempio è il pezzo che vende**, e non è un vezzo: una
@@ -127,7 +117,7 @@
                         <div style="font-size: 26px; font-weight: 800;">{{ $formatta($esempio['costo']) }}</div>
                     </div>
                     <div>
-                        <div class="nota">Incassi a 10 € l'uno</div>
+                        <div class="nota">Se rivendi a 10 € l'uno</div>
                         <div style="font-size: 26px; font-weight: 800;">{{ $formatta($esempio['ricavo']) }}</div>
                     </div>
                     <div>
@@ -136,31 +126,112 @@
                     </div>
                 </div>
                 <p class="nota" style="margin-top: var(--sp-2);">
-                    I 10 € sono un <strong>suggerimento</strong>, non un obbligo: il prezzo ai
-                    tuoi iscritti lo decidi tu.
+                    I 10 € sono un <strong>suggerimento</strong>, non un obbligo: quanto e se
+                    addebitare qualcosa ai tuoi iscritti lo decidi tu, e ne rispondi tu.
                 </p>
             </div>
+
+            <p style="margin-top: var(--sp-3);">
+                <a href="/admin/login" class="bottone bottone-pieno">Entra nel pannello</a>
+            </p>
         </div>
     </section>
 
-    {{-- ═══════════════════ i gettoni ═══════════════════ --}}
-    <section>
+    {{-- ═══════════════════ 2 · i trainer ═══════════════════ --}}
+    <section id="trainer">
         <div class="contenitore stretto">
             <div class="intestazione-sezione">
-                <div class="occhiello">Se finiscono</div>
-                <h2>Gettoni in più, quando servono.</h2>
+                <div class="occhiello">Sei un trainer indipendente</div>
+                <h2>Paghi per gli allievi a cui accendi l'AI.</h2>
                 <p class="guida">
-                    Ogni posto ne ha {{ number_format($gettoniMensili, 0, ',', '.') }} al mese, che si azzerano al rinnovo.
-                    Chi li finisce può comprarne altri: quelli comprati durano <strong>24 mesi</strong>.
+                    Non serve una palestra: i tuoi allievi entrano con un link tuo. Stesso
+                    listino, minimo {{ $minimoTrainer }} allievi invece di {{ $minimoPalestra }}.
+                </p>
+            </div>
+
+            <div class="scheda" style="padding: 0; overflow: hidden;">
+                <table class="tabella-prezzi">
+                    <thead>
+                        <tr>
+                            <th>Allievi con l'AI accesa</th>
+                            <th style="text-align: right;">Prezzo per allievo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($scaglioni as $s)
+                            <tr>
+                                <td>{{ $s['etichetta'] }}</td>
+                                <td style="text-align: right; font-weight: 700;">{{ $formatta($s['prezzo']) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="scheda" style="margin-top: var(--sp-3); background: var(--accento-tenue); border-color: color-mix(in srgb, var(--accento) 25%, transparent);">
+                <h3>Un esempio con {{ $esempioTrainer['posti'] }} allievi</h3>
+                <div class="griglia" style="grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); margin-top: var(--sp-2);">
+                    <div>
+                        <div class="nota">Paghi a noi</div>
+                        <div style="font-size: 26px; font-weight: 800;">{{ $formatta($esempioTrainer['costo']) }}</div>
+                    </div>
+                    <div>
+                        <div class="nota">Se rivendi a 10 € l'uno</div>
+                        <div style="font-size: 26px; font-weight: 800;">{{ $formatta($esempioTrainer['ricavo']) }}</div>
+                    </div>
+                    <div>
+                        <div class="nota">Ti resta</div>
+                        <div style="font-size: 26px; font-weight: 800; color: var(--accento);">{{ $formatta($esempioTrainer['margine']) }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <ul class="elenco" style="margin-top: var(--sp-3);">
+                <li>Schede e piani alimentari, dal computer o dal telefono</li>
+                <li>Chat cifrata con i tuoi allievi</li>
+                <li>Quello che mandi resta loro, anche se smettete</li>
+                <li>I posti spenti non si pagano</li>
+            </ul>
+
+            <p style="margin-top: var(--sp-3);">
+                <a href="/admin/login" class="bottone bottone-pieno">Entra nel pannello</a>
+            </p>
+        </div>
+    </section>
+
+    {{--
+        ═══════════════════ 3 · chi si allena da solo ═══════════════════
+
+        🚨 **Qui l'unità di misura cambia**, ed è il motivo per cui questa
+        sezione non poteva stare nella stessa tabella delle altre due: una
+        palestra compra **persone**, una persona compra **gettoni**. Metterli
+        nella stessa riga farebbe confrontare due grandezze diverse.
+    --}}
+    <section id="solo" class="tenue">
+        <div class="contenitore stretto">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Vuoi allenarti da solo</div>
+                <h2>Paghi a gettoni, e li compri quando servono.</h2>
+                <p class="guida">
+                    Diario, allenamenti e progressi sono <strong>gratis</strong> e non
+                    scadono. I gettoni servono solo per l'intelligenza artificiale: si
+                    comprano una volta e durano <strong>24 mesi</strong>.
                 </p>
             </div>
 
             <div class="griglia">
-                @foreach ($pacchetti as $p)
-                    <div class="scheda" style="text-align: center;">
+                @foreach ($pacchetti as $indice => $p)
+                    <div class="scheda scheda-prezzo{{ $indice === 1 ? ' scelta' : '' }}" style="text-align: center;">
+                        @if ($indice === 1)
+                            <span class="etichetta">Il più scelto</span>
+                        @endif
                         <h3>{{ number_format($p['gettoni'], 0, ',', '.') }} gettoni</h3>
                         <div class="prezzo" style="font-size: 30px;">{{ $formatta($p['prezzo']) }}</div>
                         <p class="nota">{{ $p['nota'] }}</p>
+                        <p class="nota">
+                            {{ number_format((int) round($p['gettoni'] / 30), 0, ',', '.') }} richieste al giorno
+                            per un mese
+                        </p>
                     </div>
                 @endforeach
             </div>
@@ -178,11 +249,22 @@
                     nasconderlo in una nota.
                 </p>
             </div>
+
+            <div class="scheda" style="margin-top: var(--sp-3);">
+                <h3>Oppure a mese</h3>
+                <p class="nota">
+                    Se l'AI la usi tutti i giorni conviene l'abbonamento:
+                    <strong>{{ $formatta($prezzoSingolo) }} al mese</strong> con
+                    {{ number_format($gettoniMensili, 0, ',', '.') }} gettoni che si rinnovano.
+                    ⚠️ Quelli del mese <strong>si azzerano</strong> al rinnovo; quelli comprati
+                    no, restano 24 mesi. Si usano prima i primi.
+                </p>
+            </div>
         </div>
     </section>
 
     {{-- ═══════════════════ domande sui prezzi ═══════════════════ --}}
-    <section class="tenue">
+    <section>
         <div class="contenitore stretto">
             <div class="intestazione-sezione">
                 <div class="occhiello">Domande</div>
@@ -222,16 +304,14 @@
                     pagato non deve sparire in silenzio.
                 </p>
             </details>
-        </div>
-    </section>
 
-    <section style="text-align: center;">
-        <div class="contenitore stretto">
-            <h2>Cominci da {{ $formatta($primoScaglione * 5) }} al mese.</h2>
-            <p class="guida" style="margin: 0 auto var(--sp-3);">
-                Cinque posti accesi. Tutti gli altri iscritti usano l'app gratis.
-            </p>
-            <a href="/admin/login" class="bottone bottone-pieno bottone-grande">Entra nel pannello</a>
+            <details>
+                <summary>E se una richiesta non riesce?</summary>
+                <p>
+                    Non si paga. Se il fornitore del modello non risponde, il gettone non viene
+                    scalato.
+                </p>
+            </details>
         </div>
     </section>
 

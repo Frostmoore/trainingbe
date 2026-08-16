@@ -204,6 +204,22 @@
             margin-bottom: var(--sp-2);
         }
 
+        /* Le tre porte in cima ai prezzi. 💡 Sono `<a>` e non riquadri con
+           un link dentro: il bersaglio da premere è tutta la scheda, che su un
+           telefono è la differenza fra centrare e riprovare. */
+        .porta { text-decoration: none; color: inherit; display: block; transition: border-color .15s, transform .15s; }
+        .porta:hover { border-color: var(--accento); transform: translateY(-2px); }
+        .porta h3 { margin: var(--sp-1) 0 4px; }
+
+        .tabella-prezzi { width: 100%; border-collapse: collapse; font-size: 16px; }
+        .tabella-prezzi th { text-align: left; padding: 14px var(--sp-3); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
+        .tabella-prezzi td { padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo); }
+        .tabella-prezzi tr:last-child td { border-bottom: 0; }
+
+        /* ⚠️ Le tre sezioni hanno un'ancora, e la barra in alto è fissa: senza
+           questo, chi ci salta si ritrova il titolo nascosto sotto la barra. */
+        #palestre, #trainer, #solo { scroll-margin-top: 80px; }
+
         /* ───────────────────────── navigazione ───────────────────────── */
 
         .navbar {

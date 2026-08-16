@@ -33,12 +33,10 @@
     </div>
 @else
     {{--
-        💡 Non un pulsante spento, che si prova comunque a premere: una riga che
-        dice come stanno le cose, e accanto l'azione che invece **funziona
-        adesso** — leggere come funziona.
+        💡 **Solo la riga, nessun pulsante.** Un pulsante spento si prova a
+        premere lo stesso, e uno che rimanda altrove al posto di scaricare
+        promette una cosa e ne fa un'altra. Finche' non c'e' niente da
+        scaricare, qui si dice come stanno le cose e basta.
     --}}
-    <div style="display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center;">
-        <a href="#come-funziona" class="bottone bottone-pieno{{ $misura }}">Guarda come funziona</a>
-        <span class="pillola">Presto su Google Play e App Store</span>
-    </div>
+    <span class="pillola">Presto su Google Play e App Store</span>
 @endif

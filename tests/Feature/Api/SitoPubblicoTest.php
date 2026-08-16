@@ -199,6 +199,46 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
+     * 🚨 **Tre sezioni, e tre unità di misura diverse.**
+     *
+     * ⚠️ Palestre e trainer comprano **persone**, chi si allena da solo compra
+     * **gettoni**. Metterle nella stessa tabella farebbe confrontare due
+     * grandezze che non si confrontano.
+     */
+    #[Test]
+    public function the_pricing_page_is_split_into_three(): void
+    {
+        $r = $this->get('/prezzi')->assertOk();
+
+        $r->assertSee('id="palestre"', escape: false)
+            ->assertSee('id="trainer"', escape: false)
+            ->assertSee('id="solo"', escape: false);
+
+        $r->assertSee('Sei una palestra', escape: false)
+            ->assertSee('Sei un trainer indipendente', escape: false)
+            ->assertSee('Vuoi allenarti da solo', escape: false);
+
+        // 💡 E i due minimi sono diversi: è la sola differenza fra il listino
+        // di una palestra e quello di un trainer, e va detta.
+        $r->assertSee('minimo '.config('listino.minimo_palestra').' posti', escape: false)
+            ->assertSee('minimo '.config('listino.minimo_trainer').' allievi', escape: false);
+    }
+
+    /** 💡 I gettoni sono la scala di prezzo di chi si allena da solo. */
+    #[Test]
+    public function the_solo_section_is_priced_in_tokens(): void
+    {
+        config()->set('listino.pacchetti', [
+            ['gettoni' => 42, 'prezzo_cent' => 1234, 'nota' => 'finto'],
+        ]);
+
+        $this->get('/prezzi')
+            ->assertOk()
+            ->assertSee('42 gettoni', escape: false)
+            ->assertSee('12,34 €', escape: false);
+    }
+
+    /**
      * 🚨 **Gli scaglioni sono progressivi, come le aliquote.**
      *
      * I primi 25 posti costano il prezzo pieno **anche a chi ne ha 300**.
