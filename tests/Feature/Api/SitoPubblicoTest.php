@@ -195,7 +195,11 @@ class SitoPubblicoTest extends TestCase
             ->assertOk()
             // Il primo scaglione, formattato come lo vede una persona.
             ->assertSee(number_format($listino->primoScaglione() / 100, 2, ',', '.').' €', escape: false)
-            ->assertSee('500', escape: false);
+            // ⚠️ Era `assertSee('500')`, e il 500 era **anche** quello di un
+            // pacchetto di gettoni: sarebbe passata comunque il giorno in cui
+            // la dotazione mensile fosse cambiata. Il 16/08 è scesa a 300, e
+            // sarebbe passata senza accorgersene.
+            ->assertSee((string) config('listino.gettoni_mensili'), escape: false);
     }
 
     /**
@@ -216,12 +220,50 @@ class SitoPubblicoTest extends TestCase
 
         $r->assertSee('Sei una palestra', escape: false)
             ->assertSee('Sei un trainer indipendente', escape: false)
-            ->assertSee('Vuoi allenarti da solo', escape: false);
+            ->assertSee('Ti alleni da solo', escape: false);
 
         // 💡 E i due minimi sono diversi: è la sola differenza fra il listino
         // di una palestra e quello di un trainer, e va detta.
-        $r->assertSee('minimo '.config('listino.minimo_palestra').' posti', escape: false)
-            ->assertSee('minimo '.config('listino.minimo_trainer').' allievi', escape: false);
+        $r->assertSee('Minimo '.config('listino.minimo_palestra').' posti', escape: false)
+            ->assertSee('Minimo '.config('listino.minimo_trainer').' allievi', escape: false);
+    }
+
+    /**
+     * 🚨 **Si parte da chi si allena da solo, non dalla palestra.**
+     *
+     * ⚠️ È la platea più larga e la sola che arriva qui **senza sapere già cosa
+     * vuole comprare**: la palestra ci arriva sapendolo, e una linguetta le
+     * basta. L'ordine nel documento è l'ordine in cui si scorre, quindi è
+     * l'ordine che conta.
+     */
+    #[Test]
+    public function the_carousel_opens_on_the_person_not_on_the_gym(): void
+    {
+        $pagina = $this->get('/prezzi')->assertOk()->getContent();
+
+        $solo = strpos($pagina, 'id="solo"');
+        $trainer = strpos($pagina, 'id="trainer"');
+        $palestre = strpos($pagina, 'id="palestre"');
+
+        $this->assertLessThan($trainer, $solo, 'la prima anta non è chi si allena da solo');
+        $this->assertLessThan($palestre, $trainer, 'il trainer non viene prima della palestra');
+    }
+
+    /**
+     * 💡 **Il carosello non ha bisogno di JavaScript.**
+     *
+     * ⚠️ Le linguette sono link veri e lo scorrimento è del browser
+     * (`scroll-snap`): con una libreria, chi ha JavaScript bloccato vedrebbe
+     * tre pannelli impilati **senza modo di raggiungerli**.
+     */
+    #[Test]
+    public function the_carousel_needs_no_javascript(): void
+    {
+        $pagina = $this->get('/prezzi')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('<script', $pagina);
+        $this->assertStringContainsString('href="#solo"', $pagina);
+        $this->assertStringContainsString('scroll-snap-type', $pagina);
     }
 
     /** 💡 I gettoni sono la scala di prezzo di chi si allena da solo. */
@@ -307,10 +349,19 @@ class SitoPubblicoTest extends TestCase
             'sulla home è ricomparso un prezzo',
         );
 
-        foreach (['rivend', 'margine', 'a posto', 'posti accesi', 'al mese'] as $parola) {
-            $this->assertStringNotContainsStringIgnoringCase(
-                $parola,
-                $home,
+        /*
+         * ⚠️ **Con i confini di parola, e c'è un motivo.**
+         *
+         * La prima versione cercava le parole come sottostringhe, e un
+         * commento nel foglio di stile che diceva «occup**a posto**» faceva
+         * fallire il test. 💡 Un controllo troppo largo su un testo in
+         * italiano fallisce su prosa innocente, e il modo in cui lo si
+         * «aggiusta» di solito è indebolirlo fino a non provare più niente.
+         */
+        foreach (['rivend\w*', 'margine', 'a posto', 'per posto', 'posti accesi', 'al mese'] as $parola) {
+            $this->assertSame(
+                0,
+                preg_match('~\b'.$parola.'\b~iu', $home),
                 "sulla home è ricomparso il discorso commerciale: «{$parola}»",
             );
         }

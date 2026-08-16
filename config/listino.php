@@ -60,8 +60,26 @@ return [
     /** L'abbonamento di chi si iscrive da solo, IVA inclusa. */
     'singolo_cent' => 799,
 
-    /** I gettoni che un posto riceve ogni mese. Si azzerano al rinnovo. */
-    'gettoni_mensili' => 500,
+    /*
+     * I gettoni che un posto riceve ogni mese. Si azzerano al rinnovo.
+     *
+     * ── 🚨 Erano 500, portati a 300 il 16/08/2026 ─────────────────────────
+     *
+     * Decisione del committente: **«ci devono arrivare a mala pena a fine mese
+     * facendo una o due foto»**. Dieci richieste al giorno per trenta giorni.
+     *
+     * ⚠️ E' una scelta **deliberatamente stretta**, non una stima: la misura
+     * bottom-up in `memory/STIMA-COSTI-AI.md` dice che chi usa l'app davvero
+     * ne consuma **320-490** al mese. Trecento vuol dire che chi la usa tutti
+     * i giorni finisce i gettoni prima della fine del mese e ne compra — ed e'
+     * il punto.
+     *
+     * 🚨 **Vale sia per l'abbonamento singolo sia per ogni posto di palestra**,
+     * perche' e' un valore solo. Il giorno in cui i due dovessero divergere,
+     * qui servono due chiavi e non una: separarle **dopo** aver fatturato
+     * significa cambiare cosa hanno comprato le persone gia' abbonate.
+     */
+    'gettoni_mensili' => 300,
 
     /**
      * Il prezzo suggerito alla palestra per rivendere un posto.

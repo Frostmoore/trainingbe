@@ -204,21 +204,76 @@
             margin-bottom: var(--sp-2);
         }
 
-        /* Le tre porte in cima ai prezzi. 💡 Sono `<a>` e non riquadri con
-           un link dentro: il bersaglio da premere è tutta la scheda, che su un
-           telefono è la differenza fra centrare e riprovare. */
-        .porta { text-decoration: none; color: inherit; display: block; transition: border-color .15s, transform .15s; }
-        .porta:hover { border-color: var(--accento); transform: translateY(-2px); }
-        .porta h3 { margin: var(--sp-1) 0 4px; }
+        /* ───────────────────────── il carosello dei prezzi ─────────────────
+
+           🚨 **Nessuna libreria, e nemmeno una riga di JavaScript.** Un
+           carosello è scorrimento più agganci: il browser sa già farli
+           entrambi (`scroll-snap`), e gli agganci sono link veri. ⚠️ Con una
+           libreria, chi ha JavaScript bloccato vedrebbe tre pannelli
+           impilati senza modo di raggiungerli; così invece si scorre lo
+           stesso, col dito o con la barra.
+
+           💡 Le tre linguette sono `<a href="#...">`: premerle sposta il
+           **contenitore**, non la pagina, perché il browser scorre l'antenato
+           scorrevole più vicino.
+        */
+
+        .carosello {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 100%;
+            gap: var(--sp-3);
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            /* ⚠️ Spazio sotto per la barra di scorrimento, che su Windows
+               occupa posto e altrimenti mangia il bordo dell'ultima scheda. */
+            padding-bottom: var(--sp-2);
+            /* 💡 Nasconde la barra dove si può: il carosello ha già le sue
+               linguette, e una barra grigia in mezzo alla pagina sembra un
+               difetto. */
+            scrollbar-width: none;
+        }
+
+        .carosello::-webkit-scrollbar { display: none; }
+
+        .carosello > .anta {
+            scroll-snap-align: start;
+            /* ⚠️ `min-width: 0` o il contenuto largo (le tabelle) allarga la
+               colonna invece di scorrere dentro di sé. */
+            min-width: 0;
+        }
+
+        /* Le linguette sopra il carosello. */
+        .linguette {
+            display: flex; gap: var(--sp-1); flex-wrap: wrap;
+            margin-bottom: var(--sp-3);
+        }
+
+        .linguette a {
+            flex: 1 1 200px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--testo);
+            border: 1px solid var(--bordo);
+            border-radius: var(--raggio);
+            padding: 12px var(--sp-2);
+            background: var(--sfondo);
+            transition: border-color .15s, background .15s;
+        }
+
+        .linguette a:hover { border-color: var(--accento); background: var(--accento-tenue); }
+        .linguette a strong { display: block; font-size: 15px; }
+        .linguette a span { font-size: 13px; color: var(--testo-tenue); }
+
+        /* 🚨 L'aggancio deve fermare la colonna a sinistra del contenitore, non
+           sotto la barra fissa in alto. */
+        .anta { scroll-margin-top: 80px; }
 
         .tabella-prezzi { width: 100%; border-collapse: collapse; font-size: 16px; }
         .tabella-prezzi th { text-align: left; padding: 14px var(--sp-3); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
         .tabella-prezzi td { padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo); }
         .tabella-prezzi tr:last-child td { border-bottom: 0; }
-
-        /* ⚠️ Le tre sezioni hanno un'ancora, e la barra in alto è fissa: senza
-           questo, chi ci salta si ritrova il titolo nascosto sotto la barra. */
-        #palestre, #trainer, #solo { scroll-margin-top: 80px; }
 
         /* ───────────────────────── navigazione ───────────────────────── */
 
