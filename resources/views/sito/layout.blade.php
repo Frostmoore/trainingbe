@@ -57,11 +57,16 @@
     @endif
 
     {{--
-        💡 **L'icona è disegnata qui dentro, non è un file.** È il quadratino
-        del marchio: un SVG di duecento byte incorporato non è una richiesta in
-        più al server e non è un file da ricordarsi di caricare.
+        L'icona della scheda.
+
+        💡 **È lo stesso file del marchio**, non una seconda immagine da tenere
+        allineata: due file che devono restare uguali finiscono sempre per non
+        esserlo più. Finché il marchio non c'è resta il quadratino disegnato
+        qui dentro — duecento byte incorporati, nessuna richiesta al server e
+        nessun file da ricordarsi di caricare.
     --}}
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F766E'/%3E%3Crect x='9' y='9' width='14' height='14' rx='4' fill='%23ECFDF5'/%3E%3C/svg%3E">
+    @php($segnoIcona = app(\App\Support\ImmaginiDelSito::class)->marchio())
+    <link rel="icon" href="{{ $segnoIcona ?? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F766E'/%3E%3Crect x='9' y='9' width='14' height='14' rx='4' fill='%23ECFDF5'/%3E%3C/svg%3E" }}">
 
     <style>
         :root {
@@ -185,6 +190,18 @@
             border-radius: 0;
             margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-3);
             width: auto;
+        }
+
+        /* Il numero grande in cima ai tre passi di «come funziona».
+           💡 Un numero invece di «1 ·» nel titolo: si vede da lontano che sono
+           passi in ordine, che è l'unica cosa che quella sezione deve dire
+           prima ancora di essere letta. */
+        .numero-passo {
+            width: 34px; height: 34px; border-radius: 10px;
+            display: grid; place-items: center;
+            background: var(--accento-tenue); color: var(--accento);
+            font-weight: 800; font-size: 17px;
+            margin-bottom: var(--sp-2);
         }
 
         /* ───────────────────────── navigazione ───────────────────────── */
@@ -360,11 +377,26 @@
 
 <nav class="navbar">
     <div class="contenitore">
-        <a href="/" class="marchio"><span class="punto"></span> Training Companion</a>
+        {{-- 💡 Il nome resta **testo vero**, sempre: un marchio con dentro le
+             lettere sarebbe illeggibile agli screen reader e ai motori di
+             ricerca, e sfocato sugli schermi che non gli piacciono. Il file
+             disegnato sostituisce solo il **segno**. --}}
+        @php($segno = app(\App\Support\ImmaginiDelSito::class)->marchio())
+        <a href="/" class="marchio">
+            @if ($segno !== null)
+                <img src="{{ $segno }}" alt="" width="28" height="28" style="border-radius: 7px;">
+            @else
+                <span class="punto"></span>
+            @endif
+            Training Companion
+        </a>
         <div class="nav-voci">
             <a href="/#come-funziona" class="solo-grande">Come funziona</a>
             <a href="/prezzi" class="solo-grande">Prezzi</a>
-            <a href="/admin/login" class="bottone bottone-vuoto">Entra</a>
+            <a href="/admin/login" class="bottone bottone-vuoto solo-grande">Pannello</a>
+            {{-- 💡 Quando l'app sarà sugli store, questo diventa il pulsante
+                 principale della barra senza toccare niente. --}}
+            <x-sito.scarica />
         </div>
     </div>
 </nav>
@@ -394,7 +426,7 @@
         </div>
 
         <div class="chiusura-pie">
-            Training Companion · L'app funziona senza AI, gratis e per sempre.
+            Training Companion · Diario, allenamenti e schede. Gratis, per sempre.
         </div>
     </div>
 </footer>

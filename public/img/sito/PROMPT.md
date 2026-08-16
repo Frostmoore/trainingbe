@@ -94,3 +94,48 @@ tenere basso il peso.
 ⚠️ **Se un'immagine esce con del testo dentro, va rigenerata.** I generatori scrivono lettere
 storte e parole inventate, e su una parete di palestra si notano più di quanto sembri mentre la si
 guarda a schermo intero.
+
+---
+
+# Il marchio
+
+⚠️ **Un generatore di immagini non sa scrivere.** Chiedergli «il logo di Training Companion» produce
+lettere storte e parole inventate, e il difetto si nota esattamente dove non deve: nel nome del
+prodotto.
+
+🚨 **Quindi si chiede solo il segno, mai le lettere.** Il nome resta testo vero nella pagina — così
+è leggibile dagli screen reader e dai motori di ricerca, e resta nitido su qualunque schermo. Il
+file disegnato sostituisce soltanto il quadratino accanto al nome.
+
+✅ **Fatto il 16/08/2026**: `marchio.svg` è un monogramma TC nel verde del prodotto, e compare nella barra in alto **e** come icona della scheda (lo stesso file, non due immagini da tenere allineate). L'originale è in `memory/immagini-sorgente/marchio-originale.svg`.
+questa cartella e compare nella barra in alto. Finché non c'è, resta il quadratino disegnato in CSS,
+che è lo stesso segno dell'icona della scheda.
+
+## Il prompt
+
+> Disegna un **simbolo** per il logo di un'app di allenamento e alimentazione. **Solo il simbolo:
+> nessuna lettera, nessuna parola, nessun testo di nessun tipo.**
+>
+> - stile **piatto e geometrico**, da icona vettoriale, non un disegno e non un rendering 3D;
+> - **un colore solo**, verde-petrolio `#0F766E`, su sfondo trasparente o bianco pieno;
+> - deve funzionare **dentro un quadrato** e restare riconoscibile a 24 pixel di lato;
+> - tratti spessi e uniformi, nessuna sfumatura, nessuna ombra, nessun riflesso;
+> - niente cliché del settore: **nessun manubrio, nessun bicipite, nessuna fiamma, nessun cuore
+>   con l'elettrocardiogramma**;
+> - l'idea da rendere è **la costanza**: qualcosa che si ripete e cresce un poco per volta.
+>
+> Dammene quattro varianti diverse fra loro, su una griglia, ciascuna dentro il suo quadrato.
+
+## Se le quattro non convincono
+
+Sono tre direzioni da provare, una per volta, aggiungendole in coda al prompt:
+
+| Direzione | Da aggiungere |
+|---|---|
+| **Il progresso** | «tre o quattro barre verticali di altezza crescente, con gli angoli arrotondati, viste come un piccolo grafico» |
+| **Il giorno che torna** | «un quadrato con l'angolo superiore destro aperto, come una casella che si spunta ogni giorno» |
+| **Le due parti** | «due forme uguali che si incastrano, una piena e una vuota: chi si allena e chi lo segue» |
+
+💡 Quando una piace, chiedere: *«questa, ripulita: stessi spessori ovunque, allineata al centro del
+quadrato, e con un margine libero attorno pari a un ottavo del lato»*. È la rifinitura che fa la
+differenza fra un disegno e un marchio.

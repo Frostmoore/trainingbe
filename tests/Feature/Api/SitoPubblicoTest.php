@@ -239,6 +239,87 @@ class SitoPubblicoTest extends TestCase
         $this->assertGreaterThan(0, $e['margine']);
     }
 
+    /**
+     * 🚨 **Sulla home non si parla di soldi.**
+     *
+     * ── Perche' questo test esiste ────────────────────────────────────────
+     *
+     * La home del 16/08 mattina spiegava, nel terzo passo di «come funziona»,
+     * che una palestra puo' rivendere un posto a 10 € e tenersene la meta'.
+     *
+     * ⚠️ **E' vero, ed e' la cosa sbagliata da dire li'.** Chi legge quella
+     * pagina sta valutando se scaricare un'app: gli si stava spiegando che e'
+     * un prodotto costruito per essere rivenduto addosso a lui. Quei numeri
+     * stanno su `/prezzi`, che e' la pagina dove una palestra li cerca apposta.
+     *
+     * 💡 Il test guarda il **meccanismo**, non le parole esatte: qualunque
+     * cifra in euro sulla home lo fa fallire, comunque sia stata scritta.
+     */
+    #[Test]
+    public function the_home_does_not_pitch_the_reseller_margin(): void
+    {
+        $home = $this->get('/')->assertOk()->getContent();
+
+        // Nessuna cifra in euro, in nessuna forma.
+        $this->assertSame(
+            0,
+            preg_match_all('~\d+[.,]\d{2}\s*(€|&euro;)~u', $home),
+            'sulla home è ricomparso un prezzo',
+        );
+
+        foreach (['rivend', 'margine', 'a posto', 'posti accesi', 'al mese'] as $parola) {
+            $this->assertStringNotContainsStringIgnoringCase(
+                $parola,
+                $home,
+                "sulla home è ricomparso il discorso commerciale: «{$parola}»",
+            );
+        }
+    }
+
+    /**
+     * 💡 E dice **cosa fa l'app**, in ordine, prima di dire tutto il resto.
+     *
+     * I tre passi erano «entrano tutti / chi vuole l'AI la accende / la
+     * palestra la rivende»: tre passi del **modello di business**. Chi li
+     * leggeva non sapeva ancora cosa fa l'app, e imparava come si guadagna
+     * sopra di lui.
+     */
+    #[Test]
+    public function the_home_explains_the_product_in_three_steps(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Scarichi ed entri', escape: false)
+            ->assertSee('Segni cosa mangi', escape: false)
+            ->assertSee('Ricevi le schede dal tuo trainer', escape: false);
+    }
+
+    /**
+     * 🚨 **Nessun pulsante «Scarica» finche' non c'e' niente da scaricare.**
+     *
+     * ⚠️ Uno che non scarica niente e' peggio di nessun pulsante: chi lo preme
+     * una volta e non succede niente non lo preme piu', e non torna a
+     * controllare se nel frattempo funziona.
+     */
+    #[Test]
+    public function the_download_button_appears_only_when_there_is_a_store(): void
+    {
+        config()->set('app_mobile.android', '');
+        config()->set('app_mobile.ios', '');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Scarica per', escape: false)
+            ->assertSee('Presto su Google Play', escape: false);
+
+        config()->set('app_mobile.android', 'https://play.google.com/store/apps/details?id=finto');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('Scarica per Android', escape: false)
+            ->assertSee('https://play.google.com/store/apps/details?id=finto', escape: false);
+    }
+
     // ═══════════════════ le immagini ═══════════════════
 
     /**

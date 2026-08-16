@@ -1,7 +1,26 @@
+{{--
+    La home — rifatta il 16/08/2026, sera.
+
+    ── 🚨 Chi legge questa pagina ─────────────────────────────────────────────
+
+    **Una persona che si allena**, non chi compra. È la correzione che ha fatto
+    rifare questa pagina: la versione precedente spiegava, nel terzo passo di
+    «come funziona», che una palestra può rivendere un posto a 10 € e tenersene
+    la metà.
+
+    ⚠️ **È vero, ed è la cosa sbagliata da dire qui.** Chi sta valutando se
+    scaricare un'app legge che è un prodotto costruito per essere rivenduto
+    addosso a lui, e chiude. Quei numeri esistono ancora e stanno su `/prezzi`,
+    che è la pagina dove una palestra li sta cercando apposta.
+
+    💡 **La regola, in una riga**: sulla home non compare nessun prezzo, nessun
+    margine e nessun «posto». Ci sono un test che lo verifica
+    (`the_home_does_not_pitch_the_reseller_margin`) e un motivo, che è questo.
+--}}
 @extends('sito.layout')
 
 @section('titolo', 'Training Companion — l\'app per chi si allena')
-@section('descrizione', 'Diario, allenamenti e chat con il tuo trainer: gratis, per sempre. L\'AI è un supplemento che accendi solo se lo vuoi.')
+@section('descrizione', 'Diario alimentare, allenamenti e le schede del tuo trainer, in un\'app sola. Gratis, per sempre, senza periodo di prova.')
 
 @section('contenuto')
 
@@ -14,34 +33,29 @@
                 {{-- 🚨 L'affermazione è **l'app è gratis**, non «l'AI che ti
                      cambia la vita». È la cosa vera e la più difficile da
                      copiare: gli altri fanno pagare l'ingresso. --}}
-                <h1 style="margin-top: var(--sp-2);">L'app per chi si allena.<br>Gratis, per sempre.</h1>
+                <h1 style="margin-top: var(--sp-2);">Alimentazione e allenamento.<br>In un'app sola, gratis.</h1>
 
                 <p class="guida">
-                    Diario alimentare, schede, allenamenti e la chat cifrata con il tuo
-                    trainer. Non costa niente e non ha un periodo di prova che scade.
+                    Segni cosa mangi, tieni il conto degli allenamenti e ricevi le schede
+                    del tuo trainer. Senza abbonamento, senza periodo di prova che scade,
+                    senza carta di credito.
                 </p>
 
-                <p class="guida" style="margin-top: var(--sp-2);">
-                    L'intelligenza artificiale è un <strong>supplemento</strong>: la accendi
-                    se ti serve, e la paghi solo mentre la usi.
-                </p>
-
-                <div style="display: flex; gap: var(--sp-1); flex-wrap: wrap; margin-top: var(--sp-3);">
-                    <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Guarda i prezzi</a>
-                    <a href="#come-funziona" class="bottone bottone-vuoto bottone-grande">Come funziona</a>
+                <div style="margin-top: var(--sp-3);">
+                    <x-sito.scarica :grande="true" />
                 </div>
 
                 <p class="nota" style="margin-top: var(--sp-2);">
-                    Nessuna carta di credito per cominciare. Nessuna, proprio.
+                    Funziona da sola o con la tua palestra. La scelta è tua e si cambia
+                    quando vuoi.
                 </p>
             </div>
 
             {{--
                 🚨 **La fotografia sta DIETRO, il telefono è disegnato davanti.**
 
-                L'immagine generata dà il tono — palestra, luce, movimento — e
-                l'unica cosa che **afferma qualcosa sul prodotto** resta scritta
-                in HTML.
+                L'immagine dà il tono — palestra, luce, movimento — e l'unica
+                cosa che **afferma qualcosa sul prodotto** resta scritta in HTML.
 
                 ⚠️ Il contrario — una schermata dell'app dentro una fotografia —
                 sarebbe una schermata **inventata**: mostrerebbe un'interfaccia
@@ -51,9 +65,6 @@
                 💡 E il telefono disegnato non va tenuto aggiornato con
                 un'esportazione grafica: se cambia il testo dello spunto, si
                 cambia qui.
-
-                Il velo in mezzo serve a far leggere la scheda: senza, una
-                fotografia piena di dettagli se la mangia.
             --}}
             <div style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 420px; padding: var(--sp-4) var(--sp-3);">
                 <div class="figura-eroe">
@@ -71,7 +82,6 @@
                     <div style="background: var(--accento-tenue); border-radius: 14px; padding: 14px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <strong style="font-size: 14px; color: var(--accento);">✦ Spunto di oggi</strong>
-                            <span style="margin-left: auto; font-size: 11px; color: var(--accento); border: 1px solid var(--accento); border-radius: 99px; padding: 1px 7px;">1 gettone</span>
                         </div>
                         <p style="font-size: 13px; margin: 8px 0 0; line-height: 1.5;">
                             Sei a 1.240 kcal a metà pomeriggio: sei in linea. Stanotte hai
@@ -98,48 +108,167 @@
         </div>
     </section>
 
-    {{-- ═══════════════════ come funziona ═══════════════════ --}}
+    {{--
+        ═══════════════════ come funziona ═══════════════════
+
+        🚨 **Tre passi che una persona compie davvero, in ordine.**
+
+        Prima erano «entrano tutti / chi vuole l'AI la accende / la palestra la
+        rivende»: tre passi del **modello di business**, non del prodotto. Chi
+        li leggeva non sapeva ancora cosa fa l'app, e imparava invece come si
+        guadagna sopra di lui.
+    --}}
     <section id="come-funziona" class="tenue">
         <div class="contenitore">
             <div class="intestazione-sezione">
                 <div class="occhiello">Come funziona</div>
-                <h2>Il prodotto è gratis. L'AI è il supplemento.</h2>
+                <h2>Tre passi, e ci vogliono due minuti.</h2>
                 <p class="guida">
-                    È il contrario di come funzionano quasi tutte le app di questo tipo, e
-                    non è una trovata: è l'unico modo perché una palestra possa metterla in
-                    mano a tutti gli iscritti senza chiedere niente a nessuno.
+                    Non c'è niente da configurare prima di cominciare: si scarica, si entra
+                    e si scrive il primo pasto.
                 </p>
             </div>
 
             <div class="griglia">
                 <div class="scheda">
-                    <h3>1 · Entrano tutti</h3>
+                    <div class="numero-passo">1</div>
+                    <h3>Scarichi ed entri</h3>
                     <p class="nota">
-                        La palestra dà il proprio codice agli iscritti. Loro installano l'app e
-                        hanno diario, schede, allenamenti e la chat con il trainer.
-                        <strong>Costo: zero.</strong>
+                        Se la tua palestra usa Training Companion, inserisci il suo codice e
+                        sei già collegato al tuo trainer. <strong>Se non ce l'hai</strong>,
+                        ti registri e basta: l'app funziona lo stesso.
                     </p>
+                </div>
+
+                <div class="scheda">
+                    <div class="numero-passo">2</div>
+                    <h3>Segni cosa mangi e come ti alleni</h3>
+                    <p class="nota">
+                        Scrivi <em>«pasta al pomodoro e due uova»</em> e l'app calcola
+                        calorie e macro. Gli allenamenti li registri esercizio per esercizio,
+                        serie per serie, e li ritrovi la volta dopo.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <div class="numero-passo">3</div>
+                    <h3>Ricevi le schede dal tuo trainer</h3>
+                    <p class="nota">
+                        Il tuo trainer ti manda la scheda e il piano alimentare direttamente
+                        in chat. Li apri, li segui, e <strong>restano tuoi</strong> anche se
+                        cambi palestra.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {{-- ═══════════════════ cosa c'è dentro ═══════════════════ --}}
+    <section>
+        <div class="contenitore">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Cosa c'è dentro</div>
+                <h2>Tutto quello che serve, niente che non serva.</h2>
+            </div>
+
+            <div class="griglia">
+                <div class="scheda">
+                    <h3>🍽 Diario alimentare</h3>
+                    <p class="nota">
+                        Calorie, proteine, carboidrati e grassi. Dai preferiti si registra un
+                        pasto in due tocchi, e il fabbisogno si calcola da peso, altezza e
+                        quanto ti muovi.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <h3>🏋 Allenamenti</h3>
+                    <p class="nota">
+                        Carichi, serie e ripetizioni, con lo storico di ogni esercizio. Vedi
+                        subito cosa avevi fatto l'ultima volta, senza cercarlo.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <h3>📋 Schede e piani</h3>
+                    <p class="nota">
+                        Quello che il tuo trainer prepara per te, sul telefono: giorno per
+                        giorno, esercizio per esercizio, con le sue note.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <h3>💬 Chat col trainer</h3>
+                    <p class="nota">
+                        Per chiedere se un esercizio si fa così, mandare una foto, cambiare
+                        un orario. <strong>Cifrata</strong>: la leggete solo voi due.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <h3>📈 Peso e misure</h3>
+                    <p class="nota">
+                        L'andamento nel tempo, con le foto dei progressi se le vuoi. Restano
+                        sul tuo telefono e non le vede nessun altro.
+                    </p>
+                </div>
+
+                <div class="scheda">
+                    <h3>😴 Sonno e recupero</h3>
+                    <p class="nota">
+                        Se colleghi l'orologio, l'app legge sonno, battito e variabilità — e
+                        te li rimette accanto a com'è andato l'allenamento.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {{--
+        ═══════════════════ l'AI, che è un supplemento ═══════════════════
+
+        ⚠️ **Sezione separata, e dopo le funzioni.** L'AI è la parte che si
+        paga: metterla in mezzo alle cose gratuite farebbe sembrare a pagamento
+        anche quelle, che è esattamente il malinteso da evitare.
+    --}}
+    <section class="tenue">
+        <div class="contenitore stretto">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Se ti va</div>
+                <h2>L'intelligenza artificiale è un extra.</h2>
+                <p class="guida">
+                    Tutto quello che hai letto fin qui è gratis e resta gratis. L'AI si
+                    accende solo se la vuoi, e senza non manca niente: si scrive il pasto a
+                    mano come si è sempre fatto.
+                </p>
+            </div>
+
+            <div class="griglia">
+                <div class="scheda">
+                    <h3>Scrivi, e conta lei</h3>
+                    <p class="nota">Una frase in italiano al posto di cercare ogni ingrediente in un elenco.</p>
                 </div>
                 <div class="scheda">
-                    <h3>2 · Chi vuole l'AI la accende</h3>
-                    <p class="nota">
-                        Stima delle calorie da una frase o da una foto, e uno spunto sulla
-                        giornata. La palestra decide a chi accenderla, uno per uno.
-                    </p>
+                    <h3>Fotografa il piatto</h3>
+                    <p class="nota">Quando non hai voglia di scrivere: una foto, e i macro sono stimati.</p>
                 </div>
                 <div class="scheda">
-                    <h3>3 · La palestra la rivende</h3>
-                    <p class="nota">
-                        {{-- 🚨 Anche qui i numeri vengono da `Listino`: era l'unico
-                             prezzo rimasto scritto a mano in un template, ed è
-                             esattamente il caso che `no_price_is_written_inside_a_view`
-                             esiste per impedire. --}}
-                        Un posto costa <strong>{{ $formatta($primoScaglione) }}</strong> al mese.
-                        Se lo rivende a {{ $formatta($rivenditaSuggerita) }}
-                        sull'abbonamento, <strong>{{ $formatta($rivenditaSuggerita - $primoScaglione) }}
-                        restano a lei</strong> — e più posti accende, più le resta per ciascuno.
-                    </p>
+                    <h3>Lo spunto del giorno</h3>
+                    <p class="nota">Due righe su come sta andando la giornata, costruite sui tuoi numeri.</p>
                 </div>
+            </div>
+
+            {{-- 🚨 Sta qui e non in fondo a una pagina di condizioni: è la cosa
+                 che una persona deve sapere **prima** di dare peso a quello che
+                 legge nell'app. --}}
+            <div class="scheda" style="margin-top: var(--sp-3); border-color: color-mix(in srgb, var(--accento) 25%, transparent); background: var(--accento-tenue);">
+                <h3>⚠️ Quello che l'AI non è</h3>
+                <p class="nota">
+                    Non è un medico e non è un nutrizionista. Quello che scrive è un'ipotesi
+                    costruita su pochi numeri, <strong>può sbagliare</strong>, e non conosce
+                    la tua storia clinica. Se riguarda la tua salute, parlane con un medico
+                    dello sport. Nell'app c'è scritto sotto ogni spunto.
+                </p>
             </div>
         </div>
     </section>
@@ -152,14 +281,17 @@
                 <h2>I dati del tuo corpo non stanno sui nostri server.</h2>
                 <p class="guida">
                     Peso, misure, foto dei progressi, sonno e battito vivono
-                    <strong>nel telefono di chi li produce</strong>. Non è una promessa
-                    scritta in un documento: le tabelle che li contenevano sono state
-                    cancellate.
+                    <strong>nel tuo telefono</strong>. Non è una promessa scritta in un
+                    documento: le tabelle che li contenevano sono state cancellate.
                 </p>
                 <p class="guida" style="margin-top: var(--sp-2);">
                     I messaggi con il tuo trainer sono cifrati da un telefono all'altro.
                     Noi li consegniamo <strong>senza poterli leggere</strong> — nemmeno
                     volendo, nemmeno la tua palestra.
+                </p>
+                <p class="guida" style="margin-top: var(--sp-2);">
+                    E non vendiamo niente a nessuno: non c'è pubblicità profilata, non c'è
+                    un secondo mestiere fatto coi tuoi dati.
                 </p>
                 <p style="margin-top: var(--sp-3);">
                     <a href="/privacy" class="bottone bottone-vuoto">Leggi l'informativa</a>
@@ -190,7 +322,13 @@
         </div>
     </section>
 
-    {{-- ═══════════════════ per chi ═══════════════════ --}}
+    {{--
+        ═══════════════════ per chi ═══════════════════
+
+        ⚠️ Le tre platee restano — servono a chi arriva da fuori a capire se la
+        cosa lo riguarda — ma **nessuna delle tre parla di soldi**. Chi vuole i
+        numeri clicca, e li trova su `/prezzi`.
+    --}}
     <section class="tenue">
         <div class="contenitore">
             <div class="intestazione-sezione">
@@ -201,19 +339,39 @@
             <div class="griglia">
                 <div class="scheda">
                     <x-sito.figura
+                        nome="platea-solo"
+                        alt="Una persona che si allena da sola in casa, di prima mattina"
+                    />
+                    <h3>Per chi si allena da solo</h3>
+                    <p class="nota">
+                        Non serve nessuna palestra e non serve nessun codice. Ti registri e
+                        cominci, e l'app è tutta lì.
+                    </p>
+                    <ul class="elenco">
+                        <li>Diario, allenamenti e progressi</li>
+                        <li>Nessun periodo di prova che scade</li>
+                        <li>L'AI a parte, se ti va</li>
+                    </ul>
+                </div>
+
+                <div class="scheda">
+                    <x-sito.figura
                         nome="platea-palestra"
                         alt="La reception di una palestra, con un tablet sul bancone"
                     />
                     <h3>Per le palestre</h3>
                     <p class="nota">
-                        L'app con il tuo marchio e i tuoi colori. I trainer compongono schede e
-                        piani dal pannello o dal telefono, e li mandano in chat.
+                        L'app con il tuo marchio e i tuoi colori, in mano a tutti gli
+                        iscritti. I trainer preparano schede e piani e li mandano in chat.
                     </p>
                     <ul class="elenco">
                         <li>App con il tuo logo</li>
                         <li>Pannello per lo staff</li>
-                        <li>Paghi solo i posti AI accesi</li>
+                        <li>Gratis per tutti i tuoi iscritti</li>
                     </ul>
+                    <p style="margin-top: var(--sp-2);">
+                        <a href="/prezzi" class="bottone bottone-vuoto">Vedi i prezzi</a>
+                    </p>
                 </div>
 
                 <div class="scheda">
@@ -223,31 +381,17 @@
                     />
                     <h3>Per i trainer indipendenti</h3>
                     <p class="nota">
-                        I tuoi allievi entrano con un link tuo: non serve una palestra. Componi
-                        dal computer, mandi dal telefono.
+                        I tuoi allievi entrano con un link tuo: non serve una palestra.
+                        Componi dal computer, mandi dal telefono.
                     </p>
                     <ul class="elenco">
                         <li>Schede e piani alimentari</li>
-                        <li>Chat cifrata con i tuoi</li>
+                        <li>Chat cifrata con i tuoi allievi</li>
                         <li>Quello che mandi resta loro</li>
                     </ul>
-                </div>
-
-                <div class="scheda">
-                    <x-sito.figura
-                        nome="platea-solo"
-                        alt="Una persona che si allena da sola in casa, di prima mattina"
-                    />
-                    <h3>Per chi si allena da solo</h3>
-                    <p class="nota">
-                        Non serve nessuna palestra e non serve nessun codice. Ti registri e
-                        cominci.
+                    <p style="margin-top: var(--sp-2);">
+                        <a href="/prezzi" class="bottone bottone-vuoto">Vedi i prezzi</a>
                     </p>
-                    <ul class="elenco">
-                        <li>Diario e allenamenti, gratis</li>
-                        <li>AI a parte, se la vuoi</li>
-                        <li>Nessun periodo di prova che scade</li>
-                    </ul>
                 </div>
             </div>
         </div>
@@ -265,37 +409,37 @@
                 <summary>Davvero gratis, o gratis per tre mesi?</summary>
                 <p>
                     Gratis. Diario, allenamenti, schede e chat non hanno una scadenza e non
-                    chiedono una carta. Si paga solo l'intelligenza artificiale, e solo
-                    mentre la si usa.
+                    chiedono una carta. L'unica cosa che si paga è l'intelligenza
+                    artificiale, e solo se la si accende.
                 </p>
             </details>
 
             <details>
-                <summary>Cos'è un gettone?</summary>
+                <summary>Serve che la mia palestra la usi?</summary>
                 <p>
-                    Una chiamata all'AI. Scrivere cosa hai mangiato ne costa <strong>1</strong>,
-                    riconoscerlo da una foto ne costa <strong>10</strong> — perché a noi costa
-                    circa quattro volte tanto. Registrare un pasto dal tuo piano, dai preferiti
-                    o a mano non costa niente.
+                    No. Con il codice della palestra sei collegato al tuo trainer e ricevi
+                    le sue schede; senza, l'app funziona lo stesso e tieni tutto da solo.
+                    Si può anche cominciare da soli e collegarsi dopo.
                 </p>
             </details>
 
             <details>
                 <summary>L'AI mi dice cosa mangiare o come allenarmi?</summary>
                 <p>
-                    No, e ci teniamo a essere chiari: quello che scrive è un'ipotesi costruita
-                    su pochi numeri, <strong>non è un parere medico</strong> e non va preso per
-                    buono. Se riguarda la tua salute, parlane con un medico dello sport. Nell'app
-                    c'è scritto sotto ogni spunto, non in fondo a una pagina di condizioni.
+                    No, e ci teniamo a essere chiari: quello che scrive è un'ipotesi
+                    costruita su pochi numeri, <strong>non è un parere medico</strong> e non
+                    va preso per buono. Se riguarda la tua salute, parlane con un medico
+                    dello sport. Nell'app c'è scritto sotto ogni spunto, non in fondo a una
+                    pagina di condizioni.
                 </p>
             </details>
 
             <details>
                 <summary>La mia palestra vede quanto peso o quanto mi alleno?</summary>
                 <p>
-                    No. Peso, misure, foto e sonno non arrivano nemmeno a noi: restano sul tuo
-                    telefono. E i messaggi con il tuo trainer sono cifrati fra i due telefoni,
-                    quindi non li legge nessun altro — noi compresi.
+                    No. Peso, misure, foto e sonno non arrivano nemmeno a noi: restano sul
+                    tuo telefono. E i messaggi con il tuo trainer sono cifrati fra i due
+                    telefoni, quindi non li legge nessun altro — noi compresi.
                 </p>
             </details>
 
@@ -311,11 +455,11 @@
             </details>
 
             <details>
-                <summary>Cosa succede se smetto di pagare l'AI?</summary>
+                <summary>Se smetto con la palestra, perdo le schede?</summary>
                 <p>
-                    L'app continua a funzionare come prima, senza le funzioni AI. Le schede e i
-                    piani che il tuo trainer ti ha mandato <strong>restano tuoi</strong>: sono
-                    sul tuo telefono e non li tocca nessuno.
+                    No. Le schede e i piani che il tuo trainer ti ha mandato
+                    <strong>restano tuoi</strong>: sono sul tuo telefono e non li tocca
+                    nessuno, nemmeno se il rapporto con la palestra finisce.
                 </p>
             </details>
         </div>
@@ -324,12 +468,13 @@
     {{-- ═══════════════════ chiusura ═══════════════════ --}}
     <section class="tenue" style="text-align: center;">
         <div class="contenitore stretto">
-            <h2>Provala con la tua palestra.</h2>
+            <h2>Comincia stasera, col primo pasto.</h2>
             <p class="guida" style="margin: 0 auto var(--sp-3);">
-                Si comincia da cinque posti. Se non funziona, si spegne — non c'è niente da
-                disdire.
+                Non serve una palestra, non serve una carta e non c'è niente da disdire.
             </p>
-            <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Guarda i prezzi</a>
+            <div style="display: flex; justify-content: center;">
+                <x-sito.scarica :grande="true" />
+            </div>
         </div>
     </section>
 

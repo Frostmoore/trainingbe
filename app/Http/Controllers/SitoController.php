@@ -25,35 +25,24 @@ class SitoController extends Controller
     /**
      * La home.
      *
-     * ⚠️ **Non elenca più i piani dal database.** Dal 16/08 il listino sta su
-     * `/prezzi` e segue il modello a posti (`config/listino.php`): la home
-     * racconta cosa fa il prodotto, e chi vuole i numeri clicca.
+     * ── 🚨 Non riceve `Listino`, ed e' voluto ─────────────────────────────
      *
-     * 💡 Le tre platee restano — palestre, trainer indipendenti, chi si allena
-     * da solo — ma come **sezioni**, non come tre listini affiancati: erano tre
-     * colonne di prezzi prima ancora che qualcuno avesse capito cosa fa l'app.
-     */
-    public function home(Listino $listino): View
-    {
-        return view('sito.home', [
-            // 🚨 Anche la home ha un prezzo da mostrare (il passo 3 di «come
-            // funziona»), e anche quello viene da qui: era l'unico numero
-            // rimasto scritto a mano dentro un template.
-            'formatta' => $this->formattatore(),
-            'primoScaglione' => $listino->primoScaglione(),
-            'rivenditaSuggerita' => (int) config('listino.rivendita_suggerita_cent'),
-        ]);
-    }
-
-    /**
-     * Da centesimi a «4,99 €».
+     * Perche' **sulla home non c'e' nessun prezzo**. La versione del 16/08
+     * mattina spiegava, nel terzo passo di «come funziona», che una palestra
+     * puo' rivendere un posto a 10 € e tenersene la meta'.
      *
-     * 💡 Una funzione sola per le due pagine: due formattatori diversi
-     * scriverebbero lo stesso prezzo in due modi, e la differenza si nota.
+     * ⚠️ E' vero, ed e' la cosa sbagliata da dire li': chi sta valutando se
+     * scaricare un'app legge che e' un prodotto costruito per essere rivenduto
+     * addosso a lui, e chiude. Quei numeri stanno su `/prezzi`, che e' la
+     * pagina dove una palestra li sta cercando apposta.
+     *
+     * 💡 Non avere il listino iniettato **e' il modo di renderlo difficile da
+     * rimettere**: chi volesse riscriverci un prezzo dovrebbe prima cambiare
+     * questa firma, e a quel punto legge il perche'.
      */
-    private function formattatore(): \Closure
+    public function home(): View
     {
-        return static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €';
+        return view('sito.home');
     }
 
     /**
@@ -67,7 +56,7 @@ class SitoController extends Controller
     public function prezzi(Listino $listino): View
     {
         return view('sito.prezzi', [
-            'formatta' => $this->formattatore(),
+            'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
             'primoScaglione' => $listino->primoScaglione(),
             'prezzoSingolo' => (int) config('listino.singolo_cent'),
             'gettoniMensili' => (int) config('listino.gettoni_mensili'),

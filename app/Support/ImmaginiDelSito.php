@@ -84,8 +84,12 @@ class ImmaginiDelSito
      * ⚠️ L'ordine conta: se ci sono sia `eroe.webp` sia `eroe.jpg` si prende il
      * `webp`, che a parita' di resa pesa la meta'. Su un server condiviso con
      * altri due siti, il peso delle pagine non e' un dettaglio estetico.
+     *
+     * 💡 `svg` viene per primo ed e' li' **per il marchio**, non per le
+     * fotografie: un segno vettoriale resta nitido a ogni misura, dalla barra
+     * in alto all'icona della scheda.
      */
-    private const FORMATI = ['webp', 'jpg', 'jpeg', 'png'];
+    private const FORMATI = ['svg', 'webp', 'jpg', 'jpeg', 'png'];
 
     /** @var array<string, string|null> */
     private array $trovate = [];
@@ -121,6 +125,25 @@ class ImmaginiDelSito
             array_keys(self::ATTESE),
             fn (string $nome): bool => ! $this->esiste($nome),
         ));
+    }
+
+    /**
+     * Il marchio, se e' stato caricato.
+     *
+     * ── 💡 Perche' NON sta in `ATTESE` ────────────────────────────────────
+     *
+     * Perche' `ATTESE` e' la lista di quello che **deve** esserci, e
+     * `all_seven_images_are_actually_on_disk()` la controlla: metterci dentro
+     * il marchio farebbe fallire quel test fino al giorno in cui viene
+     * disegnato, e un test rosso che si impara a ignorare smette di servire.
+     *
+     * ⚠️ Finche' manca, la barra in alto mostra il quadratino disegnato in CSS
+     * — che e' lo stesso segno dell'icona della scheda, quindi non e' un
+     * segnaposto: e' il marchio provvisorio.
+     */
+    public function marchio(): ?string
+    {
+        return $this->url('marchio');
     }
 
     private function cerca(string $nome): ?string
