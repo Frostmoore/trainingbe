@@ -195,11 +195,39 @@ class SitoPubblicoTest extends TestCase
             ->assertOk()
             // Il primo scaglione, formattato come lo vede una persona.
             ->assertSee(number_format($listino->primoScaglione() / 100, 2, ',', '.').' €', escape: false)
-            // ⚠️ Era `assertSee('500')`, e il 500 era **anche** quello di un
-            // pacchetto di gettoni: sarebbe passata comunque il giorno in cui
-            // la dotazione mensile fosse cambiata. Il 16/08 è scesa a 300, e
-            // sarebbe passata senza accorgersene.
-            ->assertSee((string) config('listino.gettoni_mensili'), escape: false);
+            ->assertSee(number_format($listino->pacchetti()[0]['prezzo'] / 100, 2, ',', '.').' €', escape: false);
+    }
+
+    /**
+     * 🚨 **Quante richieste include l'abbonamento non si scrive da nessuna
+     * parte**, e non è reticenza.
+     *
+     * ── Il conto che chiunque farebbe ─────────────────────────────────────
+     *
+     * Sulla stessa pagina ci sono i pacchetti di gettoni. Se accanto comparisse
+     * «l'abbonamento ne include N», la divisione la fa chiunque in tre secondi —
+     * e scopre che comprare un pacchetto costa meno che abbonarsi. ⚠️ A quel
+     * punto l'abbonamento, che è la cosa che rende il servizio sostenibile, non
+     * lo comprerebbe nessuno.
+     *
+     * 💡 Il limite d'uso **esiste ed è nelle condizioni**: quello che non si fa
+     * è pubblicizzarlo come una quantità. Non è la stessa cosa che nasconderlo.
+     *
+     * 📌 La stessa decisione vale nell'app: a chi è abbonato il contatore dei
+     * gettoni **non si mostra affatto** (`mostra_gettoni` in `/ai/usage`).
+     */
+    #[Test]
+    public function the_included_monthly_allowance_is_never_published(): void
+    {
+        // Un valore che non può comparire per caso in un prezzo o in un conto.
+        config()->set('listino.gettoni_mensili', 7777);
+
+        $this->get('/prezzi')
+            ->assertOk()
+            ->assertDontSee('7777', escape: false)
+            ->assertDontSee('7.777', escape: false);
+
+        $this->get('/')->assertOk()->assertDontSee('7777', escape: false);
     }
 
     /**

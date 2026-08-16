@@ -60,7 +60,7 @@ Si paga soltanto l'**intelligenza artificiale**, e solo per le persone a cui è 
 |---|---|
 | **Cos'è un gettone** | una chiamata all'intelligenza artificiale |
 | **Quanto costa una richiesta** | 1 gettone per una stima da testo o per uno spunto, 10 per il riconoscimento da foto |
-| **Gettoni del mese** | inclusi in ogni posto attivo, si **azzerano** al rinnovo |
+| **Uso incluso nell'abbonamento** | un numero di richieste al mese, che si **azzera** al rinnovo. È dimensionato per l'uso quotidiano di una persona: chi lo raggiunge **viene avvisato nell'app** e può aggiungere gettoni |
 | **Gettoni acquistati** | validi **24 mesi**; ogni ricarica sposta in avanti la scadenza dell'intero saldo |
 | **Ordine di consumo** | prima quelli del mese, poi quelli acquistati |
 

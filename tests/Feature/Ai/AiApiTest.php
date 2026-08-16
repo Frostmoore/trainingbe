@@ -9,12 +9,14 @@ use App\Enums\UserRole;
 use App\Models\AiAdvice;
 use App\Models\AiUsageLog;
 use App\Models\FoodEntry;
+use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\AiUsageRecorder;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Billing\PortafoglioGettoni;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
@@ -437,6 +439,67 @@ class AiApiTest extends TestCase
             ->assertJsonPath('data.used_calls', 1)
             ->assertJsonPath('data.remaining_calls', 9)
             ->assertJsonPath('data.ai_credits', 0);
+    }
+
+    /**
+     * 🚨 **A chi è abbonato il saldo non si mostra** — 16/08/2026, sera.
+     *
+     * ── Il conto che chiunque farebbe ─────────────────────────────────────
+     *
+     * Fino a questa modifica `gettoni_disponibili` era `quota del mese +
+     * gettoni comprati`. ⚠️ Sommandoli, chi ha un abbonamento vedeva **quante
+     * chiamate gli restano incluse** — e quel numero, accanto al listino
+     * pubblicato, si trasforma in una divisione che chiunque sa fare: comprare
+     * un pacchetto costa meno che abbonarsi.
+     *
+     * 💡 **E non si manda zero, si dice di non mostrare niente**: uno zero
+     * accanto a un'AI che funziona è una contraddizione, e chi lo legge pensa
+     * che sia rotta.
+     */
+    #[Test]
+    public function a_subscriber_is_not_shown_a_balance(): void
+    {
+        $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/usage')
+            ->assertOk()
+            // La dotazione inclusa esiste...
+            ->assertJsonPath('data.remaining_calls', 10)
+            // ...ma non compare come credito, e il contatore resta spento.
+            ->assertJsonPath('data.gettoni_disponibili', 0)
+            ->assertJsonPath('data.mostra_gettoni', false);
+    }
+
+    /** 💡 Chi invece i gettoni li ha **comprati** continua a vederli: sono suoi. */
+    #[Test]
+    public function someone_who_bought_credits_still_sees_them(): void
+    {
+        $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
+
+        app(PortafoglioGettoni::class)->accredita($this->alfa, 42);
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/usage')
+            ->assertOk()
+            ->assertJsonPath('data.gettoni_disponibili', 42)
+            ->assertJsonPath('data.mostra_gettoni', true);
+    }
+
+    /**
+     * ⚠️ E chi **non ha nessuna dotazione inclusa** lo vede comunque: lì i
+     * gettoni comprati sono l'unica cosa fra lui e un `402`, e nasconderli
+     * vorrebbe dire farlo restare a secco senza preavviso.
+     */
+    #[Test]
+    public function without_an_included_allowance_the_counter_stays_visible(): void
+    {
+        Plan::query()->update(['ai_enabled' => false]);
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/usage')
+            ->assertOk()
+            ->assertJsonPath('data.mostra_gettoni', true);
     }
 
     // ───────────────────────── consiglio ─────────────────────────

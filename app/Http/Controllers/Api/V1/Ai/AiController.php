@@ -20,6 +20,7 @@ use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
+use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
@@ -498,21 +499,46 @@ class AiController extends Controller
             /*
              * 🆕 16/08 — **il numero che l'app mostra nell'intestazione**.
              *
-             * E' la somma delle due tasche: quello che resta del mese piu' i
-             * gettoni comprati. 💡 Si sommano perche' sono la stessa moneta e si
-             * spendono in fila — prima il mese, poi i comprati.
+             * ── 🚨 Sono SOLO i gettoni comprati, e la dotazione del piano NON
+             *    si somma piu' ────────────────────────────────────────────
              *
-             * ⚠️ `null` = **illimitato**, e l'app deve disegnare un simbolo, non
-             * uno zero. Sommare `null` a un numero darebbe zero, che e'
-             * esattamente il contrario.
+             * Fino alla sera del 16/08 questo campo era `quota rimasta + gettoni
+             * comprati`. ⚠️ Sommandoli, l'app mostrava a chi ha un abbonamento
+             * **quante chiamate gli restano incluse** — e quel numero, accanto
+             * al listino, dice a chiunque sappia fare una divisione che
+             * comprare un pacchetto conviene piu' che abbonarsi.
              *
-             * 📌 Fino a `H1` il contatore del mese conta **chiamate**, dove una
-             * foto vale 1: dopo `H1` varra' 10 e questo numero sara' gettoni
-             * veri. La forma e' gia' quella giusta, la scala no.
+             * 🎯 Decisione del committente: *«per chi ha il piano flat non deve
+             * vedere quanti gettoni ha»*. La dotazione inclusa e' un **uso
+             * compreso**, non un credito da contare.
+             *
+             * 💡 Chi ha comprato gettoni continua a vederli, ed e' giusto: quelli
+             * li ha pagati a parte, sono suoi, e vuole sapere quanti gliene
+             * restano.
              */
-            'gettoni_disponibili' => $this->quota->remaining($utente) === null
-                ? null
-                : $this->quota->remaining($utente) + $this->portafoglio->saldo($utente),
+            'gettoni_disponibili' => $this->portafoglio->saldo($utente),
+
+            /*
+             * Se l'app debba disegnare il contatore, oppure niente.
+             *
+             * ── ⚠️ Perche' non basta mandare zero ─────────────────────────
+             *
+             * Perche' uno zero accanto a un'AI che **funziona** e' una
+             * contraddizione: chi lo legge pensa che sia rotta, e scrive. Il
+             * contatore va **nascosto**, non azzerato.
+             *
+             * 🚨 Si mostra quando i gettoni comprati sono l'unica cosa fra la
+             * persona e un `402`: o perche' ne ha (e allora sono suoi e li deve
+             * vedere), o perche' non ha nessuna dotazione inclusa (e allora
+             * quel numero e' tutto cio' che ha).
+             *
+             * ⚠️ Si guarda `haLaAi()` e **non** `capFor()`: quest'ultimo torna
+             * `null` per «illimitata», e `null ?? 0 === 0` avrebbe scambiato
+             * l'illimitata per «nessuna dotazione» — cioe' avrebbe mostrato un
+             * contatore proprio a chi non ne ha bisogno.
+             */
+            'mostra_gettoni' => $this->portafoglio->saldo($utente) > 0
+                || ! app(PianoAttivo::class)->haLaAi($utente),
 
             // 💡 Serve all'app per dire «illimitata» invece di un numero.
             'illimitata' => $this->quota->remaining($utente) === null,

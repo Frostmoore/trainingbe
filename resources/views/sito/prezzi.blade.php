@@ -112,16 +112,35 @@
                         </p>
                     </div>
 
+                    {{--
+                        🚨 **Qui NON si scrive quante richieste include l'abbonamento.**
+
+                        Non è reticenza: è che un numero, accanto al listino dei
+                        pacchetti qui sopra, si trasforma subito in una divisione.
+                        ⚠️ Chi la fa scopre che comprare un pacchetto costa meno
+                        di abbonarsi, e l'abbonamento — che è la cosa che rende
+                        il servizio sostenibile — non lo comprerebbe nessuno.
+
+                        💡 L'abbonamento si vende su **cosa toglie**: non dover
+                        pensare al credito. È la stessa ragione per cui l'app,
+                        a chi è abbonato, il contatore non lo mostra affatto.
+
+                        📌 Il limite d'uso c'è, ed è scritto nelle condizioni
+                        d'uso (§5.1): quello che non si fa è **pubblicizzarlo
+                        come una quantità**, non nasconderlo.
+                    --}}
                     <div class="scheda" style="margin-top: var(--sp-3);">
-                        <h3>Oppure a mese</h3>
+                        <h3>Oppure a mese, e non ci pensi più</h3>
                         <p class="nota">
-                            Se l'AI la usi tutti i giorni c'è l'abbonamento:
-                            <strong>{{ $formatta($prezzoSingolo) }} al mese</strong> con
-                            {{ number_format($gettoniMensili, 0, ',', '.') }} gettoni —
-                            <strong>{{ (int) round($gettoniMensili / 30) }} richieste al giorno</strong>,
-                            con dentro qualche foto.
-                            ⚠️ Quelli del mese <strong>si azzerano</strong> al rinnovo; quelli
-                            comprati no, restano 24 mesi. Si usano prima i primi.
+                            <strong>{{ $formatta($prezzoSingolo) }} al mese</strong>: l'AI è
+                            accesa e basta, per l'uso di tutti i giorni. Niente credito da
+                            controllare, niente ricariche da ricordarsi, nessuna sorpresa a
+                            metà settimana.
+                        </p>
+                        <p class="nota" style="margin-top: var(--sp-2);">
+                            💡 Conviene a chi la usa <strong>quasi ogni giorno</strong>. Se
+                            invece la accendi ogni tanto, i pacchetti qui sopra durano
+                            24 mesi e costano meno.
                         </p>
                     </div>
                 </div>
@@ -269,12 +288,23 @@
             </div>
 
             <details>
-                <summary>Quanto durano {{ number_format($gettoniMensili, 0, ',', '.') }} gettoni?</summary>
+                <summary>Quanto dura un pacchetto di gettoni?</summary>
                 <p>
-                    Circa <strong>{{ (int) round($gettoniMensili / 30) }} richieste al giorno</strong>
-                    per un mese, con dentro qualche foto. Scrivere un pasto ne costa 1,
-                    riconoscerlo da una foto ne costa 10; registrarlo dal tuo piano, dai
-                    preferiti o a mano non ne costa nessuno.
+                    Dipende da come li spendi: scrivere un pasto ne costa <strong>1</strong>,
+                    riconoscerlo da una foto ne costa <strong>10</strong>, e registrarlo dal
+                    tuo piano, dai preferiti o a mano non ne costa nessuno. Chi scrive quasi
+                    sempre e fotografa ogni tanto se la cava con poche decine a settimana.
+                </p>
+            </details>
+
+            <details>
+                <summary>Con l'abbonamento quante richieste ho?</summary>
+                <p>
+                    L'abbonamento copre <strong>l'uso quotidiano</strong>: non c'è un credito
+                    da tenere d'occhio, e nell'app non compare nessun contatore. C'è un
+                    limite d'uso corretto, indicato nelle <a href="/condizioni">condizioni
+                    d'uso</a>, ed è pensato perché una persona che usa l'app tutti i giorni
+                    non lo incontri. Se lo raggiungi te lo diciamo, e puoi aggiungere gettoni.
                 </p>
             </details>
 
