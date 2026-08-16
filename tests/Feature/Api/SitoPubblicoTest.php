@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Services\Billing\Listino;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
+use App\Support\ImmaginiDelSito;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -236,6 +237,170 @@ class SitoPubblicoTest extends TestCase
         $this->assertSame(60, $e['posti']);
         $this->assertSame($e['ricavo'] - $e['costo'], $e['margine']);
         $this->assertGreaterThan(0, $e['margine']);
+    }
+
+    // ═══════════════════ le immagini ═══════════════════
+
+    /**
+     * 🚨 **Il sito non deve sembrare guasto mentre è solo incompleto.**
+     *
+     * Le immagini vanno generate e caricate a mano. Un `<img src>` scritto
+     * secco mostrerebbe l'icona dell'immagine rotta su tutte le pagine fino a
+     * quel momento — e chi arriva non distingue «manca una foto» da «questo
+     * sito non funziona».
+     */
+    #[Test]
+    public function a_missing_image_leaves_a_deliberate_gap_not_a_broken_icon(): void
+    {
+        $this->svuotaLeImmagini();
+
+        $home = $this->get('/')->assertOk();
+
+        $home->assertSee('figura-vuota', escape: false);
+        $home->assertDontSee('<img', escape: false);
+    }
+
+    /** 💡 E quando il file arriva, compare da solo: nessun template da toccare. */
+    #[Test]
+    public function dropping_the_file_in_is_all_it_takes(): void
+    {
+        $this->creaImmagine('eroe');
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('/img/sito/eroe.jpg?v=', escape: false)
+            // ⚠️ Le misure sono negli attributi, non nel CSS: servono a
+            // riservare lo spazio **prima** del caricamento, o la pagina salta
+            // in faccia a chi sta leggendo.
+            ->assertSee('width="1600"', escape: false)
+            ->assertSee('height="1200"', escape: false);
+    }
+
+    /**
+     * 🚨 **L'indirizzo porta la data di modifica del file.**
+     *
+     * ⚠️ Senza, chi ha già visto il sito continuerebbe a vedere la vecchia
+     * immagine dalla cache del browser anche dopo averla sostituita — e non
+     * c'è nessuna catena di build che aggiunga un'impronta al nome.
+     */
+    #[Test]
+    public function replacing_an_image_changes_its_address(): void
+    {
+        $percorso = $this->creaImmagine('eroe');
+
+        $prima = app(ImmaginiDelSito::class)->url('eroe');
+
+        touch($percorso, time() + 60);
+        clearstatcache(true, $percorso);
+
+        $this->assertNotSame($prima, (new ImmaginiDelSito)->url('eroe'));
+    }
+
+    /**
+     * 🚨 **Un `og:image` che punta a un file inesistente è peggio di nessuno**:
+     * i servizi di messaggistica mostrano il riquadro rotto invece di
+     * ripiegare sul titolo.
+     */
+    #[Test]
+    public function the_social_preview_is_only_promised_when_it_exists(): void
+    {
+        $this->svuotaLeImmagini();
+
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('og:image', escape: false)
+            ->assertSee('name="twitter:card" content="summary"', escape: false);
+
+        $this->creaImmagine('og');
+
+        $this->get('/')
+            ->assertOk()
+            // ⚠️ Assoluto: chi legge questo tag non ha un indirizzo di base da
+            // cui risolvere un percorso relativo.
+            ->assertSee('property="og:image" content="http', escape: false)
+            ->assertSee('summary_large_image', escape: false);
+    }
+
+    /**
+     * ⚠️ Il nome dell'immagine arriva dai template, ma non si accetta niente
+     * che non sia un nome: un `..` diventerebbe un percorso fuori da `public/`.
+     */
+    #[Test]
+    public function an_image_name_cannot_climb_out_of_the_folder(): void
+    {
+        $this->assertNull(app(ImmaginiDelSito::class)->url('../../.env'));
+        $this->assertNull(app(ImmaginiDelSito::class)->url('..'));
+    }
+
+    /**
+     * 💡 **La lista della spesa non si ricava a occhio dalla cartella.**
+     *
+     * `mancanti()` è quello che dice cosa resta da produrre, ed è la stessa
+     * lista che `LEGGIMI.md` ripete a chi apre la cartella invece del codice.
+     */
+    #[Test]
+    public function the_shopping_list_says_what_is_still_missing(): void
+    {
+        $this->svuotaLeImmagini();
+
+        $immagini = new ImmaginiDelSito;
+
+        $this->assertSame(array_keys(ImmaginiDelSito::ATTESE), $immagini->mancanti());
+
+        $this->creaImmagine('og');
+
+        $this->assertNotContains('og', (new ImmaginiDelSito)->mancanti());
+    }
+
+    // ─────────────────── i due aiutanti delle immagini ───────────────────
+
+    /**
+     * 🚨 Sposta via le immagini vere invece di cancellarle.
+     *
+     * ⚠️ Un test che cancellasse `public/img/sito/` distruggerebbe file veri
+     * caricati a mano, che non stanno da nessun'altra parte.
+     */
+    private function svuotaLeImmagini(): void
+    {
+        foreach (glob(public_path(ImmaginiDelSito::CARTELLA).'/*') ?: [] as $file) {
+            if (is_file($file) && ! str_ends_with($file, '.md')) {
+                rename($file, $file.'.daparte');
+            }
+        }
+    }
+
+    private function creaImmagine(string $nome): string
+    {
+        $cartella = public_path(ImmaginiDelSito::CARTELLA);
+
+        if (! is_dir($cartella)) {
+            mkdir($cartella, 0755, true);
+        }
+
+        $percorso = "{$cartella}/{$nome}.jpg";
+        file_put_contents($percorso, 'finta');
+
+        $this->daRipulire[] = $percorso;
+
+        return $percorso;
+    }
+
+    /** @var list<string> */
+    private array $daRipulire = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->daRipulire as $percorso) {
+            @unlink($percorso);
+        }
+
+        // ⚠️ E si rimettono a posto quelle vere, altrimenti il primo test che
+        // le sposta le fa sparire dal sito di chi sta sviluppando.
+        foreach (glob(public_path(ImmaginiDelSito::CARTELLA).'/*.daparte') ?: [] as $file) {
+            rename($file, substr($file, 0, -strlen('.daparte')));
+        }
+
+        parent::tearDown();
     }
 
     // ─────────────────── L'atterraggio di un invito — F6.2 ───────────────────

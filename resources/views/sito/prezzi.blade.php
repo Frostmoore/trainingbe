@@ -16,6 +16,18 @@
         </div>
     </section>
 
+    {{-- 💡 Una fascia sola, larga, sotto il titolo: la pagina dei prezzi deve
+         restare una pagina di numeri, e un'immagine per scheda distrarrebbe da
+         quello che si è venuti a leggere. --}}
+    <section style="padding-top: 0; padding-bottom: var(--sp-4);">
+        <div class="contenitore">
+            <x-sito.figura
+                nome="prezzi"
+                alt="Un gruppo che si allena in sala, visto da lontano"
+            />
+        </div>
+    </section>
+
     {{-- ═══════════════════ i tre modi ═══════════════════ --}}
     <section style="padding-top: 0;">
         <div class="contenitore">

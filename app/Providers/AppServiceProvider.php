@@ -33,6 +33,18 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(TenantContext::class);
 
         /**
+         * Le immagini del sito — 16/08/2026.
+         *
+         * 💡 **`scoped` e non `singleton`**: tiene in memoria quali file
+         * esistono per la durata **della richiesta**, e la stessa immagine
+         * viene chiesta più volte nella stessa pagina (`is_file()` tocca il
+         * disco ogni volta). ⚠️ Un singleton sotto Octane si porterebbe dietro
+         * la risposta anche dopo che qualcuno ha caricato l'immagine, e
+         * continuerebbe a mostrare il riempimento vuoto finché non si riavvia.
+         */
+        $this->app->scoped(ImmaginiDelSito::class);
+
+        /**
          * La verifica dei token social — C17.
          *
          * Legato al contratto e non alla classe concreta perche' i test lo

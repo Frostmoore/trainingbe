@@ -33,9 +33,27 @@ class SitoController extends Controller
      * da solo — ma come **sezioni**, non come tre listini affiancati: erano tre
      * colonne di prezzi prima ancora che qualcuno avesse capito cosa fa l'app.
      */
-    public function home(): View
+    public function home(Listino $listino): View
     {
-        return view('sito.home');
+        return view('sito.home', [
+            // 🚨 Anche la home ha un prezzo da mostrare (il passo 3 di «come
+            // funziona»), e anche quello viene da qui: era l'unico numero
+            // rimasto scritto a mano dentro un template.
+            'formatta' => $this->formattatore(),
+            'primoScaglione' => $listino->primoScaglione(),
+            'rivenditaSuggerita' => (int) config('listino.rivendita_suggerita_cent'),
+        ]);
+    }
+
+    /**
+     * Da centesimi a «4,99 €».
+     *
+     * 💡 Una funzione sola per le due pagine: due formattatori diversi
+     * scriverebbero lo stesso prezzo in due modi, e la differenza si nota.
+     */
+    private function formattatore(): \Closure
+    {
+        return static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €';
     }
 
     /**
@@ -49,7 +67,7 @@ class SitoController extends Controller
     public function prezzi(Listino $listino): View
     {
         return view('sito.prezzi', [
-            'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
+            'formatta' => $this->formattatore(),
             'primoScaglione' => $listino->primoScaglione(),
             'prezzoSingolo' => (int) config('listino.singolo_cent'),
             'gettoniMensili' => (int) config('listino.gettoni_mensili'),

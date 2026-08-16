@@ -37,16 +37,35 @@
             </div>
 
             {{--
-                💡 **Il finto telefono è disegnato, non fotografato.**
+                🚨 **La fotografia sta DIETRO, il telefono è disegnato davanti.**
 
-                Un mockup con dentro una schermata vera richiederebbe
-                un'immagine da tenere aggiornata a ogni modifica dell'app — e
-                che al primo cambio di interfaccia diventa una bugia. Questo è
-                l'unica cosa che l'app dice davvero, scritta in HTML: se cambia
-                il testo, si cambia qui.
+                L'immagine generata dà il tono — palestra, luce, movimento — e
+                l'unica cosa che **afferma qualcosa sul prodotto** resta scritta
+                in HTML.
+
+                ⚠️ Il contrario — una schermata dell'app dentro una fotografia —
+                sarebbe una schermata **inventata**: mostrerebbe un'interfaccia
+                che non esiste, e il primo che scarica l'app se ne accorge. È lo
+                stesso motivo per cui qui non ci sono loghi di clienti.
+
+                💡 E il telefono disegnato non va tenuto aggiornato con
+                un'esportazione grafica: se cambia il testo dello spunto, si
+                cambia qui.
+
+                Il velo in mezzo serve a far leggere la scheda: senza, una
+                fotografia piena di dettagli se la mangia.
             --}}
-            <div aria-hidden="true" style="display: flex; justify-content: center;">
-                <div style="width: 280px; border: 10px solid var(--testo); border-radius: 36px; padding: var(--sp-2) 12px; background: var(--sfondo); box-shadow: 0 20px 50px rgba(0,0,0,.10);">
+            <div style="position: relative; display: flex; justify-content: center; align-items: center; min-height: 420px; padding: var(--sp-4) var(--sp-3);">
+                <div class="figura-eroe">
+                    <x-sito.figura
+                        nome="eroe"
+                        alt="Una sala pesi con la luce del mattino"
+                        :priorita="true"
+                    />
+                </div>
+                <div class="velo-eroe"></div>
+
+                <div aria-hidden="true" style="position: relative; z-index: 2; width: 280px; border: 10px solid var(--testo); border-radius: 36px; padding: var(--sp-2) 12px; background: var(--sfondo); box-shadow: 0 20px 50px rgba(0,0,0,.22);">
                     <div style="height: 5px; width: 70px; background: var(--testo); border-radius: 99px; margin: 0 auto var(--sp-2);"></div>
 
                     <div style="background: var(--accento-tenue); border-radius: 14px; padding: 14px;">
@@ -111,9 +130,14 @@
                 <div class="scheda">
                     <h3>3 · La palestra la rivende</h3>
                     <p class="nota">
-                        Un posto costa <strong>4,99 €</strong> al mese. Se lo rivende a 10 €
-                        sull'abbonamento, <strong>metà resta a lei</strong> — e più posti
-                        accende, più le resta per ciascuno.
+                        {{-- 🚨 Anche qui i numeri vengono da `Listino`: era l'unico
+                             prezzo rimasto scritto a mano in un template, ed è
+                             esattamente il caso che `no_price_is_written_inside_a_view`
+                             esiste per impedire. --}}
+                        Un posto costa <strong>{{ $formatta($primoScaglione) }}</strong> al mese.
+                        Se lo rivende a {{ $formatta($rivenditaSuggerita) }}
+                        sull'abbonamento, <strong>{{ $formatta($rivenditaSuggerita - $primoScaglione) }}
+                        restano a lei</strong> — e più posti accende, più le resta per ciascuno.
                     </p>
                 </div>
             </div>
@@ -143,6 +167,13 @@
             </div>
 
             <div class="griglia" style="grid-template-columns: 1fr;">
+                {{-- 💡 Una fotografia riservata, non una di prodotto: qui si
+                     sta dicendo «questa roba è tua», e una foto di attrezzi
+                     direbbe il contrario. --}}
+                <x-sito.figura
+                    nome="privacy"
+                    alt="Una persona guarda il proprio telefono, di sera, in un momento riservato"
+                />
                 <div class="scheda tenue">
                     <h3>📱 Resta sul telefono</h3>
                     <p class="nota">Peso e misure · foto dei progressi · sonno, battito e variabilità · le schede che ricevi</p>
@@ -169,6 +200,10 @@
 
             <div class="griglia">
                 <div class="scheda">
+                    <x-sito.figura
+                        nome="platea-palestra"
+                        alt="La reception di una palestra, con un tablet sul bancone"
+                    />
                     <h3>Per le palestre</h3>
                     <p class="nota">
                         L'app con il tuo marchio e i tuoi colori. I trainer compongono schede e
@@ -182,6 +217,10 @@
                 </div>
 
                 <div class="scheda">
+                    <x-sito.figura
+                        nome="platea-trainer"
+                        alt="Un personal trainer che segue un allievo durante un esercizio"
+                    />
                     <h3>Per i trainer indipendenti</h3>
                     <p class="nota">
                         I tuoi allievi entrano con un link tuo: non serve una palestra. Componi
@@ -195,6 +234,10 @@
                 </div>
 
                 <div class="scheda">
+                    <x-sito.figura
+                        nome="platea-solo"
+                        alt="Una persona che si allena da sola in casa, di prima mattina"
+                    />
                     <h3>Per chi si allena da solo</h3>
                     <p class="nota">
                         Non serve nessuna palestra e non serve nessun codice. Ti registri e

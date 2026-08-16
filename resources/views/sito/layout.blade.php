@@ -26,6 +26,43 @@
     <title>@yield('titolo', 'Training Companion')</title>
     <meta name="description" content="@yield('descrizione', 'L\'app per chi si allena, gratis. L\'AI è un supplemento che la palestra accende a chi la vuole.')">
     <meta name="theme-color" content="#0F766E">
+
+    {{--
+        🚨 **L'anteprima quando il link viene condiviso.**
+
+        Fino al 16/08 non c'era: mandare l'indirizzo su WhatsApp mostrava un
+        riquadro grigio con dentro il dominio. ⚠️ È il primo posto in cui il
+        prodotto si presenta a qualcuno che non lo conosce, e presentarsi con un
+        riquadro vuoto è peggio che non farsi condividere.
+    --}}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Training Companion">
+    <meta property="og:locale" content="it_IT">
+    <meta property="og:title" content="@yield('titolo', 'Training Companion')">
+    <meta property="og:description" content="@yield('descrizione', 'L\'app per chi si allena, gratis.')">
+    <meta property="og:url" content="{{ url()->current() }}">
+
+    @php($anteprima = app(\App\Support\ImmaginiDelSito::class)->url('og'))
+    @if ($anteprima !== null)
+        {{-- ⚠️ Assoluto e non relativo: i servizi che leggono questo tag non
+             hanno un indirizzo di base da cui risolverlo. --}}
+        <meta property="og:image" content="{{ url($anteprima) }}">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
+        <meta name="twitter:card" content="summary_large_image">
+    @else
+        {{-- 💡 Nessun `og:image` finto: un tag che punta a un file inesistente
+             fa mostrare il riquadro rotto invece di nessun riquadro. --}}
+        <meta name="twitter:card" content="summary">
+    @endif
+
+    {{--
+        💡 **L'icona è disegnata qui dentro, non è un file.** È il quadratino
+        del marchio: un SVG di duecento byte incorporato non è una richiesta in
+        più al server e non è un file da ricordarsi di caricare.
+    --}}
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F766E'/%3E%3Crect x='9' y='9' width='14' height='14' rx='4' fill='%23ECFDF5'/%3E%3C/svg%3E">
+
     <style>
         :root {
             --accento: #0F766E;
@@ -72,6 +109,78 @@
 
         .contenitore { max-width: 1080px; margin: 0 auto; padding: 0 var(--sp-3); }
         .stretto { max-width: 760px; }
+
+        /* ───────────────────────── figure ─────────────────────────
+
+           🚨 Ogni figura ha il suo rapporto scritto in `aspect-ratio`, quindi
+           **occupa il suo spazio prima di essersi caricata**. Senza, la pagina
+           salta mentre le immagini arrivano e chi sta leggendo perde il segno.
+        */
+
+        .figura {
+            width: 100%;
+            border-radius: var(--raggio);
+            overflow: hidden;
+            background: var(--superficie);
+            border: 1px solid var(--bordo);
+        }
+
+        .figura img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* ⚠️ Le fotografie sono prodotte in luce piena, e di notte «bucano» la
+           pagina. Un velo appena percettibile le rimette nel tono senza
+           spegnerle. */
+        @media (prefers-color-scheme: dark) {
+            .figura img { filter: brightness(.86) saturate(.94); }
+        }
+
+        /*
+           💡 Il posto vuoto quando l'immagine non è ancora stata caricata.
+           Non dice «manca un'immagine»: mette il segno del prodotto su una
+           sfumatura dei suoi colori, e sembra una scelta.
+        */
+        .figura-vuota {
+            width: 100%; height: 100%;
+            display: grid; place-items: center;
+            background:
+                radial-gradient(120% 90% at 20% 0%, var(--accento-tenue) 0%, transparent 60%),
+                linear-gradient(140deg, var(--superficie) 0%, var(--sfondo) 100%);
+        }
+
+        .figura-vuota .punto {
+            width: 22px; height: 22px; border-radius: 7px;
+            background: var(--accento);
+            opacity: .30;
+        }
+
+        /* La figura in apertura: sta sotto al telefono disegnato, quindi non
+           deve reggere da sola l'attenzione. */
+        .figura-eroe { position: absolute; inset: 0; z-index: 0; }
+        .figura-eroe .figura, .figura-eroe img { height: 100%; border-radius: var(--raggio); }
+
+        /* 🚨 Il velo sopra la fotografia dell'apertura. Senza, il telefono
+           disegnato in CSS si perde su una foto piena di dettagli e il testo
+           dentro non si legge più. */
+        .velo-eroe {
+            position: absolute; inset: 0; z-index: 1;
+            border-radius: var(--raggio);
+            background: linear-gradient(160deg,
+                color-mix(in srgb, var(--sfondo) 55%, transparent) 0%,
+                color-mix(in srgb, var(--sfondo) 82%, transparent) 100%);
+        }
+
+        /* La figura in cima a una scheda: senza bordo proprio e senza angoli
+           in basso, perché è incollata alla scheda che la contiene. */
+        .scheda > .figura:first-child {
+            border: 0;
+            border-radius: 0;
+            margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-3);
+            width: auto;
+        }
 
         /* ───────────────────────── navigazione ───────────────────────── */
 
