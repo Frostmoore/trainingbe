@@ -284,7 +284,23 @@ class AiController extends Controller
 
         $contesto = $this->contestoConsiglio($request);
 
-        $cache = AiAdvice::cached($utente, $oggi, 'daily', self::chiaveDiCache($contesto));
+        /*
+         * 🚨 **«Rigenera» salta la cache, ed e' tutto il senso del pulsante** —
+         * 16/08/2026.
+         *
+         * Senza questa condizione il tocco restituirebbe **lo stesso testo di
+         * prima** senza spendere niente: sembrerebbe rotto, e chi lo prova due
+         * volte penserebbe che il pulsante non funziona.
+         *
+         * ⚠️ E allora deve **pagare**: e' una chiamata vera al modello. Il
+         * pulsante lo dice prima di essere toccato (`1 gettone`), che e' l'unico
+         * modo onesto di far spendere qualcuno.
+         */
+        $manuale = $request->boolean('manuale');
+
+        $cache = $manuale
+            ? null
+            : AiAdvice::cached($utente, $oggi, 'daily', self::chiaveDiCache($contesto));
 
         if ($cache !== null) {
             return response()->json(['data' => [
@@ -306,7 +322,7 @@ class AiController extends Controller
          * corrente esiste gia', lo si restituisce comunque. L'interruttore
          * ferma la spesa, non la lettura.
          */
-        if ($utente->consiglio_automatico === false && ! $request->boolean('manuale')) {
+        if ($utente->consiglio_automatico === false && ! $manuale) {
             return response()->json(['data' => null]);
         }
 
@@ -318,6 +334,21 @@ class AiController extends Controller
         );
 
         $this->consumaGettoniSeServe($utente, AiFeature::DailyAdvice, $conGettoni);
+
+        /*
+         * ⚠️ **Una rigenerazione SOSTITUISCE, non affianca.**
+         *
+         * Senza, ogni tocco lascerebbe una riga in piu' dello stesso giorno: la
+         * cache ne troverebbe una a caso fra quelle con lo stesso hash, e la
+         * tabella crescerebbe proprio nel momento in cui abbiamo appena smesso
+         * di farla crescere.
+         */
+        if ($manuale) {
+            AiAdvice::withoutGlobalScopes()
+                ->where('user_id', $utente->getKey())
+                ->whereDate('date', $oggi->etichetta)
+                ->delete();
+        }
 
         $riga = AiAdvice::create([
             'tenant_id' => $utente->tenant_id,
