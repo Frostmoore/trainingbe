@@ -1,0 +1,90 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Il listino a posti — 16/08/2026.
+ *
+ * ── 🚨 Perche' sta in configurazione e non in `plans` ─────────────────────
+ *
+ * La tabella `plans` contiene ancora il **modello vecchio**, a scaglioni di
+ * trainer («Palestra — 5 trainer», 349,99 €), ed e' quello su cui poggiano gli
+ * abbonamenti gia' attivi (`plan_subscriptions`). Riscriverla adesso vorrebbe
+ * dire cambiare cosa viene fatturato, che e' lavoro della **Parte H** e non del
+ * sito.
+ *
+ * ⚠️ **QUINDI OGGI IL SITO E IL SISTEMA DI FATTURAZIONE DICONO DUE COSE
+ * DIVERSE**, ed e' scritto qui perche' non lo si scopra da un cliente:
+ *
+ * | | |
+ * |---|---|
+ * | Il sito annuncia | 4,99 € a posto, scaglioni, minimo 5 |
+ * | `plans` contiene | «Palestra — 5 trainer» a 349,99 € al mese |
+ *
+ * 🎯 Si allineano in `H1.5` (il seeder del listino) e `H2.2` (i pacchetti di
+ * gettoni, che oggi vivono qui e domani in `ai_credit_packs`). Fino ad allora
+ * **non si vende a nessuno** su questi numeri senza saperlo.
+ *
+ * 💡 Perche' comunque **non** e' scritto dentro la vista: un prezzo in un
+ * template e' un prezzo che un giorno dira' una cosa diversa da quella che il
+ * sistema fattura, e la si scopre da un cliente arrabbiato invece che da un
+ * test. Qui almeno c'e' un punto solo da cambiare, ed e' provato.
+ *
+ * Fonte dei numeri: `memory/business_plan.md`, versione «meta' e meta'».
+ */
+return [
+
+    /*
+     * Gli scaglioni sul prezzo di un posto AI, in **centesimi**.
+     *
+     * 🚨 Centesimi e non euro: `4.99` in virgola mobile e' `4.9899999...`, e su
+     * una moltiplicazione per trecento posti l'errore si vede.
+     *
+     * ⚠️ `fino` e' **inclusivo** e `null` vuol dire «da qui in su».
+     */
+    'scaglioni' => [
+        ['fino' => 25,   'prezzo_cent' => 499],
+        ['fino' => 100,  'prezzo_cent' => 399],
+        ['fino' => null, 'prezzo_cent' => 299],
+    ],
+
+    /*
+     * Quanti posti bisogna accendere come minimo.
+     *
+     * 💡 Non e' un canone travestito: e' il modo di dire «sotto questa soglia
+     * non conviene a nessuno dei due» senza far pagare chi non usa niente.
+     */
+    'minimo_palestra' => 5,
+    'minimo_trainer' => 3,
+
+    /** L'abbonamento di chi si iscrive da solo, IVA inclusa. */
+    'singolo_cent' => 799,
+
+    /** I gettoni che un posto riceve ogni mese. Si azzerano al rinnovo. */
+    'gettoni_mensili' => 500,
+
+    /**
+     * Il prezzo suggerito alla palestra per rivendere un posto.
+     *
+     * ⚠️ **Suggerito**, e va scritto ovunque compaia: se una palestra lo mette a
+     * 20 € e l'iscritto scopre che da solo lo pagherebbe 7,99, la lamentela
+     * torna indietro a noi.
+     */
+    'rivendita_suggerita_cent' => 1000,
+
+    /*
+     * I pacchetti di gettoni.
+     *
+     * 📌 Vivono qui **provvisoriamente**: `H2.2` li sposta in `ai_credit_packs`,
+     * dove potranno essere versionati (cambiare prezzo crea una riga nuova e
+     * ritira la vecchia, invece di riscrivere il passato).
+     */
+    'pacchetti' => [
+        ['gettoni' => 100,  'prezzo_cent' => 199,  'nota' => 'per provare'],
+        ['gettoni' => 500,  'prezzo_cent' => 799,  'nota' => 'un mese in piu\''],
+        ['gettoni' => 2000, 'prezzo_cent' => 2499, 'nota' => 'il piu\' conveniente'],
+    ],
+
+    /** L'esempio mostrato sul sito: una palestra con questi posti accesi. */
+    'esempio_posti' => 60,
+];

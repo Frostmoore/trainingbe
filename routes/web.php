@@ -18,6 +18,28 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [SitoController::class, 'home'])->name('sito.home');
 
 /*
+| I prezzi — 16/08/2026.
+|
+| 🚨 Pagina propria e non un'ancora nella home: e' il documento che una palestra
+| apre, guarda e rimanda a qualcun altro. Un indirizzo che finisce con `#prezzi`
+| e' un indirizzo che qualcuno incolla male.
+*/
+Route::get('/prezzi', [SitoController::class, 'prezzi'])->name('sito.prezzi');
+
+/*
+| I documenti legali.
+|
+| 🚨 **Erano gia' linkati dal pie' di pagina, e rispondevano 404.** Il sito
+| prometteva l'informativa privacy e le condizioni d'uso da quando esiste.
+|
+| ⚠️ `{quale}` e' vincolato a due valori: senza, il nome finisce in un percorso
+| di file e `/documento/../../.env` diventa una lettura arbitraria.
+*/
+Route::get('/{quale}', [SitoController::class, 'documento'])
+    ->whereIn('quale', ['privacy', 'condizioni'])
+    ->name('sito.documento');
+
+/*
 | L'atterraggio di un invito personale — F6.2.
 |
 | 🚨 **È un `GET` e NON riscatta niente.** Il riscatto ha bisogno di un modulo

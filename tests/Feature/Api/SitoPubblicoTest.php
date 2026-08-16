@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Enums\PlanKind;
 use App\Enums\UserRole;
-use App\Models\Plan;
+use App\Services\Billing\Listino;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Database\Seeders\PlanSeeder;
@@ -40,7 +39,7 @@ class SitoPubblicoTest extends TestCase
         $r = $this->get('/')->assertOk();
 
         // F9.1 — tre percorsi: persone, trainer indipendenti, palestre.
-        $r->assertSee('Per chi si allena')
+        $r->assertSee('Per chi si allena da solo')
             ->assertSee('Per i trainer indipendenti')
             ->assertSee('Per le palestre');
 
@@ -48,85 +47,56 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
-     * 🚨 **Il listino viene dal database, non dal template.**
+     * 🚨 **Nessun prezzo è scritto dentro una vista.**
      *
-     * Un prezzo scritto in una vista è un prezzo che un giorno dirà una cosa
-     * diversa da quella che il sistema fattura — e lo si scopre da un cliente
-     * arrabbiato, non da un test.
+     * ── ⚠️ Questo test ha sostituito `the_prices_come_from_the_database` ────
+     *
+     * Il vecchio provava che la home leggesse i piani da `plans`. Dal 16/08 la
+     * home non elenca più i piani: il listino sta su `/prezzi` e viene da
+     * `Listino` + `config/listino.php`, perché il modello è cambiato — si paga
+     * **a posto**, non a scaglione di trainer.
+     *
+     * 💡 **L'intenzione del vecchio test resta, ed è questa**: un prezzo scritto
+     * in un template è un prezzo che un giorno dirà una cosa diversa da quella
+     * che il sistema fattura, e lo si scopre da un cliente arrabbiato invece
+     * che da un test. Qui si cambia il listino e si guarda se la pagina segue.
      */
     #[Test]
-    public function the_prices_come_from_the_database(): void
+    public function no_price_is_written_inside_a_view(): void
     {
-        Plan::query()->where('code', Plan::PLUS)->update(['price_cents' => 777]);
+        config()->set('listino.scaglioni', [['fino' => null, 'prezzo_cent' => 1234]]);
+        config()->set('listino.singolo_cent', 4321);
 
-        $this->get('/')->assertOk()->assertSee('7,77');
-    }
-
-    /**
-     * 💡 **E il listino dice la verità sull'AI.**
-     *
-     * `ai_enabled` è la stessa colonna che il cancello `RequirePlanWithAi` legge
-     * per rispondere `403`. Se il sito la scrivesse a mano, il giorno in cui i
-     * due divergessero il prodotto prometterebbe una cosa e ne farebbe un'altra.
-     */
-    #[Test]
-    public function the_page_tells_the_truth_about_the_ai(): void
-    {
-        $this->get('/')->assertOk()->assertSee(// ⚠️ Senza l'apostrofo: Blade lo scrive come `&#039;`, e cercarlo in
-            // chiaro farebbe fallire un test che sta verificando tutt'altro.
-            'Niente funzioni con l', escape: false);
-
-        // ⚠️ **Tutti** i piani, non solo il gratuito: la frase compare anche
-        // sul «Trainer gratuito», e accendendo l'AI solo al primo il test
-        // fallirebbe per un piano che non stava verificando.
-        Plan::query()->update(['ai_enabled' => true]);
-
-        $this->get('/')->assertOk()->assertDontSee(// ⚠️ Senza l'apostrofo: Blade lo scrive come `&#039;`, e cercarlo in
-            // chiaro farebbe fallire un test che sta verificando tutt'altro.
-            'Niente funzioni con l', escape: false);
-    }
-
-    /**
-     * 🚨 **I numeri della quota vengono dalle stesse colonne del cancello** — G10.2.
-     *
-     * ⚠️ È la stessa classe di errore del prezzo, un piano più in là: «quota AI
-     * inclusa» non è una promessa verificabile, **«400 richieste al mese» sì** —
-     * e il giorno in cui il listino dicesse 400 e `MemberAiQuota` ne concedesse
-     * 200, il cliente lo scoprirebbe alla duecentounesima.
-     */
-    #[Test]
-    public function the_price_list_says_how_many_ai_calls_are_included(): void
-    {
-        Plan::query()->where('kind', PlanKind::Gym->value)->update([
-            'ai_enabled' => true,
-            'ai_monthly_calls_per_member' => 373,
-            'ai_monthly_photo_calls_per_member' => 41,
-        ]);
-
-        $this->get('/')
+        $this->get('/prezzi')
             ->assertOk()
-            ->assertSee('373')
-            ->assertSee('41');
+            ->assertSee('12,34 €', escape: false)
+            ->assertSee('43,21 €', escape: false);
     }
 
     /**
-     * 💡 **I due tetti di una palestra sono due, e si moltiplicano** — D5.
+     * 🚨 **Il sito non annuncia funzioni che non esistono più.**
      *
-     * Chi legge solo «fino a 10 trainer» si fa il conto sbagliato: quello che
-     * compra sono 10 × il tetto per trainer.
+     * ── Cosa provava prima, e perché è cambiato ────────────────────────────
+     *
+     * `the_price_list_says_how_many_ai_calls_are_included` e
+     * `a_gym_sees_both_of_its_caps` provavano il **sotto-limite delle foto**
+     * («400 richieste di cui 40 con foto») e i due tetti delle palestre.
+     *
+     * ⚠️ Il 15/08 il modello è passato a **una moneta sola**: non esiste più un
+     * sotto-limite, esistono i gettoni, e una foto ne costa 10. Quei due test
+     * difendevano una promessa che il prodotto non fa più.
      */
     #[Test]
-    public function a_gym_sees_both_of_its_caps(): void
+    public function the_site_talks_about_tokens_not_about_a_photo_sub_limit(): void
     {
-        Plan::query()->where('kind', PlanKind::Gym->value)->update([
-            'max_trainers' => 7,
-            'max_members_per_trainer' => 23,
-        ]);
+        $prezzi = $this->get('/prezzi')->assertOk();
 
-        $this->get('/')
-            ->assertOk()
-            ->assertSee('Fino a 7 trainer')
-            ->assertSee('Fino a 23 iscritti per trainer');
+        $prezzi->assertSee('gettoni', escape: false);
+        $prezzi->assertSee('10', escape: false);
+
+        // 💡 La formula vecchia non deve ricomparire: se un giorno qualcuno la
+        // rimette, sta rimettendo anche un modello di prezzo che non esiste.
+        $prezzi->assertDontSee('di cui con foto', escape: false);
     }
 
     /**
@@ -145,8 +115,127 @@ class SitoPubblicoTest extends TestCase
         $r->assertDontSee('li assegni');
 
         // 💡 E dice la cosa che al trainer interessa davvero sapere prima di
-        // pagare: R8 — un programma consegnato non gli si può togliere.
-        $r->assertSee('non spariscono', escape: false);
+        // pagare: R8 — un programma consegnato non gli si può togliere. Dal
+        // 16/08 sta fra le domande frequenti, che è dove uno se lo chiede.
+        $r->assertSee('restano tuoi', escape: false);
+    }
+
+    // ═══════════════════ il sito ridisegnato — 16/08/2026 ═══════════════════
+
+    /**
+     * 🚨 **I due link legali del piè di pagina rispondevano 404.**
+     *
+     * Erano lì da quando il sito esiste: il footer prometteva l'informativa
+     * privacy e le condizioni d'uso, e chi le apriva trovava una pagina di
+     * errore. ⚠️ È il tipo di difetto che nessuno segnala — chi cerca
+     * l'informativa e non la trova non scrive per lamentarsi, se ne va.
+     */
+    #[Test]
+    public function the_legal_documents_are_actually_there(): void
+    {
+        $this->get('/privacy')->assertOk()->assertSee('Informativa privacy', escape: false);
+        $this->get('/condizioni')->assertOk()->assertSee('Condizioni', escape: false);
+    }
+
+    #[Test]
+    public function the_footer_only_promises_pages_that_exist(): void
+    {
+        $home = $this->get('/')->assertOk()->getContent();
+
+        preg_match_all('~href="(/[a-z-]*)"~', $home, $trovati);
+
+        foreach (array_unique($trovati[1]) as $percorso) {
+            // 💡 Si saltano le rotte del pannello, che rimandano al login.
+            if (str_starts_with($percorso, '/admin')) {
+                continue;
+            }
+
+            $this->get($percorso)->assertOk();
+        }
+    }
+
+    /**
+     * ⚠️ **La lista dei documenti è chiusa, e questo test è il motivo.**
+     *
+     * 🚨 Senza il vincolo sulla rotta, il nome del documento finisce dentro un
+     * percorso di file: `/../../.env` diventa una lettura arbitraria del disco.
+     */
+    #[Test]
+    public function you_cannot_ask_for_a_document_that_is_not_on_the_list(): void
+    {
+        $this->get('/inventato')->assertNotFound();
+        $this->get('/..%2f..%2f.env')->assertNotFound();
+    }
+
+    #[Test]
+    public function the_terms_say_it_is_not_a_medical_device(): void
+    {
+        /*
+         * 🚨 È la clausola per cui queste condizioni sono nate. L'app mostra
+         * testi generati da un modello su dati di salute: se le condizioni non
+         * dicono, in modo esplicito, che non è un dispositivo medico e che non
+         * va seguito senza un professionista, il resto del documento non serve
+         * a niente.
+         */
+        $this->get('/condizioni')
+            ->assertOk()
+            ->assertSee('Non è un dispositivo medico', escape: false)
+            ->assertSee('medico dello sport', escape: false);
+    }
+
+    // ═══════════════════ i prezzi ═══════════════════
+
+    #[Test]
+    public function the_pricing_page_shows_the_real_numbers(): void
+    {
+        $listino = app(Listino::class);
+
+        $this->get('/prezzi')
+            ->assertOk()
+            // Il primo scaglione, formattato come lo vede una persona.
+            ->assertSee(number_format($listino->primoScaglione() / 100, 2, ',', '.').' €', escape: false)
+            ->assertSee('500', escape: false);
+    }
+
+    /**
+     * 🚨 **Gli scaglioni sono progressivi, come le aliquote.**
+     *
+     * I primi 25 posti costano il prezzo pieno **anche a chi ne ha 300**.
+     * ⚠️ L'alternativa — «oltre 100 paghi tutto a 2,99» — creerebbe un salto in
+     * cui **aggiungere un posto fa scendere la fattura**, e chi se ne accorge
+     * lo racconta.
+     */
+    #[Test]
+    public function the_tiers_are_progressive_not_a_cliff(): void
+    {
+        $listino = app(Listino::class);
+
+        $this->assertSame(0, $listino->costoMensile(0));
+        $this->assertSame(25 * 499, $listino->costoMensile(25));
+        $this->assertSame(25 * 499 + 1 * 399, $listino->costoMensile(26));
+        $this->assertSame(25 * 499 + 75 * 399 + 200 * 299, $listino->costoMensile(300));
+
+        // 💡 La proprietà che conta più di ogni singolo numero: la fattura non
+        // scende mai aggiungendo un posto.
+        for ($n = 1; $n <= 150; $n++) {
+            $this->assertGreaterThan(
+                $listino->costoMensile($n - 1),
+                $listino->costoMensile($n),
+                "aggiungere il posto {$n} fa scendere la fattura",
+            );
+        }
+    }
+
+    #[Test]
+    public function the_example_shows_what_the_gym_keeps(): void
+    {
+        $e = app(Listino::class)->esempio(60);
+
+        // 💡 È il numero che vende: non «4,99 a posto» ma «incasso 600 e ne
+        // pago 264».
+        $this->assertSame(60, $e['posti']);
+        $this->assertSame($e['ricavo'] - $e['costo'], $e['margine']);
+        $this->assertGreaterThan(0, $e['margine']);
     }
 
     // ─────────────────── L'atterraggio di un invito — F6.2 ───────────────────

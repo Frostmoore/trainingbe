@@ -1,162 +1,293 @@
 @extends('sito.layout')
 
-@section('titolo', 'Training Companion — allenamento e alimentazione')
+@section('titolo', 'Training Companion — l\'app per chi si allena')
+@section('descrizione', 'Diario, allenamenti e chat con il tuo trainer: gratis, per sempre. L\'AI è un supplemento che accendi solo se lo vuoi.')
 
-{{--
-    F9.1 — tre percorsi, tre pubblici.
-
-    🚨 **L'ordine non è casuale**: prima le persone, poi i trainer, poi le
-    palestre. Il gratuito è la porta d'ingresso del prodotto, e la sua funzione
-    vera è la **conversione**, non la cassa: metterlo in fondo lo nasconderebbe
-    proprio a chi deve entrarci.
---}}
 @section('contenuto')
-    <h1>Allenamento e alimentazione,<br>senza rifare i conti ogni volta.</h1>
-    <p class="sottotitolo">
-        Scheda, diario, peso e progressi in un posto solo. Che ti alleni da solo,
-        che segua altre persone, o che gestisca una palestra.
-    </p>
 
-    {{-- ── Le persone ────────────────────────────────────────────────── --}}
-    <h2>Per chi si allena</h2>
-    <p class="nota">
-        Ti registri e cominci. Il codice della palestra serve solo se ce l'hai.
-    </p>
+    {{-- ═══════════════════ apertura ═══════════════════ --}}
+    <section style="padding-top: var(--sp-5);">
+        <div class="contenitore griglia-2">
+            <div>
+                <span class="pillola">In prova con le prime palestre</span>
 
-    <div class="griglia">
-        @foreach ($perPersone as $piano)
-            <div class="scheda">
-                <h3>{{ $piano->name }}</h3>
-                <div class="prezzo">
-                    {{ $piano->eGratuito() ? 'Gratis' : number_format($piano->prezzoEuro(), 2, ',', '.').' €' }}
-                    @unless ($piano->eGratuito())<small>/mese</small>@endunless
+                {{-- 🚨 L'affermazione è **l'app è gratis**, non «l'AI che ti
+                     cambia la vita». È la cosa vera e la più difficile da
+                     copiare: gli altri fanno pagare l'ingresso. --}}
+                <h1 style="margin-top: var(--sp-2);">L'app per chi si allena.<br>Gratis, per sempre.</h1>
+
+                <p class="guida">
+                    Diario alimentare, schede, allenamenti e la chat cifrata con il tuo
+                    trainer. Non costa niente e non ha un periodo di prova che scade.
+                </p>
+
+                <p class="guida" style="margin-top: var(--sp-2);">
+                    L'intelligenza artificiale è un <strong>supplemento</strong>: la accendi
+                    se ti serve, e la paghi solo mentre la usi.
+                </p>
+
+                <div style="display: flex; gap: var(--sp-1); flex-wrap: wrap; margin-top: var(--sp-3);">
+                    <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Guarda i prezzi</a>
+                    <a href="#come-funziona" class="bottone bottone-vuoto bottone-grande">Come funziona</a>
                 </div>
-                <ul class="elenco">
-                    <li>Diario, allenamenti, storico e peso</li>
-                    <li>Piani ricevuti dal tuo trainer</li>
-                    {{-- 🚨 `ai_enabled` viene dal database, non da una riga
-                         scritta qui: il listino e il cancello devono dire la
-                         stessa cosa, sempre. --}}
-                    <li class="{{ $piano->ai_enabled ? '' : 'no' }}">
-                        {{ $piano->ai_enabled
-                            ? 'Stima da testo e da foto, consiglio del giorno'
-                            : 'Niente funzioni con l\'AI' }}
-                    </li>
-                    {{-- 💡 **Il numero, non l'aggettivo** — G10.2. «Quota AI
-                         inclusa» non dice niente; «400 richieste al mese, di cui
-                         40 con foto» dice esattamente cosa si compra, e viene
-                         dalle stesse colonne che il cancello legge per dire di
-                         no. --}}
-                    @if ($piano->ai_enabled && $piano->chiamateAlMese())
-                        <li>
-                            {{ $piano->chiamateAlMese() }} richieste all'AI al mese
-                            @if ($piano->chiamateConFotoAlMese())
-                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
-                            @endif
-                        </li>
-                    @endif
-                </ul>
+
+                <p class="nota" style="margin-top: var(--sp-2);">
+                    Nessuna carta di credito per cominciare. Nessuna, proprio.
+                </p>
             </div>
-        @endforeach
-    </div>
 
-    {{-- ── I trainer indipendenti ─────────────────────────────────────── --}}
-    <h2>Per i trainer indipendenti</h2>
-    <p class="nota">
-        Componi schede e piani dal computer, li mandi dal telefono. I tuoi
-        utenti entrano con un link tuo — non serve una palestra.
-    </p>
-    {{-- 🚨 «li mandi», non «li assegni» — 14/08/2026. Non è una sfumatura di
-         copy: dal pannello **non si assegna più niente**, un programma si
-         consegna via chat cifrata (D4). Una promessa sul sito che il prodotto
-         non mantiene è la peggiore delle due cose. --}}
-    <p class="nota">
-        I programmi viaggiano cifrati e restano sul telefono di chi li riceve:
-        <strong>non spariscono</strong> se un giorno smettete di lavorare insieme.
-    </p>
+            {{--
+                💡 **Il finto telefono è disegnato, non fotografato.**
 
-    <div class="griglia">
-        @foreach ($perTrainer as $piano)
-            <div class="scheda">
-                <h3>{{ $piano->name }}</h3>
-                <div class="prezzo">
-                    {{ $piano->eGratuito() ? 'Gratis' : number_format($piano->prezzoEuro(), 2, ',', '.').' €' }}
-                    @unless ($piano->eGratuito())<small>/mese</small>@endunless
+                Un mockup con dentro una schermata vera richiederebbe
+                un'immagine da tenere aggiornata a ogni modifica dell'app — e
+                che al primo cambio di interfaccia diventa una bugia. Questo è
+                l'unica cosa che l'app dice davvero, scritta in HTML: se cambia
+                il testo, si cambia qui.
+            --}}
+            <div aria-hidden="true" style="display: flex; justify-content: center;">
+                <div style="width: 280px; border: 10px solid var(--testo); border-radius: 36px; padding: var(--sp-2) 12px; background: var(--sfondo); box-shadow: 0 20px 50px rgba(0,0,0,.10);">
+                    <div style="height: 5px; width: 70px; background: var(--testo); border-radius: 99px; margin: 0 auto var(--sp-2);"></div>
+
+                    <div style="background: var(--accento-tenue); border-radius: 14px; padding: 14px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <strong style="font-size: 14px; color: var(--accento);">✦ Spunto di oggi</strong>
+                            <span style="margin-left: auto; font-size: 11px; color: var(--accento); border: 1px solid var(--accento); border-radius: 99px; padding: 1px 7px;">1 gettone</span>
+                        </div>
+                        <p style="font-size: 13px; margin: 8px 0 0; line-height: 1.5;">
+                            Sei a 1.240 kcal a metà pomeriggio: sei in linea. Stanotte hai
+                            dormito poco, quindi oggi potresti tenere il carico più basso.
+                        </p>
+                        <p style="font-size: 10px; color: var(--testo-tenue); margin: 10px 0 0; line-height: 1.4;">
+                            Scritto da un'intelligenza artificiale e può sbagliare. Non è un
+                            parere medico.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-top: 10px;">
+                        <div style="flex: 1; border: 1px solid var(--bordo); border-radius: 12px; padding: 10px;">
+                            <div style="font-size: 18px; font-weight: 800;">1.240</div>
+                            <div style="font-size: 10px; color: var(--testo-tenue);">di 2.100 kcal</div>
+                        </div>
+                        <div style="flex: 1; border: 1px solid var(--bordo); border-radius: 12px; padding: 10px;">
+                            <div style="font-size: 18px; font-weight: 800;">412</div>
+                            <div style="font-size: 10px; color: var(--testo-tenue);">bruciate</div>
+                        </div>
+                    </div>
                 </div>
-                <ul class="elenco">
-                    <li>{{ $piano->max_members === null ? 'Utenti illimitati' : 'Fino a '.$piano->max_members.' utenti' }}</li>
-                    <li>Chat cifrata con i tuoi utenti</li>
-                    <li class="{{ $piano->ai_enabled ? '' : 'no' }}">
-                        {{ $piano->ai_enabled ? 'Quota AI condivisa con i tuoi' : 'Niente funzioni con l\'AI' }}
-                    </li>
-                    @if ($piano->ai_enabled && $piano->chiamateAlMese())
-                        <li>
-                            {{ $piano->chiamateAlMese() }} richieste al mese <em>per ogni utente</em>
-                            @if ($piano->chiamateConFotoAlMese())
-                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
-                            @endif
-                        </li>
-                    @endif
-                </ul>
             </div>
-        @endforeach
-    </div>
+        </div>
+    </section>
 
-    {{-- ── Le palestre ────────────────────────────────────────────────── --}}
-    <h2>Per le palestre</h2>
-    <p class="nota">
-        L'app con i tuoi colori e il tuo logo. I tuoi trainer, i tuoi iscritti,
-        il tuo codice d'invito.
-    </p>
+    {{-- ═══════════════════ come funziona ═══════════════════ --}}
+    <section id="come-funziona" class="tenue">
+        <div class="contenitore">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Come funziona</div>
+                <h2>Il prodotto è gratis. L'AI è il supplemento.</h2>
+                <p class="guida">
+                    È il contrario di come funzionano quasi tutte le app di questo tipo, e
+                    non è una trovata: è l'unico modo perché una palestra possa metterla in
+                    mano a tutti gli iscritti senza chiedere niente a nessuno.
+                </p>
+            </div>
 
-    <div class="griglia">
-        @foreach ($perPalestre as $piano)
-            <div class="scheda">
-                <h3>{{ $piano->name }}</h3>
-                <div class="prezzo">
-                    {{ number_format($piano->prezzoEuro(), 2, ',', '.') }} €<small>/mese</small>
+            <div class="griglia">
+                <div class="scheda">
+                    <h3>1 · Entrano tutti</h3>
+                    <p class="nota">
+                        La palestra dà il proprio codice agli iscritti. Loro installano l'app e
+                        hanno diario, schede, allenamenti e la chat con il trainer.
+                        <strong>Costo: zero.</strong>
+                    </p>
                 </div>
-                <ul class="elenco">
-                    <li>App white-label con il tuo marchio</li>
-                    <li>Pannello per lo staff, schede e piani</li>
-                    {{-- 🚨 **I due tetti che una palestra deve sapere prima di
-                         firmare** — D5. Sono due numeri diversi e si moltiplicano
-                         fra loro: quanti trainer, e quanti allievi ciascuno. Chi
-                         legge solo il primo si fa il conto sbagliato. --}}
-                    @if ($piano->max_trainers)
-                        <li>Fino a {{ $piano->max_trainers }} trainer</li>
-                    @endif
-                    @if ($piano->tettoAllieviPerTrainer())
-                        <li>Fino a {{ $piano->tettoAllieviPerTrainer() }} iscritti per trainer</li>
-                    @endif
-                    @if ($piano->chiamateAlMese())
-                        <li>
-                            {{ $piano->chiamateAlMese() }} richieste all'AI al mese <em>per iscritto</em>
-                            @if ($piano->chiamateConFotoAlMese())
-                                , di cui {{ $piano->chiamateConFotoAlMese() }} con foto
-                            @endif
-                        </li>
-                    @else
-                        <li>Quota AI inclusa per ogni iscritto</li>
-                    @endif
-                </ul>
+                <div class="scheda">
+                    <h3>2 · Chi vuole l'AI la accende</h3>
+                    <p class="nota">
+                        Stima delle calorie da una frase o da una foto, e uno spunto sulla
+                        giornata. La palestra decide a chi accenderla, uno per uno.
+                    </p>
+                </div>
+                <div class="scheda">
+                    <h3>3 · La palestra la rivende</h3>
+                    <p class="nota">
+                        Un posto costa <strong>4,99 €</strong> al mese. Se lo rivende a 10 €
+                        sull'abbonamento, <strong>metà resta a lei</strong> — e più posti
+                        accende, più le resta per ciascuno.
+                    </p>
+                </div>
             </div>
-        @endforeach
-    </div>
+        </div>
+    </section>
 
-    {{--
-        ⚠️ **Il pagamento non c'è ancora, e la pagina non finge il contrario.**
+    {{-- ═══════════════════ la privacy, che qui è una funzione ═══════════════════ --}}
+    <section>
+        <div class="contenitore griglia-2">
+            <div>
+                <div class="occhiello">Quello che non facciamo</div>
+                <h2>I dati del tuo corpo non stanno sui nostri server.</h2>
+                <p class="guida">
+                    Peso, misure, foto dei progressi, sonno e battito vivono
+                    <strong>nel telefono di chi li produce</strong>. Non è una promessa
+                    scritta in un documento: le tabelle che li contenevano sono state
+                    cancellate.
+                </p>
+                <p class="guida" style="margin-top: var(--sp-2);">
+                    I messaggi con il tuo trainer sono cifrati da un telefono all'altro.
+                    Noi li consegniamo <strong>senza poterli leggere</strong> — nemmeno
+                    volendo, nemmeno la tua palestra.
+                </p>
+                <p style="margin-top: var(--sp-3);">
+                    <a href="/privacy" class="bottone bottone-vuoto">Leggi l'informativa</a>
+                </p>
+            </div>
 
-        `plan_parte_b.md` F9.3 lascia il fornitore **da decidere**, ed è una
-        decisione che porta con sé fatturazione elettronica, condizioni e
-        recesso. 🚨 Un pulsante «Abbonati» che non porta da nessuna parte è
-        peggio di nessun pulsante: fa sembrare rotto proprio il momento in cui
-        qualcuno stava per pagare.
-    --}}
-    <h2>Come si comincia</h2>
-    <p class="nota">
-        Scarica l'app e registrati. Per i piani a pagamento, scrivici: l'attivazione
-        è ancora manuale.
-    </p>
+            <div class="griglia" style="grid-template-columns: 1fr;">
+                <div class="scheda tenue">
+                    <h3>📱 Resta sul telefono</h3>
+                    <p class="nota">Peso e misure · foto dei progressi · sonno, battito e variabilità · le schede che ricevi</p>
+                </div>
+                <div class="scheda tenue">
+                    <h3>🔒 Cifrato da capo a fondo</h3>
+                    <p class="nota">I messaggi con il trainer. La chiave non passa da noi, quindi non possiamo leggerli.</p>
+                </div>
+                <div class="scheda tenue">
+                    <h3>☁️ Sta da noi</h3>
+                    <p class="nota">Chi sei, a quale palestra appartieni, il diario alimentare e cosa hai comprato.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {{-- ═══════════════════ per chi ═══════════════════ --}}
+    <section class="tenue">
+        <div class="contenitore">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Per chi</div>
+                <h2>Tre modi di usarla.</h2>
+            </div>
+
+            <div class="griglia">
+                <div class="scheda">
+                    <h3>Per le palestre</h3>
+                    <p class="nota">
+                        L'app con il tuo marchio e i tuoi colori. I trainer compongono schede e
+                        piani dal pannello o dal telefono, e li mandano in chat.
+                    </p>
+                    <ul class="elenco">
+                        <li>App con il tuo logo</li>
+                        <li>Pannello per lo staff</li>
+                        <li>Paghi solo i posti AI accesi</li>
+                    </ul>
+                </div>
+
+                <div class="scheda">
+                    <h3>Per i trainer indipendenti</h3>
+                    <p class="nota">
+                        I tuoi allievi entrano con un link tuo: non serve una palestra. Componi
+                        dal computer, mandi dal telefono.
+                    </p>
+                    <ul class="elenco">
+                        <li>Schede e piani alimentari</li>
+                        <li>Chat cifrata con i tuoi</li>
+                        <li>Quello che mandi resta loro</li>
+                    </ul>
+                </div>
+
+                <div class="scheda">
+                    <h3>Per chi si allena da solo</h3>
+                    <p class="nota">
+                        Non serve nessuna palestra e non serve nessun codice. Ti registri e
+                        cominci.
+                    </p>
+                    <ul class="elenco">
+                        <li>Diario e allenamenti, gratis</li>
+                        <li>AI a parte, se la vuoi</li>
+                        <li>Nessun periodo di prova che scade</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {{-- ═══════════════════ domande ═══════════════════ --}}
+    <section id="domande">
+        <div class="contenitore stretto">
+            <div class="intestazione-sezione">
+                <div class="occhiello">Domande frequenti</div>
+                <h2>Le cose che ci chiederesti.</h2>
+            </div>
+
+            <details>
+                <summary>Davvero gratis, o gratis per tre mesi?</summary>
+                <p>
+                    Gratis. Diario, allenamenti, schede e chat non hanno una scadenza e non
+                    chiedono una carta. Si paga solo l'intelligenza artificiale, e solo
+                    mentre la si usa.
+                </p>
+            </details>
+
+            <details>
+                <summary>Cos'è un gettone?</summary>
+                <p>
+                    Una chiamata all'AI. Scrivere cosa hai mangiato ne costa <strong>1</strong>,
+                    riconoscerlo da una foto ne costa <strong>10</strong> — perché a noi costa
+                    circa quattro volte tanto. Registrare un pasto dal tuo piano, dai preferiti
+                    o a mano non costa niente.
+                </p>
+            </details>
+
+            <details>
+                <summary>L'AI mi dice cosa mangiare o come allenarmi?</summary>
+                <p>
+                    No, e ci teniamo a essere chiari: quello che scrive è un'ipotesi costruita
+                    su pochi numeri, <strong>non è un parere medico</strong> e non va preso per
+                    buono. Se riguarda la tua salute, parlane con un medico dello sport. Nell'app
+                    c'è scritto sotto ogni spunto, non in fondo a una pagina di condizioni.
+                </p>
+            </details>
+
+            <details>
+                <summary>La mia palestra vede quanto peso o quanto mi alleno?</summary>
+                <p>
+                    No. Peso, misure, foto e sonno non arrivano nemmeno a noi: restano sul tuo
+                    telefono. E i messaggi con il tuo trainer sono cifrati fra i due telefoni,
+                    quindi non li legge nessun altro — noi compresi.
+                </p>
+            </details>
+
+            <details>
+                <summary>Se cambio telefono perdo tutto?</summary>
+                <p>
+                    No, ma serve il backup: l'app ne fa uno automatico col ripristino di
+                    sistema, e in più puoi esportare un file protetto da un codice.
+                    ⚠️ Siccome quei dati non ce li abbiamo noi, <strong>se perdi telefono e
+                    backup insieme non possiamo recuperarli</strong>. È il prezzo di non
+                    tenerli.
+                </p>
+            </details>
+
+            <details>
+                <summary>Cosa succede se smetto di pagare l'AI?</summary>
+                <p>
+                    L'app continua a funzionare come prima, senza le funzioni AI. Le schede e i
+                    piani che il tuo trainer ti ha mandato <strong>restano tuoi</strong>: sono
+                    sul tuo telefono e non li tocca nessuno.
+                </p>
+            </details>
+        </div>
+    </section>
+
+    {{-- ═══════════════════ chiusura ═══════════════════ --}}
+    <section class="tenue" style="text-align: center;">
+        <div class="contenitore stretto">
+            <h2>Provala con la tua palestra.</h2>
+            <p class="guida" style="margin: 0 auto var(--sp-3);">
+                Si comincia da cinque posti. Se non funziona, si spegne — non c'è niente da
+                disdire.
+            </p>
+            <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Guarda i prezzi</a>
+        </div>
+    </section>
+
 @endsection
-
