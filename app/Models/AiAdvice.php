@@ -59,6 +59,43 @@ class AiAdvice extends Model
     }
 
     /**
+     * 🚨 **Butta i consigli dei giorni passati.** — 16/08/2026
+     *
+     * ── Perche' esiste, e perche' non c'era ───────────────────────────────
+     *
+     * Questa tabella e' una **cache**, non uno storico: `cached()` filtra
+     * `whereDate('date', $oggi)` e non guarda mai indietro. ⚠️ Ma nessuno l'ha
+     * mai potata, quindi ogni consiglio mai generato e' rimasto li' — righe che
+     * **nessun codice leggera' mai piu'**.
+     *
+     * 🚨 **E non e' peso morto qualunque: e' il testo piu' intimo che abbiamo
+     * sul server.** Un consiglio dice *«hai mangiato 1.400 kcal, ti mancano
+     * proteine, ieri non ti sei allenato»* — un racconto sulla salute di una
+     * persona, in chiaro, conservato per sempre senza che serva a niente.
+     *
+     * 💡 Misurato in `I0.1`: a tre consigli al giorno sono **5.475 righe e
+     * 2,4 MB** in cinque anni — piu' del diario alimentare e del sonno messi
+     * insieme.
+     *
+     * ── Perche' qui e non in un comando schedulato ────────────────────────
+     *
+     * ⚠️ Un cron che pota e' un cron che un giorno non gira, e nessuno se ne
+     * accorge finche' la tabella non e' gonfia. Potare **nel momento in cui si
+     * scrive** non ha quel problema: se si scrive, si pota.
+     *
+     * 🎯 E l'ordine e' quello giusto — si scrive prima e si pota dopo: al
+     * peggio resta una riga in piu' per un giorno, invece di perdere il
+     * consiglio appena generato.
+     */
+    public static function pota(int $userId, GiornoLocale $oggi): int
+    {
+        return static::withoutGlobalScopes()
+            ->where('user_id', $userId)
+            ->whereDate('date', '<', $oggi->etichetta)
+            ->delete();
+    }
+
+    /**
      * 🚨 **Il giorno fa parte della chiave di cache**, ed e' per questo che il
      * consiglio si rigenera a mezzanotte senza nessun cron. ⚠️ Deve pero'
      * essere la **mezzanotte di chi legge**: con il confine in UTC, a Roma il

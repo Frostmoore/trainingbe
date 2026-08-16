@@ -329,6 +329,20 @@ class AiController extends Controller
             'model' => $this->ai->modelFor(AiFeature::DailyAdvice),
         ]);
 
+        /*
+         * 🚨 **Si pota qui, subito dopo aver scritto** — 16/08/2026.
+         *
+         * Questa tabella e' una **cache**: `AiAdvice::cached()` guarda solo il
+         * giorno corrente. ⚠️ Ma nessuno la potava, quindi ogni consiglio mai
+         * generato restava li' per sempre — e un consiglio e' il testo piu'
+         * intimo che abbiamo sul server.
+         *
+         * 💡 Potare **nello stesso punto in cui si scrive** invece che in un
+         * comando schedulato: un cron e' una cosa che un giorno non gira, e
+         * nessuno se ne accorge finche' la tabella non e' gonfia.
+         */
+        AiAdvice::pota((int) $utente->getKey(), $oggi);
+
         return response()->json(['data' => [
             'body' => $riga->body,
             'cached' => false,
