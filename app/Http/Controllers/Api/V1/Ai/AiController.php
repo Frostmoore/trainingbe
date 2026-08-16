@@ -294,6 +294,22 @@ class AiController extends Controller
             ]]);
         }
 
+        /*
+         * 🚨 **L'interruttore del committente** — 16/08/2026.
+         *
+         * Chi l'ha spento non vuole che il consiglio si rigeneri da solo. ⚠️ Si
+         * controlla **qui e non nel middleware**: la lettura del consiglio gia'
+         * scritto deve continuare a funzionare — spegnere l'aggiornamento non
+         * vuol dire cancellare quello che c'e'.
+         *
+         * 💡 E si controlla **dopo** la cache: se il consiglio della fascia
+         * corrente esiste gia', lo si restituisce comunque. L'interruttore
+         * ferma la spesa, non la lettura.
+         */
+        if ($utente->consiglio_automatico === false && ! $request->boolean('manuale')) {
+            return response()->json(['data' => null]);
+        }
+
         $conGettoni = $this->assertQuota($request->user(), AiFeature::DailyAdvice);
 
         $testo = $this->ai->for(AiFeature::DailyAdvice)->dailyAdvice(
@@ -433,6 +449,28 @@ class AiController extends Controller
 
             // 🆕 D16 — quanto resta nel portafoglio di chi paga per questa persona.
             'ai_credits' => $this->portafoglio->saldo($utente),
+
+            /*
+             * 🆕 16/08 — **il numero che l'app mostra nell'intestazione**.
+             *
+             * E' la somma delle due tasche: quello che resta del mese piu' i
+             * gettoni comprati. 💡 Si sommano perche' sono la stessa moneta e si
+             * spendono in fila — prima il mese, poi i comprati.
+             *
+             * ⚠️ `null` = **illimitato**, e l'app deve disegnare un simbolo, non
+             * uno zero. Sommare `null` a un numero darebbe zero, che e'
+             * esattamente il contrario.
+             *
+             * 📌 Fino a `H1` il contatore del mese conta **chiamate**, dove una
+             * foto vale 1: dopo `H1` varra' 10 e questo numero sara' gettoni
+             * veri. La forma e' gia' quella giusta, la scala no.
+             */
+            'gettoni_disponibili' => $this->quota->remaining($utente) === null
+                ? null
+                : $this->quota->remaining($utente) + $this->portafoglio->saldo($utente),
+
+            // 💡 Serve all'app per dire «illimitata» invece di un numero.
+            'illimitata' => $this->quota->remaining($utente) === null,
         ]]);
     }
 
@@ -739,6 +777,114 @@ class AiController extends Controller
         return Arr::except($contesto, self::VOLATILI);
     }
 
+    /**
+     * I campi del recupero che si accettano, e **nessun altro**.
+     *
+     * 🚨 **E' una lista bianca, non un elenco di esempi.** Quello che l'app manda
+     * e non e' qui dentro **non parte**: senza questa riga il contesto sarebbe
+     * «tutto cio' che il telefono ha voglia di allegare», e la prima versione
+     * dell'app che aggiunge un campo lo spedirebbe a un modello senza che
+     * nessuno l'abbia deciso.
+     *
+     * 💡 I due `baseline` non sono dati in piu': sono quello che rende leggibili
+     * gli altri due. Un HRV di 40 non vuol dire niente da solo — vuol dire
+     * qualcosa solo contro la media di quella persona, ed e' scritto anche nel
+     * prompt (regola 10).
+     *
+     * @var array<string, string> campo => tipo atteso
+     */
+    private const RECUPERO = [
+        'hours' => 'float',
+        'quality' => 'string',
+        'wakings' => 'int',
+        'deep_min' => 'int',
+        'rem_min' => 'int',
+        'hrv_ms' => 'int',
+        'hrv_baseline_ms' => 'int',
+        'resting_hr' => 'int',
+        'resting_hr_baseline' => 'int',
+    ];
+
+    /**
+     * Il recupero nel contesto del consiglio — 16/08/2026.
+     *
+     * ── 🚨 Perche' arriva DALL'APP e non da una tabella ────────────────────
+     *
+     * Perche' una tabella non c'e', ed e' voluto: sonno, battito e variabilita'
+     * vivono nell'archivio locale del telefono (D9), e il server non li
+     * conserva. E' la stessa strada gia' battuta dal target in
+     * `targetDallApp()` — **il server inoltra, non tiene**.
+     *
+     * 💡 E risolve un conflitto che sembrava grosso: il consiglio non puo'
+     * essere generato da un job del server, perche' il server questi dati non
+     * ce li ha. Lo chiede l'app, al massimo una volta per fascia — e cosi' il
+     * tetto di tre al giorno resta, senza nessuno schedulatore.
+     *
+     * ── ⚠️ Le due condizioni, ed ENTRAMBE servono ─────────────────────────
+     *
+     * | | |
+     * |---|---|
+     * | `ai_consent_at` | ci pensa il middleware `ai.consent`, prima di qui |
+     * | `sleep_ai_consent_at` | 🚨 **si controlla qui**, ed e' un consenso a parte |
+     *
+     * Chi ha detto si' all'AI ma non al recupero riceve il consiglio **senza**
+     * questa parte, e il prompt (regola 9) sa comportarsi di conseguenza. Un
+     * consenso a pacchetto sarebbe vietato dall'art. 7 — vedi §C12 di
+     * `todo-2026-08-11.md`, il documento che il vecchio commento in
+     * `contestoConsiglio()` imponeva di leggere prima di riaprire questa porta.
+     *
+     * ── 💡 Perche' TUTTO il quadro e non solo le ore ──────────────────────
+     *
+     * Decisione del committente, 16/08: *«che senso ha farlo senza tutto il
+     * contesto»*. Ha ragione su un punto che vale la pena scrivere: **il passo
+     * legale e' gia' fatto mandando le ore.** Sonno, HRV e battito stanno nella
+     * stessa categoria dell'art. 9, chiedono lo stesso consenso e gli stessi
+     * documenti. Mandarne meta' avrebbe dato un consiglio peggiore a parita' di
+     * esposizione.
+     *
+     * ⚠️ Ma «tutto il quadro» resta **una lista chiusa** (`self::RECUPERO`): la
+     * minimizzazione dell'art. 5(1)(c) si misura sull'uso, e ogni campo qui
+     * dentro ha una riga nel prompt che dice come si legge. Un campo che il
+     * prompt non nomina sarebbe dato in piu' mandato per niente.
+     *
+     * @return array<string, mixed>
+     */
+    private function recuperoDallApp(Request $request): array
+    {
+        $utente = $request->user();
+
+        if ($utente?->sleep_ai_consent_at === null) {
+            return [];
+        }
+
+        $recupero = [];
+
+        foreach (self::RECUPERO as $campo => $tipo) {
+            $valore = $request->input($campo);
+
+            // ⚠️ Un valore che non e' un numero si **scarta**, non si inoltra:
+            // meglio un consiglio senza quel campo che un prompt con dentro una
+            // parola al posto di una cifra.
+            if ($valore === null || ($tipo !== 'string' && ! is_numeric($valore))) {
+                continue;
+            }
+
+            $recupero[$campo] = match ($tipo) {
+                'float' => round((float) $valore, 1),
+                'int' => (int) $valore,
+                default => mb_substr((string) $valore, 0, 32),
+            };
+        }
+
+        // 🚨 Senza le ore il resto non si legge: un HRV da solo non dice se la
+        // notte e' stata corta. Se manca il minimo, non parte niente.
+        if (! isset($recupero['hours'])) {
+            return [];
+        }
+
+        return ['recovery' => $recupero];
+    }
+
     private function contestoConsiglio(Request $request): array
     {
         $utente = $request->user();
@@ -837,6 +983,9 @@ class AiController extends Controller
                 'days_since_last' => $riepilogo['training']['days_since_last'],
             ],
             'body' => $riepilogo['body'],
+
+            // 🆕 16/08/2026 — il recupero, se e solo se la persona l'ha concesso.
+            ...$this->recuperoDallApp($request),
         ];
     }
 }

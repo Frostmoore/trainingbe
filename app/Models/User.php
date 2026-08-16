@@ -78,6 +78,11 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         'locale' => 'it',
         'is_active' => true,
         'is_super_admin' => false,
+
+        // 🆕 16/08 — stessa ragione delle tre righe qui sopra: senza, subito
+        // dopo `User::create()` vale `null` e il consiglio automatico
+        // risulterebbe spento per chi si e' appena iscritto.
+        'consiglio_automatico' => true,
     ];
 
     /** @return array<string, string> */
@@ -144,6 +149,24 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'terms_accepted_at' => 'datetime',
             'health_consent_at' => 'datetime',
             'ai_consent_at' => 'datetime',
+
+            /*
+             * 🆕 16/08/2026 — il sonno nel contesto del consiglio del giorno.
+             *
+             * 🚨 **Separato da `ai_consent_at` di proposito.** Chi accetta che
+             * una frase sul pranzo vada a un modello non ha con cio' accettato
+             * che ci vada quanto e come dorme: sono due cose di intimita'
+             * diversa, e l'art. 7 vieta il consenso a pacchetto.
+             *
+             * 💡 E' una **data** e non un booleano perche' l'art. 7(1) chiede di
+             * poter *dimostrare* il consenso: un `true` non dice quando, quindi
+             * non dice sotto quale informativa.
+             */
+            'sleep_ai_consent_at' => 'datetime',
+
+            // 💡 Preferenza, non consenso: `true` di serie. Vedi la migrazione
+            // `2026_08_16_100000`.
+            'consiglio_automatico' => 'boolean',
         ];
     }
 

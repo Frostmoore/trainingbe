@@ -45,6 +45,22 @@ class ConsentController extends Controller
     private const CONSENSI = [
         'health' => 'health_consent_at',
         'ai' => 'ai_consent_at',
+
+        /*
+         * 🆕 16/08/2026 — il sonno nel contesto del consiglio del giorno.
+         *
+         * 🚨 **La terza casella, e non poteva essere dentro la seconda.** Chi
+         * accetta che una frase sul pranzo vada a un modello non ha con cio'
+         * accettato che ci vada quanto e come dorme: sono due decisioni di
+         * intimita' diversa, e l'art. 7 vieta il consenso a pacchetto. E' la
+         * stessa ragione per cui `health` e `ai` sono gia' separate.
+         *
+         * 💡 Ed e' **subordinata** ad `ai`: senza il consenso all'AI non parte
+         * nessuna chiamata, quindi il sonno non va da nessuna parte comunque.
+         * L'interfaccia la mostra spenta e non toccabile finche' `ai` e' spento
+         * — vedi `SchermataConsensi`.
+         */
+        'sleep_ai' => 'sleep_ai_consent_at',
     ];
 
     public function show(Request $request): JsonResponse
@@ -70,6 +86,22 @@ class ConsentController extends Controller
         $dati = $request->validate([
             'health' => ['sometimes', 'boolean'],
             'ai' => ['sometimes', 'boolean'],
+            'sleep_ai' => ['sometimes', 'boolean'],
+
+            /*
+             * 🆕 16/08 — l'interruttore del consiglio automatico.
+             *
+             * ⚠️ **Non e' un consenso, ed e' importante non confonderlo.** Un
+             * consenso e' una base giuridica: si da', si revoca, e si conserva
+             * la data per poterlo dimostrare. Questa e' una **preferenza**:
+             * «voglio o non voglio che il consiglio si aggiorni da solo».
+             *
+             * 💡 Sta nella stessa chiamata perche' nell'app sta nella stessa
+             * schermata — chi apre «privacy e AI» cerca entrambe le cose li'.
+             * Ma nella risposta viaggia sotto una chiave diversa, e nel database
+             * e' un booleano invece di una data: la differenza si vede da fuori.
+             */
+            'consiglio_automatico' => ['sometimes', 'boolean'],
         ]);
 
         $utente = $request->user();
@@ -78,6 +110,28 @@ class ConsentController extends Controller
             if (array_key_exists($nome, $dati)) {
                 $utente->registraConsenso($colonna, (bool) $dati[$nome]);
             }
+        }
+
+        /*
+         * 🚨 **Revocare l'AI revoca anche il sonno.**
+         *
+         * ⚠️ Senza questa riga resterebbe una data su `sleep_ai_consent_at` di
+         * qualcuno che ha detto di no all'AI: un consenso appeso a una funzione
+         * spenta, che il giorno che l'AI si riaccende tornerebbe attivo **senza
+         * che nessuno l'abbia riconfermato**.
+         *
+         * 💡 E' la conseguenza della subordinazione: se il consenso figlio non
+         * puo' valere senza il padre, deve cadere con lui.
+         */
+        if (array_key_exists('ai', $dati) && ! (bool) $dati['ai']) {
+            $utente->registraConsenso('sleep_ai_consent_at', false);
+        }
+
+        if (array_key_exists('consiglio_automatico', $dati)) {
+            // ⚠️ `forceFill`: e' una colonna di `users` che non sta in
+            // `$fillable`, come tutto cio' che decide cosa fa il sistema per
+            // conto di qualcuno.
+            $utente->forceFill(['consiglio_automatico' => (bool) $dati['consiglio_automatico']])->save();
         }
 
         return response()->json(['data' => $this->stato($utente->refresh())]);
@@ -97,6 +151,10 @@ class ConsentController extends Controller
         return [
             'health' => $utente->health_consent_at?->toIso8601String(),
             'ai' => $utente->ai_consent_at?->toIso8601String(),
+            'sleep_ai' => $utente->sleep_ai_consent_at?->toIso8601String(),
+
+            // 💡 Preferenza, non consenso: un booleano, non una data.
+            'consiglio_automatico' => (bool) $utente->consiglio_automatico,
             'age_confirmed_at' => $utente->age_confirmed_at?->toIso8601String(),
             'terms_accepted_at' => $utente->terms_accepted_at?->toIso8601String(),
         ];
