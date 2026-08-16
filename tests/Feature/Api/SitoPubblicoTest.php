@@ -260,10 +260,25 @@ class SitoPubblicoTest extends TestCase
         $home->assertDontSee('<img', escape: false);
     }
 
-    /** 💡 E quando il file arriva, compare da solo: nessun template da toccare. */
+    /**
+     * 💡 E quando il file arriva, compare da solo: nessun template da toccare.
+     *
+     * ── 🚨 Perche' comincia svuotando ─────────────────────────────────────
+     *
+     * Fino al 16/08 questo test **passava per il motivo sbagliato**: la cartella
+     * era vuota, quindi il file finto era l'unico. Caricate le immagini vere, il
+     * `.webp` viene prima del `.jpg` nell'ordine di preferenza e la ricerca
+     * avrebbe trovato quello — provando che funziona una cosa che il test non
+     * stava verificando.
+     *
+     * ⚠️ **Un test che non sistema la propria premessa non dimostra niente**, e
+     * lo si scopre solo quando la premessa cambia.
+     */
     #[Test]
     public function dropping_the_file_in_is_all_it_takes(): void
     {
+        $this->svuotaLeImmagini();
+
         $this->creaImmagine('eroe');
 
         $this->get('/')
@@ -286,6 +301,9 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function replacing_an_image_changes_its_address(): void
     {
+        // ⚠️ Come sopra: senza svuotare si misurerebbe il `.webp` vero.
+        $this->svuotaLeImmagini();
+
         $percorso = $this->creaImmagine('eroe');
 
         $prima = app(ImmaginiDelSito::class)->url('eroe');
@@ -350,6 +368,52 @@ class SitoPubblicoTest extends TestCase
         $this->creaImmagine('og');
 
         $this->assertNotContains('og', (new ImmaginiDelSito)->mancanti());
+    }
+
+    /**
+     * 🚨 **Le sette immagini sono state caricate davvero.**
+     *
+     * ⚠️ Finche' mancavano, il sito mostrava un riempimento voluto e nessuno se
+     * ne accorgeva — che era lo scopo. Ora che ci sono, il rischio si e'
+     * capovolto: **se una sparisce, il riempimento la nasconde**. Questo test e'
+     * l'unica cosa che se ne accorgerebbe.
+     */
+    #[Test]
+    public function all_seven_images_are_actually_on_disk(): void
+    {
+        $this->assertSame([], (new ImmaginiDelSito)->mancanti());
+    }
+
+    /**
+     * ⚠️ **E pesano poco.** Il server e' condiviso con altri due siti, e
+     * un'immagine sostituita con l'originale da due megabyte non farebbe
+     * fallire niente: farebbe solo aprire la pagina in cinque secondi, che e'
+     * il genere di cosa che nessuno segnala.
+     */
+    #[Test]
+    public function the_images_stay_light(): void
+    {
+        $immagini = new ImmaginiDelSito;
+
+        foreach (array_keys(ImmaginiDelSito::ATTESE) as $nome) {
+            $percorso = $immagini->url($nome);
+
+            if ($percorso === null) {
+                continue;
+            }
+
+            $file = public_path(parse_url($percorso, PHP_URL_PATH) ?? '');
+
+            // 🚨 `og` piu' stretta delle altre: alcuni servizi di messaggistica
+            // scartano le anteprime pesanti e tornano al riquadro grigio.
+            $tetto = $nome === 'og' ? 200 : 300;
+
+            $this->assertLessThan(
+                $tetto * 1024,
+                filesize($file),
+                "{$nome} pesa piu' di {$tetto} KB",
+            );
+        }
     }
 
     // ─────────────────── i due aiutanti delle immagini ───────────────────

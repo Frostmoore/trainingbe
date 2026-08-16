@@ -131,12 +131,12 @@
             display: block;
         }
 
-        /* ⚠️ Le fotografie sono prodotte in luce piena, e di notte «bucano» la
-           pagina. Un velo appena percettibile le rimette nel tono senza
-           spegnerle. */
-        @media (prefers-color-scheme: dark) {
-            .figura img { filter: brightness(.86) saturate(.94); }
-        }
+        /* ── ⚠️ Tolto il 16/08, quando le fotografie sono arrivate ────────
+           C'era `brightness(.86)` per il tema scuro, scritto **prima di
+           averle**, immaginandole in luce piena. Sono uscite tutte scure e in
+           controluce: abbassarle ancora le trasformava in rettangoli neri.
+           💡 Si adattano al tema scuro da sole, ed e' la ragione per cui non
+           c'e' niente qui. */
 
         /*
            💡 Il posto vuoto quando l'immagine non è ancora stata caricata.
@@ -162,15 +162,20 @@
         .figura-eroe { position: absolute; inset: 0; z-index: 0; }
         .figura-eroe .figura, .figura-eroe img { height: 100%; border-radius: var(--raggio); }
 
-        /* 🚨 Il velo sopra la fotografia dell'apertura. Senza, il telefono
-           disegnato in CSS si perde su una foto piena di dettagli e il testo
-           dentro non si legge più. */
+        /* Il velo sopra la fotografia dell'apertura.
+           ── ⚠️ Tarato il 16/08, quando le fotografie sono arrivate ────────
+           Prima era 55% → 82%, scelto **senza avere le immagini**. Sono uscite
+           tutte scure e in controluce: un velo bianco così forte le riduceva a
+           un rettangolo grigio, cioè cancellava proprio quello che erano lì a
+           fare. 💡 Restano leggere perché il telefono disegnato è chiaro e su
+           una foto scura si stacca da solo — il velo serve solo a raccordare
+           l'immagine alla pagina, non a fare contrasto. */
         .velo-eroe {
             position: absolute; inset: 0; z-index: 1;
             border-radius: var(--raggio);
             background: linear-gradient(160deg,
-                color-mix(in srgb, var(--sfondo) 55%, transparent) 0%,
-                color-mix(in srgb, var(--sfondo) 82%, transparent) 100%);
+                color-mix(in srgb, var(--sfondo) 14%, transparent) 0%,
+                color-mix(in srgb, var(--sfondo) 38%, transparent) 100%);
         }
 
         /* La figura in cima a una scheda: senza bordo proprio e senza angoli

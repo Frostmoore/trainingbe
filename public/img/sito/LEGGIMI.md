@@ -1,23 +1,34 @@
 # Le immagini del sito
 
-Qui dentro vanno i file delle immagini del sito pubblico. **Finché non ci sono, il sito funziona
-lo stesso**: al loro posto compare un riempimento con i colori del prodotto, e nessuno vede
-un'icona di immagine rotta.
+Qui dentro stanno le immagini del sito pubblico. ✅ **Caricate tutte e sette il 16/08/2026.**
+
+Se una sparisce il sito non si rompe: al suo posto compare un riempimento con i colori del
+prodotto, e nessuno vede un'icona di immagine rotta. ⚠️ Il rovescio è che **una sparizione non si
+nota**: se ne accorge solo `all_seven_images_are_actually_on_disk()`.
 
 L'elenco autorevole sta in `app/Support/ImmaginiDelSito.php` (costante `ATTESE`). Questo file lo
 ripete per chi apre la cartella invece del codice.
 
 ## Cosa serve
 
-| Nome del file | Misura | Dove compare |
-|---|---|---|
-| `og.jpg` | **1200 × 630** | L'anteprima quando il link viene condiviso (WhatsApp, Telegram, LinkedIn) |
-| `eroe.jpg` | **1600 × 1200** | Lo sfondo dietro il telefono, in apertura della home |
-| `platea-palestra.jpg` | **800 × 600** | La scheda «Per le palestre» |
-| `platea-trainer.jpg` | **800 × 600** | La scheda «Per i trainer indipendenti» |
-| `platea-solo.jpg` | **800 × 600** | La scheda «Per chi si allena da solo» |
-| `privacy.jpg` | **1200 × 900** | La sezione «I dati del tuo corpo non stanno sui nostri server» |
-| `prezzi.jpg` | **1600 × 700** | La fascia in apertura della pagina dei prezzi |
+| File | Misura | Peso | Dove compare |
+|---|---|---|---|
+| `og.jpg` | 1200 × 630 | 91 KB | L'anteprima quando il link viene condiviso |
+| `eroe.webp` | 1600 × 1200 | 46 KB | Lo sfondo dietro il telefono, in apertura della home |
+| `platea-palestra.webp` | 800 × 600 | 26 KB | La scheda «Per le palestre» |
+| `platea-trainer.webp` | 800 × 600 | 26 KB | La scheda «Per i trainer indipendenti» |
+| `platea-solo.webp` | 800 × 600 | 33 KB | La scheda «Per chi si allena da solo» |
+| `privacy.webp` | 1200 × 900 | 21 KB | La sezione «I dati del tuo corpo non stanno sui nostri server» |
+| `prezzi.webp` | 1600 × 700 | 33 KB | La fascia in apertura della pagina dei prezzi |
+
+**276 KB in tutto.** 🚨 `og` è l'unica in JPG: alcuni raccoglitori di anteprime non leggono il webp
+e tornerebbero a mostrare il riquadro grigio. È l'unico posto in cui il formato lo decide qualcun
+altro.
+
+📌 **Gli originali non ritagliati** (1536 × 1024, PNG, ~2 MB l'uno) stanno nel repo documentale, in
+`memory/immagini-sorgente/`, con i comandi esatti che hanno prodotto questi file. Non stanno qui
+perché questa cartella è **pubblicata**, e quattordici megabyte di PNG verrebbero spediti a chi apre
+il sito.
 
 ## Regole
 
@@ -45,4 +56,8 @@ svuotare nessuna cache.
 ## Come si sostituiscono
 
 Si copia il file qui dentro con il nome esatto della tabella. Non c'è niente da rigenerare, niente
-da compilare, nessun comando da lanciare.
+da compilare, nessun comando da lanciare: l'indirizzo che il sito scrive porta la data di modifica
+del file, quindi la versione nuova si vede subito.
+
+⚠️ **Per un ritaglio diverso si riparte dagli originali**, non da questi: questi sono già stati
+tagliati e compressi una volta, e ricomprimerli somma i difetti.
