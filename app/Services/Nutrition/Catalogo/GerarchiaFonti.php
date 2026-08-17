@@ -37,6 +37,14 @@ use App\Models\Food;
  */
 class GerarchiaFonti
 {
+    /**
+     * I prefissi di `foods.fonte`, e stanno qui perche' non finiscano scritti
+     * a mano in due posti che poi divergono.
+     */
+    public const PREFISSO_CREA = 'CREA:';
+
+    public const PREFISSO_OFF = 'OFF:';
+
     public const RANGO_CREA = 3;
 
     public const RANGO_OFF = 2;
@@ -50,11 +58,11 @@ class GerarchiaFonti
             return self::RANGO_UTENTE;
         }
 
-        if (str_starts_with($fonte, 'CREA:')) {
+        if (str_starts_with($fonte, self::PREFISSO_CREA)) {
             return self::RANGO_CREA;
         }
 
-        if (str_starts_with($fonte, 'OFF:')) {
+        if (str_starts_with($fonte, self::PREFISSO_OFF)) {
             return self::RANGO_OFF;
         }
 

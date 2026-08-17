@@ -20,7 +20,6 @@ use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
-use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
@@ -515,41 +514,25 @@ class AiController extends Controller
              * 💡 Chi ha comprato gettoni continua a vederli, ed e' giusto: quelli
              * li ha pagati a parte, sono suoi, e vuole sapere quanti gliene
              * restano.
+             *
+             * ── ⚠️ E si mostra SEMPRE, anche a zero — 17/08/2026 ─────────────
+             *
+             * La prima versione nascondeva il contatore a chi e' abbonato e non
+             * ha comprato niente, per non far leggere uno zero accanto a un'AI
+             * che funziona. 🚨 Provandolo sul telefono, il committente:
+             * *«non si vede piu' il saldo dei miei gettoni [...] si deve vedere
+             * anche se ne ho infiniti o 0»*.
+             *
+             * 💡 Ha ragione: **un contatore che a volte c'e' e a volte no e'
+             * peggio di uno zero**. Chi lo cerca e non lo trova pensa che sia
+             * rotto, e non ha modo di sapere se e' sparito perche' non serve o
+             * perche' non funziona. Uno zero almeno si capisce.
+             *
+             * 📌 E' il motivo per cui `mostra_gettoni` non c'e' piu': la
+             * decisione di mostrarlo non e' del server, e mantenerla li' voleva
+             * dire tre condizioni da tenere allineate a niente.
              */
             'gettoni_disponibili' => $this->portafoglio->saldo($utente),
-
-            /*
-             * Se l'app debba disegnare il contatore, oppure niente.
-             *
-             * ── ⚠️ Perche' non basta mandare zero ─────────────────────────
-             *
-             * Perche' uno zero accanto a un'AI che **funziona** e' una
-             * contraddizione: chi lo legge pensa che sia rotta, e scrive. Il
-             * contatore va **nascosto**, non azzerato.
-             *
-             * 🚨 Si mostra quando i gettoni comprati sono l'unica cosa fra la
-             * persona e un `402`: o perche' ne ha (e allora sono suoi e li deve
-             * vedere), o perche' non ha nessuna dotazione inclusa (e allora
-             * quel numero e' tutto cio' che ha).
-             *
-             * ⚠️ Si guarda `haLaAi()` e **non** `capFor()`: quest'ultimo torna
-             * `null` per «illimitata», e `null ?? 0 === 0` avrebbe scambiato
-             * l'illimitata per «nessuna dotazione» — cioe' avrebbe mostrato un
-             * contatore proprio a chi non ne ha bisogno.
-             *
-             * ── 🚨 La terza condizione, e perche' non e' un di piu' ────────
-             *
-             * Senza `remaining() <= 0`, a un abbonato che ha finito la dotazione
-             * **e** i gettoni comprati il contatore **sparirebbe proprio nel
-             * momento in cui serve**: l'AI smette di rispondere e sullo schermo
-             * non c'e' niente che spieghi perche'.
-             *
-             * 💡 Uno zero mostrato **quando e' vero** non e' la contraddizione
-             * che si stava evitando: li' e' l'informazione che dice cosa fare.
-             */
-            'mostra_gettoni' => $this->portafoglio->saldo($utente) > 0
-                || ! app(PianoAttivo::class)->haLaAi($utente)
-                || ($this->quota->remaining($utente) ?? 1) <= 0,
 
             // 💡 Serve all'app per dire «illimitata» invece di un numero.
             'illimitata' => $this->quota->remaining($utente) === null,

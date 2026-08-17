@@ -158,6 +158,74 @@ class RicercaAlimentiTest extends TestCase
             ->cerca('p', $this->io));
     }
 
+    /**
+     * \U0001F6A8 **Il CREA viene prima di Open Food Facts**, a parità di uso.
+     *
+     * ── Perché, e come si è scoperto ───────────────────────────────
+     *
+     * Provando l'app sul telefono con un milione e mezzo di prodotti Open Food
+     * Facts in catalogo, cercare «pollo» restituiva soprattutto **roba di
+     * scaffale**: nomi in lingue diverse, marche mai sentite, valori trascritti
+     * da volontari.
+     *
+     * \U0001F4A1 È una differenza **di qualità della fonte**, non di popolarità: le
+     * 832 voci CREA sono misure di laboratorio, gli 1,57 milioni di Open Food
+     * Facts sono etichette copiate da chiunque. ⚠️ L'ordinamento per `usi` da
+     * solo non poteva saperlo — all'inizio nessuno ha usato niente, e a parità
+     * di zero decideva l'ordine alfabetico.
+     */
+    #[Test]
+    public function crea_comes_before_open_food_facts(): void
+    {
+        $this->alimento('Pollo aaa off', fonte: 'OFF:8001234567890');
+        $this->alimento('Pollo zzz crea', fonte: 'CREA:106140');
+
+        $ordine = app(RicercaAlimenti::class)
+            ->cerca('pollo', $this->io)
+            ->pluck('nome')
+            ->all();
+
+        // \U0001F4A1 Senza la regola vincerebbe l'ordine alfabetico, e quindi l'OFF.
+        $this->assertSame(['Pollo zzz crea', 'Pollo aaa off'], $ordine);
+    }
+
+    /**
+     * ⚠️ **Ma i propri vengono prima anche del CREA.**
+     *
+     * Quello che una persona usa tutti i giorni resta la prima cosa che deve
+     * trovare, anche se è un prodotto di marca trascritto da un volontario.
+     */
+    #[Test]
+    public function your_own_foods_come_before_even_crea(): void
+    {
+        $mio = $this->alimento('Pollo mio', fonte: 'OFF:8009999999999');
+        $this->alimento('Pollo del CREA', fonte: 'CREA:106140');
+
+        $this->usa($this->io, $mio, 1);
+
+        $ordine = app(RicercaAlimenti::class)
+            ->cerca('pollo', $this->io)
+            ->pluck('nome')
+            ->all();
+
+        $this->assertSame(['Pollo mio', 'Pollo del CREA'], $ordine);
+    }
+
+    /** \U0001F4A1 E fra due Open Food Facts decide sempre l'uso. */
+    #[Test]
+    public function between_two_off_products_usage_still_decides(): void
+    {
+        $this->alimento('Pollo poco usato', usi: 2, fonte: 'OFF:1');
+        $this->alimento('Pollo molto usato', usi: 900, fonte: 'OFF:2');
+
+        $ordine = app(RicercaAlimenti::class)
+            ->cerca('pollo', $this->io)
+            ->pluck('nome')
+            ->all();
+
+        $this->assertSame(['Pollo molto usato', 'Pollo poco usato'], $ordine);
+    }
+
     // ═══════════════════ la rotta ═══════════════════
 
     /**
@@ -210,13 +278,17 @@ class RicercaAlimentiTest extends TestCase
 
     // ───────────────────────── aiutanti ─────────────────────────
 
-    private function alimento(string $nome, int $usi = 0, bool $pubblico = true): Food
-    {
+    private function alimento(
+        string $nome,
+        int $usi = 0,
+        bool $pubblico = true,
+        string $fonte = 'CREA:000001',
+    ): Food {
         return Food::query()->create([
             'chiave' => app(ChiaveAlimento::class)->da($nome),
             'nome' => $nome,
             'kcal_100' => 100.0, 'protein_100' => 23.3, 'carbs_100' => 0.0, 'fat_100' => 0.8,
-            'fonte' => 'CREA:000001',
+            'fonte' => $fonte,
             'note' => 'Fonte: CREA Centro di ricerca Alimenti e Nutrizione',
             'usi' => $usi,
             'conferme' => 2,

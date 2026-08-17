@@ -24,6 +24,23 @@ use Illuminate\Support\Collection;
  * decrescente, quelli che nessuno ha mai scelto (`usi = 0`) finiscono in fondo
  * da soli, che è precisamente «inseriti da altri».
  *
+ * ── 🚨 E in mezzo, il CREA — provato sul telefono il 17/08/2026 ─────────
+ *
+ * Con un milione e mezzo di prodotti Open Food Facts in catalogo, cercare
+ * «pollo» restituiva soprattutto **roba di scaffale**: nomi in lingue diverse,
+ * marche mai sentite, dati trascritti da volontari. Il committente, provandolo:
+ * *«preferirei vedere prima gli alimenti di CREA e i miei rispetto a quelli di
+ * OFF (in effetti è un archivio un po' sporchetto)»*.
+ *
+ * 💡 Ha ragione, ed è una differenza **di qualità della fonte**, non di
+ * popolarità: le 832 voci CREA sono misure di laboratorio di un ente pubblico,
+ * gli 1,57 milioni di Open Food Facts sono etichette trascritte da chiunque.
+ * L'ordinamento per `usi` da solo non poteva saperlo — all'inizio nessuno ha
+ * usato niente, e a parità di zero vinceva l'ordine alfabetico.
+ *
+ * ⚠️ Il CREA viene **dopo i propri**: quello che una persona usa tutti i
+ * giorni resta la prima cosa che deve trovare, anche se è un prodotto di marca.
+ *
  * ── ⚠️ Perché prima il prefisso e poi il «contiene» ────────────────────────
  *
  * Su MySQL `LIKE 'pas%'` usa l'indice; `LIKE '%pas%'` **no**, e su
@@ -93,6 +110,17 @@ class RicercaAlimenti
             .' where food_entries.food_id = foods.id'
             .' and food_entries.user_id = '.(int) $chi->getKey().')';
 
+        /*
+         * 🚨 La qualità della fonte, come numero da ordinare.
+         *
+         * ⚠️ Si confronta il **prefisso** e non si chiama `GerarchiaFonti`:
+         * qui serve dentro un `ORDER BY`, cioè nel database, e una funzione PHP
+         * non ci può entrare. Il prefisso viene comunque dalla costante, così
+         * il giorno che cambia non ci sono due posti da ricordarsi.
+         */
+        $qualitaFonte = "case when foods.fonte like '"
+            .GerarchiaFonti::PREFISSO_CREA."%' then 0 else 1 end";
+
         return Food::query()
             ->visibiliA($chi)
             ->select('foods.*')
@@ -100,7 +128,9 @@ class RicercaAlimenti
             // 1. e 2. — i miei, prima quelli che uso di più
             ->orderByRaw($mieSelezioni.' > 0 desc')
             ->orderByRaw($mieSelezioni.' desc')
-            // 3. e 4. — i più scelti in generale, poi il resto
+            // 3. — poi il CREA, che è misurato in laboratorio
+            ->orderByRaw($qualitaFonte.' asc')
+            // 4. e 5. — i più scelti in generale, poi il resto
             ->orderByDesc('usi')
             ->orderByDesc('conferme')
             ->orderBy('nome')
