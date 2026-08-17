@@ -22,6 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        /*
+         * 🚨 Il webhook di Stripe non puo' avere un token CSRF.
+         *
+         * Arriva da un server, non da un browser: non ha sessione e non ha
+         * compilato nessun modulo. ⚠️ L'esenzione non lo lascia scoperto —
+         * quello che lo autentica e' la **firma**, verificata in
+         * `StripeWebhookController`, che e' un controllo piu' forte di un
+         * token di sessione.
+         */
+        $middleware->validateCsrfTokens(except: ['stripe/webhook']);
+
         // L'ordine in cui si applicano nelle rotte conta:
         //   auth:sanctum → tenant → tenant.active
         // `tenant` ha bisogno dell'utente autenticato, e `tenant.active` del

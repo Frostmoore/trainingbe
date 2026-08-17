@@ -69,4 +69,23 @@ return [
         ],
     ],
 
+    /*
+     * Stripe — 17/08/2026.
+     *
+     * 🚨 **Le chiavi stanno solo in `.env`, che e' ignorato da git.** Non
+     * finiscono mai in un file versionato: `.env.example` porta i nomi, non i
+     * valori.
+     *
+     * ⚠️ **`webhook_secret` non e' facoltativo.** La conferma di un pagamento
+     * deve arrivare dal webhook firmato, **non** dal ritorno del browser: chi
+     * torna sulla pagina di successo puo' averci messo l'indirizzo a mano, e
+     * accreditare gettoni su quella base vuol dire regalarli a chiunque legga
+     * l'URL una volta.
+     */
+    'stripe' => [
+        'key' => env('STRIPE_PUBLIC_KEY'),
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
 ];

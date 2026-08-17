@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\SitoController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Support\Impersonation\Impersonator;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +36,21 @@ Route::get('/prezzi', [SitoController::class, 'prezzi'])->name('sito.prezzi');
 | ⚠️ `{quale}` e' vincolato a due valori: senza, il nome finisce in un percorso
 | di file e `/documento/../../.env` diventa una lettura arbitraria.
 */
+/*
+|--------------------------------------------------------------------------
+| L'orecchio di Stripe — 17/08/2026
+|--------------------------------------------------------------------------
+|
+| 🚨 **Fuori da `auth`, fuori dal tenant, esente da CSRF.** Un webhook arriva
+| da un server, non da un browser: non ha sessione, non ha cookie e non ha un
+| token da mettere in un modulo. L'unica cosa che lo autentica e' la **firma**,
+| e la verifica quella sta nel controller.
+|
+| ⚠️ Sta **prima** di `/{quale}`: quest'ultima e' una rotta con segnaposto, e
+| messa sopra si prenderebbe anche `stripe`.
+*/
+Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
+
 Route::get('/{quale}', [SitoController::class, 'documento'])
     ->whereIn('quale', ['privacy', 'condizioni'])
     ->name('sito.documento');
