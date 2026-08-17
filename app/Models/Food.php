@@ -28,10 +28,19 @@ class Food extends Model
     /** Quante **persone diverse** servono perche' un alimento diventi pubblico. */
     public const CONFERME_PER_PUBBLICARE = 2;
 
+    /**
+     * ⚠️ Esplicita, e serve: Laravel considera «food» un nome **invariabile**
+     * (come «sheep») e cercherebbe la tabella `food`. La migrazione crea
+     * `foods`, e senza questa riga il modello non trova niente — con un errore
+     * che parla di una tabella che nessuno ha mai scritto.
+     */
+    protected $table = 'foods';
+
     protected $fillable = [
         'chiave', 'nome', 'marca',
         'kcal_100', 'protein_100', 'carbs_100', 'fat_100',
-        'basis', 'origine', 'fonte', 'conferme', 'usi', 'pubblico',
+        'basis', 'origine', 'fonte', 'note', 'conferme', 'usi', 'pubblico',
+        'immagine_url', 'immagine_piccola_url', 'codice_a_barre',
     ];
 
     protected function casts(): array

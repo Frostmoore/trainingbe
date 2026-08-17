@@ -79,6 +79,48 @@ return new class extends Migration
             $tabella->string('fonte', 40)->nullable();
 
             /*
+             * 🚨 **La provenienza del dato, in chiaro e per riga.**
+             *
+             * Non e' una comodita': e' **la condizione della licenza**. CREA
+             * chiede «una chiara indicazione della fonte originale», Open Food
+             * Facts chiede l'attribuzione ODbL. ⚠️ Una nota tenuta solo nel
+             * codice del comando che ha importato i dati non e' un'attribuzione:
+             * il giorno che si mescolano due fonti nella stessa tabella, non si
+             * sa piu' quale riga viene da dove.
+             *
+             * 💡 E' anche l'unico posto in cui si puo' scrivere «rivisto a mano
+             * il tal giorno» quando un valore verra' corretto.
+             */
+            $tabella->string('note', 255)->nullable();
+
+            /*
+             * Le immagini, quando la fonte ne ha.
+             *
+             * ⚠️ Si conserva **l'indirizzo**, non il file: le immagini di Open
+             * Food Facts sono `CC BY-SA 3.0` — una licenza **diversa** da quella
+             * dei dati — e ricopiarle sul nostro server significherebbe
+             * ridistribuirle, con gli obblighi che ne derivano. Puntarle le
+             * lascia dove stanno, con il loro autore.
+             *
+             * 🚨 Conseguenza da sapere: se quel server e' irraggiungibile,
+             * l'immagine non si vede. L'app deve reggere l'assenza, che e'
+             * comunque il caso normale — la maggior parte degli alimenti non ne
+             * ha nessuna.
+             */
+            $tabella->string('immagine_url', 255)->nullable();
+            $tabella->string('immagine_piccola_url', 255)->nullable();
+
+            /*
+             * Il codice a barre, per i prodotti confezionati.
+             *
+             * 💡 Non e' la chiave: due confezioni dello stesso prodotto hanno
+             * codici diversi, e un prodotto senza codice (la mela) deve poter
+             * esistere lo stesso. E' un **secondo modo di trovare** la riga, non
+             * un secondo modo di identificarla.
+             */
+            $tabella->string('codice_a_barre', 20)->nullable()->index();
+
+            /*
              * Quante **persone diverse** l'hanno inserito.
              *
              * ⚠️ Persone, non volte: chi mangia lo yogurt ogni mattina conta
