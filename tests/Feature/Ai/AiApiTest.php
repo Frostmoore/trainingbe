@@ -487,6 +487,41 @@ class AiApiTest extends TestCase
     }
 
     /**
+     * 🚨 **Quando l'abbonato resta a secco, il contatore ricompare.**
+     *
+     * ── Il buco che questa riga chiude ────────────────────────────────────
+     *
+     * Nascondere il saldo a chi e' abbonato e' giusto finche' la dotazione
+     * copre. ⚠️ Ma se finisce **e** non ci sono gettoni comprati, l'AI smette
+     * di rispondere e sullo schermo non resta niente che spieghi perche': il
+     * contatore sarebbe sparito **proprio nel momento in cui serve**.
+     *
+     * 💡 Uno zero mostrato quando e' vero non e' la contraddizione che si
+     * stava evitando: li' e' l'informazione che dice cosa fare.
+     */
+    #[Test]
+    public function the_counter_comes_back_when_the_subscriber_runs_dry(): void
+    {
+        $this->aiFinta();
+
+        $this->alfa->update(['ai_monthly_calls_per_member' => 1]);
+
+        // Finche' la dotazione copre, niente contatore.
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/usage')
+            ->assertOk()
+            ->assertJsonPath('data.mostra_gettoni', false);
+
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
+
+        $this->comeIscritto()
+            ->getJson('/api/v1/ai/usage')
+            ->assertOk()
+            ->assertJsonPath('data.mostra_gettoni', true)
+            ->assertJsonPath('data.gettoni_disponibili', 0);
+    }
+
+    /**
      * ⚠️ E chi **non ha nessuna dotazione inclusa** lo vede comunque: lì i
      * gettoni comprati sono l'unica cosa fra lui e un `402`, e nasconderli
      * vorrebbe dire farlo restare a secco senza preavviso.

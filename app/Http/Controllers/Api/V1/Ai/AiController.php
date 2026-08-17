@@ -536,9 +536,20 @@ class AiController extends Controller
              * `null` per «illimitata», e `null ?? 0 === 0` avrebbe scambiato
              * l'illimitata per «nessuna dotazione» — cioe' avrebbe mostrato un
              * contatore proprio a chi non ne ha bisogno.
+             *
+             * ── 🚨 La terza condizione, e perche' non e' un di piu' ────────
+             *
+             * Senza `remaining() <= 0`, a un abbonato che ha finito la dotazione
+             * **e** i gettoni comprati il contatore **sparirebbe proprio nel
+             * momento in cui serve**: l'AI smette di rispondere e sullo schermo
+             * non c'e' niente che spieghi perche'.
+             *
+             * 💡 Uno zero mostrato **quando e' vero** non e' la contraddizione
+             * che si stava evitando: li' e' l'informazione che dice cosa fare.
              */
             'mostra_gettoni' => $this->portafoglio->saldo($utente) > 0
-                || ! app(PianoAttivo::class)->haLaAi($utente),
+                || ! app(PianoAttivo::class)->haLaAi($utente)
+                || ($this->quota->remaining($utente) ?? 1) <= 0,
 
             // 💡 Serve all'app per dire «illimitata» invece di un numero.
             'illimitata' => $this->quota->remaining($utente) === null,
