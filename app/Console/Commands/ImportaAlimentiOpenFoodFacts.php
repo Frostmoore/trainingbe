@@ -7,7 +7,6 @@ namespace App\Console\Commands;
 use App\Models\Food;
 use App\Services\Nutrition\Catalogo\AlimentoAmmissibile;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
-use App\Services\Nutrition\Catalogo\GerarchiaFonti;
 use Illuminate\Console\Command;
 
 /**
@@ -66,27 +65,28 @@ class ImportaAlimentiOpenFoodFacts extends Command
      * come li chiamiamo noi. Cambiano raramente ma cambiano, ed e' il motivo
      * per cui l'intestazione si legge invece di dare per scontata la posizione.
      */
-    /**
-     * Quante righe per volta.
+    /*
+     * \U0001F4A1 `GerarchiaFonti` non e' iniettata, ed e' voluto.
      *
-     * 💡 Mille e' il compromesso: una query da mille righe e' ancora ben
-     * dentro i limiti di MySQL (`max_allowed_packet`), e riduce le
-     * interrogazioni di tre ordini di grandezza rispetto a una per prodotto.
+     * La regola che serve qui e' una sola \u2014 «Open Food Facts non tocca le
+     * righe del CREA» \u2014 e chiederla al servizio riga per riga significava
+     * un'interrogazione al database per prodotto. \u26A0\uFE0F Le chiavi protette
+     * sono 832: si caricano una volta in un insieme in memoria, e il confronto
+     * costa niente.
+     *
+     * \U0001F6A8 Il giorno in cui si aggiungesse una fonte di rango superiore a `OFF`
+     * e molto piu' grande, questo insieme andrebbe ripensato \u2014 non il
+     * principio, la sua taglia. La gerarchia completa resta in `GerarchiaFonti`
+     * e la usa `CatalogoAlimenti`, dove i confronti sono uno alla volta davvero.
      */
-    private const BLOCCO = 1000;
-
-    private GerarchiaFonti $gerarchia;
-
     private const COLONNE = [
         'code', 'product_name', 'brands', 'quantity', 'countries_tags',
         'energy-kcal_100g', 'proteins_100g', 'carbohydrates_100g', 'fat_100g',
         'image_url', 'image_small_url',
     ];
 
-    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro, GerarchiaFonti $gerarchia): int
+    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro): int
     {
-        $this->gerarchia = $gerarchia;
-
         $percorso = $this->argument('file');
 
         if (! is_file($percorso)) {
@@ -143,8 +143,7 @@ class ImportaAlimentiOpenFoodFacts extends Command
         // **quando e' stata fatta l'importazione**, non il singolo prodotto.
         $adesso = now();
 
-        /** @var array<string, array<string, mixed>> $blocco */
-        $blocco = [];
+        $scrittura = new ScritturaABlocchi;
 
         $letti = $tenuti = $scartati = 0;
 
@@ -231,7 +230,7 @@ class ImportaAlimentiOpenFoodFacts extends Command
              * **prima** che il blocco parta, che e' lo stesso esito che dava la
              * scrittura una-per-volta.
              */
-            $blocco[$chiave] = [
+            $scrittura->aggiungi([
                 'chiave' => $chiave,
                 'nome' => mb_substr($nome, 0, 120),
                 'marca' => $marca,
@@ -248,13 +247,9 @@ class ImportaAlimentiOpenFoodFacts extends Command
                 'usi' => 0,
                 'created_at' => $adesso,
                 'updated_at' => $adesso,
-            ];
+            ]);
 
             $tenuti++;
-
-            if (count($blocco) >= self::BLOCCO) {
-                $this->scarica($blocco);
-            }
 
             if ($limite > 0 && $tenuti >= $limite) {
                 break;
@@ -263,7 +258,7 @@ class ImportaAlimentiOpenFoodFacts extends Command
 
         // ⚠️ L'ultimo blocco, quasi sempre incompleto: senza questa riga si
         // perderebbero fino a mille prodotti, in silenzio.
-        $this->scarica($blocco);
+        $scrittura->scarica();
 
         gzclose($flusso);
 
@@ -332,44 +327,5 @@ class ImportaAlimentiOpenFoodFacts extends Command
         }
 
         return mb_substr($valore, 0, 255);
-    }
-
-    /**
-     * Scrive un blocco e lo svuota.
-     *
-     * ── 🚨 Cosa si aggiorna, e cosa NON si tocca ──────────────────
-     *
-     * Sulla riga che esiste gia' si riscrivono i **dati** — nome, marca, macro,
-     * immagini, fonte. ⚠️ Non si tocca `usi`: e' il conteggio di quante volte
-     * le persone hanno scelto quell'alimento, e un'importazione non ha nessun
-     * diritto di azzerarlo. Sarebbe la classe di difetto che non fallisce e non
-     * si vede: i suggerimenti tornerebbero in ordine alfabetico e nessuno
-     * saprebbe perche'.
-     *
-     * 💡 `conferme` e `pubblico` invece si aggiornano di proposito: un
-     * alimento che prima era scritto da una persona sola, e che ora arriva da
-     * una fonte dichiarata, e' diventato pubblico davvero.
-     *
-     * @param  array<string, array<string, mixed>>  $blocco
-     */
-    private function scarica(array &$blocco): void
-    {
-        if ($blocco === []) {
-            return;
-        }
-
-        Food::query()->upsert(
-            array_values($blocco),
-            ['chiave'],
-            [
-                'nome', 'marca',
-                'kcal_100', 'protein_100', 'carbs_100', 'fat_100',
-                'basis', 'origine', 'fonte', 'note',
-                'codice_a_barre', 'immagine_url', 'immagine_piccola_url',
-                'pubblico', 'conferme', 'updated_at',
-            ],
-        );
-
-        $blocco = [];
     }
 }

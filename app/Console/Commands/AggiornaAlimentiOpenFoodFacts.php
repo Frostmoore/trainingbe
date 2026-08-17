@@ -7,8 +7,9 @@ namespace App\Console\Commands;
 use App\Models\Food;
 use App\Services\Nutrition\Catalogo\AlimentoAmmissibile;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
-use App\Services\Nutrition\Catalogo\GerarchiaFonti;
+use App\Services\Nutrition\Catalogo\ScritturaABlocchi;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -80,18 +81,45 @@ class AggiornaAlimentiOpenFoodFacts extends Command
      * contatto. Non e' burocrazia: e' come fanno a scrivere a qualcuno invece
      * di bloccare un indirizzo che si comporta male.
      */
-    private GerarchiaFonti $gerarchia;
-
+    /*
+     * \U0001F4A1 `GerarchiaFonti` non e' iniettata, ed e' voluto.
+     *
+     * La regola che serve qui e' una sola \u2014 «Open Food Facts non tocca le
+     * righe del CREA» \u2014 e chiederla al servizio riga per riga significava
+     * un'interrogazione al database per prodotto. \u26A0\uFE0F Le chiavi protette
+     * sono 832: si caricano una volta in un insieme in memoria, e il confronto
+     * costa niente.
+     *
+     * \U0001F6A8 Il giorno in cui si aggiungesse una fonte di rango superiore a `OFF`
+     * e molto piu' grande, questo insieme andrebbe ripensato \u2014 non il
+     * principio, la sua taglia. La gerarchia completa resta in `GerarchiaFonti`
+     * e la usa `CatalogoAlimenti`, dove i confronti sono uno alla volta davvero.
+     */
     private const AGENTE = 'TrainingCompanion/1.0 (https://training.riccardoronconi.it)';
 
-    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro, GerarchiaFonti $gerarchia): int
+    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro): int
     {
-        $this->gerarchia = $gerarchia;
-
         $daQuando = Cache::get(self::SEGNAPOSTO)
             ?? now()->subDays((int) $this->option('giorni'))->timestamp;
 
         $this->info('Prodotti modificati dopo il '.date('d/m/Y H:i', (int) $daQuando));
+
+        /*
+         * \U0001F6A8 **Le righe protette si caricano UNA volta, non una per prodotto.**
+         *
+         * La prima versione chiedeva al database, per ogni prodotto, «questa
+         * chiave e' gia' di una fonte superiore?». \u26A0\uFE0F Con il tetto di 20.000
+         * prodotti per esecuzione sono ventimila interrogazioni che si
+         * risparmiano con un insieme in memoria di 832 elementi.
+         */
+        $intoccabili = Food::query()
+            ->where('fonte', 'like', 'CREA:%')
+            ->pluck('chiave')
+            ->flip()
+            ->all();
+
+        $scrittura = new ScritturaABlocchi;
+        $adesso = now();
 
         $piuRecente = (int) $daQuando;
         $pagina = 1;
@@ -149,7 +177,9 @@ class AggiornaAlimentiOpenFoodFacts extends Command
 
                 $piuRecente = max($piuRecente, $modificato);
 
-                $this->salva($p, $chiavi, $filtro) ? $scritti++ : $scartati++;
+                $this->salva($p, $chiavi, $filtro, $scrittura, $intoccabili, $adesso)
+                    ? $scritti++
+                    : $scartati++;
             }
 
             if ($arrivatoAlGiaVisto) {
@@ -171,6 +201,10 @@ class AggiornaAlimentiOpenFoodFacts extends Command
             // questa e' arrivata.
             $this->warn('Raggiunto il tetto delle pagine: il recupero continuera\' alla prossima esecuzione.');
         }
+
+        // \u26A0\uFE0F Prima di tirare le somme: l'ultimo blocco e' quasi sempre
+        // incompleto, e senza questa riga si perderebbe in silenzio.
+        $scrittura->scarica();
 
         if ($arrivatoInFondo) {
             Cache::forever(self::SEGNAPOSTO, $piuRecente);
@@ -228,9 +262,18 @@ class AggiornaAlimentiOpenFoodFacts extends Command
         return is_array($prodotti) ? $prodotti : null;
     }
 
-    /** @param  array<string, mixed>  $p */
-    private function salva(array $p, ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro): bool
-    {
+    /**
+     * @param  array<string, mixed>  $p
+     * @param  array<string, int>  $intoccabili
+     */
+    private function salva(
+        array $p,
+        ChiaveAlimento $chiavi,
+        AlimentoAmmissibile $filtro,
+        ScritturaABlocchi $scrittura,
+        array $intoccabili,
+        Carbon $adesso,
+    ): bool {
         $nome = trim((string) ($p['product_name'] ?? ''));
 
         if (mb_strlen($nome) < 3) {
@@ -254,27 +297,30 @@ class AggiornaAlimentiOpenFoodFacts extends Command
 
         $chiave = $chiavi->da($nome, $marca);
 
-        if (! $this->gerarchia->puoScrivere(Food::query()->where('chiave', $chiave)->first(), GerarchiaFonti::RANGO_OFF)) {
+        // \U0001F6A8 Le uniche righe che Open Food Facts non puo' toccare, dall'insieme
+        // caricato una volta sola.
+        if (isset($intoccabili[$chiave])) {
             return false;
         }
 
-        Food::query()->updateOrCreate(
-            ['chiave' => $chiave],
-            [
-                'nome' => mb_substr($nome, 0, 120),
-                'marca' => $marca,
-                ...$per100,
-                'basis' => 'g',
-                'origine' => Food::ORIGINE_MANUALE,
-                'fonte' => 'OFF:'.($p['code'] ?? ''),
-                'note' => self::NOTA,
-                'codice_a_barre' => mb_substr((string) ($p['code'] ?? ''), 0, 20) ?: null,
-                'immagine_url' => $this->url((string) ($p['image_url'] ?? '')),
-                'immagine_piccola_url' => $this->url((string) ($p['image_small_url'] ?? '')),
-                'pubblico' => true,
-                'conferme' => Food::CONFERME_PER_PUBBLICARE,
-            ],
-        );
+        $scrittura->aggiungi([
+            'chiave' => $chiave,
+            'nome' => mb_substr($nome, 0, 120),
+            'marca' => $marca,
+            ...$per100,
+            'basis' => 'g',
+            'origine' => Food::ORIGINE_MANUALE,
+            'fonte' => 'OFF:'.($p['code'] ?? ''),
+            'note' => self::NOTA,
+            'codice_a_barre' => mb_substr((string) ($p['code'] ?? ''), 0, 20) ?: null,
+            'immagine_url' => $this->url((string) ($p['image_url'] ?? '')),
+            'immagine_piccola_url' => $this->url((string) ($p['image_small_url'] ?? '')),
+            'pubblico' => true,
+            'conferme' => Food::CONFERME_PER_PUBBLICARE,
+            'usi' => 0,
+            'created_at' => $adesso,
+            'updated_at' => $adesso,
+        ]);
 
         return true;
     }
