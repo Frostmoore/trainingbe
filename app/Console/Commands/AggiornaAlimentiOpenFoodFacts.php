@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\Food;
 use App\Services\Nutrition\Catalogo\AlimentoAmmissibile;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
+use App\Services\Nutrition\Catalogo\GerarchiaFonti;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -79,10 +80,14 @@ class AggiornaAlimentiOpenFoodFacts extends Command
      * contatto. Non e' burocrazia: e' come fanno a scrivere a qualcuno invece
      * di bloccare un indirizzo che si comporta male.
      */
+    private GerarchiaFonti $gerarchia;
+
     private const AGENTE = 'TrainingCompanion/1.0 (https://training.riccardoronconi.it)';
 
-    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro): int
+    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro, GerarchiaFonti $gerarchia): int
     {
+        $this->gerarchia = $gerarchia;
+
         $daQuando = Cache::get(self::SEGNAPOSTO)
             ?? now()->subDays((int) $this->option('giorni'))->timestamp;
 
@@ -247,8 +252,14 @@ class AggiornaAlimentiOpenFoodFacts extends Command
 
         $marca = $this->primaMarca((string) ($p['brands'] ?? ''));
 
+        $chiave = $chiavi->da($nome, $marca);
+
+        if (! $this->gerarchia->puoScrivere(Food::query()->where('chiave', $chiave)->first(), GerarchiaFonti::RANGO_OFF)) {
+            return false;
+        }
+
         Food::query()->updateOrCreate(
-            ['chiave' => $chiavi->da($nome, $marca)],
+            ['chiave' => $chiave],
             [
                 'nome' => mb_substr($nome, 0, 120),
                 'marca' => $marca,

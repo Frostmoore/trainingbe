@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Nutrition;
 
+use App\Models\Food;
 use App\Services\Nutrition\Catalogo\AlimentoAmmissibile;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
+use App\Services\Nutrition\Catalogo\GerarchiaFonti;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -169,6 +171,80 @@ class CatalogoAlimentiTest extends TestCase
 
         // 💡 Ma «pasta e fagioli» resta un alimento: e' nel catalogo CREA.
         $this->assertNull($filtro->motivoDelRifiuto('Pasta e fagioli', $macroValidi));
+    }
+
+    // ═══════════════════ la gerarchia delle fonti ═══════════════════
+
+    /**
+     * 🚨 **CREA → Open Food Facts → utenti**, e nessuno risale la china.
+     *
+     * ── Il difetto che ha reso necessaria la gerarchia ────────────────────
+     *
+     * Dopo la prima importazione completa le righe CREA erano scese da **832 a
+     * 700**: 132 alimenti misurati in laboratorio erano stati rimpiazzati da
+     * prodotti confezionati con lo stesso nome normalizzato. ⚠️
+     * `updateOrCreate` sulla chiave fa esattamente questo e non se ne lamenta:
+     * nessun errore, nessun avviso, solo dati peggiori al posto di dati
+     * migliori.
+     */
+    #[Test]
+    public function a_lower_source_never_overwrites_a_higher_one(): void
+    {
+        $g = new GerarchiaFonti;
+
+        $crea = new Food(['fonte' => 'CREA:000530', 'origine' => Food::ORIGINE_MANUALE]);
+        $off = new Food(['fonte' => 'OFF:8001234567890', 'origine' => Food::ORIGINE_MANUALE]);
+        $utente = new Food(['fonte' => null, 'origine' => Food::ORIGINE_MANUALE]);
+
+        // Nessuno tocca il CREA.
+        $this->assertFalse($g->puoScrivere($crea, GerarchiaFonti::RANGO_OFF));
+        $this->assertFalse($g->puoScrivere($crea, GerarchiaFonti::RANGO_UTENTE));
+
+        // Open Food Facts non tocca il CREA, ma copre l'utente.
+        $this->assertFalse($g->puoScrivere($off, GerarchiaFonti::RANGO_UTENTE));
+        $this->assertTrue($g->puoScrivere($utente, GerarchiaFonti::RANGO_OFF));
+
+        // E il CREA copre tutti e due.
+        $this->assertTrue($g->puoScrivere($off, GerarchiaFonti::RANGO_CREA));
+        $this->assertTrue($g->puoScrivere($utente, GerarchiaFonti::RANGO_CREA));
+    }
+
+    /** 💡 La stessa fonte che si riscrive e' un aggiornamento, non un conflitto. */
+    #[Test]
+    public function a_source_may_refresh_its_own_rows(): void
+    {
+        $g = new GerarchiaFonti;
+
+        $this->assertTrue($g->puoScrivere(new Food(['fonte' => 'CREA:000530']), GerarchiaFonti::RANGO_CREA));
+        $this->assertTrue($g->puoScrivere(new Food(['fonte' => 'OFF:8001234567890']), GerarchiaFonti::RANGO_OFF));
+    }
+
+    /**
+     * 🚨 **Fra due utenti vince chi c'era prima**, con una sola eccezione:
+     * una voce scritta a mano promuove una creata dall'AI.
+     *
+     * 💡 Una stima del modello e' un'ipotesi; un numero digitato e' qualcuno
+     * che ha letto l'etichetta. ⚠️ E succede **una volta sola**: dopo,
+     * `origine` e' `manuale` e nessuno promuove piu' niente.
+     */
+    #[Test]
+    public function between_two_users_the_first_one_wins_unless_it_was_the_ai(): void
+    {
+        $g = new GerarchiaFonti;
+
+        $daAi = new Food(['fonte' => null, 'origine' => Food::ORIGINE_AI]);
+        $aMano = new Food(['fonte' => null, 'origine' => Food::ORIGINE_MANUALE]);
+
+        $this->assertTrue($g->puoScrivere($daAi, GerarchiaFonti::RANGO_UTENTE, Food::ORIGINE_MANUALE));
+        $this->assertFalse($g->puoScrivere($aMano, GerarchiaFonti::RANGO_UTENTE, Food::ORIGINE_MANUALE));
+        $this->assertFalse($g->puoScrivere($aMano, GerarchiaFonti::RANGO_UTENTE, Food::ORIGINE_AI));
+    }
+
+    /** Un alimento che non c'e' ancora si scrive sempre. */
+    #[Test]
+    public function a_food_that_does_not_exist_yet_is_always_written(): void
+    {
+        $this->assertTrue((new GerarchiaFonti)->puoScrivere(null, GerarchiaFonti::RANGO_UTENTE));
     }
 
     // ═══ le tre correzioni imparate dalla prima importazione CREA ═══

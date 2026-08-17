@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\Food;
 use App\Services\Nutrition\Catalogo\AlimentoAmmissibile;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
+use App\Services\Nutrition\Catalogo\GerarchiaFonti;
 use Illuminate\Console\Command;
 
 /**
@@ -65,14 +66,18 @@ class ImportaAlimentiOpenFoodFacts extends Command
      * come li chiamiamo noi. Cambiano raramente ma cambiano, ed e' il motivo
      * per cui l'intestazione si legge invece di dare per scontata la posizione.
      */
+    private GerarchiaFonti $gerarchia;
+
     private const COLONNE = [
         'code', 'product_name', 'brands', 'quantity', 'countries_tags',
         'energy-kcal_100g', 'proteins_100g', 'carbohydrates_100g', 'fat_100g',
         'image_url', 'image_small_url',
     ];
 
-    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro): int
+    public function handle(ChiaveAlimento $chiavi, AlimentoAmmissibile $filtro, GerarchiaFonti $gerarchia): int
     {
+        $this->gerarchia = $gerarchia;
+
         $percorso = $this->argument('file');
 
         if (! is_file($percorso)) {
@@ -163,8 +168,16 @@ class ImportaAlimentiOpenFoodFacts extends Command
 
             $marca = $this->primaMarca($prendi('brands'));
 
+            $chiave = $chiavi->da($nome, $marca);
+
+            if (! $this->gerarchia->puoScrivere(Food::query()->where('chiave', $chiave)->first(), GerarchiaFonti::RANGO_OFF)) {
+                $scartati++;
+
+                continue;
+            }
+
             Food::query()->updateOrCreate(
-                ['chiave' => $chiavi->da($nome, $marca)],
+                ['chiave' => $chiave],
                 [
                     'nome' => mb_substr($nome, 0, 120),
                     'marca' => $marca,
