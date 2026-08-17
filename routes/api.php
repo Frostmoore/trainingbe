@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
@@ -270,6 +271,20 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('food-entries/{entry}', [DiaryController::class, 'update'])->whereNumber('entry');
         Route::delete('food-entries/{entry}', [DiaryController::class, 'destroy'])->whereNumber('entry');
         Route::post('food-entries/{entry}/favorite', [FoodFavoriteController::class, 'fromEntry'])->whereNumber('entry');
+
+        /*
+         * I suggerimenti mentre si scrive il nome di un alimento — Parte L.
+         *
+         * 🚨 Con un **limite di frequenza stretto**: parte a ogni tasto premuto
+         * (l'app aspetta un attimo, ma resta una richiesta ogni poche lettere),
+         * e senza freno un solo telefono con un campo di testo impazzito
+         * basterebbe a tenere occupato il server.
+         *
+         * 💡 Sessanta al minuto sono abbondanti per chi scrive davvero e
+         * strette per chiunque altro.
+         */
+        Route::get('foods/search', [CatalogoAlimentiController::class, 'search'])
+            ->middleware('throttle:60,1');
 
         Route::get('food-favorites', [FoodFavoriteController::class, 'index']);
         Route::post('food-favorites/meal', [FoodFavoriteController::class, 'storeMeal']);

@@ -8,8 +8,10 @@ use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Exceptions\MassaIncoerenteException;
 use App\Models\Concerns\BelongsToTenant;
+use App\Observers\FoodEntryObserver;
 use App\Services\Nutrition\FoodUnit;
 use App\Support\Tempo\GiornoLocale;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * quando mancano — vedi il boot — cosi' nessun chiamante puo' salvare una voce
  * senza il dato che serve alle somme.
  */
+#[ObservedBy(FoodEntryObserver::class)]
 class FoodEntry extends Model
 {
     use BelongsToTenant;
@@ -37,7 +40,7 @@ class FoodEntry extends Model
         'grams', 'qty', 'unit',
         'kcal', 'protein', 'carbs', 'fat',
         'kcal_100', 'protein_100', 'carbs_100', 'fat_100',
-        'source', 'ai_raw', 'nutrition_plan_id',
+        'source', 'ai_raw', 'nutrition_plan_id', 'food_id',
     ];
 
     protected function casts(): array
