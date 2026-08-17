@@ -66,6 +66,15 @@ class ImportaAlimentiOpenFoodFacts extends Command
      * come li chiamiamo noi. Cambiano raramente ma cambiano, ed e' il motivo
      * per cui l'intestazione si legge invece di dare per scontata la posizione.
      */
+    /**
+     * Quante righe per volta.
+     *
+     * 💡 Mille e' il compromesso: una query da mille righe e' ancora ben
+     * dentro i limiti di MySQL (`max_allowed_packet`), e riduce le
+     * interrogazioni di tre ordini di grandezza rispetto a una per prodotto.
+     */
+    private const BLOCCO = 1000;
+
     private GerarchiaFonti $gerarchia;
 
     private const COLONNE = [
@@ -119,6 +128,24 @@ class ImportaAlimentiOpenFoodFacts extends Command
         $limite = (int) $this->option('limite');
         $minNome = (int) $this->option('min-nome');
 
+        // 🚨 Le chiavi che Open Food Facts non puo' sovrascrivere, caricate
+        // una volta sola: sono quelle delle fonti di rango superiore.
+        $intoccabili = Food::query()
+            ->where('fonte', 'like', 'CREA:%')
+            ->pluck('chiave')
+            ->flip()
+            ->all();
+
+        $this->info(count($intoccabili).' righe protette da fonti superiori.');
+
+        // ⚠️ Un istante solo per tutta l'importazione: `now()` chiamato due
+        // milioni di volte e' lavoro sprecato, e le date servono a sapere
+        // **quando e' stata fatta l'importazione**, non il singolo prodotto.
+        $adesso = now();
+
+        /** @var array<string, array<string, mixed>> $blocco */
+        $blocco = [];
+
         $letti = $tenuti = $scartati = 0;
 
         while (($riga = fgetcsv($flusso, 0, "\t", '"', '\\')) !== false) {
@@ -170,36 +197,73 @@ class ImportaAlimentiOpenFoodFacts extends Command
 
             $chiave = $chiavi->da($nome, $marca);
 
-            if (! $this->gerarchia->puoScrivere(Food::query()->where('chiave', $chiave)->first(), GerarchiaFonti::RANGO_OFF)) {
+            /*
+             * 🚨 **L'unico controllo di gerarchia che serve qui, e sta in
+             * memoria.**
+             *
+             * Chiedere al database, riga per riga, «questa chiave e' gia' di
+             * qualcun altro?» significava **due interrogazioni per prodotto**:
+             * su due milioni di prodotti sono quattro milioni di viaggi, ed e'
+             * cio' che rendeva l'importazione lunga giorni invece di ore.
+             *
+             * 💡 Le uniche righe che Open Food Facts non puo' toccare sono
+             * quelle del CREA, e sono **832**: stanno in un insieme in memoria,
+             * e il confronto costa niente.
+             *
+             * ⚠️ Se un giorno si aggiungesse una fonte di rango superiore a
+             * `OFF` e piu' grande di qualche migliaio di righe, questo insieme
+             * andrebbe ripensato — non il principio, la sua taglia.
+             */
+            if (isset($intoccabili[$chiave])) {
                 $scartati++;
 
                 continue;
             }
 
-            Food::query()->updateOrCreate(
-                ['chiave' => $chiave],
-                [
-                    'nome' => mb_substr($nome, 0, 120),
-                    'marca' => $marca,
-                    ...$per100,
-                    'basis' => 'g',
-                    'origine' => Food::ORIGINE_MANUALE,
-                    'fonte' => 'OFF:'.$prendi('code'),
-                    'note' => self::NOTA,
-                    'codice_a_barre' => mb_substr($prendi('code'), 0, 20) ?: null,
-                    'immagine_url' => $this->url($prendi('image_url')),
-                    'immagine_piccola_url' => $this->url($prendi('image_small_url')),
-                    'pubblico' => true,
-                    'conferme' => Food::CONFERME_PER_PUBBLICARE,
-                ],
-            );
+            /*
+             * ⚠️ **Lo stesso file contiene la stessa chiave piu' volte.**
+             *
+             * Varianti di formato dello stesso prodotto — stesso nome, stessa
+             * marca, codici a barre diversi — finiscono sulla stessa chiave.
+             * 🚨 In una scrittura a blocchi, due righe con la stessa chiave nel
+             * **medesimo** `upsert` fanno fallire l'intera operazione: MySQL non
+             * sa quale delle due tenere. Qui l'ultima sovrascrive la precedente
+             * **prima** che il blocco parta, che e' lo stesso esito che dava la
+             * scrittura una-per-volta.
+             */
+            $blocco[$chiave] = [
+                'chiave' => $chiave,
+                'nome' => mb_substr($nome, 0, 120),
+                'marca' => $marca,
+                ...$per100,
+                'basis' => 'g',
+                'origine' => Food::ORIGINE_MANUALE,
+                'fonte' => 'OFF:'.$prendi('code'),
+                'note' => self::NOTA,
+                'codice_a_barre' => mb_substr($prendi('code'), 0, 20) ?: null,
+                'immagine_url' => $this->url($prendi('image_url')),
+                'immagine_piccola_url' => $this->url($prendi('image_small_url')),
+                'pubblico' => true,
+                'conferme' => Food::CONFERME_PER_PUBBLICARE,
+                'usi' => 0,
+                'created_at' => $adesso,
+                'updated_at' => $adesso,
+            ];
 
             $tenuti++;
+
+            if (count($blocco) >= self::BLOCCO) {
+                $this->scarica($blocco);
+            }
 
             if ($limite > 0 && $tenuti >= $limite) {
                 break;
             }
         }
+
+        // ⚠️ L'ultimo blocco, quasi sempre incompleto: senza questa riga si
+        // perderebbero fino a mille prodotti, in silenzio.
+        $this->scarica($blocco);
 
         gzclose($flusso);
 
@@ -268,5 +332,44 @@ class ImportaAlimentiOpenFoodFacts extends Command
         }
 
         return mb_substr($valore, 0, 255);
+    }
+
+    /**
+     * Scrive un blocco e lo svuota.
+     *
+     * ── 🚨 Cosa si aggiorna, e cosa NON si tocca ──────────────────
+     *
+     * Sulla riga che esiste gia' si riscrivono i **dati** — nome, marca, macro,
+     * immagini, fonte. ⚠️ Non si tocca `usi`: e' il conteggio di quante volte
+     * le persone hanno scelto quell'alimento, e un'importazione non ha nessun
+     * diritto di azzerarlo. Sarebbe la classe di difetto che non fallisce e non
+     * si vede: i suggerimenti tornerebbero in ordine alfabetico e nessuno
+     * saprebbe perche'.
+     *
+     * 💡 `conferme` e `pubblico` invece si aggiornano di proposito: un
+     * alimento che prima era scritto da una persona sola, e che ora arriva da
+     * una fonte dichiarata, e' diventato pubblico davvero.
+     *
+     * @param  array<string, array<string, mixed>>  $blocco
+     */
+    private function scarica(array &$blocco): void
+    {
+        if ($blocco === []) {
+            return;
+        }
+
+        Food::query()->upsert(
+            array_values($blocco),
+            ['chiave'],
+            [
+                'nome', 'marca',
+                'kcal_100', 'protein_100', 'carbs_100', 'fat_100',
+                'basis', 'origine', 'fonte', 'note',
+                'codice_a_barre', 'immagine_url', 'immagine_piccola_url',
+                'pubblico', 'conferme', 'updated_at',
+            ],
+        );
+
+        $blocco = [];
     }
 }
