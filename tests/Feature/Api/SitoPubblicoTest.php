@@ -309,6 +309,61 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
+     * 🚨 **Un taglio piu' grande non puo' costare di piu' a gettone.**
+     *
+     * ── Perche' e' un test e non un buon proposito ────────────────────
+     *
+     * ⚠️ Se il pacchetto da 2000 costasse, per gettone, piu' di quello da 100,
+     * chi fa la divisione — e qualcuno la fa sempre — comprerebbe venti
+     * pacchetti da cento. Il listino sembrerebbe una **trappola** invece di uno
+     * sconto, ed e' esattamente il genere di cosa che si racconta in giro.
+     *
+     * 💡 E' un'invariante facile da rompere senza accorgersene: basta
+     * ritoccare un prezzo solo, che e' proprio quello che si fa.
+     */
+    #[Test]
+    public function a_bigger_pack_never_costs_more_per_token(): void
+    {
+        $pacchetti = app(Listino::class)->pacchetti();
+
+        $this->assertGreaterThan(1, count($pacchetti), 'servono almeno due tagli per confrontarli');
+
+        $precedente = null;
+
+        foreach ($pacchetti as $p) {
+            $perGettone = $p['prezzo'] / $p['gettoni'];
+
+            if ($precedente !== null) {
+                $this->assertLessThan(
+                    $precedente['prezzo_per_gettone'],
+                    $perGettone,
+                    sprintf(
+                        'il taglio da %d costa %.2f centesimi a gettone, quello da %d ne costava %.2f',
+                        $p['gettoni'],
+                        $perGettone,
+                        $precedente['gettoni'],
+                        $precedente['prezzo_per_gettone'],
+                    ),
+                );
+            }
+
+            $precedente = ['gettoni' => $p['gettoni'], 'prezzo_per_gettone' => $perGettone];
+        }
+    }
+
+    /** 💡 E i tagli sono in ordine crescente: un elenco disordinato non si legge. */
+    #[Test]
+    public function the_packs_are_listed_from_smallest_to_biggest(): void
+    {
+        $gettoni = array_column(app(Listino::class)->pacchetti(), 'gettoni');
+
+        $ordinati = $gettoni;
+        sort($ordinati);
+
+        $this->assertSame($ordinati, $gettoni);
+    }
+
+    /**
      * 🚨 **Gli scaglioni sono progressivi, come le aliquote.**
      *
      * I primi 25 posti costano il prezzo pieno **anche a chi ne ha 300**.

@@ -93,14 +93,29 @@ return [
     /*
      * I pacchetti di gettoni.
      *
+     * ── 🚨 Il prezzo per gettone deve SCENDERE al crescere del taglio ──
+     *
+     *     100  →  2,50 €  =  2,50 centesimi a gettone
+     *     500  → 10,00 €  =  2,00 centesimi a gettone
+     *     2000 → 29,90 €  =  1,50 centesimi a gettone
+     *
+     * ⚠️ Se un taglio grande costasse **di piu'** a gettone di uno piccolo,
+     * chi fa la divisione — e qualcuno la fa sempre — comprerebbe venti
+     * pacchetti da cento. Il listino sembrerebbe una trappola invece di uno
+     * sconto, ed e' la cosa che si racconta. C'e' un test che lo verifica.
+     *
+     * 📌 Rivisti il 17/08/2026: erano 1,99 / 7,99 / 24,99, e il taglio da 500
+     * costava **quanto un mese di abbonamento**, che ne da' 300. Accostati sulla
+     * stessa pagina, erano un invito a non abbonarsi.
+     *
      * 📌 Vivono qui **provvisoriamente**: `H2.2` li sposta in `ai_credit_packs`,
      * dove potranno essere versionati (cambiare prezzo crea una riga nuova e
      * ritira la vecchia, invece di riscrivere il passato).
      */
     'pacchetti' => [
-        ['gettoni' => 100,  'prezzo_cent' => 199,  'nota' => 'per provare'],
-        ['gettoni' => 500,  'prezzo_cent' => 799,  'nota' => 'un mese in piu\''],
-        ['gettoni' => 2000, 'prezzo_cent' => 2499, 'nota' => 'il piu\' conveniente'],
+        ['gettoni' => 100,  'prezzo_cent' => 250,  'nota' => 'per provare'],
+        ['gettoni' => 500,  'prezzo_cent' => 1000, 'nota' => 'per chi la usa spesso'],
+        ['gettoni' => 2000, 'prezzo_cent' => 2990, 'nota' => 'il piu\' conveniente'],
     ],
 
     /** L'esempio mostrato sul sito: una palestra con questi posti accesi. */
