@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -40,7 +41,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 #[Fillable([
     'tenant_id', 'name', 'email', 'username', 'password', 'phone',
-    'avatar_path', 'locale', 'timezone', 'is_active',
+    'avatar_path', 'locale', 'timezone', 'comune_id', 'is_active',
 ])]
 // `is_super_admin` NON è fillable di proposito: si concede solo da seeder o da
 // console, mai per assegnazione di massa da una richiesta HTTP. Un campo del
@@ -401,6 +402,18 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     public function profile(): HasOne
     {
         return $this->hasOne(Profile::class);
+    }
+
+    /**
+     * La citta' dichiarata — M1.2. `null` finche' non la si sceglie, e resta
+     * legittimamente `null` per sempre se non la si vuole dire.
+     *
+     * ⚠️ **Non e' `BelongsToTenant`**: i comuni sono un dato pubblico condiviso
+     * da tutte le palestre, non una tabella per tenant.
+     */
+    public function comune(): BelongsTo
+    {
+        return $this->belongsTo(Comune::class);
     }
 
     /**

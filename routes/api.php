@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Account\CittaController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\RecoveryKeyController;
 use App\Http\Controllers\Api\V1\Account\TimezoneController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
+use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
@@ -50,6 +52,23 @@ Route::prefix('v1')->group(function (): void {
     // per provare codici palestra a tappeto.
     Route::get('branding/lookup', [BrandingController::class, 'lookup'])
         ->middleware('throttle:branding-lookup');
+
+    /*
+     * ── I comuni italiani — M1.2 ──────────────────────────────────────────
+     *
+     * 🚨 **Pubblica di proposito.** L'elenco dei comuni lo pubblica l'ISTAT e lo
+     * scarica chiunque: proteggerlo con l'autenticazione non proteggerebbe
+     * niente, e servirebbe solo a impedire al modulo di iscrizione sul sito di
+     * chiedere la citta' — che serve **prima** che esista un account.
+     *
+     * ⚠️ Il tetto c'e' lo stesso, ma per un motivo diverso dai dati: parte a
+     * ogni tasto premuto, quindi e' largo (60/minuto), e serve a non lasciare un
+     * endpoint pubblico senza limite.
+     */
+    Route::middleware('throttle:comuni')->group(function (): void {
+        Route::get('comuni', [ComuneController::class, 'index']);
+        Route::get('comuni/{comune}', [ComuneController::class, 'show']);
+    });
 
     Route::prefix('auth')->group(function (): void {
 
@@ -431,6 +450,21 @@ Route::prefix('v1')->group(function (): void {
         // `PUT` perché è idempotente: è lo stato del dispositivo, non una
         // modifica a qualcosa.
         Route::put('account/timezone', [TimezoneController::class, 'update']);
+
+        /*
+        | ── La citta' della persona (M1.2) ────────────────────────────────
+        |
+        | 🚨 Sta su `users` e non su `profiles`: `profiles` e' sotto consenso
+        | per dati sanitari (art. 9), e la citta' non lo e'. Metterla li'
+        | avrebbe voluto dire che chi revoca il consenso ai dati di salute
+        | perde anche il campo con cui trova una palestra.
+        |
+        | ⚠️ `PUT` e non `PATCH` perche' si deve poter **azzerare**: la citta'
+        | non e' obbligatoria e non lo diventera'. Con `PATCH`, «assente» e
+        | «vuoto» sarebbero indistinguibili.
+        */
+        Route::get('account/citta', [CittaController::class, 'show']);
+        Route::put('account/citta', [CittaController::class, 'update']);
 
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);

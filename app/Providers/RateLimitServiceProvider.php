@@ -56,6 +56,25 @@ class RateLimitServiceProvider extends ServiceProvider
         ]);
 
         /*
+        | Ricerca dei comuni (M1.2): parte **mentre si scrive**, quindi il limite
+        | va misurato su quello, non su un'azione deliberata.
+        |
+        | 💡 Larga di proposito: chi digita «bologna» in un campo con il
+        | completamento automatico manda cinque o sei richieste in pochi secondi,
+        | e un limite stretto trasformerebbe un campo che funziona in un campo
+        | che a meta' parola smette di rispondere.
+        |
+        | ⚠️ Serve lo stesso: l'endpoint e' pubblico, e senza tetto e' un modo
+        | comodo per tenere occupato il server a costo zero. Il tetto orario esiste
+        | per quello — 🚨 non per proteggere i dati, che sono pubblici (ISTAT) e
+        | scaricabili da chiunque dalla fonte originale.
+        */
+        RateLimiter::for('comuni', fn (Request $request): array => [
+            Limit::perMinute(60)->by($request->ip()),
+            Limit::perHour(600)->by($request->ip()),
+        ]);
+
+        /*
         | AI (B6.6 / B10.2): 20 chiamate all'ora **per utente**, non per IP.
         |
         | 🚨 Per utente e' obbligatorio qui, per il motivo opposto a quello del

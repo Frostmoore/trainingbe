@@ -83,9 +83,39 @@ return [
      * l'URL una volta.
      */
     'stripe' => [
-        'key' => env('STRIPE_PUBLIC_KEY'),
-        'secret' => env('STRIPE_SECRET_KEY'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        /*
+         * 🚨 **Le chiavi vere si usano SOLO in produzione.**
+         *
+         * Su questa macchina convivono due coppie di chiavi: quelle live e
+         * quelle di prova. ⚠️ Fino al 18/08 la configurazione leggeva
+         * `STRIPE_SECRET_KEY` e basta - cioe' **quella live**, anche in locale.
+         * Un flusso di pagamento scritto male avrebbe mosso soldi veri al primo
+         * tentativo, e nessuno se ne sarebbe accorto prima dell'estratto conto.
+         *
+         * 💡 Il verso della condizione conta: si parte dalle chiavi di prova
+         * e si passa a quelle vere **solo** dichiarando `APP_ENV=production`.
+         * Il contrario - live salvo eccezioni - sbaglierebbe in silenzio ogni
+         * volta che qualcuno dimentica una variabile.
+         *
+         * 📌 In locale `APP_ENV=local`, su staging `APP_ENV=staging`:
+         * entrambi prendono la sandbox, ed e' quello che serve.
+         */
+        'key' => env('APP_ENV') === 'production'
+            ? env('STRIPE_PUBLIC_KEY')
+            : env('STRIPE_STAGING_PUBLIC_KEY'),
+
+        'secret' => env('APP_ENV') === 'production'
+            ? env('STRIPE_SECRET_KEY')
+            : env('STRIPE_STAGING_SECRET_KEY'),
+
+        /*
+         * ⚠️ Il segreto dei webhook e' **diverso fra sandbox e produzione**:
+         * Stripe ne genera uno per ogni endpoint registrato, e quello della
+         * sandbox non verifica le firme di produzione.
+         */
+        'webhook_secret' => env('APP_ENV') === 'production'
+            ? env('STRIPE_WEBHOOK_SECRET')
+            : env('STRIPE_STAGING_WEBHOOK_SECRET'),
     ],
 
 ];
