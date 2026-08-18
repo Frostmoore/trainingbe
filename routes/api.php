@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\CittaController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
 use App\Http\Controllers\Api\V1\Account\RecoveryKeyController;
@@ -523,6 +524,20 @@ Route::prefix('v1')->group(function (): void {
         */
         Route::get('account/citta', [CittaController::class, 'show']);
         Route::put('account/citta', [CittaController::class, 'update']);
+
+        /*
+        | ── L'immagine del profilo (M7.2) ─────────────────────────────────
+        |
+        | 🚨 **È l'unica immagine di una persona che sta sul server**, e la
+        | ragione è che serve a farsi riconoscere da qualcun altro: un trainer
+        | deve vedere la faccia di chi gli scrive. ⚠️ Le foto dei **progressi**
+        | sono un'altra cosa e restano sul telefono (S5.4) — le rotte `photos`
+        | sono state cancellate apposta.
+        |
+        | 💡 La differenza in una riga: questa la mostri, quelle le nascondi.
+        */
+        Route::post('account/avatar', [AvatarController::class, 'store']);
+        Route::delete('account/avatar', [AvatarController::class, 'destroy']);
 
         Route::post('device-tokens', [DeviceTokenController::class, 'store']);
         Route::delete('device-tokens', [DeviceTokenController::class, 'destroy']);
