@@ -70,6 +70,27 @@ due informative, o una con due sezioni.
 | Registro di controllo (accessi, impersonazioni) | Sicurezza | Art. 6(1)(f) |
 | Conteggi di token AI | Quota e fatturazione | Art. 6(1)(b) · 💡 **conteggi, non contenuti** |
 | Dichiarazione di maggiore età e consensi, **con data e ora** | Prova ai sensi dell'art. 7(1) | Art. 6(1)(c) |
+| 🆕 **Il comune che indichi** | Farti trovare palestre e trainer vicino a te | Art. 6(1)(b) · 💡 **facoltativo**, si può togliere |
+| 🆕 **La foto del profilo**, se la carichi | Farti riconoscere da chi ti scrive | Art. 6(1)(a) — consenso, dato caricandola |
+| 🆕 Quali schede **sponsorizzate** hai visto, e quando | Fatturare la pubblicità a chi la compra | Art. 6(1)(f) — legittimo interesse |
+
+#### 🆕 Il comune, la foto e le schede sponsorizzate — cosa comporta
+
+**Il comune non è la tua posizione.** Non usiamo il GPS e non lo chiediamo: indichi tu un comune da
+un elenco, e serve solo a ordinare i risultati del catalogo. 💡 Puoi toglierlo quando vuoi, dal
+profilo: l'app continua a funzionare per intero, perdi solo l'ordinamento per vicinanza.
+
+**La foto del profilo è l'unica tua immagine che sta sui nostri server**, e la ragione è che serve a
+farti riconoscere da chi ti scrive. ⚠️ Le foto dei progressi sono un'altra cosa e restano sul tuo
+telefono (§3.2). Puoi togliere la foto quando vuoi.
+
+🚨 **Le schede sponsorizzate: cosa registriamo davvero.** Quando il catalogo ti mostra una scheda a
+pagamento, registriamo che *un* utente l'ha vista quel giorno — una volta al giorno per persona,
+anche se apri il catalogo dieci volte. Serve a fatturare a chi compra la pubblicità.
+
+⚠️ **Chi paga la pubblicità NON riceve il tuo nome, né sa che sei stato tu**: vede solo *quante
+persone* ha raggiunto. E il dettaglio si cancella dopo **tredici mesi** — restano solo gli importi,
+che non contengono nessun nome.
 
 ### 3.2 📱 Solo sul telefono — **non ci arrivano mai**
 
@@ -145,6 +166,9 @@ trainer o con un medico.
 | Messaggi cifrati | Restano, **illeggibili da chiunque** — vedi §4.3 |
 | Registro di controllo | ⚠️ **DA DECIDERE**: proposta **24 mesi** |
 | Conteggi di token | ⚠️ **DA DECIDERE**: proposta **fino alla fine dell'esercizio fiscale + 10 anni** (art. 2220 c.c.) |
+| 🆕 Comune indicato · foto del profilo | Finché li tieni: si tolgono in qualsiasi momento dal profilo |
+| 🆕 **Chi ha visto quali schede sponsorizzate** | **13 mesi**, poi si cancella. 💡 Coprono il confronto con lo stesso mese dell'anno prima, che è la forma più lontana che può prendere una contestazione su una fattura |
+| 🆕 Importi delle campagne pubblicitarie | Restano: **non contengono nessun nome** |
 
 ### 4.2 Presso Anthropic — **i numeri veri**
 

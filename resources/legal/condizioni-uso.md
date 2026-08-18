@@ -81,7 +81,41 @@ Il conteggio mensile considera il **numero massimo di posti attivi raggiunto nel
 palestra decide da sé quanto e se addebitare qualcosa ai propri iscritti, e ne risponde nei loro
 confronti.
 
-### 5.3 Pagamenti
+### 5.2-bis 📣 La pubblicità nel catalogo
+
+Palestre e trainer possono comparire **in cima** ai risultati del catalogo. Si paga **a
+visualizzazione**, non a canone.
+
+| | |
+|---|---|
+| **Cosa si paga** | ogni persona raggiunta |
+| **Quanto vale una persona** | 🚨 **una volta al giorno**, anche se apre il catalogo dieci volte |
+| **Chi non conta** | chi consulta il catalogo **senza un account**: quelle visite sono gratuite |
+| **Tetto di spesa** | 🚨 **obbligatorio**. Raggiunto il tetto la campagna si spegne da sola e riparte il mese dopo |
+| **Accendere e spegnere** | quando si vuole, dal proprio pannello |
+| **Il prezzo** | quello del **momento in cui la campagna è stata accesa**: un aumento di listino non tocca le campagne già in corso |
+
+🚨 **I risultati a pagamento sono etichettati «Sponsorizzato».** Chi cerca ha diritto di sapere cosa
+sta guardando, e non è una gentilezza: presentare a pagamento qualcosa che sembra un risultato di
+ricerca è pubblicità occulta.
+
+⚠️ **Chi compra la pubblicità non riceve nessun nome**: vede quante persone ha raggiunto, quanto ha
+speso e quanto gli resta. Non sa chi sono.
+
+### 5.3 🆕 La chat con chi non ti segue
+
+Chi **non** è coperto da un abbonamento — proprio o della propria palestra — può scrivere **tre
+messaggi** a una palestra o a un trainer che non lo segue. Poi la conversazione **resta leggibile**
+e non si scrive più.
+
+💡 **Il contatore non si ricarica col tempo**, e non è una furbizia: un limite che si azzera ogni
+mese diventa un'attesa, e chi vuole insistere aspetta il primo del mese. Si sblocca **iscrivendosi**
+a quella palestra o accettando l'invito di quel trainer — cioè quando il rapporto diventa vero.
+
+🚨 **Con chi ti segue già non c'è nessun limite, e non ci sarà mai**: il tuo trainer, i trainer della
+tua palestra. È il rapporto per cui questo servizio esiste.
+
+### 5.4 Pagamenti
 
 ⚠️ Alla data di questo aggiornamento **il pagamento automatico non è ancora attivo**: i crediti
 vengono accreditati manualmente. Le modalità saranno indicate qui quando saranno disponibili.
