@@ -92,7 +92,25 @@ class ProfiloPubblico extends Model
     public function destinatario(): ?User
     {
         if (! $this->ePalestra()) {
-            return $this->trainer;
+            /*
+             * 🚨 `withoutGlobalScopes()`, e senza sarebbe `null`.
+             *
+             * ⚠️ `User` usa `BelongsToTenant`: la relazione `trainer` viene
+             * filtrata dal tenant **corrente**, che qui e' quello di chi guarda
+             * il catalogo — un'altra palestra. Il trainer indipendente sta nel
+             * suo tenant personale, quindi la relazione non lo troverebbe.
+             *
+             * 🚨 Il guasto era muto ed esattamente quello gia' visto sul
+             * proprietario: la scheda risultava «non contattabile», e chi
+             * provava a scrivere riceveva un `409` senza capire perche'.
+             *
+             * 💡 Non e' un bypass dell'isolamento: `user_id` e' scritto su
+             * questa riga, e la scheda e' pubblica per definizione. Si sta
+             * risolvendo un identificativo che il catalogo mostra gia'.
+             */
+            return $this->user_id === null
+                ? null
+                : User::query()->withoutGlobalScopes()->find($this->user_id);
         }
 
         return User::query()

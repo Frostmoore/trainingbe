@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Chat;
 
+use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
 use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\ProfiloPubblico;
 use App\Models\User;
+use App\Services\Chat\CancelloDellaChat;
+use App\Services\Chat\LimiteDeiTreMessaggi;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -28,6 +32,11 @@ use Illuminate\Support\Facades\Gate;
  */
 class ConversationController extends Controller
 {
+    public function __construct(
+        private readonly CancelloDellaChat $cancello,
+        private readonly LimiteDeiTreMessaggi $limite,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $utente = $request->user();
@@ -129,26 +138,14 @@ class ConversationController extends Controller
         ]);
     }
 
-    /**
-     * Il rapporto fra i due capi di questo filo è stato sospeso? — F6.4.
+    /*
+     * 📌 `canaleChiuso()` **non sta piu' qui** — 18/08, M3.2.
      *
-     * ⚠️ Si guarda il **legame**, non l'utente: `users.is_active` chiuderebbe
-     * fuori quella persona dall'**app**, e una persona che paga anche un altro
-     * trainer si ritroverebbe l'account bloccato da un terzo.
-     *
-     * 💡 `withoutGlobalScopes()` sul pivot: il legame appartiene al tenant del
-     * trainer (F6.1), quindi letto dal contesto dell'**utente** — che ha un
-     * tenant personale suo — non si troverebbe. Non è un bypass: la coppia di
-     * id è già la chiave più stretta possibile.
+     * E' dentro `CancelloDellaChat`, insieme a tutte le altre condizioni che
+     * decidono se si puo' scrivere. ⚠️ Tenerne una copia qui avrebbe voluto dire
+     * due posti in cui cambiare la stessa regola, e la copia che nessuno
+     * rilegge e' sempre quella che sbaglia.
      */
-    private function canaleChiuso(Conversation $c): bool
-    {
-        return DB::table('trainer_member')
-            ->where('trainer_id', $c->trainer_id)
-            ->where('member_id', $c->member_id)
-            ->whereNotNull('disattivato_il')
-            ->exists();
-    }
 
     /**
      * Tutti i trainer della palestra di questa persona — F7.1.
@@ -216,26 +213,31 @@ class ConversationController extends Controller
         }
 
         /*
-         * 🚨 **Il canale chiuso — F6.4, decisione D5.**
+         * 🚨 **Il cancello, e da qui in poi e' l'unico** — M3.2.
          *
-         * Se il trainer ha disattivato questo utente, non si scrive più. ⚠️ È
-         * l'unico effetto della disattivazione, e da solo copre più di quanto
-         * sembri: dopo D11/D13 i piani viaggiano **dentro la chat**, quindi
-         * chiudere il canale chiude anche la consegna di piani nuovi.
+         * Copre il canale chiuso (F6.4, decisione D5), il limite dei tre
+         * messaggi (M4) e l'impersonazione. ⚠️ Prima queste regole stavano in
+         * tre punti diversi; ora la tabella §4.6 vive in `CancelloDellaChat` e
+         * **in nessun altro posto**, perche' tre copie della stessa regola sono
+         * tre modi di divergere.
          *
          * 💡 **403 e non 404**: la conversazione esiste e la persona ci sta
          * dentro — nascondere il filo la farebbe pensare a un guasto, mentre il
-         * fatto è che il rapporto è sospeso. E la storia resta leggibile: si
+         * fatto e' che non puo' scrivere. E la storia resta leggibile: si
          * chiude la scrittura, non l'archivio.
          *
          * 🚨 **Vale in entrambe le direzioni.** Chiudere solo la penna
-         * dell'utente lascerebbe il trainer libero di scrivere a qualcuno che
-         * non può rispondere, che è peggio del silenzio.
+         * dell'utente lascerebbe l'altro libero di scrivere a qualcuno che non
+         * puo' rispondere, che e' peggio del silenzio.
          */
-        if ($this->canaleChiuso($c)) {
+        $permesso = $this->cancello->puoScrivere($request->user(), $c);
+
+        if (! $permesso->consentito) {
             return response()->json([
-                'message' => __('Questa conversazione è stata chiusa.'),
-                'code' => 'conversation_closed',
+                'message' => $permesso->spiegazione,
+                'code' => $permesso->codice,
+                // 💡 L'app deve sapere **cosa offrire**, non solo che c'e' un no.
+                'permesso' => $permesso->perLApp(),
             ], 403);
         }
 
@@ -259,19 +261,51 @@ class ConversationController extends Controller
             'body' => ['required', 'string', 'min:1', 'max:8000'],
         ]);
 
-        $messaggio = $c->messages()->create([
-            'sender_id' => $request->user()->getKey(),
-            'envelope_version' => $dati['envelope_version'],
-            'nonce' => $dati['nonce'],
-            'body' => $dati['body'],
-        ]);
+        /*
+         * 🚨 **Messaggio e contatore nella STESSA transazione** — M4.2.
+         *
+         * ⚠️ Se il messaggio si salvasse e il contatore no, la persona avrebbe
+         * scritto senza consumare nulla e il limite diventerebbe un
+         * suggerimento. Al contrario — contatore aumentato e messaggio perso —
+         * avrebbe consumato senza scrivere, che e' peggio.
+         */
+        $messaggio = DB::transaction(function () use ($request, $c, $dati): Message {
+            $m = $c->messages()->create([
+                'sender_id' => $request->user()->getKey(),
+                'envelope_version' => $dati['envelope_version'],
+                'nonce' => $dati['nonce'],
+                'body' => $dati['body'],
+            ]);
+
+            $this->limite->consuma($request->user(), $c);
+
+            return $m;
+        });
 
         // 🚨 Dopo il salvataggio, non prima: se il broadcast fallisse — broker
         // giu', configurazione sbagliata — il messaggio deve comunque esistere.
         // L'app che fa polling lo troverebbe lo stesso.
         MessageSent::announce($messaggio);
 
-        return response()->json(['data' => $messaggio->toApiArray()], 201);
+        return response()->json([
+            'data' => $messaggio->toApiArray(),
+
+            /*
+             * 💡 Quanti ne restano **dopo** questo, cosi' l'app aggiorna il
+             * contatore senza una seconda chiamata — e dice «te ne resta uno»
+             * mentre la persona sta ancora guardando la schermata.
+             *
+             * 🚨 Si richiede **al cancello**, non a `LimiteDeiTreMessaggi`.
+             *
+             * ⚠️ Il limite conta i messaggi e basta: non sa niente di
+             * abbonamenti. Chiedendolo a lui, a un abbonato sarebbe stato
+             * risposto `2`, `1`, `0` — cioe' la risposta HTTP avrebbe **detto il
+             * contrario** del cancello, che lo lascia scrivere senza limite.
+             * L'app avrebbe mostrato un contatore che scende a zero e poi non
+             * succede niente. L'ha trovato un test.
+             */
+            'restanti' => $this->cancello->puoScrivere($request->user(), $c->fresh())->restanti,
+        ], 201);
     }
 
     /** Segna come letto tutto quello che ha scritto l'altro. */
@@ -325,7 +359,106 @@ class ConversationController extends Controller
 
         $c = Conversation::between($trainer, $membro);
 
+        /*
+         * 🚨 **M4.4 — diventare iscritti sblocca il filo che c'era gia'.**
+         *
+         * Se questi due si erano gia' scritti dal catalogo, la conversazione
+         * esiste ed e' di tipo `informazioni`, col limite dei tre. Ora sono
+         * collegati per davvero — `coppia()` l'ha appena verificato — e il
+         * limite non ha piu' senso.
+         *
+         * ⚠️ Senza questa riga la persona si iscriverebbe e **resterebbe
+         * bloccata** nella stessa conversazione, con la storia sotto gli occhi e
+         * la penna ferma: il difetto piu' irritante possibile, perche' capita
+         * esattamente a chi ha appena pagato.
+         *
+         * 💡 E il contatore non si azzera, cambia il tipo: quel numero dice
+         * quante volte quella persona ha provato prima di iscriversi.
+         */
+        $this->limite->sblocca($c);
+
         return response()->json(['data' => ['id' => $c->id]], 201);
+    }
+
+    /**
+     * Apre un filo **dal catalogo** — M3.2, `POST /conversations/informazioni`.
+     *
+     * ── 🚨 Si manda l'id della SCHEDA, non quello della persona ────────────
+     *
+     * ⚠️ Un `user_id` in ingresso vorrebbe dire che il catalogo deve pubblicare
+     * gli identificativi dei titolari di palestra — a chiunque, senza
+     * autenticazione. 💡 Mandando l'id della scheda, chi e' il destinatario lo
+     * decide **il server** (`ProfiloPubblico::destinatario()`), e nessun id di
+     * persona esce mai.
+     *
+     * 🚨 E i trainer **dipendenti** restano irraggiungibili senza bisogno di un
+     * controllo apposta: una scheda e' di una palestra o di un trainer
+     * indipendente, e un dipendente non ha una scheda da cui partire (§4.7).
+     */
+    public function informazioni(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            'profilo_id' => ['required', 'integer'],
+        ]);
+
+        $io = $request->user();
+
+        $scheda = ProfiloPubblico::query()->visibili()->find($dati['profilo_id']);
+
+        /*
+         * ⚠️ `404` anche per una scheda che esiste ma non e' pubblicata: un
+         * messaggio diverso direbbe a chi prova gli id quali palestre sono
+         * iscritte senza essersi pubblicate.
+         */
+        if ($scheda === null) {
+            return response()->json(['message' => __('Scheda non trovata.')], 404);
+        }
+
+        $destinatario = $scheda->destinatario();
+
+        if ($destinatario === null) {
+            return response()->json([
+                'message' => __('Questa scheda non e\' contattabile.'),
+                'code' => 'non_contattabile',
+            ], 409);
+        }
+
+        $permesso = $this->cancello->puoAprireInformazioni($io, $destinatario);
+
+        if (! $permesso->consentito) {
+            return response()->json([
+                'message' => $permesso->spiegazione,
+                'code' => $permesso->codice,
+                'permesso' => $permesso->perLApp(),
+            ], 403);
+        }
+
+        /*
+         * 🚨 Chi chiede e' il **member**, chi risponde e' il **trainer**.
+         *
+         * ⚠️ Non e' una convenzione arbitraria: `conversations` ha due colonne
+         * con quei nomi e tutto il resto del codice le legge cosi'. Invertirle
+         * per un filo di informazioni farebbe apparire la palestra come
+         * «iscritto» in ogni elenco.
+         */
+        $c = Conversation::between($destinatario, $io, TipoConversazione::Informazioni);
+
+        return response()->json(['data' => [
+            'id' => $c->id,
+            'tipo' => $c->tipo->value,
+            'con' => [
+                'nome' => $scheda->titolo,
+                'tipo' => $scheda->ePalestra() ? 'palestra' : 'trainer',
+            ],
+            /*
+             * 💡 M4.3: l'app deve poter dire quanti ne restano **prima** che la
+             * persona scriva, non dopo aver premuto invio.
+             *
+             * 🚨 Dal cancello e non dal limite: per un abbonato dev'essere
+             * `null` (nessun limite), e il limite da solo risponderebbe `3`.
+             */
+            'restanti' => $this->cancello->puoScrivere($io, $c)->restanti,
+        ]], 201);
     }
 
     // ───────────────────────── interni ─────────────────────────

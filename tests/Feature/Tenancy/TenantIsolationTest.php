@@ -31,6 +31,41 @@ class TenantIsolationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * 🚨 **Le eccezioni, e ognuna deve avere una ragione scritta QUI.**
+     *
+     * ── ⚠️ Perché un elenco, in un test che esiste per non averne ──────────
+     *
+     * Il valore di questo file è accorgersi da solo di un modello dimenticato.
+     * Un elenco di eccezioni è esattamente il modo in cui una guardia del genere
+     * smette di guardare: basta aggiungerci un nome quando dà fastidio.
+     *
+     * 💡 Quindi la regola è **una sola e severa**: si aggiunge un nome qui solo
+     * se la riga di spiegazione qui sotto regge da sola. Se la spiegazione è
+     * «per far passare il test», il modello va sistemato, non elencato.
+     *
+     * @var array<class-string, string>
+     */
+    private const ECCEZIONI_MOTIVATE = [
+        /*
+         * 🚨 `profili_pubblici` esiste **apposta** per essere visto da fuori.
+         *
+         * Il `TenantScope` filtra per la palestra di chi guarda: applicato qui,
+         * ogni palestra vedrebbe soltanto la propria scheda — cioè il catalogo
+         * pubblico non mostrerebbe niente a nessuno, che è l'unica cosa che
+         * quella tabella deve fare (M2).
+         *
+         * ⚠️ **L'isolamento qui lo fa `visibile`**, non lo scope: una scheda
+         * spenta non compare, e non c'è nessuna rete sotto. Ogni query che legge
+         * questa tabella per mostrarla a qualcuno **deve** filtrarlo, e c'è un
+         * test che lo verifica (`CatalogoPubblicoTest`).
+         *
+         * 💡 E non è un dato sensibile: sono il nome e la città di un'attività
+         * commerciale che ha **chiesto** di comparire.
+         */
+        \App\Models\ProfiloPubblico::class => 'Catalogo pubblico (M2): deve essere visibile fuori dal proprio tenant. Isolamento tramite `visibile`.',
+    ];
+
     private Tenant $alfa;
 
     private Tenant $beta;
@@ -77,6 +112,10 @@ class TenantIsolationTest extends TestCase
             $tabella = $model->getTable();
 
             if (! Schema::hasTable($tabella) || ! Schema::hasColumn($tabella, 'tenant_id')) {
+                continue;
+            }
+
+            if (array_key_exists($classe, self::ECCEZIONI_MOTIVATE)) {
                 continue;
             }
 
@@ -161,6 +200,10 @@ class TenantIsolationTest extends TestCase
             $tabella = $model->getTable();
 
             if (! Schema::hasTable($tabella) || ! Schema::hasColumn($tabella, 'tenant_id')) {
+                continue;
+            }
+
+            if (array_key_exists($classe, self::ECCEZIONI_MOTIVATE)) {
                 continue;
             }
 
@@ -324,6 +367,42 @@ class TenantIsolationTest extends TestCase
         // /god girano legittimamente senza palestra. La sicurezza sta nel fatto
         // che ogni richiesta HTTP autenticata imposta sempre il contesto.
         $this->assertSame(2, $this->context()->runWithoutTenant(fn () => User::count()));
+    }
+
+    /**
+     * 🚨 **La guardia sulla guardia: l'elenco delle eccezioni non deve marcire.**
+     *
+     * ── Perché serve ────────────────────────────────────────────────────────
+     *
+     * Un elenco di eccezioni è il punto debole di ogni controllo automatico:
+     * ⚠️ una voce che resta lì dopo che il modello è stato rinominato, o dopo
+     * che ha smesso di avere `tenant_id`, non fa rumore — semplicemente smette
+     * di escludere qualcosa e nessuno se ne accorge. E se un giorno un modello
+     * nuovo prendesse per caso quel nome, entrerebbe esente senza che nessuno
+     * l'abbia deciso.
+     *
+     * 💡 Quindi ogni eccezione deve **esistere**, **avere davvero `tenant_id`**
+     * (altrimenti è inutile e va tolta) e portare una spiegazione non vuota.
+     */
+    #[Test]
+    public function ogni_eccezione_all_isolamento_e_ancora_giustificata(): void
+    {
+        foreach (self::ECCEZIONI_MOTIVATE as $classe => $perche) {
+            $this->assertTrue(
+                class_exists($classe),
+                "L'eccezione {$classe} non esiste più: va tolta dall'elenco.",
+            );
+
+            $tabella = (new $classe)->getTable();
+
+            $this->assertTrue(
+                Schema::hasTable($tabella) && Schema::hasColumn($tabella, 'tenant_id'),
+                "{$classe} è elencata come eccezione ma {$tabella} non ha `tenant_id`: "
+                .'l\'eccezione non serve a niente e va tolta.',
+            );
+
+            $this->assertNotSame('', trim($perche), "L'eccezione {$classe} non ha una ragione scritta.");
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────

@@ -433,6 +433,21 @@ Route::prefix('v1')->group(function (): void {
         // apre, e su rete mobile capita.
         Route::get('conversations', [ConversationController::class, 'index']);
         Route::post('conversations', [ConversationController::class, 'open']);
+
+        /*
+         * 🚨 Apre un filo **dal catalogo** — M3.2.
+         *
+         * Vuole `profilo_id`, cioe' l'id della **scheda**, non quello della
+         * persona: chi sia il destinatario lo decide il server. ⚠️ Un `user_id`
+         * in ingresso avrebbe voluto dire pubblicare nel catalogo gli
+         * identificativi di tutti i titolari di palestra.
+         *
+         * 💡 Sotto `throttle:catalogo`: e' il punto in cui un elenco pubblico
+         * diventa la possibilita' di scrivere a degli sconosciuti, e va tenuto
+         * piu' stretto delle altre rotte della chat.
+         */
+        Route::post('conversations/informazioni', [ConversationController::class, 'informazioni'])
+            ->middleware('throttle:catalogo');
         Route::get('conversations/contacts', [ConversationController::class, 'contacts']);
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');

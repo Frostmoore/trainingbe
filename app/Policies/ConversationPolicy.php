@@ -117,8 +117,28 @@ class ConversationPolicy
             return false;
         }
 
-        return $conversazione->includes($utente)
-            && $conversazione->tenant_id === $utente->tenant_id;
+        if (! $conversazione->includes($utente)) {
+            return false;
+        }
+
+        /*
+         * 🚨 **`tenant_id` nullo = filo fra due palestre** (M3), e li' il
+         * confronto sui tenant non si puo' fare: i due capi appartengono per
+         * definizione a tenant diversi.
+         *
+         * ⚠️ Non e' un allentamento del controllo, ed e' importante capire
+         * perche': il controllo vero e' `includes()`, qui sopra, che confronta i
+         * partecipanti con **l'id di chi chiede**. Indovinare l'id di una
+         * conversazione non serve a niente — bisogna comunque *essere* uno dei
+         * due. Il confronto sui tenant e' una seconda cintura contro gli id
+         * progressivi globali, e per un filo che attraversa due palestre e'
+         * semplicemente la misura sbagliata.
+         *
+         * 💡 E resta stretta dove serve: per tutte le conversazioni normali
+         * (`tenant_id` valorizzato) il controllo e' identico a prima.
+         */
+        return $conversazione->tenant_id === null
+            || $conversazione->tenant_id === $utente->tenant_id;
     }
 
     /**

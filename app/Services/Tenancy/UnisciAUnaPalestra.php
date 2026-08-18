@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services\Tenancy;
 
 use App\Enums\TenantStatus;
+use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
+use App\Models\Conversation;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -134,6 +136,8 @@ class UnisciAUnaPalestra
 
             $this->rifaiIRuoli($utente, $vecchio, $palestra);
 
+            $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
+
             /*
              * ⚠️ **Il tenant personale si cancella logicamente, non davvero.**
              *
@@ -191,6 +195,60 @@ class UnisciAUnaPalestra
 
             return $spostate;
         });
+    }
+
+    /**
+     * 🚨 **Iscriversi sblocca le conversazioni aperte dal catalogo** — M4.4.
+     *
+     * ── Perche' sta qui e non in `open()` ──────────────────────────────────
+     *
+     * Perche' **questo** e' il momento in cui una persona «diventa iscritta».
+     * ⚠️ Averlo messo solo dove si apre una chat sarebbe stato il posto
+     * sbagliato: chi ha scritto a una palestra dal catalogo e poi si iscrive non
+     * riapre niente — apre la conversazione che ha gia', e la troverebbe **con
+     * la penna ferma**. E' il difetto piu' irritante possibile, perche' capita
+     * esattamente a chi ha appena pagato.
+     *
+     * ── ⚠️ Solo i fili con gente di QUESTA palestra ────────────────────────
+     *
+     * Iscriversi da Olimpo non sblocca la conversazione aperta con Ares. 🚨
+     * Sbloccarle tutte vorrebbe dire che iscriversi da qualunque parte regala
+     * messaggi illimitati verso chiunque — cioe' che il limite si aggira
+     * iscrivendosi alla palestra piu' economica.
+     *
+     * 💡 Il contatore **non si azzera**: cambia il tipo. Quel numero dice
+     * quante volte quella persona ha provato prima di iscriversi.
+     */
+    private function sbloccaLeConversazioniConLaPalestra(User $utente, Tenant $palestra): void
+    {
+        /*
+         * 🚨 **`whereKeyNot($utente)`, e senza questa riga il limite si aggira.**
+         *
+         * ⚠️ Questo metodo gira **dopo** che `users.tenant_id` e' stato
+         * spostato: la persona che si sta iscrivendo e' gia' dentro l'elenco
+         * della palestra. Senza escluderla, `member_id IN (…)` combacia con
+         * **ogni** suo filo — anche quelli con palestre diverse — e iscriversi
+         * alla palestra piu' economica sbloccherebbe la scrittura illimitata
+         * verso chiunque.
+         *
+         * 💡 L'ha trovato un test: `iscriversi_NON_sblocca_i_fili_con_ALTRE_palestre`.
+         */
+        $dellaPalestra = User::withoutGlobalScopes()
+            ->where('tenant_id', $palestra->getKey())
+            ->whereKeyNot($utente->getKey())
+            ->pluck('id');
+
+        if ($dellaPalestra->isEmpty()) {
+            return;
+        }
+
+        Conversation::withoutGlobalScopes()
+            ->where('tipo', TipoConversazione::Informazioni->value)
+            ->forUser($utente)
+            ->where(fn ($q) => $q
+                ->whereIn('trainer_id', $dellaPalestra)
+                ->orWhereIn('member_id', $dellaPalestra))
+            ->update(['tipo' => TipoConversazione::Iscritto->value]);
     }
 
     /**

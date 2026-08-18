@@ -4,24 +4,74 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Models\Concerns\BelongsToTenant;
+use App\Enums\TipoConversazione;
+use App\Models\Concerns\BelongsToTenantOrGlobal;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Il filo di conversazione fra un trainer e un iscritto — B8.1.
+ * Il filo di conversazione fra due persone — B8.1, esteso in M3/M4.
+ *
+ * ── 🚨 Perche' dal 18/08 usa `BelongsToTenantOrGlobal` ─────────────────────
+ *
+ * Perche' una conversazione **puo' attraversare due palestre**: dal catalogo,
+ * qualcuno del tenant A scrive al proprietario del tenant B. ⚠️ Con
+ * `BelongsToTenant` uno dei due non l'avrebbe mai vista — il global scope
+ * l'avrebbe filtrata via — e non ci sarebbe stato nessun errore: il messaggio
+ * scritto, e il destinatario che non lo trova.
+ *
+ * 💡 `tenant_id = NULL` vuol dire **«di nessuna palestra»**, visibile in ogni
+ * contesto. E' lo stesso schema di `exercises` e `media`.
+ *
+ * 🚨 **E non e' un buco nell'isolamento.** Il controllo vero su una
+ * conversazione non e' mai stato il tenant: e' `includes()`, che confronta i due
+ * partecipanti con l'id di **chi chiede**. Indovinare l'id di una conversazione
+ * non serve a niente, perche' bisogna comunque *essere* uno dei due. Il tenant
+ * era una seconda cintura, e per i fili fra due palestre e' la misura sbagliata.
  */
 class Conversation extends Model
 {
-    use BelongsToTenant;
+    use BelongsToTenantOrGlobal;
 
-    protected $fillable = ['tenant_id', 'trainer_id', 'member_id', 'last_message_at'];
+    protected $fillable = ['tenant_id', 'trainer_id', 'member_id', 'tipo', 'messaggi_di', 'last_message_at'];
 
     protected function casts(): array
     {
-        return ['last_message_at' => 'datetime'];
+        return [
+            'last_message_at' => 'datetime',
+            'tipo' => TipoConversazione::class,
+            'messaggi_di' => 'array',
+        ];
+    }
+
+    /**
+     * 🚨 **Una conversazione di tipo `informazioni` non appartiene a nessuna
+     * palestra, e va imposto qui.**
+     *
+     * ⚠️ `BelongsToTenantOrGlobal` riempie `tenant_id` dal contesto quando e'
+     * nullo — che e' giusto per tutto il resto e sbagliato per questi fili: chi
+     * scrive dal catalogo ha un contesto (la **sua** palestra), e la
+     * conversazione finirebbe assegnata a un tenant che non c'entra niente,
+     * rendendola di nuovo invisibile all'altro capo.
+     *
+     * 💡 Questo ascoltatore si registra **dopo** quello del trait (`booted()`
+     * gira in fondo a `boot()`), quindi vince.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $c): void {
+            if ($c->tipo === TipoConversazione::Informazioni) {
+                $c->tenant_id = null;
+            }
+        });
+    }
+
+    /** Se e' un filo nato dal catalogo, e quindi soggetto al limite dei tre. */
+    public function eDiInformazioni(): bool
+    {
+        return $this->tipo === TipoConversazione::Informazioni;
     }
 
     public function trainer(): BelongsTo
@@ -66,11 +116,26 @@ class Conversation extends Model
      * lenta creerebbero altrimenti due thread paralleli, e i due si
      * scriverebbero in stanze diverse senza capire perche'.
      */
-    public static function between(User $trainer, User $membro): self
+    public static function between(User $trainer, User $membro, TipoConversazione $tipo = TipoConversazione::Iscritto): self
     {
+        /*
+         * ⚠️ **Il tipo NON entra nella chiave di ricerca**, ed e' deliberato.
+         *
+         * Fra due persone c'e' **un filo solo**: se qualcuno ha scritto a una
+         * palestra dal catalogo e poi si e' iscritto, la conversazione dev'essere
+         * la stessa — con la storia che continua, non una seconda stanza vuota.
+         *
+         * 🚨 E' anche la meta' del meccanismo di M4.4: diventare iscritti
+         * **sblocca la conversazione esistente** invece di aprirne un'altra.
+         */
         return static::firstOrCreate(
             ['trainer_id' => $trainer->getKey(), 'member_id' => $membro->getKey()],
-            ['tenant_id' => $membro->tenant_id],
+            [
+                'tipo' => $tipo,
+                // 💡 Per un filo di informazioni resta `null` comunque: ci pensa
+                // l'ascoltatore in `booted()`.
+                'tenant_id' => $membro->tenant_id,
+            ],
         );
     }
 
