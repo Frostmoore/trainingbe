@@ -75,6 +75,24 @@ class RateLimitServiceProvider extends ServiceProvider
         ]);
 
         /*
+        | Il catalogo (M2.4): pubblico, e piu' stretto della ricerca dei comuni.
+        |
+        | ⚠️ La differenza e' cosa restituisce. I comuni sono un elenco che
+        | chiunque scarica dall'ISTAT; il catalogo e' **l'elenco dei nostri
+        | clienti** — chi sono, dove stanno, come si presentano. 🚨 E' un dato
+        | commerciale, e un endpoint pubblico senza freno e' il modo piu' comodo
+        | per copiarselo tutto.
+        |
+        | 💡 Trenta al minuto restano larghi per una persona che cerca (anche
+        | scrivendo nel campo), e stretti per chi vuole scaricare tutto: con
+        | `limite` a 50 servirebbero ore per una copia che comunque si nota.
+        */
+        RateLimiter::for('catalogo', fn (Request $request): array => [
+            Limit::perMinute(30)->by($request->ip()),
+            Limit::perHour(300)->by($request->ip()),
+        ]);
+
+        /*
         | AI (B6.6 / B10.2): 20 chiamate all'ora **per utente**, non per IP.
         |
         | 🚨 Per utente e' obbligatorio qui, per il motivo opposto a quello del

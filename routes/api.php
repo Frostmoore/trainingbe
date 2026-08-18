@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
+use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -68,6 +69,33 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('throttle:comuni')->group(function (): void {
         Route::get('comuni', [ComuneController::class, 'index']);
         Route::get('comuni/{comune}', [ComuneController::class, 'show']);
+    });
+
+    /*
+     * ── Il catalogo di palestre e trainer — M2.4 ──────────────────────────
+     *
+     * 🚨 **Aperto a tutti, e non e' una svista di configurazione.**
+     * *(correzione del committente, 18/08)*. Chiuderlo agli abbonati lo
+     * nasconderebbe a tutti quelli che non sono ancora clienti — cioe' alle
+     * persone che deve raggiungere — e ridurrebbe il pubblico di chi paga la
+     * pubblicita' ai soli abbonati, che sono gia' dentro.
+     *
+     * 💡 L'abbonamento vende **un'altra cosa**: scrivere senza limite a chi non
+     * ti segue. Quello lo decide `CancelloDellaChat` (M3), non queste rotte.
+     *
+     * 🚨 **Fuori da `auth:sanctum`, e per questo il controller chiede il guard
+     * `sanctum` a mano.** Il guard predefinito e' `web` (sessione con cookie):
+     * `$request->user()` risponderebbe `null` anche a un'app autenticata con un
+     * token `Bearer`. ⚠️ Il catalogo avrebbe funzionato lo stesso — senza mai
+     * ordinare per vicinanza, e senza dirlo a nessuno.
+     *
+     * 💡 Chi e' autenticato ottiene quindi **un catalogo migliore** (per
+     * distanza dalla propria citta'); chi non lo e' lo riceve in ordine
+     * alfabetico. Meno utile, ma non chiuso.
+     */
+    Route::middleware('throttle:catalogo')->group(function (): void {
+        Route::get('catalogo', [CatalogoController::class, 'index']);
+        Route::get('catalogo/{profilo}', [CatalogoController::class, 'show']);
     });
 
     Route::prefix('auth')->group(function (): void {
