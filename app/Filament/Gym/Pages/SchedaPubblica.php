@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Pages;
 
+use App\Models\Campagna;
 use App\Models\Comune;
 use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
@@ -86,6 +87,8 @@ class SchedaPubblica extends Page
     {
         $scheda = $this->scheda();
 
+        $campagna = $this->campagna();
+
         $this->form->fill([
             'comune_id' => $scheda?->comune_id ?? auth()->user()?->comune_id,
             'titolo' => $scheda?->titolo ?? ($this->eUnTrainerIndipendente()
@@ -93,6 +96,10 @@ class SchedaPubblica extends Page
                 : $this->palestra()?->name),
             'descrizione' => $scheda?->descrizione,
             'visibile' => $scheda?->visibile ?? false,
+            'campagna_attiva' => $campagna?->attiva ?? false,
+            'budget_mensile_euro' => $campagna !== null
+                ? $campagna->budget_mensile_cent / 100
+                : $this->budgetMinimoEuro(),
         ]);
     }
 
@@ -141,6 +148,46 @@ class SchedaPubblica extends Page
                             ->helperText('Cosa offri, gli orari, quello che ti distingue.'),
                     ]),
 
+                /*
+                 * 📣 La campagna — M5.6 e M5.7.
+                 *
+                 * 💡 Sta nella **stessa pagina** della scheda invece che in una
+                 * sua: chi decide di farsi pubblicita' sta guardando come si
+                 * presenta, e sono la stessa decisione commerciale vista da due
+                 * lati. ⚠️ Una pagina a parte avrebbe voluto dire che si puo'
+                 * accendere una campagna senza mai guardare la scheda che
+                 * promuove.
+                 */
+                Section::make('Farti trovare per primo')
+                    ->description($this->descrizioneDellaCampagna())
+                    ->columns(2)
+                    ->schema([
+                        Toggle::make('campagna_attiva')
+                            ->label('Campagna attiva')
+                            ->helperText('Puoi accenderla e spegnerla quando vuoi.')
+                            ->columnSpanFull(),
+
+                        /*
+                         * 🚨 **Il tetto di spesa e' obbligatorio, non un'opzione.**
+                         *
+                         * ⚠️ Senza, un pagamento a evento e' un modo per mandare
+                         * a qualcuno una fattura da quattromila euro per un
+                         * difetto nostro. E' come vanno male tutti i sistemi a
+                         * consumo, e la prima volta che succede si perde il
+                         * cliente e si ha torto.
+                         */
+                        TextInput::make('budget_mensile_euro')
+                            ->label('Tetto di spesa mensile')
+                            ->numeric()
+                            ->prefix('€')
+                            ->minValue($this->budgetMinimoEuro())
+                            ->required(fn (callable $get): bool => (bool) $get('campagna_attiva'))
+                            ->helperText(
+                                'Quando lo raggiungi la campagna si spegne da sola, e riparte il mese '
+                                .'prossimo. Minimo '.$this->budgetMinimoEuro().' €.'
+                            ),
+                    ]),
+
                 Section::make('Pubblicazione')
                     ->schema([
                         /*
@@ -183,6 +230,8 @@ class SchedaPubblica extends Page
 
         $this->autorizza();
 
+        $campagna = $this->salvaLaCampagna($chiave, $dati);
+
         ProfiloPubblico::updateOrCreate(
             $chiave,
             [
@@ -190,6 +239,7 @@ class SchedaPubblica extends Page
                 'titolo' => $dati['titolo'],
                 'descrizione' => $dati['descrizione'] ?? null,
                 'visibile' => (bool) ($dati['visibile'] ?? false),
+                'campagna_id' => $campagna?->getKey(),
             ],
         );
 
@@ -241,6 +291,111 @@ class SchedaPubblica extends Page
     private function palestra(): ?Tenant
     {
         return app(TenantContext::class)->get();
+    }
+
+    private function campagna(): ?Campagna
+    {
+        $chiave = $this->chiaveDellaScheda();
+
+        return $chiave === null ? null : Campagna::where($chiave)->first();
+    }
+
+    private function budgetMinimoEuro(): int
+    {
+        return (int) (config('listino.pubblicita.budget_minimo_cent', 1000) / 100);
+    }
+
+    /**
+     * Crea o aggiorna la campagna.
+     *
+     * 🚨 **Il costo si fotografa all'attivazione e non si tocca piu'.**
+     *
+     * ⚠️ Se lo leggessimo dalla configurazione a ogni conteggio, un aumento di
+     * listino cambierebbe il prezzo di una campagna **gia' in corso** — cioe' di
+     * qualcuno che ha accettato un'altra cifra. E' il genere di cosa per cui si
+     * perde un cliente e si ha torto.
+     *
+     * 💡 `updateOrCreate` con `costo_visualizzazione_cent` fra i valori di
+     * **creazione** e non di aggiornamento: chi c'e' gia' si tiene il suo.
+     *
+     * @param  array<string, int>  $chiave
+     * @param  array<string, mixed>  $dati
+     */
+    private function salvaLaCampagna(array $chiave, array $dati): ?Campagna
+    {
+        $attiva = (bool) ($dati['campagna_attiva'] ?? false);
+        $esistente = Campagna::where($chiave)->first();
+
+        if (! $attiva && $esistente === null) {
+            // 💡 Non si crea una campagna spenta che nessuno ha chiesto.
+            return null;
+        }
+
+        $budgetCent = (int) round(((float) ($dati['budget_mensile_euro'] ?? 0)) * 100);
+        $budgetCent = max($budgetCent, (int) config('listino.pubblicita.budget_minimo_cent', 1000));
+
+        $campagna = $esistente ?? new Campagna($chiave);
+
+        $campagna->fill([
+            'attiva' => $attiva,
+            'budget_mensile_cent' => $budgetCent,
+        ]);
+
+        if ($campagna->costo_visualizzazione_cent === null) {
+            $campagna->costo_visualizzazione_cent = (int) config('listino.pubblicita.costo_visualizzazione_cent', 2);
+        }
+
+        /*
+         * 💡 Riaccendere dopo un esaurimento cancella la data: e' la risposta a
+         * «perche' non compaio piu'», e da adesso quella risposta non vale piu'.
+         *
+         * ⚠️ **Non azzera lo speso**: chi riaccende nello stesso mese riparte da
+         * dov'era, altrimenti alzare il tetto e riaccendere sarebbe un modo per
+         * spendere due volte il budget dello stesso mese.
+         */
+        if ($attiva) {
+            $campagna->esaurita_il = null;
+        }
+
+        $campagna->save();
+
+        return $campagna;
+    }
+
+    /** 💡 Il pannello di controllo di chi paga a consumo: §4.3.4 del piano. */
+    private function descrizioneDellaCampagna(): string
+    {
+        $costo = number_format(
+            (int) config('listino.pubblicita.costo_visualizzazione_cent', 2) / 100,
+            2,
+            ',',
+            '.',
+        );
+
+        $base = "Compari in cima ai risultati, con l'etichetta «Sponsorizzato». "
+            ."Paghi {$costo} € ogni persona che ti vede — una volta al giorno per persona, "
+            .'anche se apre il catalogo dieci volte.';
+
+        $campagna = $this->campagna();
+
+        if ($campagna === null) {
+            return $base;
+        }
+
+        $speso = number_format($campagna->speso_mese_cent / 100, 2, ',', '.');
+        $residuo = number_format($campagna->residuoCent() / 100, 2, ',', '.');
+        $persone = $campagna->costo_visualizzazione_cent > 0
+            ? intdiv($campagna->speso_mese_cent, $campagna->costo_visualizzazione_cent)
+            : 0;
+
+        $stato = "Questo mese: {$persone} persone raggiunte, {$speso} € spesi, {$residuo} € residui.";
+
+        if ($campagna->esaurita_il !== null) {
+            $stato .= ' ⚠️ La campagna si è spenta da sola il '
+                .$campagna->esaurita_il->format('d/m/Y').' per budget esaurito.';
+        }
+
+        return $base.' '.$stato;
     }
 
     /** Se chi sta guardando e' un trainer indipendente e non una palestra. */

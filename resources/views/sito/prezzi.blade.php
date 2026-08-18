@@ -220,6 +220,36 @@
                 <h2>Sui prezzi, in particolare.</h2>
             </div>
 
+            {{--
+                📣 **La pubblicità nel catalogo** — M5.7, 18/08/2026.
+
+                🚨 Sta fra le domande e non fra i piani, ed è voluto: non è un
+                piano, è un servizio in più che si accende quando serve. Metterla
+                accanto ai pacchetti l'avrebbe fatta sembrare un costo obbligato
+                per stare nel catalogo, che è il contrario di come funziona —
+                nel catalogo ci si sta gratis.
+            --}}
+            <details>
+                <summary>Posso farmi trovare per primo nel catalogo?</summary>
+                <p>
+                    Sì, e si paga <strong>solo per le persone che ti vedono davvero</strong>:
+                    <strong>{{ number_format($costoVisualizzazione, 2, ',', '.') }} €</strong> a persona
+                    raggiunta — che sono {{ number_format($costoVisualizzazione * 1000, 0, ',', '.') }} €
+                    ogni mille. Non c'è nessun canone: la accendi e la spegni quando vuoi.
+                </p>
+                <p>
+                    <strong>Una persona vale una volta al giorno</strong>, anche se apre il catalogo
+                    dieci volte: paghi le persone raggiunte, non le schermate. E scegli un
+                    <strong>tetto di spesa mensile</strong> — minimo
+                    {{ number_format($budgetMinimo, 0, ',', '.') }} € — oltre il quale la campagna si
+                    spegne da sola e riparte il mese dopo.
+                </p>
+                <p>
+                    I risultati a pagamento portano l'etichetta <strong>«Sponsorizzato»</strong>:
+                    chi cerca ha diritto di sapere cosa sta guardando.
+                </p>
+            </details>
+
             <details>
                 <summary>Quanto dura un pacchetto di gettoni?</summary>
                 <p>

@@ -62,6 +62,14 @@ class SitoController extends Controller
             'gettoniMensili' => $listino->gettoniMensili(),
             'pacchetti' => $listino->pacchettiGettoni(),
             'esempio' => $listino->esempio(),
+
+            /*
+             * 📣 M5.7 — anche questi due passano dal `Listino`, non dalla vista.
+             * Un prezzo scritto in un template è un prezzo che un giorno dirà
+             * una cosa diversa da quella che il sistema addebita.
+             */
+            'costoVisualizzazione' => $listino->costoVisualizzazione() / 100,
+            'budgetMinimo' => $listino->budgetMinimoPubblicita() / 100,
         ]);
     }
 

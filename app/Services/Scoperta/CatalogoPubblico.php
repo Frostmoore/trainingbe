@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Scoperta;
 
+use App\Models\Campagna;
 use App\Models\Comune;
 use App\Models\ProfiloPubblico;
 use App\Models\User;
@@ -48,6 +49,7 @@ class CatalogoPubblico
     public function __construct(
         private readonly Vicinanza $vicinanza,
         private readonly ChiaveComune $chiavi,
+        private readonly ContatoreVisualizzazioni $contatore,
     ) {}
 
     /**
@@ -76,7 +78,7 @@ class CatalogoPubblico
 
         $query = ProfiloPubblico::query()
             ->visibili()
-            ->with(['comune', 'tenant', 'trainer']);
+            ->with(['comune', 'tenant', 'trainer', 'campagna']);
 
         if ($testo !== null && trim($testo) !== '') {
             $this->filtraPerTesto($query, $testo);
@@ -84,10 +86,24 @@ class CatalogoPubblico
 
         $vicini = $centro !== null ? $this->vicinanza->idVicini($centro) : [];
 
-        return $this->ordina($query, $centro, $vicini)
+        $trovate = $this->ordina($query, $centro, $vicini)
             ->limit($limite)
             ->get()
             ->map(fn (ProfiloPubblico $p): ProfiloPubblico => $this->arricchisci($p, $centro));
+
+        /*
+         * 🚨 **Si conta QUI, dopo aver deciso i risultati** — M5.3.
+         *
+         * ⚠️ Contare prima vorrebbe dire fatturare schede che non sono state
+         * restituite: una ricerca che ne trova trenta e ne mostra venti farebbe
+         * pagare anche le dieci che nessuno ha visto.
+         *
+         * 💡 E il contatore non puo' far fallire il catalogo: se si rompe,
+         * annota e va avanti. Si perde un centesimo, non un utente.
+         */
+        $this->contatore->segna($chi, $trovate);
+
+        return $trovate;
     }
 
     /**
@@ -129,15 +145,26 @@ class CatalogoPubblico
     private function ordina(Builder $query, ?Comune $centro, array $vicini): Builder
     {
         /*
-         * 🚨 **Gli sponsorizzati per primi, e con l'etichetta** (M5).
+         * 🚨 **Gli sponsorizzati per primi, e solo quelli che stanno pagando.**
          *
-         * ⚠️ `campagna_id` non basta: una campagna esaurita o spenta non deve
-         * comparire in cima. Finche' `campagne` non esiste (M5) la colonna e'
-         * sempre nulla e questo ordinamento non fa niente — ma sta gia' qui,
-         * perche' aggiungerlo dopo vorrebbe dire ricontrollare ogni test
-         * dell'ordinamento invece di scriverli una volta sola.
+         * ⚠️ `campagna_id IS NOT NULL` **non basta**: una campagna spenta o col
+         * budget esaurito resterebbe in cima gratis, togliendo il posto a chi
+         * paga davvero. La condizione e' la stessa di `Campagna::puoComparire()`,
+         * scritta in SQL perche' qui serve **ordinare**, non decidere caso per
+         * caso.
+         *
+         * 💡 `CASE WHEN campagne.mese = ?` riproduce l'azzeramento pigro: se il
+         * mese conservato non e' questo, lo speso vale zero.
          */
-        $query->orderByRaw('CASE WHEN campagna_id IS NULL THEN 1 ELSE 0 END');
+        $query
+            ->leftJoin('campagne', 'campagne.id', '=', 'profili_pubblici.campagna_id')
+            ->select('profili_pubblici.*')
+            ->orderByRaw(
+                'CASE WHEN campagne.attiva = 1 AND (campagne.budget_mensile_cent - '.
+                '(CASE WHEN campagne.mese = ? THEN campagne.speso_mese_cent ELSE 0 END)) '.
+                '>= campagne.costo_visualizzazione_cent THEN 0 ELSE 1 END',
+                [Campagna::meseCorrente()],
+            );
 
         if ($centro === null) {
             /*
@@ -188,10 +215,15 @@ class CatalogoPubblico
          * 🚨 **L'etichetta «Sponsorizzato» non e' facoltativa.**
          *
          * ⚠️ Presentare a pagamento qualcosa che sembra un risultato di ricerca
-         * e' pubblicita' occulta. Basta la parola, ma deve esserci — e c'e' un
-         * test in M5 che la pretende.
+         * e' **pubblicita' occulta**. Basta la parola, ma deve esserci, e c'e'
+         * un test che la pretende.
+         *
+         * 💡 `eSponsorizzata()` e non `campagna_id !== null`: una campagna
+         * esaurita non sta pagando, quindi non e' pubblicita' e non va
+         * etichettata. Etichettare chi non paga sarebbe l'errore opposto e
+         * altrettanto sbagliato.
          */
-        $p->setAttribute('sponsorizzato', $p->campagna_id !== null);
+        $p->setAttribute('sponsorizzato', $p->eSponsorizzata());
 
         return $p;
     }

@@ -55,6 +55,26 @@ class ProfiloPubblico extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** La campagna pubblicitaria, quando ce n'e' una — M5. */
+    public function campagna(): BelongsTo
+    {
+        return $this->belongsTo(Campagna::class);
+    }
+
+    /**
+     * 🚨 **Sponsorizzata VUOL DIRE che sta pagando adesso**, non che ha una
+     * campagna collegata.
+     *
+     * ⚠️ Una campagna spenta o col budget esaurito non deve comparire in cima
+     * ne' essere etichettata: chi ha finito i soldi torna a essere un risultato
+     * come gli altri. Guardare solo `campagna_id` avrebbe lasciato in testa le
+     * campagne esaurite — gratis, e togliendo il posto a chi paga.
+     */
+    public function eSponsorizzata(): bool
+    {
+        return $this->campagna?->puoComparire() === true;
+    }
+
     /** Se e' la scheda di una palestra e non di un trainer indipendente. */
     public function ePalestra(): bool
     {

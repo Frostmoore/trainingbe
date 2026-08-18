@@ -143,4 +143,53 @@ return [
 
     /** Il pacchetto su cui e' costruito l'esempio del sito. */
     'esempio_posti' => 25,
+
+    /*
+    |---------------------------------------------------------------------------
+    | 📣 La pubblicita' nel catalogo — M5, 18/08/2026
+    |---------------------------------------------------------------------------
+    |
+    | Si paga **a visualizzazione**, non a canone. Scelta del committente: una
+    | cifra fissa uguale per chi raggiunge dieci persone e per chi ne raggiunge
+    | mille «e' ridicola».
+    |
+    | ⚠️ **Il rovescio, da sapere prima**: a listino fisso l'incasso c'e' dal
+    | primo giorno; a visualizzazione, finche' l'app ha poche installazioni,
+    | l'incasso e' vicino allo zero. Il modello diventa buono quando c'e'
+    | traffico, non prima.
+    */
+    'pubblicita' => [
+        /*
+         * 🚨 **Due centesimi a visualizzazione** — confermato dal committente il
+         * 18/08. Sono 20 € ogni mille persone raggiunte.
+         *
+         * ⚠️ Questo valore e' il **listino**, non il prezzo di una campagna in
+         * corso: all'attivazione viene fotografato in
+         * `campagne.costo_visualizzazione_cent`, cosi' un aumento non cambia il
+         * prezzo di chi ha gia' acceso. Cambiare questa riga vale solo per le
+         * campagne accese **dopo**.
+         */
+        'costo_visualizzazione_cent' => 2,
+
+        /*
+         * Il budget mensile minimo: 10 €, cioe' cinquecento persone raggiunte.
+         *
+         * 💡 Non e' un modo per far spendere di piu': sotto questa cifra la
+         * campagna si spegnerebbe in un giorno, e chi l'ha attivata concluderebbe
+         * che la pubblicita' «non funziona» avendola vista funzionare per poche
+         * ore.
+         */
+        'budget_minimo_cent' => 1000,
+
+        /*
+         * 🚨 **Per quanti mesi si conservano le righe di dettaglio.**
+         *
+         * Servono a rispondere a una contestazione — «perche' questo mese ho
+         * speso tanto?» — e per quello tredici mesi bastano: coprono il confronto
+         * con lo stesso mese dell'anno prima. ⚠️ Tenerle per sempre vorrebbe dire
+         * conservare **chi ha visto cosa** all'infinito, che non serve a nessuno
+         * e va contro la minimizzazione.
+         */
+        'mesi_di_dettaglio' => 13,
+    ],
 ];

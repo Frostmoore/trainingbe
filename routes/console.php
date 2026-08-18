@@ -38,3 +38,28 @@ Schedule::command('alimenti:aggiorna-off')
             'Aggiornamento settimanale di Open Food Facts fallito.',
         );
     });
+
+/*
+|--------------------------------------------------------------------------
+| 🧹 La potatura del dettaglio delle visualizzazioni — M5
+|--------------------------------------------------------------------------
+|
+| `visualizzazioni` contiene **chi ha visto cosa**: un dato personale che non ha
+| ragione di stare li' per sempre. Tredici mesi coprono il confronto con lo
+| stesso mese dell'anno prima, che e' la forma piu' lontana che puo' prendere
+| una contestazione su una fattura.
+|
+| ⚠️ Gli importi in `campagne` **non** vengono toccati: la fattura resta
+| corretta senza dover conservare chi era. E' la differenza fra «quanto hai
+| speso», che va conservato, e «chi ti ha visto», che no.
+|
+| 💡 Il primo del mese alle 4:35 — cinque minuti dopo l'aggiornamento degli
+| alimenti, per non farli partire insieme sul server condiviso.
+*/
+Schedule::command('pubblicita:pota')
+    ->monthlyOn(1, '4:35')
+    ->withoutOverlapping(60)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura delle visualizzazioni fallita: il dettaglio resta piu\' a lungo del dovuto.');
+    });

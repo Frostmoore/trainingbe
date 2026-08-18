@@ -64,6 +64,25 @@ class TenantIsolationTest extends TestCase
          * commerciale che ha **chiesto** di comparire.
          */
         \App\Models\ProfiloPubblico::class => 'Catalogo pubblico (M2): deve essere visibile fuori dal proprio tenant. Isolamento tramite `visibile`.',
+
+        /*
+         * 🚨 `campagne` viene letta **mentre si risponde a chiunque**.
+         *
+         * L'ordinamento del catalogo fa una `JOIN` su questa tabella per sapere
+         * chi sta pagando, e quella query gira anche per un visitatore anonimo:
+         * col `TenantScope` non troverebbe mai nessuna campagna, e la pubblicità
+         * semplicemente non funzionerebbe — senza nessun errore.
+         *
+         * ⚠️ **L'isolamento in scrittura c'è ed è altrove**: una campagna si
+         * modifica solo dalla propria pagina del pannello, che la cerca con
+         * `tenant_id` o `user_id` **esplicito** e mai dal contesto. E i due
+         * indici unici impediscono che qualcuno ne abbia due.
+         *
+         * 💡 In lettura non c'è niente da proteggere: il fatto che una palestra
+         * si stia facendo pubblicità è, per definizione, quello che vuole far
+         * sapere. Gli importi restano nel pannello, non escono dall'API.
+         */
+        \App\Models\Campagna::class => 'Pubblicità nel catalogo (M5): la legge il catalogo pubblico, anche per gli anonimi. Scrittura solo dalla propria pagina, con chiave esplicita.',
     ];
 
     private Tenant $alfa;

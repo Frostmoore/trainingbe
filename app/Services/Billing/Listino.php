@@ -137,4 +137,27 @@ class Listino
             'margine' => $ricavo - $scelto['prezzo'],
         ];
     }
+    /**
+     * 📣 Quanto costa una visualizzazione pubblicitaria, in centesimi — M5.
+     *
+     * 🚨 E' il **listino**, non il prezzo di una campagna in corso: quello viene
+     * fotografato all'attivazione in `campagne.costo_visualizzazione_cent`.
+     * ⚠️ Cambiare questo valore vale solo per le campagne accese **dopo**.
+     */
+    public function costoVisualizzazione(): int
+    {
+        return (int) config("listino.pubblicita.costo_visualizzazione_cent", 2);
+    }
+
+    /**
+     * Il tetto di spesa mensile minimo, in centesimi.
+     *
+     * 💡 Non e' un modo per far spendere di piu': sotto questa cifra la campagna
+     * si spegnerebbe in un giorno, e chi l'ha attivata concluderebbe che la
+     * pubblicita' non funziona avendola vista funzionare per poche ore.
+     */
+    public function budgetMinimoPubblicita(): int
+    {
+        return (int) config("listino.pubblicita.budget_minimo_cent", 1000);
+    }
 }
