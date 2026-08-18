@@ -65,13 +65,15 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function no_price_is_written_inside_a_view(): void
     {
-        config()->set('listino.scaglioni', [['fino' => null, 'prezzo_cent' => 1234]]);
         config()->set('listino.singolo_cent', 4321);
+        config()->set('listino.palestre.pacchetti', [
+            ['posti' => 10, 'prezzo_cent' => 1234, 'nota' => 'finto'],
+        ]);
 
         $this->get('/prezzi')
             ->assertOk()
-            ->assertSee('12,34 €', escape: false)
-            ->assertSee('43,21 €', escape: false);
+            ->assertSee('43,21 €', escape: false)
+            ->assertSee('12,34 €', escape: false);
     }
 
     /**
@@ -194,40 +196,50 @@ class SitoPubblicoTest extends TestCase
         $this->get('/prezzi')
             ->assertOk()
             // Il primo scaglione, formattato come lo vede una persona.
-            ->assertSee(number_format($listino->primoScaglione() / 100, 2, ',', '.').' €', escape: false)
-            ->assertSee(number_format($listino->pacchetti()[0]['prezzo'] / 100, 2, ',', '.').' €', escape: false);
+            ->assertSee(number_format($listino->singolo() / 100, 2, ',', '.').' €', escape: false)
+            ->assertSee(number_format($listino->pacchettiGettoni()[0]['prezzo'] / 100, 2, ',', '.').' €', escape: false);
     }
 
     /**
-     * 🚨 **Quante richieste include l'abbonamento non si scrive da nessuna
-     * parte**, e non è reticenza.
+     * 📌 **Quante richieste include l'abbonamento si dice.**
      *
-     * ── Il conto che chiunque farebbe ─────────────────────────────────────
+     * ── ⚠️ Ha ROVESCIATO `the_included_monthly_allowance_is_never_published`
      *
-     * Sulla stessa pagina ci sono i pacchetti di gettoni. Se accanto comparisse
-     * «l'abbonamento ne include N», la divisione la fa chiunque in tre secondi —
-     * e scopre che comprare un pacchetto costa meno che abbonarsi. ⚠️ A quel
-     * punto l'abbonamento, che è la cosa che rende il servizio sostenibile, non
-     * lo comprerebbe nessuno.
+     * Fino al 17/08 il numero era **deliberatamente taciuto**: sulla stessa
+     * pagina ci sono i pacchetti di gettoni, e la divisione la fa chiunque in
+     * tre secondi, scoprendo che comprare un pacchetto costa meno che
+     * abbonarsi. C'era un test che vietava di pubblicarlo.
      *
-     * 💡 Il limite d'uso **esiste ed è nelle condizioni**: quello che non si fa
-     * è pubblicizzarlo come una quantità. Non è la stessa cosa che nasconderlo.
+     * 🎯 Il 18/08 il committente ha deciso il contrario: *«a sto punto
+     * diciamolo, tanto sta scritto nelle condizioni d'uso»*. 💡 Ed e' la scelta
+     * giusta per una ragione che vale piu' del calcolo: **un numero che c'e' ma
+     * non si dice si legge come qualcosa da nascondere**, e su un servizio a
+     * pagamento e' l'impressione peggiore possibile.
      *
-     * 📌 La stessa decisione vale nell'app: a chi è abbonato il contatore dei
-     * gettoni **non si mostra affatto** (`mostra_gettoni` in `/ai/usage`).
+     * 📌 Resta vero che a 300 gettoni i pacchetti convengono di piu' per
+     * gettone: e' una scelta commerciale consapevole, non una svista.
      */
     #[Test]
-    public function the_included_monthly_allowance_is_never_published(): void
+    public function the_included_monthly_allowance_is_published(): void
     {
-        // Un valore che non può comparire per caso in un prezzo o in un conto.
         config()->set('listino.gettoni_mensili', 7777);
 
-        $this->get('/prezzi')
-            ->assertOk()
-            ->assertDontSee('7777', escape: false)
-            ->assertDontSee('7.777', escape: false);
+        $this->get('/prezzi')->assertOk()->assertSee('7.777', escape: false);
+    }
 
-        $this->get('/')->assertOk()->assertDontSee('7777', escape: false);
+    /**
+     * 🚨 **Il pulsante dice «Iscriviti ora», non «Entra nel pannello».**
+     *
+     * ⚠️ «Entra nel pannello» e' quello che fa chi è **gia' cliente**: su una
+     * pagina di prezzi manda via proprio chi la stava leggendo per decidere.
+     */
+    #[Test]
+    public function the_pricing_page_asks_you_to_sign_up(): void
+    {
+        $prezzi = $this->get('/prezzi')->assertOk();
+
+        $prezzi->assertSee('Iscriviti ora', escape: false);
+        $prezzi->assertDontSee('Entra nel pannello', escape: false);
     }
 
     /**
@@ -252,8 +264,8 @@ class SitoPubblicoTest extends TestCase
 
         // 💡 E i due minimi sono diversi: è la sola differenza fra il listino
         // di una palestra e quello di un trainer, e va detta.
-        $r->assertSee('Minimo '.config('listino.minimo_palestra').' posti', escape: false)
-            ->assertSee('Minimo '.config('listino.minimo_trainer').' allievi', escape: false);
+        $r->assertSee('minimo '.config('listino.palestre.minimo'), escape: false)
+            ->assertSee('minimo '.config('listino.trainer.minimo'), escape: false);
     }
 
     /**
@@ -324,7 +336,7 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function a_bigger_pack_never_costs_more_per_token(): void
     {
-        $pacchetti = app(Listino::class)->pacchetti();
+        $pacchetti = app(Listino::class)->pacchettiGettoni();
 
         $this->assertGreaterThan(1, count($pacchetti), 'servono almeno due tagli per confrontarli');
 
@@ -355,7 +367,7 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function the_packs_are_listed_from_smallest_to_biggest(): void
     {
-        $gettoni = array_column(app(Listino::class)->pacchetti(), 'gettoni');
+        $gettoni = array_column(app(Listino::class)->pacchettiGettoni(), 'gettoni');
 
         $ordinati = $gettoni;
         sort($ordinati);
@@ -364,30 +376,96 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
-     * 🚨 **Gli scaglioni sono progressivi, come le aliquote.**
+     * 🚨 **Un pacchetto grande non può costare di piu' a posto di uno piccolo.**
      *
-     * I primi 25 posti costano il prezzo pieno **anche a chi ne ha 300**.
-     * ⚠️ L'alternativa — «oltre 100 paghi tutto a 2,99» — creerebbe un salto in
-     * cui **aggiungere un posto fa scendere la fattura**, e chi se ne accorge
-     * lo racconta.
+     * ── ⚠️ Ha sostituito `the_tiers_are_progressive_not_a_cliff` ───────
+     *
+     * Quello provava che la **scala progressiva** sui posti non avesse salti: i
+     * primi 25 al prezzo pieno anche a chi ne aveva 300, come le aliquote. Era
+     * corretta e **illeggibile** — per sapere quanto si spendeva bisognava fare
+     * una somma a pezzi — e il 18/08 e' stata sostituita da pacchetti a prezzo
+     * fisso.
+     *
+     * 💡 L'invariante che conta e' rimasta, in forma piu' semplice: **chi
+     * compra di piu' paga di meno a posto**. Altrimenti chi fa la divisione
+     * comprerebbe tanti pacchetti piccoli, e il listino sembrerebbe una
+     * trappola invece di uno sconto.
      */
     #[Test]
-    public function the_tiers_are_progressive_not_a_cliff(): void
+    public function a_bigger_bundle_never_costs_more_per_seat(): void
     {
         $listino = app(Listino::class);
 
-        $this->assertSame(0, $listino->costoMensile(0));
-        $this->assertSame(25 * 499, $listino->costoMensile(25));
-        $this->assertSame(25 * 499 + 1 * 399, $listino->costoMensile(26));
-        $this->assertSame(25 * 499 + 75 * 399 + 200 * 299, $listino->costoMensile(300));
+        foreach (['palestre', 'trainer'] as $platea) {
+            $pacchetti = $listino->pacchettiPosti($platea);
 
-        // 💡 La proprietà che conta più di ogni singolo numero: la fattura non
-        // scende mai aggiungendo un posto.
-        for ($n = 1; $n <= 150; $n++) {
+            $this->assertGreaterThan(1, count($pacchetti), "{$platea}: servono almeno due pacchetti");
+
+            $precedente = null;
+
+            foreach ($pacchetti as $p) {
+                if ($precedente !== null) {
+                    $this->assertLessThan(
+                        $precedente['perPosto'],
+                        $p['perPosto'],
+                        sprintf(
+                            '%s: il pacchetto da %d costa %d centesimi a posto, quello da %d ne costava %d',
+                            $platea, $p['posti'], $p['perPosto'], $precedente['posti'], $precedente['perPosto'],
+                        ),
+                    );
+                }
+
+                $precedente = $p;
+            }
+        }
+    }
+
+    /**
+     * 🚨 **Un posto costa sempre meno dell'abbonamento singolo.**
+     *
+     * ⚠️ Se costasse di piu', alla palestra converrebbe dire ai propri
+     * iscritti «abbonatevi da soli», e il pacchetto non lo comprerebbe nessuno.
+     * E' la regola da cui discende tutto il listino, ed e' la piu' facile da
+     * rompere ritoccando **un** prezzo.
+     */
+    #[Test]
+    public function a_seat_always_costs_less_than_an_individual_subscription(): void
+    {
+        $listino = app(Listino::class);
+        $singolo = $listino->singolo();
+
+        foreach (['palestre', 'trainer'] as $platea) {
+            foreach ($listino->pacchettiPosti($platea) as $p) {
+                $this->assertLessThan(
+                    $singolo,
+                    $p['perPosto'],
+                    sprintf(
+                        '%s: il pacchetto da %d costa %d a posto, l\'abbonamento singolo %d',
+                        $platea, $p['posti'], $p['perPosto'], $singolo,
+                    ),
+                );
+            }
+        }
+    }
+
+    /**
+     * 💡 **E il piano a consumo costa piu' del pacchetto piu' piccolo.**
+     *
+     * E' il prezzo della flessibilita'. ⚠️ Senza quella differenza il
+     * pacchetto non converrebbe a nessuno e sarebbe li' per finta.
+     */
+    #[Test]
+    public function paying_as_you_go_costs_more_than_the_smallest_bundle(): void
+    {
+        $listino = app(Listino::class);
+
+        foreach (['palestre', 'trainer'] as $platea) {
+            $piuPiccolo = $listino->pacchettiPosti($platea)[0];
+
             $this->assertGreaterThan(
-                $listino->costoMensile($n - 1),
-                $listino->costoMensile($n),
-                "aggiungere il posto {$n} fa scendere la fattura",
+                $piuPiccolo['perPosto'],
+                $listino->aConsumo($platea),
+                "{$platea}: a consumo costa quanto o meno del pacchetto piu' piccolo",
             );
         }
     }
@@ -395,11 +473,11 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function the_example_shows_what_the_gym_keeps(): void
     {
-        $e = app(Listino::class)->esempio(60);
+        $e = app(Listino::class)->esempio('palestre', 25);
 
         // 💡 È il numero che vende: non «4,99 a posto» ma «incasso 600 e ne
         // pago 264».
-        $this->assertSame(60, $e['posti']);
+        $this->assertSame(25, $e['posti']);
         $this->assertSame($e['ricavo'] - $e['costo'], $e['margine']);
         $this->assertGreaterThan(0, $e['margine']);
     }

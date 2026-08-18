@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Il listino a posti — 16/08/2026.
+ * Il listino — rifatto il 18/08/2026.
  *
  * ── 🚨 Perche' sta in configurazione e non in `plans` ─────────────────────
  *
@@ -14,54 +14,50 @@ declare(strict_types=1);
  * sito.
  *
  * ⚠️ **QUINDI OGGI IL SITO E IL SISTEMA DI FATTURAZIONE DICONO DUE COSE
- * DIVERSE**, ed e' scritto qui perche' non lo si scopra da un cliente:
+ * DIVERSE**, ed e' scritto qui perche' non lo si scopra da un cliente. Si
+ * allineano in `H1.5` e `H2.2`. Fino ad allora **non si vende a nessuno** su
+ * questi numeri senza saperlo.
  *
- * | | |
- * |---|---|
- * | Il sito annuncia | 4,99 € a posto, scaglioni, minimo 5 |
- * | `plans` contiene | «Palestra — 5 trainer» a 349,99 € al mese |
+ * ── 🎯 Da dove vengono i prezzi ───────────────────────────────────────────
  *
- * 🎯 Si allineano in `H1.5` (il seeder del listino) e `H2.2` (i pacchetti di
- * gettoni, che oggi vivono qui e domani in `ai_credit_packs`). Fino ad allora
- * **non si vende a nessuno** su questi numeri senza saperlo.
+ * **Tutto discende dal prezzo del singolo: 7,99 € al mese.** E' il numero che
+ * chiunque puo' vedere e con cui chiunque puo' fare il confronto.
  *
- * 💡 Perche' comunque **non** e' scritto dentro la vista: un prezzo in un
- * template e' un prezzo che un giorno dira' una cosa diversa da quella che il
- * sistema fattura, e la si scopre da un cliente arrabbiato invece che da un
- * test. Qui almeno c'e' un punto solo da cambiare, ed e' provato.
+ * Da li' due regole che non si possono violare senza che il listino diventi
+ * incoerente:
  *
- * Fonte dei numeri: `memory/business_plan.md`, versione «meta' e meta'».
+ * 1. 🚨 **Un posto in un pacchetto costa sempre MENO di 7,99.** Se costasse di
+ *    piu', alla palestra converrebbe dire ai propri iscritti «abbonatevi da
+ *    soli», e il pacchetto non lo comprerebbe nessuno.
+ * 2. 🚨 **Piu' grande e' il pacchetto, meno costa a posto.** Se un pacchetto
+ *    grande costasse di piu' a posto di uno piccolo, chi fa la divisione — e
+ *    qualcuno la fa sempre — ne comprerebbe tanti piccoli. Il listino
+ *    sembrerebbe una trappola invece di uno sconto.
+ *
+ * 💡 E il **piano a consumo** costa piu' del pacchetto piu' piccolo: e' il
+ * prezzo della flessibilita', ed e' cio' che rende il pacchetto conveniente.
+ * Senza quella differenza il pacchetto sarebbe li' per finta.
+ *
+ * ⚠️ **Tutto in centesimi.** `4.99` in virgola mobile e' `4.9899999...`: su
+ * cento posti l'errore si vede, e su una fattura si contesta.
+ *
+ * 📌 Ci sono test che verificano entrambe le regole su **tutti** i pacchetti:
+ * sono invarianti facili da rompere ritoccando un prezzo solo, che e' proprio
+ * quello che si fa.
  */
 return [
 
     /*
-     * Gli scaglioni sul prezzo di un posto AI, in **centesimi**.
-     *
-     * 🚨 Centesimi e non euro: `4.99` in virgola mobile e' `4.9899999...`, e su
-     * una moltiplicazione per trecento posti l'errore si vede.
-     *
-     * ⚠️ `fino` e' **inclusivo** e `null` vuol dire «da qui in su».
+     |--------------------------------------------------------------------------
+     | Chi si allena da solo
+     |--------------------------------------------------------------------------
      */
-    'scaglioni' => [
-        ['fino' => 25,   'prezzo_cent' => 499],
-        ['fino' => 100,  'prezzo_cent' => 399],
-        ['fino' => null, 'prezzo_cent' => 299],
-    ],
 
-    /*
-     * Quanti posti bisogna accendere come minimo.
-     *
-     * 💡 Non e' un canone travestito: e' il modo di dire «sotto questa soglia
-     * non conviene a nessuno dei due» senza far pagare chi non usa niente.
-     */
-    'minimo_palestra' => 5,
-    'minimo_trainer' => 3,
-
-    /** L'abbonamento di chi si iscrive da solo, IVA inclusa. */
+    /** L'abbonamento del singolo, IVA inclusa. E' il perno di tutto il listino. */
     'singolo_cent' => 799,
 
-    /*
-     * I gettoni che un posto riceve ogni mese. Si azzerano al rinnovo.
+    /**
+     * I gettoni che l'abbonamento accredita ogni mese. Si azzerano al rinnovo.
      *
      * ── 🚨 Erano 500, portati a 300 il 16/08/2026 ─────────────────────────
      *
@@ -69,44 +65,23 @@ return [
      * facendo una o due foto»**. Dieci richieste al giorno per trenta giorni.
      *
      * ⚠️ E' una scelta **deliberatamente stretta**, non una stima: la misura
-     * bottom-up in `memory/STIMA-COSTI-AI.md` dice che chi usa l'app davvero
-     * ne consuma **320-490** al mese. Trecento vuol dire che chi la usa tutti
-     * i giorni finisce i gettoni prima della fine del mese e ne compra — ed e'
-     * il punto.
+     * bottom-up in `memory/STIMA-COSTI-AI.md` dice che chi usa l'app davvero ne
+     * consuma **320-490** al mese.
      *
-     * 🚨 **Vale sia per l'abbonamento singolo sia per ogni posto di palestra**,
-     * perche' e' un valore solo. Il giorno in cui i due dovessero divergere,
-     * qui servono due chiavi e non una: separarle **dopo** aver fatturato
-     * significa cambiare cosa hanno comprato le persone gia' abbonate.
+     * 📌 Dal 18/08 questo numero **e' pubblicato sul sito**. Prima non lo era,
+     * per non invitare al confronto con i pacchetti; poi il committente:
+     * *«a sto punto diciamolo, tanto sta scritto nelle condizioni d'uso»*.
      */
     'gettoni_mensili' => 300,
 
-    /**
-     * Il prezzo suggerito alla palestra per rivendere un posto.
-     *
-     * ⚠️ **Suggerito**, e va scritto ovunque compaia: se una palestra lo mette a
-     * 20 € e l'iscritto scopre che da solo lo pagherebbe 7,99, la lamentela
-     * torna indietro a noi.
-     */
-    'rivendita_suggerita_cent' => 1000,
-
     /*
-     * I pacchetti di gettoni.
+     * I pacchetti di gettoni, per chi finisce quelli del mese o non si abbona.
      *
-     * ── 🚨 Il prezzo per gettone deve SCENDERE al crescere del taglio ──
+     * ── 🚨 Il prezzo per gettone deve SCENDERE al crescere del taglio ──────
      *
      *     100  →  2,50 €  =  2,50 centesimi a gettone
      *     500  → 10,00 €  =  2,00 centesimi a gettone
      *     2000 → 29,90 €  =  1,50 centesimi a gettone
-     *
-     * ⚠️ Se un taglio grande costasse **di piu'** a gettone di uno piccolo,
-     * chi fa la divisione — e qualcuno la fa sempre — comprerebbe venti
-     * pacchetti da cento. Il listino sembrerebbe una trappola invece di uno
-     * sconto, ed e' la cosa che si racconta. C'e' un test che lo verifica.
-     *
-     * 📌 Rivisti il 17/08/2026: erano 1,99 / 7,99 / 24,99, e il taglio da 500
-     * costava **quanto un mese di abbonamento**, che ne da' 300. Accostati sulla
-     * stessa pagina, erano un invito a non abbonarsi.
      *
      * 📌 Vivono qui **provvisoriamente**: `H2.2` li sposta in `ai_credit_packs`,
      * dove potranno essere versionati (cambiare prezzo crea una riga nuova e
@@ -118,6 +93,54 @@ return [
         ['gettoni' => 2000, 'prezzo_cent' => 2990, 'nota' => 'il piu\' conveniente'],
     ],
 
-    /** L'esempio mostrato sul sito: una palestra con questi posti accesi. */
-    'esempio_posti' => 60,
+    /*
+     |--------------------------------------------------------------------------
+     | Palestre e trainer: pacchetti di posti, piu' un piano a consumo
+     |--------------------------------------------------------------------------
+     |
+     | 🚨 Un «posto» e' una persona a cui l'AI e' stata accesa. Tutti gli altri
+     | iscritti usano l'app gratis e non si pagano.
+     |
+     | ⚠️ Il piano a consumo e' **uno solo** per ciascuno: piu' d'uno sarebbe un
+     | listino da studiare invece che da leggere.
+     */
+
+    'palestre' => [
+        'pacchetti' => [
+            ['posti' => 10,  'prezzo_cent' => 4990,  'nota' => 'per cominciare'],
+            ['posti' => 25,  'prezzo_cent' => 10990, 'nota' => 'il piu\' scelto'],
+            ['posti' => 50,  'prezzo_cent' => 19990, 'nota' => 'per una palestra piena'],
+            ['posti' => 100, 'prezzo_cent' => 34990, 'nota' => 'per piu\' sedi'],
+        ],
+
+        /** A consumo: si paga per ogni posto acceso, mese per mese. */
+        'a_consumo_cent' => 599,
+
+        /** Il minimo di posti sul piano a consumo. */
+        'minimo' => 5,
+    ],
+
+    'trainer' => [
+        'pacchetti' => [
+            ['posti' => 5,  'prezzo_cent' => 2990,  'nota' => 'per cominciare'],
+            ['posti' => 10, 'prezzo_cent' => 5490,  'nota' => 'il piu\' scelto'],
+            ['posti' => 25, 'prezzo_cent' => 11990, 'nota' => 'per chi ne segue tanti'],
+        ],
+
+        'a_consumo_cent' => 699,
+
+        'minimo' => 3,
+    ],
+
+    /**
+     * Il prezzo suggerito per rivendere un posto ai propri iscritti.
+     *
+     * ⚠️ **Suggerito**, e va scritto ovunque compaia: se una palestra lo mette a
+     * 20 € e l'iscritto scopre che da solo lo pagherebbe 7,99, la lamentela
+     * torna indietro a noi.
+     */
+    'rivendita_suggerita_cent' => 1000,
+
+    /** Il pacchetto su cui e' costruito l'esempio del sito. */
+    'esempio_posti' => 25,
 ];

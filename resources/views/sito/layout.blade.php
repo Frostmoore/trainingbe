@@ -263,6 +263,12 @@
         }
 
         .linguette a:hover { border-color: var(--accento); background: var(--accento-tenue); }
+
+        /* 💡 `:target` accende la linguetta di ciò che si sta guardando, senza
+           una riga di JavaScript: l'ancora nell'indirizzo è già l'informazione,
+           bastava dirlo al foglio di stile. */
+        .linguette a:target,
+        .anta:target ~ * .linguette a { border-color: var(--accento); }
         .linguette a strong { display: block; font-size: 15px; }
         .linguette a span { font-size: 13px; color: var(--testo-tenue); }
 
@@ -274,6 +280,95 @@
         .tabella-prezzi th { text-align: left; padding: 14px var(--sp-3); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
         .tabella-prezzi td { padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo); }
         .tabella-prezzi tr:last-child td { border-bottom: 0; }
+
+        /* ───────────────── il listino ────────────────
+
+           🚨 **La gerarchia visiva deve dire cosa guardare per primo.**
+           Prima le schede erano tutte uguali e il prezzo grande stava in mezzo
+           al testo: l'occhio non trovava un punto d'appoggio, e una pagina di
+           prezzi che non si scorre in tre secondi non si legge affatto.
+        */
+
+        /* L'offerta principale: una riga sola, larga, con il prezzo staccato. */
+        .offerta-principale {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: var(--sp-4);
+            align-items: center;
+            padding: var(--sp-4);
+            border-radius: var(--raggio);
+            border: 2px solid var(--accento);
+            background:
+                radial-gradient(120% 140% at 100% 0%, var(--accento-tenue) 0%, transparent 55%),
+                var(--sfondo);
+            box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 12%, transparent);
+        }
+
+        /* ⚠️ Sotto i 720 px il prezzo va sotto, non di fianco: affiancato
+           schiaccerebbe l'elenco a due parole per riga. */
+        @media (max-width: 720px) {
+            .offerta-principale { grid-template-columns: 1fr; gap: var(--sp-3); }
+            .offerta-prezzo { text-align: left; }
+        }
+
+        .offerta-prezzo { text-align: right; white-space: nowrap; }
+
+        .prezzo-grande {
+            font-size: clamp(38px, 6vw, 52px);
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: -0.03em;
+            color: var(--accento);
+        }
+
+        /* La griglia dei pacchetti: colonne uguali, schede della stessa altezza.
+           💡 `align-items: stretch` e il pulsante spinto in fondo con
+           `margin-top: auto` — senza, i pulsanti ballano e le schede sembrano
+           storte anche quando i prezzi sono allineati. */
+        .griglia-pacchetti {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: var(--sp-2);
+            align-items: stretch;
+        }
+
+        .griglia-pacchetti .scheda { display: flex; flex-direction: column; }
+
+        .per-posto {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--accento);
+            margin: 2px 0 var(--sp-2);
+        }
+
+        /* La scheda scelta si stacca in altezza, non solo di colore.
+           ⚠️ Niente `transform: scale()`: su una griglia sfalsa gli
+           allineamenti e su schermo piccolo esce dal contenitore. */
+        .scheda.scelta {
+            border-color: var(--accento);
+            border-width: 2px;
+            box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 14%, transparent);
+        }
+
+        .scheda.evidenziata {
+            background: var(--accento-tenue);
+            border-color: color-mix(in srgb, var(--accento) 25%, transparent);
+        }
+
+        /* I tre numeri dell'esempio: paghi / incassi / ti resta. */
+        .conti {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--sp-2);
+            margin-top: var(--sp-2);
+        }
+
+        .conti strong { display: block; font-size: clamp(20px, 3.4vw, 26px); font-weight: 800; }
+        .conti .risalta { color: var(--accento); }
+
+        @media (max-width: 520px) {
+            .conti { grid-template-columns: 1fr; gap: var(--sp-1); }
+        }
 
         /* ───────────────────────── navigazione ───────────────────────── */
 
