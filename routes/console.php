@@ -63,3 +63,26 @@ Schedule::command('pubblicita:pota')
     ->onFailure(function (): void {
         Log::error('Potatura delle visualizzazioni fallita: il dettaglio resta piu\' a lungo del dovuto.');
     });
+
+/*
+| Gli allegati cifrati della chat — N14.3.
+|
+| #! Un allegato si cancella da solo appena il destinatario lo scarica. Questo
+| comando copre il caso in cui NON lo scarichi mai: telefono spento, ferie, app
+| disinstallata. Senza, quelle righe e quei file resterebbero per sempre.
+|
+| «restano finche' non le scarica, max 24h» - il committente, 18/08/2026.
+|
+| * Ogni ora e non una volta al giorno: la promessa e' "24 ore", e una passata
+| giornaliera la trasformerebbe in "fino a 48". Costa una query su un indice.
+|
+| /!\ In background e senza sovrapposizioni: gira su un server condiviso con
+| altri domini, e due passate insieme si contenderebbero gli stessi file.
+*/
+Schedule::command('chat:pota-allegati')
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura degli allegati fallita: le foto della chat restano oltre le 24 ore.');
+    });

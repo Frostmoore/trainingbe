@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
+use App\Http\Controllers\Api\V1\Chat\AllegatoCifratoController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\CatalogoController;
@@ -468,6 +469,25 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/read', [ConversationController::class, 'read'])->whereNumber('conversation');
+
+        // ── Le foto della chat, in transito (N14) ────────────────────────
+        //
+        // 🚨 Byte gia' cifrati, che il server non sa aprire: la chiave viaggia
+        // dentro il messaggio, che e' gia' una busta `crypto_box` fra i due.
+        //
+        // 💡 Non stanno dentro il messaggio perche' una conversazione si carica
+        // tutta insieme: con le foto dentro, aprire una chat con venti foto
+        // vorrebbe dire scaricare otto megabyte ogni volta, anche solo per
+        // rileggere una riga.
+        //
+        // ⚠️ Lo scarico e' per **token** e non per id: un id progressivo si
+        // indovina, e chi ne conosce uno conosce anche il precedente.
+        // Restituito il file, l'allegato viene **cancellato**.
+        Route::post('conversations/{conversation}/allegati', [AllegatoCifratoController::class, 'store'])
+            ->whereNumber('conversation')
+            ->middleware('throttle:allegati-chat');
+        Route::get('allegati/{token}', [AllegatoCifratoController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{48}');
 
         // ── Le chiavi della chat (S6.3) ──────────────────────────────────
         //

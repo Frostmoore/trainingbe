@@ -106,6 +106,29 @@ class RateLimitServiceProvider extends ServiceProvider
         | controllo diverso e serve comunque: cento iscritti educati bruciano il
         | budget senza che nessuno superi il proprio limite orario.
         */
+        /*
+        | Allegati della chat (N14): 20 al minuto e 200 all'ora **per utente**.
+        |
+        | 🚨 Per utente e non per IP, per la stessa ragione dell'AI: sono
+        | richieste autenticate, e limitarle per IP vorrebbe dire che venti
+        | persone sul wi-fi della palestra si mangiano il limite a vicenda.
+        |
+        | 💡 Venti al minuto sono larghi per chi manda qualche foto di fila e
+        | stretti per chi volesse usare la chat come deposito: ogni allegato
+        | pesa fino a 2 MB e vive 24 ore, quindi il tetto vero e' quanto spazio
+        | puo' occupare una persona in un giorno — qui sotto il mezzo giga.
+        */
+        RateLimiter::for('allegati-chat', function (Request $request): array {
+            $utente = $request->user();
+
+            return $utente !== null
+                ? [
+                    Limit::perMinute(20)->by('allegati|u'.$utente->getAuthIdentifier()),
+                    Limit::perHour(200)->by('allegati|u'.$utente->getAuthIdentifier()),
+                ]
+                : [Limit::perMinute(5)->by($request->ip())];
+        });
+
         RateLimiter::for('ai', function (Request $request): array {
             $utente = $request->user();
 

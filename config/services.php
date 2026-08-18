@@ -76,14 +76,14 @@ return [
     | solo fa funzionare l'accesso su meta' dei dispositivi — il tipo di guasto
     | che in prova non si vede, perche' si prova su un telefono solo.
     |
-    | Per Apple l'`aud` e' il **bundle id** dell'app (es. `it.riccardoronconi.
-    | training`), non un client id in senso proprio. Per «Accedi con Apple» sul
+    | Per Apple l'`aud` e' il **bundle id** dell'app (`com.smp.mytrainingcompanion`),
+    | non un client id in senso proprio. Per «Accedi con Apple» sul
     | web sarebbe invece il Service ID: se un giorno ci sara' anche il web, ne
     | va aggiunto un secondo qui.
     |
     | Valori separati da virgola nel `.env`:
     |   SOCIAL_GOOGLE_CLIENT_IDS="1234-android.apps.googleusercontent.com,1234-ios.apps.googleusercontent.com"
-    |   SOCIAL_APPLE_CLIENT_IDS="it.riccardoronconi.training"
+    |   SOCIAL_APPLE_CLIENT_IDS="com.smp.mytrainingcompanion"
     */
     'social' => [
         'google' => [

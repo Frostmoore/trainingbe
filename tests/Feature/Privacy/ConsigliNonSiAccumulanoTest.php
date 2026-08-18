@@ -94,7 +94,24 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
         $rimaste = AiAdvice::withoutGlobalScopes()->get();
 
         $this->assertCount(1, $rimaste);
-        $this->assertSame(now()->toDateString(), $rimaste->first()->date->toDateString());
+
+        /*
+         * #! **Il giorno dell'UTENTE, non quello di UTC** - 19/08/2026.
+         *
+         * Qui c'era `now()->toDateString()`, cioe' la data in UTC. /!\ Il
+         * consiglio invece nasce con `giornoDiOggi()`, che usa il fuso della
+         * persona: fra le 22:00 UTC e la mezzanotte, a Roma e' gia' domani, e
+         * questo test falliva con "atteso 2026-08-18, ricevuto 2026-08-19".
+         *
+         * * Non era un difetto del codice - il codice aveva ragione, ed e'
+         * esattamente il difetto A3 che `giornoDiOggi()` esiste per chiudere.
+         * Era il test a guardare l'orologio sbagliato, e falliva solo due ore
+         * al giorno.
+         */
+        $this->assertSame(
+            $this->iscritto->fresh()->giornoDiOggi()->etichetta,
+            $rimaste->first()->date->toDateString(),
+        );
     }
 
     #[Test]
