@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Tenancy;
 
+use App\Enums\TipoConversazione;
+use App\Models\Conversation;
 use App\Models\Plan;
 use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -165,6 +168,119 @@ class InvitiDelTrainer
         ])->save();
 
         return $utente;
+    }
+
+    /**
+     * 🚨 **Il riscatto di chi ha GIA' un account** — M6.2, 18/08/2026.
+     *
+     * ── Perche' non bastava `riscatta()` ───────────────────────────────────
+     *
+     * Quello crea una persona nuova: e' la strada di chi arriva dal link senza
+     * avere ancora niente. ⚠️ Ma il caso che la Parte M ha reso normale e'
+     * l'opposto: qualcuno che **usa gia' l'app**, ha scritto a un trainer dal
+     * catalogo, ha finito i tre messaggi, e riceve da lui un invito **in chat**.
+     * Quella persona un account ce l'ha, e mandarla su un modulo di iscrizione
+     * le direbbe di crearne un secondo.
+     *
+     * 💡 **E qui non si chiede l'abbonamento**, che e' tutto il punto della
+     * decisione del committente: *«il link d'invito assegna chi lo usa — anche
+     * se non abbonato — a chi l'ha creato»*. Diventare allievo di un trainer
+     * apre la chat illimitata **con lui**, che e' un rapporto vero e non un
+     * contatto a freddo.
+     *
+     * 🚨 **Non tocca il tenant.** Chi si allena da solo resta nel proprio spazio
+     * personale: il legame `trainer_member` attraversa i tenant di proposito
+     * (F6.1). ⚠️ Spostarlo dentro quello del trainer sarebbe un trasloco di dati
+     * che nessuno ha chiesto, per un rapporto che si puo' interrompere domani.
+     *
+     * @throws ValidationException
+     */
+    public function riscattaPerChiEsiste(string $token, User $utente): User
+    {
+        $invito = TrainerInvite::withoutGlobalScopes()->where('token', $token)->first();
+
+        // 🚨 Un solo messaggio per «non esiste», «gia' usato», «scaduto» e
+        // «revocato»: distinguerli permetterebbe di provare token a tappeto.
+        $nonValido = fn (): never => throw ValidationException::withMessages([
+            'token' => __('Questo invito non è più valido.'),
+        ]);
+
+        if ($invito === null || ! $invito->eValido()) {
+            $nonValido();
+        }
+
+        /*
+         * 🚨 `withoutGlobalScopes()`, e senza questa riga NIENTE funziona.
+         *
+         * ⚠️ `TrainerInvite::trainer()` e' una relazione su `User`, che usa
+         * `BelongsToTenant`: risolta qui viene filtrata dal tenant di **chi sta
+         * riscattando**, che per definizione e' un altro. Il trainer risulta
+         * `null` e ogni invito valido viene respinto come «non piu' valido».
+         *
+         * 💡 La strada della **registrazione** (`riscatta()`) non ha questo
+         * problema perche' li' non c'e' nessuno autenticato, quindi nessun
+         * contesto: e' lo stesso codice che si comporta in due modi a seconda di
+         * chi lo chiama. Terza volta che questa trappola si presenta nella
+         * Parte M — vedi §49.6 e §50.6 dell'atlante.
+         */
+        $trainer = User::query()->withoutGlobalScopes()->find($invito->trainer_id);
+
+        if ($trainer === null || ! $trainer->is_active) {
+            $nonValido();
+        }
+
+        /*
+         * ⚠️ **Non si e' allievi di se' stessi.** Un trainer che apre il proprio
+         * link — capita, provando come si vede — si ritroverebbe fra i propri
+         * allievi, e da li' in ogni conteggio di posti occupati.
+         */
+        if ($trainer->is($utente)) {
+            $nonValido();
+        }
+
+        $rimasti = $this->postiRimasti($trainer);
+
+        if ($rimasti !== null && $rimasti <= 0) {
+            $nonValido();
+        }
+
+        return DB::transaction(function () use ($invito, $trainer, $utente): User {
+            $gia = $utente->assignedTrainers()->where('users.id', $trainer->getKey())->exists();
+
+            if (! $gia) {
+                /*
+                 * 🚨 `trainer_member.tenant_id` e' quello del **trainer** — F6.1:
+                 * e' lui che possiede il rapporto, e sotto il proprio scope deve
+                 * vedere i propri allievi.
+                 */
+                $utente->assignedTrainers()->attach($trainer->getKey(), [
+                    'tenant_id' => $trainer->tenant_id,
+                    'assigned_at' => now(),
+                    'assigned_by' => $trainer->getKey(),
+                ]);
+            }
+
+            /*
+             * 🚨 **La conversazione che c'era gia' diventa illimitata** — M6.2.
+             *
+             * ⚠️ Senza, la persona verrebbe assegnata al trainer e resterebbe
+             * comunque bloccata nel filo dove si erano conosciuti: assegnata,
+             * con la storia sotto gli occhi, e la penna ferma.
+             *
+             * 💡 `between()` la trova o la crea: se l'invito arriva da fuori
+             * dalla chat, quella conversazione nasce adesso — gia' senza limite.
+             */
+            $c = Conversation::between($trainer, $utente);
+            $c->tipo = TipoConversazione::Iscritto;
+            $c->save();
+
+            $invito->forceFill([
+                'used_at' => now(),
+                'accepted_by' => $utente->getKey(),
+            ])->save();
+
+            return $utente;
+        });
     }
 
     /**

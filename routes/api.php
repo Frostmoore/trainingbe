@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -448,6 +449,20 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('conversations/informazioni', [ConversationController::class, 'informazioni'])
             ->middleware('throttle:catalogo');
+
+        /*
+         * 🚨 Riscattare un invito **avendo gia' un account** — M6.2.
+         *
+         * Diversa da `auth/register-with-invite`, che invece **crea** la persona.
+         * ⚠️ Qui chi arriva ha gia' l'app, magari ha appena finito i tre
+         * messaggi con quel trainer: mandarlo su un modulo di registrazione gli
+         * direbbe di crearsi un secondo account.
+         *
+         * 💡 Sotto `throttle:auth-login`: un token per volta, e provarli a
+         * tappeto non deve essere comodo.
+         */
+        Route::post('inviti/{token}/riscatta', [InvitoController::class, 'riscatta'])
+            ->middleware('throttle:auth-login');
         Route::get('conversations/contacts', [ConversationController::class, 'contacts']);
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
