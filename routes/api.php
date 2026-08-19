@@ -490,6 +490,17 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/contacts', [ConversationController::class, 'contacts']);
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'store'])->whereNumber('conversation');
+
+        // ── L'usa e getta (N16) ──────────────────────────────────────────
+        //
+        // 🚨 **E' una rotta a parte, e non `read`.** `read` vuol dire «ho
+        // guardato la lista», e la lista si guarda aprendo la conversazione:
+        // legarci l'usa e getta avrebbe bruciato ogni messaggio effimero
+        // nell'istante in cui la chat si apre, prima che qualcuno lo leggesse.
+        // Questa la chiama l'app quando si CHIUDE il visualizzatore.
+        Route::post('conversations/{conversation}/messages/{message}/vista', [ConversationController::class, 'vista'])
+            ->whereNumber('conversation')
+            ->whereNumber('message');
         Route::post('conversations/{conversation}/read', [ConversationController::class, 'read'])->whereNumber('conversation');
 
         // ── Le foto della chat, in transito (N14) ────────────────────────

@@ -89,6 +89,30 @@ Schedule::command('chat:pota-allegati')
 
 /*
 |--------------------------------------------------------------------------
+| Le buste usa e getta scadute (N16)
+|--------------------------------------------------------------------------
+|
+| #! Un messaggio "una volta sola" smette di essere consegnato a chi lo riceve
+| appena lo apre, ma resta sul server per le 24 ore di chi lo ha mandato. Se il
+| destinatario non apre mai, non si fermerebbe nemmeno quello.
+|
+| /!\ Senza questa passata una busta effimera resterebbe sul server per sempre,
+| che e' l'esatto contrario di quello che ha chiesto chi l'ha mandata - e
+| nessuno se ne accorgerebbe, perche' dall'app sembrerebbe sparita.
+|
+| * Ogni ora come gli allegati: la promessa e' "24 ore", e una passata
+| giornaliera la trasformerebbe in "fino a 48".
+*/
+Schedule::command('chat:pota-effimeri')
+    ->hourly()
+    ->withoutOverlapping(30)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura delle buste effimere fallita: i messaggi usa e getta restano sul server.');
+    });
+
+/*
+|--------------------------------------------------------------------------
 | Le importazioni di piani alimentari scadute (N20)
 |--------------------------------------------------------------------------
 |

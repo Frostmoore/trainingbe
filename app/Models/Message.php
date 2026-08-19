@@ -33,9 +33,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Message extends Model
 {
+    /**
+     * Quanto vive una busta effimera sul server, dal momento dell'invio.
+     *
+     * 🚨 **Lo stesso patto degli allegati (N14), e non e' una
+     * coincidenza**: una foto usa e getta e' una busta piu' un allegato, e due
+     * scadenze diverse avrebbero prodotto il caso peggiore — la traccia che
+     * resta e il file che non c'e' piu', o viceversa.
+     */
+    public const ORE_PER_CHI_MANDA = 24;
+
     protected $fillable = [
         'conversation_id', 'sender_id', 'body', 'envelope_version', 'nonce',
-        'media_id', 'read_at',
+        'media_id', 'read_at', 'usa_e_getta', 'era_foto',
     ];
 
     protected function casts(): array
@@ -43,6 +53,10 @@ class Message extends Model
         return [
             'read_at' => 'datetime',
             'envelope_version' => 'integer',
+            'usa_e_getta' => 'boolean',
+            'era_foto' => 'boolean',
+            'visto_il' => 'datetime',
+            'svuotato_il' => 'datetime',
         ];
     }
 
@@ -79,17 +93,134 @@ class Message extends Model
      *
      * @return array<string, mixed>
      */
-    public function toApiArray(): array
+    public function toApiArray(?int $perChi = null): array
     {
+        $consegnabile = $this->consegnabileA($perChi);
+
         return [
             'id' => $this->id,
             'conversation_id' => $this->conversation_id,
             'sender_id' => $this->sender_id,
             'envelope_version' => $this->envelope_version,
-            'nonce' => $this->nonce,
-            'body' => $this->body,
+
+            /*
+             * 🚨 **La busta si svuota QUI, nella risposta**, non solo
+             * nel database.
+             *
+             * ⚠️ Il comando notturno passa una volta al giorno: fra una passata
+             * e l'altra, senza questo controllo, un messaggio effimero gia'
+             * visto continuerebbe a essere consegnato a chi l'ha visto. La
+             * cancellazione sarebbe una promessa affidata a un cron.
+             */
+            'nonce' => $consegnabile ? $this->nonce : '',
+            'body' => $consegnabile ? $this->body : '',
+
+            'usa_e_getta' => (bool) $this->usa_e_getta,
+
+            /*
+             * 💡 `spenta` dice all'app di mostrare la **traccia** invece di
+             * provare a decifrare: senza, l'app tenterebbe di aprire una busta
+             * vuota e mostrerebbe un errore di decifratura al posto di
+             * «Messaggio effimero».
+             */
+            'spenta' => $this->usa_e_getta && ! $consegnabile,
+
+            /*
+             * 💡 A busta spenta e' l'unico modo per sapere se scrivere «Foto
+             * effimera» o «Messaggio effimero»: il contenuto che lo diceva non
+             * c'e' piu'.
+             */
+            'era_foto' => (bool) $this->era_foto,
+            'visto_il' => $this->visto_il?->toIso8601String(),
+
             'read_at' => $this->read_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Se la busta puo' ancora essere consegnata a questa persona.
+     *
+     * ── 🚨 I due orologi, in una funzione sola ──────────────────────────
+     *
+     * | | Chi riceve | Chi manda |
+     * |---|---|---|
+     * | Fino a quando | Alla **prima apertura** | **24 ore dall'invio** |
+     *
+     * 💡 **Sono diversi di proposito.** Chi manda deve potersi ricordare cosa
+     * ha mandato e a chi, per una giornata. Legarlo all'apertura dell'altro
+     * avrebbe prodotto un comportamento imprevedibile: la stessa foto sparisce
+     * dopo dieci secondi o dopo tre giorni, a seconda di quando l'altro apre
+     * l'app.
+     *
+     * ⚠️ `$perChi === null` vuol dire «non lo so»: succede nel broadcast, che
+     * non ha un destinatario singolo. In quel caso si e' **prudenti** e si
+     * guarda solo se la busta e' ancora piena — l'app riceve comunque la
+     * versione buona con la prossima lettura.
+     */
+    public function consegnabileA(?int $perChi): bool
+    {
+        if (! $this->usa_e_getta) {
+            return true;
+        }
+
+        if ($this->svuotato_il !== null) {
+            return false;
+        }
+
+        if ($this->scadutaPerChiManda()) {
+            return false;
+        }
+
+        // Chi manda la rivede finche' non scadono le 24 ore, anche se l'altro
+        // l'ha gia' aperta.
+        if ($perChi !== null && $perChi === (int) $this->sender_id) {
+            return true;
+        }
+
+        return $this->visto_il === null;
+    }
+
+    public function scadutaPerChiManda(): bool
+    {
+        return $this->created_at !== null
+            && $this->created_at->addHours(self::ORE_PER_CHI_MANDA)->isPast();
+    }
+
+    /**
+     * La prima apertura di chi riceve: da qui in poi la busta non torna piu'.
+     *
+     * 🚨 **Non si svuota la riga adesso.** Chi ha mandato ha ancora le sue
+     * ventiquattro ore, e cancellare il corpo qui gliele toglierebbe nel momento
+     * in cui l'altro apre — cioe' esattamente il comportamento imprevedibile che
+     * i due orologi esistono per evitare.
+     *
+     * ⚠️ **Idempotente**: la prima apertura vince. Un secondo tocco non deve
+     * spostare la data in avanti, perche' quella data e' la prova che il
+     * contenuto e' stato scoperto.
+     */
+    public function segnaVista(): void
+    {
+        if ($this->visto_il !== null) {
+            return;
+        }
+
+        $this->forceFill(['visto_il' => now()])->save();
+    }
+
+    /**
+     * Svuota la busta: restano l'id, il mittente e la data.
+     *
+     * 🚨 **La riga non si cancella.** Un messaggio che sparisce dal mezzo di
+     * una conversazione sembra un guasto; una traccia che dice «Messaggio
+     * effimero» sembra quello che e'.
+     */
+    public function svuota(): void
+    {
+        $this->forceFill([
+            'body' => '',
+            'nonce' => '',
+            'svuotato_il' => now(),
+        ])->save();
     }
 }

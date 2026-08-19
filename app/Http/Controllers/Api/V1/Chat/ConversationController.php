@@ -199,8 +199,16 @@ class ConversationController extends Controller
         $messaggi = $query->limit(min(100, (int) $request->integer('limit', 50)))->get();
 
         return response()->json([
+            /*
+             * 🚨 **`toApiArray()` sa CHI sta guardando** — N16.
+             *
+             * Un messaggio usa e getta gia' aperto non torna piu' a chi lo ha
+             * aperto, e dopo 24 ore non torna piu' nemmeno a chi lo ha mandato.
+             * ⚠️ Senza il destinatario qui, la stessa risposta sarebbe valida
+             * per entrambi — e uno dei due vedrebbe qualcosa che non doveva.
+             */
             'data' => $messaggi->sortBy('id')->values()
-                ->map(fn (Message $m): array => $m->toApiArray())->all(),
+                ->map(fn (Message $m): array => $m->toApiArray((int) $request->user()->id))->all(),
         ]);
     }
 
@@ -259,6 +267,22 @@ class ConversationController extends Controller
             'envelope_version' => ['required', 'integer', 'min:1', 'max:255'],
             'nonce' => ['required', 'string', 'size:32'],
             'body' => ['required', 'string', 'min:1', 'max:8000'],
+
+            /*
+             * 🚨 **Facoltativo, e il default e' `false`.** Un client vecchio
+             * che non conosce il campo continua a mandare messaggi normali: il
+             * difetto in quella direzione mostra un messaggio piu' a lungo del
+             * previsto, nell'altra lo cancellerebbe a chi non aveva chiesto
+             * niente.
+             */
+            'usa_e_getta' => ['nullable', 'boolean'],
+
+            /*
+             * ⚠️ Serve **solo** a scegliere la traccia quando la busta sara'
+             * spenta: «Foto effimera» invece di «Messaggio effimero». Non si
+             * guarda per nient'altro.
+             */
+            'era_foto' => ['nullable', 'boolean'],
         ]);
 
         /*
@@ -275,6 +299,8 @@ class ConversationController extends Controller
                 'envelope_version' => $dati['envelope_version'],
                 'nonce' => $dati['nonce'],
                 'body' => $dati['body'],
+                'usa_e_getta' => (bool) ($dati['usa_e_getta'] ?? false),
+                'era_foto' => (bool) ($dati['era_foto'] ?? false),
             ]);
 
             $this->limite->consuma($request->user(), $c);
@@ -288,7 +314,7 @@ class ConversationController extends Controller
         MessageSent::announce($messaggio);
 
         return response()->json([
-            'data' => $messaggio->toApiArray(),
+            'data' => $messaggio->toApiArray((int) $request->user()->id),
 
             /*
              * 💡 Quanti ne restano **dopo** questo, cosi' l'app aggiorna il
@@ -306,6 +332,55 @@ class ConversationController extends Controller
              */
             'restanti' => $this->cancello->puoScrivere($request->user(), $c->fresh())->restanti,
         ], 201);
+    }
+
+    /**
+     * «L'ho aperto»: da qui in poi la busta effimera non torna piu' — N16.4.
+     *
+     * ── 🚨 Perche' e' una chiamata a parte e non `read` ─────────────────
+     *
+     * `read` vuol dire «ho guardato la lista», e la lista si guarda aprendo la
+     * conversazione. ⚠️ Legarci l'usa e getta avrebbe bruciato ogni messaggio
+     * effimero **nell'istante in cui la chat si apre** — cioe' prima che qualcuno
+     * lo leggesse davvero, e senza che nessuno potesse farci niente.
+     *
+     * 💡 Questa la chiama l'app **quando si chiude il visualizzatore**: la
+     * foto e' stata guardata a schermo intero, il testo e' stato scoperto. E'
+     * l'unico momento in cui «visto» vuol dire davvero visto.
+     *
+     * ── ⚠️ La chiama solo chi RICEVE ──────────────────────────────────────
+     *
+     * Chi ha mandato rilegge i propri messaggi (`crypto_box` glielo permette) e
+     * potrebbe riaprire il proprio: se quel tocco contasse come «visto», si
+     * brucerebbe da solo la busta che ha ancora diritto di vedere per 24 ore.
+     */
+    public function vista(Request $request, int $conversation, int $message): JsonResponse
+    {
+        $c = $this->conversazioneDi($request, $conversation);
+
+        if ($c === null) {
+            return $this->nonTrovata();
+        }
+
+        /*
+         * 🚨 **Attraverso la conversazione, mai per id.** E' la stessa regola
+         * di `PlanExercise`: un messaggio si raggiunge solo dal suo padre,
+         * altrimenti l'id progressivo diventa una chiave universale.
+         */
+        $messaggio = $c->messages()->whereKey($message)->first();
+
+        if ($messaggio === null) {
+            return $this->nonTrovata();
+        }
+
+        // 💡 Chi manda non brucia la propria busta: vedi il dartdoc.
+        if ((int) $messaggio->sender_id === (int) $request->user()->id) {
+            return response()->json(['data' => ['visto' => false]]);
+        }
+
+        $messaggio->segnaVista();
+
+        return response()->json(['data' => ['visto' => true]]);
     }
 
     /** Segna come letto tutto quello che ha scritto l'altro. */
