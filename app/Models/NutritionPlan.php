@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\PlanStatus;
+use App\Enums\TipoPianoAlimentare;
 use App\Models\Concerns\BelongsToTenant;
 use App\Support\Tempo\GiornoLocale;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,12 +30,23 @@ class NutritionPlan extends Model
 
     protected $attributes = [
         'status' => 'draft',
+        /*
+         * 🚨 **Consigli, non piano.** Il default e' il tipo che si puo'
+         * scrivere: cosi' un punto del codice che dimenticasse di indicarlo
+         * crea un documento **piu' povero** del dovuto, non uno che qualcuno
+         * non aveva il titolo di scrivere.
+         *
+         * ⚠️ Nella migrazione il default e' l'opposto (`piano`), e non e' una
+         * contraddizione: la' si stava dando un nome a righe **gia' esistenti**,
+         * qui si sta creando qualcosa di nuovo.
+         */
+        'tipo' => 'consigli',
     ];
 
     protected $fillable = [
         // G4 — D3 (il promemoria privato) e D15 (l'identita' stabile).
         'rif_allievo', 'origine_id',
-        'tenant_id', 'member_id', 'created_by', 'name', 'notes',
+        'tenant_id', 'member_id', 'created_by', 'name', 'tipo', 'notes',
         'target_kcal', 'target_protein_g', 'target_carbs_g', 'target_fat_g',
         'status', 'starts_at', 'ends_at', 'published_at',
     ];
@@ -43,6 +55,7 @@ class NutritionPlan extends Model
     {
         return [
             'status' => PlanStatus::class,
+            'tipo' => TipoPianoAlimentare::class,
             'starts_at' => 'date',
             'ends_at' => 'date',
             'published_at' => 'datetime',

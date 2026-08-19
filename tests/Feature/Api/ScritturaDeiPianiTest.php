@@ -39,7 +39,19 @@ final class ScritturaDeiPianiTest extends TestCase
         parent::setUp();
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'trainer@alfa.test');
+        /*
+         * #! **Nutrizionista, non trainer** - N19/N22, 19/08/2026.
+         *
+         * Questi test scrivono piani con giorni, pasti e grammi: da N19 quello
+         * e' un atto riservato, e un trainer riceve 422. /!\ Non e' una
+         * regressione - e' la funzione che funziona.
+         *
+         * * Il ruolo Nutrizionista e' predisposto e non attivo (nessun percorso
+         * reale lo assegna), ma esiste apposta anche per questo: senza un
+         * autore legittimo tutto il percorso di scrittura annidata sarebbe
+         * diventato codice che nessun test attraversa piu'.
+         */
+        $this->trainer = $this->creaUtente($this->palestra, UserRole::Nutrizionista, 'trainer@alfa.test');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
     }
 
@@ -48,6 +60,8 @@ final class ScritturaDeiPianiTest extends TestCase
     {
         return [
             'name' => 'Definizione',
+            // N19: un piano con grammi e giorni va dichiarato per quello che e'.
+            'tipo' => 'piano',
             'rif_allievo' => 'M.R. spalla dx',
             'days' => [[
                 'name' => 'Giorno 1',
@@ -192,6 +206,8 @@ final class ScritturaDeiPianiTest extends TestCase
         $this->actingAs($this->trainer, 'sanctum')
             ->putJson("/api/v1/nutrition-plans/{$id}", [
                 'name' => 'Definizione',
+                // N19: un piano con grammi e giorni va dichiarato per quello che e'.
+                'tipo' => 'piano',
                 'days' => [['name' => 'Solo uno', 'meals' => []]],
             ])
             ->assertOk();
@@ -252,7 +268,7 @@ final class ScritturaDeiPianiTest extends TestCase
         // Chi l'ha scritto lo vede.
         $r->assertJsonPath('data.rif_allievo', 'M.R. spalla dx');
 
-        $altroTrainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'altro@alfa.test');
+        $altroTrainer = $this->creaUtente($this->palestra, UserRole::Nutrizionista, 'altro@alfa.test');
 
         /*
          * 🚨 **404 e non 403.** Un `403` confermerebbe che quel piano esiste — e

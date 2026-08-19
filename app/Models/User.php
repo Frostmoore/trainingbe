@@ -586,6 +586,23 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasAppRole(UserRole::FreeTrainer);
     }
 
+    /**
+     * Chi puo' comporre un piano alimentare vero — N22.1.
+     *
+     * 🚨 **Non e' un `isTrainer()`, e non deve diventarlo** — stessa regola
+     * di `isFreeTrainer()`, e per una ragione ancora piu' netta: sono due
+     * mestieri diversi. Un trainer che rispondesse `true` qui potrebbe comporre
+     * diete, che e' esattamente cio' che N19 ha tolto.
+     *
+     * ⚠️ Il ruolo e' **predisposto e non attivo**: nessun percorso reale lo
+     * assegna. Serve perche' la struttura a grammi resti provata.
+     */
+    public function isNutrizionista(): bool
+    {
+        return $this->hasAppRole(UserRole::Nutrizionista)
+            || $this->hasAppRole(UserRole::FreeNutrizionista);
+    }
+
     /** Una persona iscritta da sola, senza codice palestra — F2.1. */
     public function isFreeUser(): bool
     {

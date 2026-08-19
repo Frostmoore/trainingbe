@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Api\V1;
 
 use App\Enums\MealType;
+use App\Enums\TipoPianoAlimentare;
 use App\Rules\AlMassimoTreAlternative;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -38,11 +39,42 @@ class NutritionPlanRequest extends FormRequest
         return true;
     }
 
+    /**
+     * Che cosa si sta scrivendo — N19.
+     *
+     * #! **Consigli, se non e' detto altrimenti.** Il default e' il tipo che
+     * chiunque puo' scrivere: un client che dimenticasse il campo crea un
+     * documento piu' povero del dovuto, non uno che non aveva il titolo di
+     * creare. /!\ Il default opposto avrebbe fatto passare per piani veri
+     * tutte le richieste scritte prima di questa versione.
+     */
+    public function tipoRichiesto(): TipoPianoAlimentare
+    {
+        return TipoPianoAlimentare::tryFrom((string) $this->input('tipo'))
+            ?? TipoPianoAlimentare::Consigli;
+    }
+
+    /**
+     * La richiesta contiene quantita', pasti o giorni?
+     *
+     * #! E' la domanda che distingue un consiglio da una dieta, e va fatta sui
+     * DATI e non sull'etichetta: «mangia pollo, riso e broccoli» e' un
+     * consiglio, «200 g di pollo alle 13:00, giorno 3» e' una dieta comunque
+     * la si chiami (§4.11 del piano).
+     */
+    public function haQuantita(): bool
+    {
+        $giorni = $this->input('days');
+
+        return is_array($giorni) && $giorni !== [];
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
             'name' => ['required', 'string', 'max:160'],
+            'tipo' => ['sometimes', Rule::enum(TipoPianoAlimentare::class)],
             'notes' => ['nullable', 'string', 'max:2000'],
 
             // D3 — il promemoria privato. Lo vede solo chi l'ha scritto (R4).

@@ -37,12 +37,34 @@ enum UserRole: string
     /** Una persona che si e' iscritta da sola, senza codice palestra. */
     case FreeUser = 'free_user';
 
+    /**
+     * Chi puo' comporre un piano alimentare vero — N22.1.
+     *
+     * 🚨 **Predisposto, non attivo.** Il ruolo esiste e i suoi confini li
+     * impone il server, ma **non e' assegnabile** da nessun percorso reale
+     * finche' non lo si decide (N22.8).
+     *
+     * ⚠️ La differenza conta: un ruolo a meta' che *si puo' gia' assegnare* e'
+     * un ruolo in produzione, e i confini si scoprono rotti quando qualcuno ci
+     * finisce dentro.
+     *
+     * 💡 Esiste **gia' adesso** perche' la struttura a grammi va tenuta viva
+     * e provata: senza un autore legittimo, tutto il percorso di scrittura dei
+     * piani annidati sarebbe diventato codice che nessun test attraversa.
+     */
+    case Nutrizionista = 'nutrizionista';
+
+    /** Un nutrizionista indipendente, come `FreeTrainer` sta a `Trainer`. */
+    case FreeNutrizionista = 'free_nutrizionista';
+
     public function label(): string
     {
         return match ($this) {
             self::SuperAdmin => 'Amministratore piattaforma',
             self::GymAdmin => 'Amministratore palestra',
             self::Trainer => 'Trainer',
+            self::Nutrizionista => 'Nutrizionista',
+            self::FreeNutrizionista => 'Nutrizionista indipendente',
             self::Member => 'Iscritto',
             self::FreeTrainer => 'Trainer indipendente',
             self::FreeUser => 'Utente senza palestra',
@@ -119,6 +141,22 @@ enum UserRole: string
             // persona vista da due lati — qualcuno che usa l'app e basta. La
             // differenza e' solo chi paga per lei.
             self::Member, self::FreeUser => false,
+
+            /*
+             * 🚨 **Il nutrizionista non entra da nessuna parte** — N22.1.
+             *
+             * Il ruolo e' predisposto e non attivo: non c'e' ancora niente da
+             * mostrargli, e nessun percorso reale lo assegna. ⚠️ «Fallisce
+             * chiuso», che e' lo stesso comportamento scelto per `FreeTrainer`
+             * in F2 — e per la stessa ragione: un ruolo che il pannello non
+             * conosce e' meglio che non entri, invece di entrare e trovare
+             * schermate pensate per qualcun altro.
+             *
+             * 💡 Il giorno di N22.7 questa riga e `User::canAccessPanel()`
+             * cambiano insieme, e `RuoliSenzaPalestraTest` e' li' per
+             * accorgersene se cambiasse una sola delle due.
+             */
+            self::Nutrizionista, self::FreeNutrizionista => false,
         };
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Nutrition;
 
 use App\Enums\PlanStatus;
+use App\Enums\TipoPianoAlimentare;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\NutritionPlanRequest;
 use App\Models\NutritionPlan;
@@ -51,10 +52,63 @@ class NutritionPlanController extends Controller
      * cui esiste meta' di questo piano. Dimenticarlo qui gli aprirebbe l'app e
      * gli chiuderebbe l'unica funzione per cui la usa.
      */
+    /**
+     * 🚨 **Il vincolo di N19, imposto QUI e non solo nascosto nell'app.**
+     *
+     * Un trainer puo' comporre **Consigli Alimentari**: un elenco di alimenti.
+     * Non un piano con quantita', pasti e giorni — quello e' un atto riservato
+     * (§4.11 del piano), e chi lo scrive senza titolo commette esercizio
+     * abusivo della professione.
+     *
+     * ⚠️ Nascondere i campi nell'interfaccia non basta: l'API e' pubblica e
+     * autenticata, e chiunque puo' mandarci un JSON con dentro `days`. Un
+     * vincolo che vive solo nel client **non e' un vincolo**.
+     *
+     * 💡 **403 e non 422**: la richiesta e' ben formata, e il problema non e'
+     * come e' scritta — e' chi la sta scrivendo. Un errore di validazione
+     * manderebbe a cercare un campo sbagliato che non c'e'.
+     */
+    private function tipoNonConsentito(
+        NutritionPlanRequest $request,
+        User $utente,
+    ): ?JsonResponse {
+        $tipo = $request->tipoRichiesto();
+
+        if (! $tipo->scrivibileDa($utente)) {
+            return response()->json([
+                'message' => __('Non puoi comporre un piano alimentare con quantita\' e orari: e\' un atto riservato a medici, biologi nutrizionisti e dietisti. Puoi mandare dei consigli alimentari.'),
+                'code' => 'piano_riservato',
+            ], 403);
+        }
+
+        if (! $tipo->ammetteQuantita() && $request->haQuantita()) {
+            return response()->json([
+                'message' => __('I consigli alimentari sono un elenco di alimenti: senza quantita\', senza orari e senza giorni.'),
+                'code' => 'consigli_senza_quantita',
+            ], 422);
+        }
+
+        return null;
+    }
+
     private function puoScrivere(?User $utente): bool
     {
+        /*
+         * 💡 **Due cancelli, e servono entrambi.**
+         *
+         * Questo dice **chi puo' entrare** in questa rotta; `tipoNonConsentito`
+         * dice **cosa puo' scriverci**. ⚠️ Fonderli sembrerebbe piu' pulito e
+         * sarebbe sbagliato: il primo protegge la rotta da chi non c'entra
+         * niente, il secondo e' il vincolo di N19 — e i due messaggi che
+         * producono devono restare diversi, perche' dicono due cose diverse a
+         * chi li legge.
+         */
         return $utente !== null
-            && ($utente->isTrainer() || $utente->isFreeTrainer() || $utente->isGymAdmin() || $utente->isSuperAdmin());
+            && ($utente->isTrainer()
+                || $utente->isFreeTrainer()
+                || $utente->isGymAdmin()
+                || $utente->isNutrizionista()
+                || $utente->isSuperAdmin());
     }
 
     private function negato(): JsonResponse
@@ -127,6 +181,10 @@ class NutritionPlanController extends Controller
 
         $utente = $request->user();
 
+        if (($no = $this->tipoNonConsentito($request, $utente)) !== null) {
+            return $no;
+        }
+
         $piano = DB::transaction(function () use ($request, $utente): NutritionPlan {
             $dati = $request->validated();
 
@@ -138,6 +196,9 @@ class NutritionPlanController extends Controller
                 'member_id' => null,
                 'created_by' => $utente->getKey(),
                 'name' => $dati['name'],
+                // 🚨 Esplicito: il default del modello e' gia' `consigli`,
+                // ma qui si vede cosa si crea senza doverlo andare a cercare.
+                'tipo' => $request->tipoRichiesto(),
                 'notes' => $dati['notes'] ?? null,
                 'rif_allievo' => $dati['rif_allievo'] ?? null,
                 'target_kcal' => $dati['target_kcal'] ?? null,
@@ -161,6 +222,10 @@ class NutritionPlanController extends Controller
 
     public function update(NutritionPlanRequest $request, int $plan): JsonResponse
     {
+        if (($no = $this->tipoNonConsentito($request, $request->user())) !== null) {
+            return $no;
+        }
+
         $piano = $this->suo($request->user(), $plan);
 
         if ($piano === null) {

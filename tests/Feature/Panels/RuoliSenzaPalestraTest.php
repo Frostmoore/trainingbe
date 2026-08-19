@@ -70,6 +70,21 @@ class RuoliSenzaPalestraTest extends TestCase
         // 💡 Sta con `member`, e non è un caso: sono la stessa persona vista da
         // due lati — qualcuno che usa l'app e basta.
         'free_user' => ['god' => false, 'admin' => false],
+
+        /*
+         * 🆕 N22.1 — il nutrizionista, **predisposto e non attivo**.
+         *
+         * 🚨 **Nessun pannello, ed è la risposta giusta per adesso.** Il ruolo
+         * esiste perché la struttura a grammi resti provata (N19), ma nessun
+         * percorso reale lo assegna e non c'è ancora niente da mostrargli.
+         *
+         * ⚠️ Il giorno che N22.7 gli darà un pannello, questa riga va cambiata
+         * **insieme** — e questo test è il posto in cui ci si ricorda di farlo.
+         * 💡 Nel frattempo «fallisce chiuso», che è lo stesso comportamento
+         * scelto per `free_trainer` in F2 e per la stessa ragione.
+         */
+        'nutrizionista' => ['god' => false, 'admin' => false],
+        'free_nutrizionista' => ['god' => false, 'admin' => false],
     ];
 
     // ───────────────── il test che si accorge di un ruolo nuovo ─────────────────
