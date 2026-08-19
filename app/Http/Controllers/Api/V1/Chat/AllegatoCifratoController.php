@@ -67,17 +67,35 @@ class AllegatoCifratoController extends Controller
             ], 403);
         }
 
+        /*
+         * ⚠️ **Nessuna regola sul tipo del file, ed e' voluto.**
+         *
+         * Arriva un flusso cifrato: da fuori sono byte a caso, e qualunque
+         * controllo su estensione o MIME direbbe soltanto che non e'
+         * un'immagine — cosa che sappiamo. L'unico limite sensato e' la
+         * **misura**, e da N21.2 e' abbastanza larga da farci passare un PDF.
+         */
         $request->validate([
             'file' => ['required', 'file', 'max:'.(int) (AllegatoCifrato::BYTE_MASSIMI / 1024)],
         ]);
 
         /*
-         * ⚠️ **Nessuna regola sul tipo del file, ed e' voluto.**
+         * 🚨 **Il budget, e non solo il limite di frequenza** — N21.2.
          *
-         * Arriva un flusso cifrato: da fuori sono byte a caso, e qualunque
-         * controllo su estensione o MIME direbbe soltanto che non e' un'immagine
-         * — cosa che sappiamo. L'unico limite sensato e' la **misura**.
+         * ⚠️ Con il tetto a 10 MB, venti caricamenti al minuto sono 200 MB al
+         * minuto. Il limite di frequenza da solo non protegge lo spazio: dice
+         * quanto **spesso** si puo' scrivere, non quanto si puo' **occupare**.
+         *
+         * 💡 413 e non 429: non e' «troppo in fretta», e' «troppo in tutto».
+         * Un 429 farebbe aspettare e riprovare, che qui non serve a niente.
          */
+        if (AllegatoCifrato::byteInGiroDi((int) $request->user()->id) >= AllegatoCifrato::BUDGET_BYTE) {
+            return response()->json([
+                'message' => __('Hai troppi allegati in attesa di essere scaricati. Riprova fra qualche ora: si liberano da soli.'),
+                'code' => 'budget_allegati_esaurito',
+            ], 413);
+        }
+
         $allegato = AllegatoCifrato::deposita(
             $c->id,
             (int) $request->user()->id,

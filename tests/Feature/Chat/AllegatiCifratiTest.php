@@ -124,9 +124,91 @@ class AllegatiCifratiTest extends TestCase
          */
         $this->actingAs($this->iscritto)
             ->post("/api/v1/conversations/{$this->filo->id}/allegati", [
-                'file' => UploadedFile::fake()->create('grosso.bin', 4096), // 4 MB
+                'file' => UploadedFile::fake()->create('grosso.bin', 12 * 1024), // 12 MB
             ])
             ->assertStatus(422);
+    }
+
+    #[Test]
+    public function un_pdf_da_otto_megabyte_passa(): void
+    {
+        /*
+         * 🚨 **N21.2** — il tetto era 2 MB, tarato sulle foto. Un piano
+         * alimentare scansionato ne pesa 5-10, e sarebbe stato respinto senza
+         * che nessuno avesse mai deciso di respingerlo.
+         */
+        $this->actingAs($this->iscritto)
+            ->post("/api/v1/conversations/{$this->filo->id}/allegati", [
+                'file' => UploadedFile::fake()->create('piano.bin', 8 * 1024),
+            ])
+            ->assertCreated();
+    }
+
+    #[Test]
+    public function oltre_il_budget_si_riceve_un_no_diverso(): void
+    {
+        /*
+         * 🚨 **Il limite di frequenza non protegge lo spazio.**
+         *
+         * ⚠️ Dice quanto **spesso** si puo' scrivere, non quanto si puo'
+         * **occupare**: con il tetto a 10 MB, venti al minuto sono 200 MB al
+         * minuto su una macchina condivisa con i domini di altri clienti.
+         *
+         * 💡 413 e non 429: non e' «troppo in fretta», e' «troppo in tutto».
+         * Un 429 farebbe aspettare e riprovare, che qui non servirebbe.
+         */
+        AllegatoCifrato::create([
+            'conversation_id' => $this->filo->id,
+            'sender_id' => $this->iscritto->id,
+            'token' => str_repeat('z', 48),
+            'byte_totali' => AllegatoCifrato::BUDGET_BYTE,
+            'scade_il' => now()->addHours(24),
+        ]);
+
+        $this->actingAs($this->iscritto)
+            ->post("/api/v1/conversations/{$this->filo->id}/allegati", [
+                'file' => UploadedFile::fake()->createWithContent('x.bin', $this->byteFinti()),
+            ])
+            ->assertStatus(413)
+            ->assertJsonPath('code', 'budget_allegati_esaurito');
+    }
+
+    #[Test]
+    public function il_budget_non_conta_quelli_gia_scaduti(): void
+    {
+        /*
+         * 💡 Sono spazzatura che il comando orario portera' via: farli pesare
+         * punirebbe qualcuno per un file che non esiste piu' se non nel senso
+         * piu' tecnico.
+         */
+        AllegatoCifrato::create([
+            'conversation_id' => $this->filo->id,
+            'sender_id' => $this->iscritto->id,
+            'token' => str_repeat('y', 48),
+            'byte_totali' => AllegatoCifrato::BUDGET_BYTE,
+            'scade_il' => now()->subHour(),
+        ]);
+
+        $this->assertSame(0, AllegatoCifrato::byteInGiroDi((int) $this->iscritto->id));
+
+        $this->deposita($this->iscritto);
+    }
+
+    #[Test]
+    public function il_budget_e_di_chi_manda_non_della_conversazione(): void
+    {
+        // ⚠️ Altrimenti due persone che si scrivono si mangerebbero il budget a
+        // vicenda, e la seconda pagherebbe per la prima.
+        AllegatoCifrato::create([
+            'conversation_id' => $this->filo->id,
+            'sender_id' => $this->iscritto->id,
+            'token' => str_repeat('w', 48),
+            'byte_totali' => AllegatoCifrato::BUDGET_BYTE,
+            'scade_il' => now()->addHours(24),
+        ]);
+
+        // Il trainer, nello stesso filo, deposita senza problemi.
+        $this->deposita($this->trainer);
     }
 
     // ─────────────────────────── lo scarico ────────────────────────────
