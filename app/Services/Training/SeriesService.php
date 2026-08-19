@@ -178,11 +178,13 @@ class SeriesService
     private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate): array
     {
         $etichette = [];
+        $giorni = [];
         $consumate = [];
         $spese = [];
 
         foreach ($da->finoA($a) as $g) {
             $etichette[] = $g->locale()->format('d/m');
+            $giorni[] = $g->etichetta;
             $consumate[] = $assunte[$g->etichetta] ?? 0;
             $spese[] = $bruciate[$g->etichetta] ?? 0;
         }
@@ -190,6 +192,20 @@ class SeriesService
         return [
             'metric' => 'calories',
             'labels' => $etichette,
+
+            /*
+             * 🚨 **Le date vere, accanto alle etichette** — 19/08/2026.
+             *
+             * `labels` e' `d/m`, cioe' testo da mostrare: non ci si puo'
+             * ricostruire un giorno sopra. ⚠️ E all'app serve, perche' le
+             * calorie bruciate misurate dall'orologio **stanno solo sul
+             * telefono** e vanno unite a questa serie **per giorno**.
+             *
+             * 💡 Senza queste date l'app dovrebbe indovinare a quale giorno
+             * corrisponde ogni colonna contando all'indietro da oggi — e
+             * sbaglierebbe al primo scorrimento indietro nello storico.
+             */
+            'dates' => $giorni,
             'consumed' => $consumate,
             'burned' => $spese,
             'granularity' => 'day',
@@ -211,6 +227,7 @@ class SeriesService
     private function perMese(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate, bool $tutto): array
     {
         $etichette = [];
+        $giorni = [];
         $consumate = [];
         $spese = [];
 
@@ -222,6 +239,10 @@ class SeriesService
             $fine = $mese->fineMese()->nonDopoDi($a) ? $mese->fineMese() : $a;
 
             $etichette[] = $mese->locale()->format('m/y');
+
+            // 💡 Il primo giorno del mese: sull'aggregato mensile l'app non
+            // fonde niente, ma la chiave resta leggibile invece che assente.
+            $giorni[] = $inizio->etichetta;
 
             $c = [];
             $b = [];
@@ -243,6 +264,7 @@ class SeriesService
         return [
             'metric' => 'calories',
             'labels' => $etichette,
+            'dates' => $giorni,
             'consumed' => $consumate,
             'burned' => $spese,
             'granularity' => 'month',
