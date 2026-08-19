@@ -84,53 +84,57 @@ enum AiFeature: string
         return $this === self::FoodPhoto
             || $this === self::PdfImport
             // 🚨 N20: un PDF e' un allegato, quindi la chiamata e'
-            // multimodale. Il costo pero' e' suo (50), non i 7 delle altre.
+            // multimodale. Il costo pero' e' suo (50), non i 10 delle altre.
             || $this === self::NutritionPdfImport;
     }
 
     /**
      * Quanto costa questa chiamata a chi ha comprato i gettoni — D16.
      *
-     * 🚨 **7, e il numero e' misurato** — `STIMA-COSTI-AI.md` §3.7.
+     * ── 🚨 Il listino, deciso dal committente il 19/08/2026 ─────────────
      *
-     * Un gettone rappresenta **una chiamata ordinaria**, e una chiamata
-     * ordinaria costa 0,00318 $ (media pesata sull'uso reale: 3 stime da testo,
-     * 6 consigli, 0,57 calorie allenamento). Una foto costa 0,0225 $, cioe'
-     * **7,1 volte**.
+     * | Chiamata | Gettoni |
+     * |---|---|
+     * | Foto di un pasto | **10** |
+     * | PDF di una **scheda** di allenamento | **10** |
+     * | PDF di un **piano alimentare** | **50** |
+     * | Tutto il resto (testo, consiglio, calorie) | **1** |
      *
-     * ⚠️ **Era 6, e sbagliava due volte**: era tarato sul rapporto con la stima
-     * da testo invece che con la chiamata ordinaria, **e** su costi vecchi di
-     * tre giorni — `FOOD_SYSTEM` era cresciuto del 329% con il classificatore
-     * alimentare e nessuno aveva rimisurato.
+     * ⚠️ **Il 10 e' un PREZZO, non una misura.** Il numero misurato era **7**:
+     * una foto costa 0,0225 $ contro 0,00318 $ di una chiamata ordinaria,
+     * cioe' 7,1 volte (`STIMA-COSTI-AI.md` §3.7). Il committente ha scelto 10, e
+     * la differenza e' margine — che e' una decisione commerciale, non un errore
+     * di calcolo.
      *
-     * 💡 Si arrotonda **per eccesso**: il margine del documento e' ±15%, e sul
-     * bordo basso ci perdiamo noi. Su un prezzo si sbaglia dal lato che non fa
-     * danno.
+     * 💡 **Se un giorno il costo misurato superasse il 10**, il prezzo va
+     * rialzato: la regola che non si rompe e' *«il prezzo non scende mai sotto il
+     * costo»*. Questo e' il solo posto in cui cambiarlo.
      *
-     * Se cambia il modello o il prompt, cambia questo numero — ed e' il solo
-     * posto in cui va cambiato.
+     * 🚨 **I 50 del piano alimentare restano un caso a se'.** Un piano non e'
+     * una pagina: sono giorni, pasti, alimenti e grammi, spesso su parecchie
+     * facciate scansionate — *«generalmente sono MOLTO piu' grandi»*, il
+     * committente. La chiamata costa molto piu' di una foto, e contarla a 10
+     * vorrebbe dire venderla sotto costo.
      *
      * ⚠️ **Il listino dice «di cui con foto», il codice conta i multimodali**, e
-     * non e' la stessa cosa: `PdfImport` non e' una foto ma passa da `sonnet-5`
-     * con un documento allegato, quindi costa come una foto. Contarlo insieme
-     * alle stime da testo vorrebbe dire vendere a 1 gettone una chiamata che ne
-     * costa 7.
+     * non e' la stessa cosa: `PdfImport` non e' una foto ma passa da un modello
+     * grande con un documento allegato, quindi costa come una foto.
      *
-     * 💡 La differenza fra il nome commerciale e il criterio tecnico e'
-     * accettabile perche' va nella direzione giusta: chi compra vede un limite
-     * **piu' generoso** di quello che il codice applica alle chiamate care, mai
-     * il contrario.
+     * 💡 La differenza fra nome commerciale e criterio tecnico e' accettabile
+     * perche' va nella direzione giusta: chi compra vede un limite **piu'
+     * generoso** di quello che il codice applica alle chiamate care, mai il
+     * contrario.
      */
     public function costoInGettoni(): int
     {
         return match ($this) {
             /*
-             * 🚨 **50, e non 7 come le altre multimodali** — N20.1.
+             * 🚨 **50, e non 10 come le altre multimodali** — N20.1, listino
+             * confermato dal committente il 19/08/2026.
              *
              * Un piano alimentare non e' una pagina: sono giorni, pasti,
-             * alimenti e grammi, spesso su parecchie facciate scansionate. La
-             * chiamata costa **molto** di piu' di una foto di un piatto, e
-             * contarla a 7 vorrebbe dire venderla sotto costo.
+             * alimenti e grammi, spesso su parecchie facciate scansionate.
+             * *«generalmente sono MOLTO piu' grandi»*.
              *
              * ⚠️ E il prezzo va **detto prima**: chi importa deve sapere che
              * gli costa cinquanta gettoni, non scoprirlo dal saldo.
@@ -141,7 +145,7 @@ enum AiFeature: string
              */
             self::NutritionPdfImport => 50,
 
-            default => $this->isMultimodal() ? 7 : 1,
+            default => $this->isMultimodal() ? 10 : 1,
         };
     }
 

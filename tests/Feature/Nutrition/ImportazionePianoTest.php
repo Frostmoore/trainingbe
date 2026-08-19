@@ -283,7 +283,7 @@ class ImportazionePianoTest extends TestCase
     public function costa_cinquanta_gettoni(): void
     {
         $this->assertSame(50, AiFeature::NutritionPdfImport->costoInGettoni());
-        $this->assertSame(7, AiFeature::FoodPhoto->costoInGettoni());
+        $this->assertSame(10, AiFeature::FoodPhoto->costoInGettoni());
         $this->assertSame(1, AiFeature::FoodText->costoInGettoni());
     }
 }

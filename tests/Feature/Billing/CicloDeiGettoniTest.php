@@ -289,11 +289,21 @@ final class CicloDeiGettoniTest extends TestCase
     }
 
     #[Test]
-    public function a_photo_costs_seven_and_the_balance_says_so(): void
+    public function a_photo_costs_ten_and_the_balance_says_so(): void
     {
-        // 💡 Misurato, non scelto: una foto costa ~7 volte una chiamata
-        // ordinaria (`STIMA-COSTI-AI.md`).
-        $this->assertSame(7, AiFeature::FoodPhoto->costoInGettoni());
+        /*
+         * 🚨 **10 e' un PREZZO, non una misura** — listino del committente,
+         * 19/08/2026.
+         *
+         * 💡 Il numero **misurato** e' 7: una foto costa 7,1 volte una chiamata
+         * ordinaria (`STIMA-COSTI-AI.md` §3.7). La differenza fra 7 e 10 e'
+         * margine, ed e' una decisione commerciale.
+         *
+         * ⚠️ Il test resta perche' la regola che non si rompe e' l'altra: **il
+         * prezzo non scende mai sotto il costo**. Se un giorno il misurato
+         * superasse il 10, e' qui che si scopre.
+         */
+        $this->assertSame(10, AiFeature::FoodPhoto->costoInGettoni());
         $this->assertSame(1, AiFeature::FoodText->costoInGettoni());
     }
 
@@ -347,9 +357,9 @@ final class CicloDeiGettoniTest extends TestCase
             ->assertStatus(402)
             ->assertJsonPath('error', 'ai_credits_exhausted')
             ->assertJsonPath('saldo', 5)
-            // 💡 «te ne servono 7 e ne hai 5» invece del generico «non bastano»:
-            // e' l'unico messaggio che dice **quanto** ricaricare.
-            ->assertJsonPath('servivano', 7);
+            // 💡 «te ne servono 10 e ne hai 5» invece del generico «non
+            // bastano»: e' l'unico messaggio che dice **quanto** ricaricare.
+            ->assertJsonPath('servivano', 10);
 
         $this->assertSame(5, $this->saldo());
     }

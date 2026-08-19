@@ -76,10 +76,20 @@ final class PortafoglioGettoniTest extends TestCase
         $this->assertSame(1, AiFeature::DailyAdvice->costoInGettoni());
         $this->assertSame(1, AiFeature::PlanFood->costoInGettoni());
 
-        $this->assertSame(7, AiFeature::FoodPhoto->costoInGettoni());
+        $this->assertSame(10, AiFeature::FoodPhoto->costoInGettoni());
 
-        // ⚠️ E l'import PDF costa come una foto: stesso modello, stesso allegato.
-        $this->assertSame(7, AiFeature::PdfImport->costoInGettoni());
+        // ⚠️ E il PDF di una **scheda** costa come una foto: stesso modello,
+        // stesso allegato.
+        $this->assertSame(10, AiFeature::PdfImport->costoInGettoni());
+
+        /*
+         * 🚨 Il PDF di un **piano alimentare** no: 50.
+         *
+         * *«generalmente sono MOLTO piu' grandi»* — il committente. Giorni,
+         * pasti, alimenti e grammi su parecchie facciate: contarlo a 10 vorrebbe
+         * dire venderlo sotto costo.
+         */
+        $this->assertSame(50, AiFeature::NutritionPdfImport->costoInGettoni());
     }
 
     // ───────────────────── l'ordine di consumo ─────────────────────
