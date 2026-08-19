@@ -214,7 +214,24 @@ class DiaryController extends Controller
     {
         $dati = $request->validate([
             'date' => ['nullable', 'date'],
-            'kcal' => ['required', 'integer', 'min:0', 'max:20000'],
+            /*
+             * 🚨 **`present` e `nullable`, NON `required`** — difetto misurato
+             * il 19/08/2026.
+             *
+             * Il modulo dell'app dice *«Vuoto = usa la stima degli
+             * allenamenti»*, e mandava `kcal: null` per ottenerlo. Con
+             * `required` quel `null` veniva rifiutato con un **422**: la
+             * funzione promessa nell'interfaccia non esisteva sul server.
+             *
+             * ⚠️ `present` e non solo `nullable`: il campo deve **esserci**. Una
+             * richiesta che lo omette del tutto e' un client che ha sbagliato,
+             * non qualcuno che vuole tornare alla stima — e le due cose non
+             * devono somigliarsi.
+             *
+             * 💡 E' la differenza fra «non lo so» e «oggi ho bruciato zero»:
+             * `null` toglie la riga, `0` la scrive a zero.
+             */
+            'kcal' => ['present', 'nullable', 'integer', 'min:0', 'max:20000'],
         ]);
 
         $utente = $request->user();
@@ -234,6 +251,15 @@ class DiaryController extends Controller
             throw ValidationException::withMessages([
                 'date' => __('Non si possono registrare calorie di un giorno futuro.'),
             ]);
+        }
+
+        if ($dati['kcal'] === null) {
+            DailyBurn::dimentica($utente, $giorno);
+
+            return response()->json(['data' => [
+                'date' => $giorno->etichetta,
+                'kcal' => null,
+            ]], 201);
         }
 
         $riga = DailyBurn::put($utente, $giorno, $dati['kcal']);

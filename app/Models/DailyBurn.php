@@ -69,6 +69,22 @@ class DailyBurn extends Model
         );
     }
 
+    /**
+     * Toglie l'override: da qui in poi vale di nuovo la stima.
+     *
+     * 🚨 **Si cancella la riga, non si scrive zero.** Una riga a zero vuol
+     * dire «oggi ho bruciato zero», che e' una dichiarazione; l'assenza di riga
+     * vuol dire «non lo so», che e' il permesso a stimare. Confonderle
+     * azzererebbe il margine calorico di chi voleva solo tornare alla stima.
+     */
+    public static function dimentica(User $user, GiornoLocale $giorno): void
+    {
+        static::query()
+            ->where('user_id', $user->getKey())
+            ->whereDate('date', $giorno->etichetta)
+            ->delete();
+    }
+
     public static function forDate(User|int $user, GiornoLocale $giorno): ?self
     {
         return static::query()
