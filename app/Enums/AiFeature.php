@@ -27,6 +27,21 @@ enum AiFeature: string
     case PdfImport = 'pdf_import';
 
     /**
+     * L'importazione di un **piano alimentare** da PDF — N20.
+     *
+     * 🚨 **Voce sua e non `PdfImport`**, che e' quella delle schede di
+     * allenamento. ⚠️ Non e' pignoleria: costano in modo diverso (50 contro 7),
+     * e soprattutto **sbagliare qui non si vede**. Un piano alimentare letto
+     * male produce numeri plausibili, non un errore: 200 g letti 20 g e' una
+     * dieta sbagliata su un documento che la persona crede fedele
+     * all'originale.
+     *
+     * 💡 Per questo l'importazione non scrive niente: produce una **bozza**
+     * da confermare riga per riga, con l'originale a fianco (N20.3).
+     */
+    case NutritionPdfImport = 'nutrition_pdf_import';
+
+    /**
      * La stima di un alimento **mentre il trainer compone un piano** — D13.
      *
      * 🚨 **Etichetta propria anche se il contatore e' lo stesso** di `FoodText`.
@@ -48,6 +63,7 @@ enum AiFeature: string
             self::WorkoutKcal => 'Calorie allenamento',
             self::DailyAdvice => 'Consiglio del giorno',
             self::PdfImport => 'Import scheda PDF',
+            self::NutritionPdfImport => 'Import piano alimentare PDF',
             self::PlanFood => 'Alimento nel piano del trainer',
         };
     }
@@ -65,7 +81,11 @@ enum AiFeature: string
      */
     public function isMultimodal(): bool
     {
-        return $this === self::FoodPhoto || $this === self::PdfImport;
+        return $this === self::FoodPhoto
+            || $this === self::PdfImport
+            // 🚨 N20: un PDF e' un allegato, quindi la chiamata e'
+            // multimodale. Il costo pero' e' suo (50), non i 7 delle altre.
+            || $this === self::NutritionPdfImport;
     }
 
     /**
@@ -103,7 +123,26 @@ enum AiFeature: string
      */
     public function costoInGettoni(): int
     {
-        return $this->isMultimodal() ? 7 : 1;
+        return match ($this) {
+            /*
+             * 🚨 **50, e non 7 come le altre multimodali** — N20.1.
+             *
+             * Un piano alimentare non e' una pagina: sono giorni, pasti,
+             * alimenti e grammi, spesso su parecchie facciate scansionate. La
+             * chiamata costa **molto** di piu' di una foto di un piatto, e
+             * contarla a 7 vorrebbe dire venderla sotto costo.
+             *
+             * ⚠️ E il prezzo va **detto prima**: chi importa deve sapere che
+             * gli costa cinquanta gettoni, non scoprirlo dal saldo.
+             *
+             * 💡 Un `match` e non una terza regola generale: le eccezioni
+             * di prezzo sono per caso, e una regola in piu' («i documenti
+             * costano X») sarebbe sbagliata al primo caso che non ci rientra.
+             */
+            self::NutritionPdfImport => 50,
+
+            default => $this->isMultimodal() ? 7 : 1,
+        };
     }
 
     /** @return array<string, string> */
