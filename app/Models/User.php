@@ -150,6 +150,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
              */
             'age_confirmed_at' => 'datetime',
             'terms_accepted_at' => 'datetime',
+            'consensi_chiesti_il' => 'datetime',
             'health_consent_at' => 'datetime',
             'ai_consent_at' => 'datetime',
 

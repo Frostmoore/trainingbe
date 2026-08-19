@@ -553,6 +553,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('account/consents', [ConsentController::class, 'show']);
         Route::patch('account/consents', [ConsentController::class, 'update']);
 
+        // 🆕 FASE 2-bis — «gliel'ho chiesto», che non e' «ha accettato».
+        //
+        // 🚨 Senza questa data, «non gliel'ho mai chiesto» e «ha detto no a
+        // tutto» sono lo stesso stato — tre `null` — e chi rifiuta si vede
+        // riproporre la domanda a ogni reinstallazione.
+        Route::post('account/consents/chiesti', [ConsentController::class, 'segnaChiesti']);
+
         // ── Il fuso orario della persona (A3) ─────────────────────────────
         //
         // 🚨 Il server non può indovinarlo: l'IP dice dov'è la rete, l'offset

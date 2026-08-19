@@ -81,6 +81,32 @@ class ConsentController extends Controller
      * (art. 7(3), terzo periodo). Chi vuole anche la cancellazione ha
      * `DELETE /account`.
      */
+    /**
+     * «Gliel'ho chiesto» — FASE 2-bis, 19/08/2026.
+     *
+     * 🚨 **La chiama l'app dopo aver MOSTRATO la domanda**, non dopo che
+     * qualcuno ha risposto di si'. La domanda a cui questa data risponde e'
+     * *«gliel'ho gia' chiesto?»*, non *«ha accettato?»* — e le due sono
+     * diverse proprio nel caso che conta: chi rifiuta tutto.
+     *
+     * ⚠️ **Idempotente**: la prima volta vince. Riscriverla a ogni apertura
+     * sposterebbe in avanti una data che serve a sapere **da quando** quella
+     * persona ha gia' visto la schermata.
+     *
+     * 💡 Non tocca nessun consenso: e' un fatto sulla nostra interfaccia,
+     * non su chi la usa.
+     */
+    public function segnaChiesti(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        if ($utente->consensi_chiesti_il === null) {
+            $utente->forceFill(['consensi_chiesti_il' => now()])->save();
+        }
+
+        return response()->json(['data' => $this->stato($utente)]);
+    }
+
     public function update(Request $request): JsonResponse
     {
         $dati = $request->validate([
@@ -157,6 +183,20 @@ class ConsentController extends Controller
             'consiglio_automatico' => (bool) $utente->consiglio_automatico,
             'age_confirmed_at' => $utente->age_confirmed_at?->toIso8601String(),
             'terms_accepted_at' => $utente->terms_accepted_at?->toIso8601String(),
+
+            /*
+             * 🚨 **«Chiesti» non e' «dati»** — FASE 2-bis.
+             *
+             * Le tre date sopra dicono quando qualcuno ha detto **si'**. Questa
+             * dice quando gliel'abbiamo **chiesto**, e senza di essa «non
+             * gliel'ho mai chiesto» e «ha detto no a tutto» sono lo stesso
+             * stato: tre `null`.
+             *
+             * ⚠️ Ed e' la differenza fra chiedere una volta e chiedere a ogni
+             * reinstallazione — che la seconda volta e' un fastidio, e la terza
+             * un motivo per disinstallare.
+             */
+            'chiesti_il' => $utente->consensi_chiesti_il?->toIso8601String(),
         ];
     }
 }
