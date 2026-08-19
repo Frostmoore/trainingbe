@@ -188,7 +188,7 @@ class Profile extends Model
      * sarebbe peggio che non restituirne nessuno — l'utente ci costruirebbe
      * sopra una dieta.
      *
-     * @return array{kcal: int, protein_g: int, carbs_g: int, fat_g: int, bmr: float, tdee: float}|null
+     * @return array{kcal: int, protein_g: int, carbs_g: int, fat_g: int, bmr: float, tdee: float, avvertenza: string}|null
      */
     public function computedTargets(?float $weightKg = null): ?array
     {
@@ -220,7 +220,13 @@ class Profile extends Model
         $kcal = $calc->calorieTarget($tdee, $this->goalForFormula());
 
         return array_merge(
-            ['kcal' => $kcal, 'bmr' => $bmr, 'tdee' => $tdee],
+            [
+                'kcal' => $kcal,
+                'bmr' => $bmr,
+                'tdee' => $tdee,
+                // 🚨 N17.4 — l'avvertenza viaggia **con** il numero.
+                'avvertenza' => CalorieCalculator::AVVERTENZA,
+            ],
             $calc->macros($kcal, $this->goalForFormula()),
         );
     }

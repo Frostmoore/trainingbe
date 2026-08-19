@@ -33,6 +33,25 @@ seguendo una terapia o hai avuto disturbi del comportamento alimentare.
 💡 Se qualcosa nei tuoi dati ti preoccupa, l'app non è il posto dove trovare una risposta: è il
 posto da cui portare i numeri a chi può leggerli.
 
+### 2.1 🚨 Il fabbisogno calorico è una stima, e chi può calcolarlo davvero
+
+Il numero di calorie e di macronutrienti che l'app ti mostra nasce da una **formula generica**
+(Mifflin-St Jeor) applicata a quattro dati che hai dichiarato tu: sesso, età, altezza e peso, con
+un coefficiente per l'attività. **Non è una misura del tuo metabolismo**, che si misura in
+laboratorio, e non è un piano alimentare.
+
+⚠️ **In Italia l'elaborazione di una dieta è un atto riservato**: la possono fare **medici, biologi
+nutrizionisti e dietisti**. Né questa app né il tuo trainer possono farlo, e non lo fanno: quello
+che il trainer può mandarti è un **elenco di alimenti**, non un piano con quantità e orari.
+
+💡 **Puoi cambiare quei valori quando vuoi**, e ti conviene farlo se un professionista abilitato
+te ne ha indicati altri: l'app usa i tuoi, non i suoi. La stima resta visibile accanto, così sai
+sempre da dove sei partito.
+
+🚨 **Se importi un piano alimentare fatto da un professionista**, quel piano è suo e la
+responsabilità di ciò che contiene è di chi l'ha redatto e di te che lo carichi. L'app lo
+**trascrive**, non lo verifica: ricontrolla sempre i valori trascritti contro l'originale.
+
 ## 3. Chi può iscriversi
 
 Il servizio è riservato a chi ha **almeno 18 anni**. Iscrivendosi si dichiara di averli.

@@ -22,6 +22,24 @@ use InvalidArgumentException;
 class CalorieCalculator
 {
     /**
+     * ⚠️ **Non e' un consiglio medico** — N17.4.
+     *
+     * In Italia l'elaborazione di una dieta e' un atto sanitario riservato a
+     * medici, biologi nutrizionisti e dietisti. Un numero che dice «devi
+     * mangiare 1.850 kcal» somiglia a una prescrizione anche quando nasce da
+     * una formula di sessant'anni fa applicata a quattro dati anagrafici.
+     *
+     * 🚨 **Viaggia con il numero, dentro la risposta.** L'app ha gia' la sua
+     * avvertenza (`AvvertenzaNutrizionale`), ma questa esce dal server: cosi'
+     * nessun client futuro — un'app nuova, un'integrazione, un pannello — puo'
+     * mostrare il numero **nudo** senza aver deliberatamente buttato via il
+     * campo che gli stava accanto.
+     */
+    public const AVVERTENZA = 'Stima da formule generiche, non un consiglio medico. '
+        .'Per un fabbisogno calcolato su di te e per un piano alimentare, '
+        .'rivolgiti a un biologo nutrizionista, a un dietista o al tuo medico.';
+
+    /**
      * Moltiplicatori del metabolismo basale per livello di attivita'.
      *
      * Sono i valori classici di Harris-Benedict aggiornati; l'ultimo, `athlete`,
