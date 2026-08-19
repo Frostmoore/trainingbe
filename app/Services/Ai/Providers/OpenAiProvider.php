@@ -11,6 +11,7 @@ use App\Services\Ai\AiUsageRecorder;
 use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
+use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
 use App\Services\Ai\Exceptions\AiRateLimitedException;
 use App\Services\Ai\Exceptions\AiUnavailableException;
@@ -119,6 +120,24 @@ class OpenAiProvider implements AiProvider
      */
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
     {
+        throw new AiUnavailableException(
+            'ai_pdf_unsupported',
+            'L\'import da PDF richiede il driver Anthropic.',
+        );
+    }
+
+    public function trascriviPianoAlimentare(
+        string $absolutePath,
+        AiCallContext $ctx,
+        ?string $forceModel = null,
+    ): PianoTrascritto {
+        /*
+         * ⚠️ Come per le schede: **fallisce chiaro invece di provarci**.
+         *
+         * 🚨 Un provider che tentasse comunque, su un piano alimentare,
+         * restituirebbe una trascrizione peggiore senza dirlo — e su questo
+         * documento «peggiore» vuol dire grammi sbagliati.
+         */
         throw new AiUnavailableException(
             'ai_pdf_unsupported',
             'L\'import da PDF richiede il driver Anthropic.',

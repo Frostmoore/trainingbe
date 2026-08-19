@@ -69,6 +69,88 @@ namespace App\Services\Ai;
  */
 final class Prompts
 {
+    /**
+     * Trascrivere un piano alimentare, non interpretarlo — N20.2.
+     *
+     * 🚨 **La consegna e' «ricopia», non «capisci».** Il piano l'ha scritto
+     * un professionista abilitato: qualunque cosa il modello aggiunga, corregga
+     * o «migliori» e' un atto che nessuno gli ha chiesto — e che finirebbe
+     * nella dieta di qualcuno senza che si veda.
+     *
+     * ⚠️ Per questo si chiede esplicitamente di **dichiarare i dubbi** invece
+     * di indovinare: un grammaggio sbiadito su una scansione va segnalato, non
+     * inventato. I dubbi portano chi controlla dritto sulle righe che contano.
+     */
+    public const PIANO_ALIMENTARE_SYSTEM = <<<'TXT'
+        Sei un trascrittore. Ricopi in una struttura dati un piano alimentare
+        gia' redatto da un professionista abilitato.
+
+        REGOLE, in ordine di importanza:
+
+        1. NON correggere, NON completare, NON arrotondare. Se il documento dice
+           "200 g", scrivi 200. Se dice "un cucchiaio", scrivi "un cucchiaio"
+           nella descrizione e lascia i grammi vuoti.
+        2. NON aggiungere alimenti, pasti o giorni che non ci sono.
+        3. Se un valore non e' leggibile con certezza, LASCIALO VUOTO e scrivi
+           una riga in "dubbi" che dica dove si trova e cosa non era chiaro.
+        4. Non dare consigli, non commentare il piano, non valutarlo.
+
+        Il tuo lavoro e' fedelta', non qualita'. Un valore mancante si corregge
+        in due secondi; un valore inventato non lo scopre nessuno.
+        TXT;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function pianoAlimentareSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'required' => ['nome', 'giorni', 'confidenza'],
+            'properties' => [
+                'nome' => ['type' => 'string'],
+                'confidenza' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+                'dubbi' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                ],
+                'giorni' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'required' => ['pasti'],
+                        'properties' => [
+                            'nome' => ['type' => 'string'],
+                            'pasti' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'required' => ['alimenti'],
+                                    'properties' => [
+                                        'tipo' => ['type' => 'string'],
+                                        'orario' => ['type' => 'string'],
+                                        'alimenti' => [
+                                            'type' => 'array',
+                                            'items' => [
+                                                'type' => 'object',
+                                                'required' => ['descrizione'],
+                                                'properties' => [
+                                                    'descrizione' => ['type' => 'string'],
+                                                    'grammi' => ['type' => 'number'],
+                                                    'quantita' => ['type' => 'string'],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
     public const FOOD_SYSTEM = <<<'TXT'
         # RUOLO
 

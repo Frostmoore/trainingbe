@@ -7,6 +7,7 @@ namespace App\Services\Ai\Contracts;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
+use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
 
 /**
@@ -58,4 +59,18 @@ interface AiProvider
     public function dailyAdvice(array $context, AiCallContext $ctx): string;
 
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan;
+
+    /**
+     * Trascrive un piano alimentare da PDF — N20.2.
+     *
+     * 🚨 **Torna una trascrizione, non un piano.** Il piano lo ha fatto un
+     * professionista abilitato ed e' nel PDF; questo e' il tentativo di
+     * ricopiarlo in una struttura, e finche' qualcuno non lo ha guardato riga
+     * per riga non vale niente.
+     */
+    public function trascriviPianoAlimentare(
+        string $absolutePath,
+        AiCallContext $ctx,
+        ?string $forceModel = null,
+    ): PianoTrascritto;
 }

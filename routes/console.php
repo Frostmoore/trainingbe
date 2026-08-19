@@ -86,3 +86,28 @@ Schedule::command('chat:pota-allegati')
     ->onFailure(function (): void {
         Log::error('Potatura degli allegati fallita: le foto della chat restano oltre le 24 ore.');
     });
+
+/*
+|--------------------------------------------------------------------------
+| Le importazioni di piani alimentari scadute (N20)
+|--------------------------------------------------------------------------
+|
+| #! Un'importazione se ne va quando l'app la chiude: bozza confermata e portata
+| sul telefono, oppure scartata. Questo comando copre il caso in cui nessuno la
+| chiuda mai - la persona apre il PDF, si stanca alla decima riga e non torna.
+|
+| /!\ E non e' un file qualunque: e' un PDF con dentro la dieta di qualcuno,
+| cioe' la cosa piu' delicata che passi da questo server.
+|
+| * Ogni notte e non ogni ora: la promessa e' "sette giorni", non "24 ore", e
+| una passata giornaliera la mantiene con ampio margine.
+|
+| /!\ In background e senza sovrapposizioni: server condiviso con altri domini.
+*/
+Schedule::command('piani:pota-importazioni')
+    ->dailyAt('03:20')
+    ->withoutOverlapping(30)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura delle importazioni fallita: PDF di piani alimentari restano oltre i 7 giorni.');
+    });

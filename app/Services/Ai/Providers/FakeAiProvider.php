@@ -9,6 +9,7 @@ use App\Services\Ai\AiUsageRecorder;
 use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
+use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
 use Throwable;
 
@@ -163,6 +164,55 @@ class FakeAiProvider implements AiProvider
             ],
         ]);
     }
+
+    public function trascriviPianoAlimentare(
+        string $absolutePath,
+        AiCallContext $ctx,
+        ?string $forceModel = null,
+    ): PianoTrascritto {
+        $this->record('trascriviPianoAlimentare', ['path' => $absolutePath, 'model' => $forceModel], $ctx);
+
+        /*
+         * 💡 La trascrizione finta porta **un dubbio**, di proposito.
+         *
+         * ⚠️ Un finto che risponde sempre perfetto fa scrivere test che non
+         * attraversano mai il caso interessante — cioe' quello in cui il
+         * modello dice «qui non ero sicuro», che e' l'unico motivo per cui la
+         * revisione riga per riga esiste.
+         */
+        if ($this->prossimoErrore !== null) {
+            throw $this->prossimoErrore;
+        }
+
+        return $this->prossimoPiano ?? PianoTrascritto::daArray([
+            'nome' => 'Piano importato',
+            'confidenza' => 0.9,
+            'dubbi' => ['Il grammaggio del pranzo del giorno 2 e\' poco leggibile.'],
+            'giorni' => [[
+                'nome' => 'Giorno 1',
+                'pasti' => [[
+                    'tipo' => 'lunch',
+                    'alimenti' => [
+                        ['descrizione' => 'Petto di pollo', 'grammi' => 200],
+                        ['descrizione' => 'Riso basmati', 'grammi' => 80],
+                    ],
+                ]],
+            ]],
+        ]);
+    }
+
+    /** Quello che il prossimo `trascriviPianoAlimentare` restituira'. */
+    public ?PianoTrascritto $prossimoPiano = null;
+
+    /**
+     * Quello che il prossimo `trascriviPianoAlimentare` lancera' invece di
+     * rispondere.
+     *
+     * 💡 Serve a provare che **un'importazione fallita non si paga**: il
+     * caso non e' raggiungibile altrimenti, perche' il finto per definizione non
+     * ha disservizi.
+     */
+    public ?Throwable $prossimoErrore = null;
 
     // ───────────────────────── interni ─────────────────────────
 

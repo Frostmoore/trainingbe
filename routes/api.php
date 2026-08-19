@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
+use App\Http\Controllers\Api\V1\Nutrition\ImportazionePianoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
@@ -428,6 +429,27 @@ Route::prefix('v1')->group(function (): void {
         Route::post('nutrition-plans', [NutritionPlanController::class, 'store']);
         Route::put('nutrition-plans/{plan}', [NutritionPlanController::class, 'update'])->whereNumber('plan');
         Route::delete('nutrition-plans/{plan}', [NutritionPlanController::class, 'destroy'])->whereNumber('plan');
+
+        // ── L'importazione di un piano da PDF (N20) ────────────
+        //
+        // 🚨 **Sono rotte della PERSONA, non del trainer.** Il piano lo ha
+        // redatto un professionista abilitato fuori di qui, e chi lo importa e'
+        // l'interessato: nessuna di queste rotte e' raggiungibile da un
+        // trainer, da una palestra o da un amministratore, nemmeno
+        // impersonando. A chi non e' il proprietario si risponde 404 e non
+        // 403, perche' su un piano alimentare anche solo l'esistenza dice
+        // qualcosa sulla salute di qualcuno.
+        //
+        // ⚠️ Costa 50 gettoni: il cancello si apre nel `store`, i gettoni si
+        // scalano nel job e **solo se la trascrizione riesce**.
+        Route::post('importazioni-piani', [ImportazionePianoController::class, 'store'])
+            ->middleware('throttle:importazioni-piani');
+        Route::get('importazioni-piani/{importazione}', [ImportazionePianoController::class, 'show'])
+            ->whereNumber('importazione');
+        Route::get('importazioni-piani/{importazione}/pdf', [ImportazionePianoController::class, 'pdf'])
+            ->whereNumber('importazione');
+        Route::delete('importazioni-piani/{importazione}', [ImportazionePianoController::class, 'destroy'])
+            ->whereNumber('importazione');
 
         // ── Chat (B8.4) ──────────────────────────────────────────────────
         //

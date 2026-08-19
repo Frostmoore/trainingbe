@@ -59,6 +59,21 @@ return [
              * accorgersene.
              */
             'plan_food' => env('AI_MODEL_PLAN_FOOD', 'claude-haiku-4-5'),
+
+            /*
+             * N20 - la trascrizione di un piano alimentare da PDF.
+             *
+             * 🚨 **Il modello migliore che abbiamo, e non si scende.** Qui
+             * il rischio non e' fallire - un fallimento si vede e si rifa'. E'
+             * riuscire **a meta'**: <<200 g>> letti <<20 g>> non danno nessun
+             * errore, danno un piano plausibile e sbagliato che qualcuno
+             * seguira' per settimane.
+             *
+             * ⚠️ Non esiste un'escalation su questa funzione (vedi il job): a 50
+             * gettoni, un secondo tentativo automatico e' una seconda fattura.
+             * Quindi il primo tentativo dev'essere gia' quello buono.
+             */
+            'nutrition_pdf_import' => env('AI_MODEL_NUTRITION_PDF_IMPORT', 'claude-sonnet-5'),
         ],
         'openai' => [
             'food_text' => env('AI_MODEL_OPENAI_FOOD_TEXT', 'gpt-4.1-mini'),
@@ -67,6 +82,15 @@ return [
             'daily_advice' => env('AI_MODEL_OPENAI_ADVICE', 'gpt-4.1-mini'),
             'plan_food' => env('AI_MODEL_OPENAI_PLAN_FOOD', 'gpt-4.1-mini'),
             'pdf_import' => env('AI_MODEL_OPENAI_PDF_IMPORT', 'gpt-4.1'),
+
+            /*
+             * ⚠️ C'e' per non far esplodere `modelFor()`, ma il provider OpenAI
+             * rifiuta comunque i PDF (`ai_pdf_unsupported`): fallire chiaro e'
+             * meglio che provarci e restituire una trascrizione peggiore senza
+             * dirlo - e su questo documento <<peggiore>> vuol dire grammi
+             * sbagliati.
+             */
+            'nutrition_pdf_import' => env('AI_MODEL_OPENAI_NUTRITION_PDF_IMPORT', 'gpt-4.1'),
         ],
     ],
 

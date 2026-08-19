@@ -15,6 +15,7 @@ use App\Services\Ai\AiUsageRecorder;
 use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
+use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
 use App\Services\Ai\Exceptions\AiRateLimitedException;
 use App\Services\Ai\Exceptions\AiUnavailableException;
@@ -174,6 +175,53 @@ class AnthropicProvider implements AiProvider
         );
 
         return ParsedWorkoutPlan::fromArray($dati);
+    }
+
+    public function trascriviPianoAlimentare(
+        string $absolutePath,
+        AiCallContext $ctx,
+        ?string $forceModel = null,
+    ): PianoTrascritto {
+        if (! is_readable($absolutePath)) {
+            throw new AiUnavailableException('ai_pdf_unreadable', 'PDF non leggibile.');
+        }
+
+        if ((int) filesize($absolutePath) > (int) config('ai.pdf.max_bytes')) {
+            throw new AiUnavailableException('ai_pdf_too_large', 'Il PDF supera il limite di dimensione.');
+        }
+
+        $dati = $this->call(
+            $ctx,
+            $forceModel ?? $this->manager->modelFor(AiFeature::NutritionPdfImport, 'anthropic'),
+            Prompts::PIANO_ALIMENTARE_SYSTEM,
+            [[
+                'role' => 'user',
+                'content' => [
+                    [
+                        'type' => 'document',
+                        'source' => [
+                            'type' => 'base64',
+                            'media_type' => 'application/pdf',
+                            'data' => base64_encode((string) file_get_contents($absolutePath)),
+                        ],
+                    ],
+                    [
+                        'type' => 'text',
+                        'text' => 'Ricopia il piano alimentare contenuto in questo documento. Non correggere niente.',
+                    ],
+                ],
+            ]],
+            Prompts::pianoAlimentareSchema(),
+            /*
+             * 💡 16k e non 8k come le schede: un piano alimentare settimanale
+             * con alternative e' parecchio piu' lungo di una scheda, e una
+             * risposta troncata a meta' non da' errore — da' un piano con tre
+             * giorni su sette, che sembra completo.
+             */
+            maxTokens: 16384,
+        );
+
+        return PianoTrascritto::daArray($dati);
     }
 
     // ───────────────────────── il motore ─────────────────────────

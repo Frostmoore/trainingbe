@@ -129,6 +129,27 @@ class RateLimitServiceProvider extends ServiceProvider
                 : [Limit::perMinute(5)->by($request->ip())];
         });
 
+        /*
+        | Importazione dei piani da PDF (N20): 3 all'ora **per utente**.
+        |
+        | 🚨 Stretto, e apposta. Ogni importazione costa 50 gettoni e
+        | fa leggere al modello un PDF multipagina intero: e' la chiamata piu'
+        | cara che abbiamo. Tre all'ora sono larghe per chi sbaglia file e
+        | riprova, strette abbastanza da non far bruciare a nessuno un
+        | portafoglio intero in cinque minuti per un doppio tocco sul pulsante.
+        |
+        | ⚠️ Il tetto vero e' comunque il cancello dei gettoni: questo limite
+        | serve a proteggere dal caso in cui il cancello venga aperto tante volte
+        | di fila prima che il primo job abbia scalato qualcosa.
+        */
+        RateLimiter::for('importazioni-piani', function (Request $request): array {
+            $utente = $request->user();
+
+            return $utente !== null
+                ? [Limit::perHour(3)->by('piani|u'.$utente->getAuthIdentifier())]
+                : [Limit::perHour(1)->by('piani|ip'.$request->ip())];
+        });
+
         RateLimiter::for('ai', function (Request $request): array {
             $utente = $request->user();
 
