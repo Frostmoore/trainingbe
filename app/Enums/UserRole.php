@@ -160,6 +160,40 @@ enum UserRole: string
         };
     }
 
+    /**
+     * Questo ruolo si puo' assegnare a qualcuno? — N22.8.
+     *
+     * ── 🚨 «Predisposto» e «attivo» sono due cose diverse ────────────────
+     *
+     * Il nutrizionista esiste nel codice, i suoi confini li impone il server e
+     * i test lo attraversano. ⚠️ Ma **nessun percorso reale deve poterlo
+     * assegnare** finche' non lo si decide: un ruolo a meta' che si puo' gia'
+     * dare a qualcuno e' un ruolo **in produzione**, e i confini si scoprono
+     * rotti quando qualcuno ci finisce dentro.
+     *
+     * 💡 Il giorno dell'attivazione si cambia **questa riga**, e basta. E'
+     * il motivo per cui la domanda vive qui e non sparsa fra i moduli di
+     * registrazione, il pannello e i comandi di servizio — dove ci si
+     * dimenticherebbe di uno dei tre.
+     */
+    public function assegnabile(): bool
+    {
+        return ! in_array($this, [self::Nutrizionista, self::FreeNutrizionista], true);
+    }
+
+    /**
+     * I ruoli che si possono davvero dare a qualcuno.
+     *
+     * @return array<int, self>
+     */
+    public static function assegnabili(): array
+    {
+        return array_values(array_filter(
+            self::cases(),
+            static fn (self $r): bool => $r->assegnabile(),
+        ));
+    }
+
     /** @return array<int, string> */
     public static function values(): array
     {

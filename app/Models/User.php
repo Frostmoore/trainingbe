@@ -91,6 +91,8 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     {
         return [
             'email_verified_at' => 'datetime',
+            // N22.2 — quando ha dichiarato l'albo, non se.
+            'albo_dichiarato_il' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
@@ -597,6 +599,23 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      * ⚠️ Il ruolo e' **predisposto e non attivo**: nessun percorso reale lo
      * assegna. Serve perche' la struttura a grammi resti provata.
      */
+    /**
+     * Ha dichiarato l'iscrizione a un albo? — N22.2.
+     *
+     * 🚨 **E' un'autocertificazione, non una verifica.** Gli albi hanno
+     * ricerche pubbliche e il giorno che servisse si potrebbe fare — ma **non
+     * e' stata fatta**, e questo commento sta qui per non farlo dimenticare.
+     *
+     * 💡 La data conta piu' del booleano: se un giorno qualcuno
+     * contestasse, la domanda sara' «cosa aveva dichiarato, e a che data».
+     */
+    public function haDichiaratoLAlbo(): bool
+    {
+        return $this->albo !== null
+            && $this->albo_numero !== null
+            && $this->albo_dichiarato_il !== null;
+    }
+
     public function isNutrizionista(): bool
     {
         return $this->hasAppRole(UserRole::Nutrizionista)
