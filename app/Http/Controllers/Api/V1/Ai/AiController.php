@@ -23,6 +23,7 @@ use App\Services\Billing\Exceptions\GettoniEsauritiException;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
+use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -749,6 +750,71 @@ class AiController extends Controller
     private const VOLATILI = ['time', 'day_progress_pct', 'now'];
 
     /**
+     * Gli allenamenti degli ultimi sette giorni, ridotti a quello che il modello
+     * puo' usare — 20/08/2026.
+     *
+     * ══ 🚨 IL NOME DELLA SCHEDA NON PARTE. MAI. ═══════════════════════════
+     *
+     * `$riepilogo['training']['recent']` contiene anche `name`, ed e' l'unico
+     * campo di questo elenco che **non deve uscire di qui**.
+     *
+     * ⚠️ E' la regola gia' scritta in \S3.2 dell'informativa e nell'accordo con le
+     * palestre: *«da un programma post-infortunio si capisce cos'e' successo a
+     * chi lo esegue»*. Un nome come «Riabilitazione spalla — fase 2» e' un dato
+     * sanitario travestito da etichetta, e mandarlo a un modello sarebbe il modo
+     * piu' distratto di trasferirlo.
+     *
+     * 💡 E non serve: al consiglio interessa **quanto e' costata** la seduta, non
+     * come si chiamava. Durata, calorie e numero di serie dicono tutto quello
+     * che c'e' da sapere per decidere cosa mangiare oggi.
+     *
+     * ── ⚠️ Sette giorni, e le sedute aperte restano fuori ──────────────────
+     *
+     * Una seduta ancora in corso non ha una durata: ce l'ha «finora», e cresce
+     * mentre il modello legge. 🚨 Entrerebbe anche nell'hash della cache, quindi
+     * il consiglio si rigenererebbe a ogni apertura della schermata — che e'
+     * esattamente il difetto per cui esiste `VOLATILI`.
+     *
+     * @param  array<string, mixed>  $riepilogo
+     * @return list<array<string, mixed>>
+     */
+    private static function allenamentiDellaSettimana(array $riepilogo, GiornoLocale $oggi): array
+    {
+        $recenti = $riepilogo['training']['recent'] ?? [];
+
+        if (! is_array($recenti)) {
+            return [];
+        }
+
+        $daQuando = $oggi->menoGiorni(7)->inizio();
+        $fuori = [];
+
+        foreach ($recenti as $s) {
+            if (! is_array($s) || ($s['is_open'] ?? false) === true) {
+                continue;
+            }
+
+            $inizio = Carbon::parse((string) $s['started_at']);
+
+            if ($inizio->lessThan($daQuando)) {
+                continue;
+            }
+
+            $fuori[] = [
+                // 💡 Il giorno e l'ora, non l'ISO completo: al modello serve
+                // sapere «giovedi' sera», non il millisecondo.
+                'day' => $inizio->locale('it')->isoFormat('ddd D/MM'),
+                'time' => $inizio->format('H:i'),
+                'duration_minutes' => $s['duration_minutes'] ?? null,
+                'kcal' => $s['kcal'] ?? null,
+                'sets_count' => $s['sets_count'] ?? null,
+            ];
+        }
+
+        return $fuori;
+    }
+
+    /**
      * Il contesto ridotto a **ciò che deve invalidare la cache**.
      *
      * @param  array<string, mixed>  $contesto
@@ -963,6 +1029,20 @@ class AiController extends Controller
             'training' => [
                 'last_30_days' => $riepilogo['training']['last_30_days'],
                 'days_since_last' => $riepilogo['training']['days_since_last'],
+
+                /*
+                 * 🆕 20/08/2026 — gli allenamenti della settimana, non solo i
+                 * conteggi.
+                 *
+                 * 📌 Richiesta del committente: *«passa anche gli ultimi
+                 * allenamenti della settimana al prompt»*.
+                 *
+                 * 💡 Due numeri dicono **quanto** ci si allena; questi dicono
+                 * **come**. Tre sedute da venti minuti e tre da un'ora e mezza
+                 * fanno lo stesso `last_30_days`, e chiedono due consigli
+                 * diversi su cosa mangiare oggi.
+                 */
+                'this_week' => self::allenamentiDellaSettimana($riepilogo, $oggi),
             ],
             'body' => $riepilogo['body'],
 
