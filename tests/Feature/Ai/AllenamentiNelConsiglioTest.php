@@ -287,6 +287,90 @@ final class AllenamentiNelConsiglioTest extends TestCase
         $this->assertArrayNotHasKey('type', $this->contestoMandato()['training']['this_week'][0]);
     }
 
+    // ─────────────── le serie della settimana ───────────────
+
+    /**
+     * 📌 *«sonno dell'ultima settimana, hrv e battito a riposo dell'ultima
+     * settimana, allenamenti dell'ultima settimana con tipo e kcal bruciate»*.
+     */
+    #[Test]
+    public function le_serie_della_settimana_arrivano_al_modello(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+
+        $contesto = $this->contestoMandato([
+            'week_sleep' => [['day' => '19/8', 'hours' => '6.9', 'deep_min' => 70]],
+            'week_hrv' => [['day' => '19/8', 'v' => 48]],
+            'week_resting_hr' => [['day' => '19/8', 'v' => 54]],
+            'week_workouts' => [
+                ['day' => '19/8', 'minutes' => 62, 'type' => 'Pesi', 'kcal' => 680],
+            ],
+        ]);
+
+        $this->assertSame('6.9', (string) $contesto['week_sleep'][0]['hours']);
+        $this->assertSame(48, $contesto['week_hrv'][0]['v']);
+        $this->assertSame('Pesi', $contesto['week_workouts'][0]['type']);
+        $this->assertSame(680, $contesto['week_workouts'][0]['kcal']);
+    }
+
+    /**
+     * ══ 🚨 LA LISTA BIANCA VALE ANCHE DENTRO GLI ELENCHI ═════════════════
+     *
+     * ⚠️ `RECUPERO` filtrava i nomi di primo livello, e bastava finche' i valori
+     * erano numeri. Qui arrivano **elenchi di oggetti**, e un elenco e' un posto
+     * in cui si puo' infilare qualunque cosa.
+     */
+    #[Test]
+    public function i_campi_non_previsti_non_passano(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+
+        $contesto = $this->contestoMandato([
+            'week_workouts' => [[
+                'day' => '19/8',
+                'minutes' => 62,
+                'scheda' => 'Riabilitazione spalla',
+                'note' => 'mal di schiena da tre giorni',
+            ]],
+        ]);
+
+        $voce = $contesto['week_workouts'][0];
+
+        $this->assertArrayNotHasKey('scheda', $voce);
+        $this->assertArrayNotHasKey('note', $voce);
+        $this->assertStringNotContainsString(
+            'Riabilitazione',
+            (string) json_encode($contesto, JSON_UNESCAPED_UNICODE),
+        );
+    }
+
+    /**
+     * 💡 Una voce senza `day` non si puo' mettere in fila: il modello legge
+     * queste serie come una sequenza nel tempo.
+     */
+    #[Test]
+    public function una_voce_senza_giorno_si_scarta(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+
+        $contesto = $this->contestoMandato([
+            'week_hrv' => [['v' => 48], ['day' => '19/8', 'v' => 50]],
+        ]);
+
+        $this->assertCount(1, $contesto['week_hrv']);
+    }
+
+    /** 🚨 Senza consenso separato non parte niente della settimana. */
+    #[Test]
+    public function senza_consenso_la_settimana_non_parte(): void
+    {
+        $contesto = $this->contestoMandato([
+            'week_sleep' => [['day' => '19/8', 'hours' => '6.9']],
+        ]);
+
+        $this->assertArrayNotHasKey('week_sleep', $contesto);
+    }
+
     /** ⚠️ I due conteggi di prima non si toccano: servono a un'altra domanda. */
     #[Test]
     public function i_conteggi_restano_dov_erano(): void

@@ -857,6 +857,46 @@ class AiController extends Controller
      *
      * @var array<string, string> campo => tipo atteso
      */
+    /**
+     * Le serie della settimana, e **la forma esatta di ogni voce** — 20/08/2026.
+     *
+     * ── 🚨 Perche' una lista bianca ANCHE sulle chiavi interne ────────────
+     *
+     * `RECUPERO` e' una lista bianca sui nomi di primo livello, e bastava
+     * finche' i valori erano numeri. ⚠️ Qui arrivano **elenchi di oggetti**, e
+     * un elenco e' un posto in cui si puo' infilare qualunque cosa: senza
+     * questa tabella, «quello che il telefono ha voglia di allegare» tornerebbe
+     * dalla finestra dopo essere stato cacciato dalla porta.
+     *
+     * 💡 Ogni voce viene ricostruita campo per campo: quello che non e' qui
+     * dentro non passa, e quello che c'e' passa **con il tipo giusto**.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const SETTIMANA = [
+        'week_sleep' => [
+            'day' => 'string',
+            'hours' => 'float',
+            'deep_min' => 'int',
+            'rem_min' => 'int',
+            'awake_min' => 'int',
+        ],
+        'week_hrv' => ['day' => 'string', 'v' => 'int'],
+        'week_resting_hr' => ['day' => 'string', 'v' => 'int'],
+        'week_workouts' => [
+            'day' => 'string',
+            'minutes' => 'int',
+            'type' => 'string',
+            'kcal' => 'int',
+        ],
+    ];
+
+    /**
+     * ⚠️ Sette giorni di dati sono al massimo una decina di voci per serie. Il
+     * tetto serve a un client modificato, non all'uso normale.
+     */
+    private const VOCI_AL_MASSIMO = 30;
+
     private const RECUPERO = [
         'hours' => 'float',
         'quality' => 'string',
@@ -947,6 +987,92 @@ class AiController extends Controller
         }
 
         return ['recovery' => $recupero];
+    }
+
+    /**
+     * Le serie della settimana che manda il telefono — 20/08/2026.
+     *
+     * ── 🚨 Il difetto che chiudono ────────────────────────────────────────
+     *
+     * Il consiglio riceveva **una notte sola** e nessun allenamento
+     * dell'orologio. ⚠️ Il committente l'ha visto subito: *«non vede il mio
+     * allenamento di ieri (dice che non mi alleno da un po')»* e *«non e' vero
+     * che di solito dormo bene»*.
+     *
+     * 💡 Erano due sintomi della stessa cosa: **un modello a cui manca il
+     * contesto non tace, lo inventa**. «Dormi bene di solito» era l'unica frase
+     * possibile per chi non ha mai visto le altre sei notti.
+     *
+     * ⚠️ **Stesso consenso del recupero** (`sleep_ai_consent_at`): sono dati
+     * sanitari letti dal telefono che partono verso un modello, ed e'
+     * esattamente cio' che quel consenso copre.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function settimanaDallApp(Request $request): array
+    {
+        if ($request->user()?->sleep_ai_consent_at === null) {
+            return [];
+        }
+
+        $fuori = [];
+
+        foreach (self::SETTIMANA as $serie => $forma) {
+            $grezza = $request->input($serie);
+
+            if (! is_array($grezza)) {
+                continue;
+            }
+
+            $voci = [];
+
+            foreach ($grezza as $voce) {
+                if (count($voci) >= self::VOCI_AL_MASSIMO) {
+                    break;
+                }
+
+                if (! is_array($voce)) {
+                    continue;
+                }
+
+                $pulita = [];
+
+                foreach ($forma as $campo => $tipo) {
+                    $v = $voce[$campo] ?? null;
+
+                    if ($v === null) {
+                        continue;
+                    }
+
+                    if ($tipo !== 'string' && ! is_numeric($v)) {
+                        continue;
+                    }
+
+                    $pulita[$campo] = match ($tipo) {
+                        'float' => round((float) $v, 1),
+                        'int' => (int) $v,
+                        // ⚠️ Tagliato corto: `type` e `day` sono etichette, e
+                        // 32 caratteri bastano per «Nuoto in acque libere».
+                        default => mb_substr((string) $v, 0, 32),
+                    };
+                }
+
+                /*
+                 * 💡 Una voce senza `day` non serve a niente: il modello legge
+                 * queste serie **come una sequenza nel tempo**, e un valore
+                 * senza giorno non si puo' mettere in fila.
+                 */
+                if (isset($pulita['day']) && count($pulita) > 1) {
+                    $voci[] = $pulita;
+                }
+            }
+
+            if ($voci !== []) {
+                $fuori[$serie] = $voci;
+            }
+        }
+
+        return $fuori;
     }
 
     /**
@@ -1150,6 +1276,9 @@ class AiController extends Controller
                 ),
             ],
             'body' => $riepilogo['body'],
+
+            // 🆕 20/08 — la settimana: sonno, HRV, battito e allenamenti.
+            ...$this->settimanaDallApp($request),
 
             // 🆕 16/08/2026 — il recupero, se e solo se la persona l'ha concesso.
             ...$this->recuperoDallApp($request),
