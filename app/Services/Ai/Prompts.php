@@ -496,6 +496,16 @@ final class Prompts
         8-bis. E GUARDA COM'E' ANDATA LA SETTIMANA: `training.this_week`.
            - e' l'elenco degli allenamenti degli ultimi sette giorni, dal piu' recente.
              Ogni voce ha `day`, `time`, `duration_minutes`, `kcal` e `sets_count`;
+           - alcune voci hanno anche `type`: e' un CODICE tecnico che arriva dall'orologio,
+             tipo `STRENGTH_TRAINING` (pesi), `RUNNING` (corsa), `BIKING` (bici),
+             `SWIMMING_POOL` (nuoto), `WALKING` (camminata), `HIGH_INTENSITY_INTERVAL_TRAINING`
+             (HIIT). Se non lo riconosci, ignoralo invece di indovinare;
+           - 🚨 NON scrivere mai il codice nel testo. In italiano si dice «la corsa di
+             ieri», non «il tuo RUNNING di ieri»;
+           - il tipo cambia il consiglio sul cibo piu' della durata: dopo un lavoro di forza
+             contano le proteine, dopo un lungo di corsa contano i carboidrati e i liquidi;
+           - se `type` NON c'e', non sai che allenamento era. Non tirare a indovinare dal
+             numero di serie: una seduta senza tipo e' semplicemente una seduta;
            - i due numeri della regola 8 dicono QUANTO ci si allena, questo elenco dice
              COME. Tre sedute da venti minuti e tre da un'ora e mezza sono lo stesso
              `last_30_days` e chiedono due consigli diversi;

@@ -67,12 +67,15 @@ final class AllenamentiNelConsiglioTest extends TestCase
     }
 
     /**
+     * @param  array<string, mixed>  $query
      * @return array<string, mixed>
      */
-    private function contestoMandato(): array
+    private function contestoMandato(array $query = []): array
     {
+        $url = '/api/v1/ai/advice'.($query === [] ? '' : '?'.http_build_query($query));
+
         $this->comeApp($this->iscritto->fresh())
-            ->getJson('/api/v1/ai/advice')
+            ->getJson($url)
             ->assertOk();
 
         $chiamate = array_values(array_filter(
@@ -190,6 +193,98 @@ final class AllenamentiNelConsiglioTest extends TestCase
 
         $this->assertArrayHasKey('this_week', $contesto['training']);
         $this->assertSame([], $contesto['training']['this_week']);
+    }
+
+    // ─────────────── il tipo, che lo sa solo il telefono ───────────────
+
+    /**
+     * 📌 *«il tipo di allenamento deve partire: se il mio allenamento e' Pesi
+     * questo deve passare»*.
+     *
+     * 💡 Sul server il tipo **non esiste**: l'unico posto dove esiste «Pesi» e'
+     * l'orologio, e quello sta sul telefono.
+     */
+    #[Test]
+    public function il_tipo_arriva_dal_telefono_e_si_attacca_alla_seduta(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+        $seduta = $this->seduta(1);
+
+        $voce = $this->contestoMandato([
+            'training_types' => [$seduta->getKey() => 'STRENGTH_TRAINING'],
+        ])['training']['this_week'][0];
+
+        $this->assertSame('STRENGTH_TRAINING', $voce['type']);
+    }
+
+    /**
+     * ══ 🚨 IL FILTRO CHE TIENE IN PIEDI LA PROMESSA ═══════════════════════
+     *
+     * ⚠️ Il server accetta solo `/^[A-Z_]{2,48}$/`. E' quella regex a garantire
+     * che da qui non possa uscire **testo libero**: e' la ragione per cui e'
+     * stato scelto il codice dell'orologio invece del nome della scheda.
+     *
+     * 🚨 Se questo test diventa rosso, diventano false T17 e la \S3.3-ter
+     * dell'informativa.
+     */
+    #[Test]
+    public function un_tipo_che_e_testo_libero_viene_rifiutato(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+        $seduta = $this->seduta(1);
+
+        $contesto = $this->contestoMandato([
+            'training_types' => [$seduta->getKey() => 'Riabilitazione spalla — fase 2'],
+        ]);
+
+        $this->assertArrayNotHasKey('type', $contesto['training']['this_week'][0]);
+        $this->assertStringNotContainsString(
+            'Riabilitazione',
+            (string) json_encode($contesto, JSON_UNESCAPED_UNICODE),
+        );
+    }
+
+    /** 🚨 Senza il consenso separato il campo si scarta, come il recupero. */
+    #[Test]
+    public function senza_consenso_il_tipo_non_entra(): void
+    {
+        $seduta = $this->seduta(1);
+
+        $voce = $this->contestoMandato([
+            'training_types' => [$seduta->getKey() => 'RUNNING'],
+        ])['training']['this_week'][0];
+
+        $this->assertArrayNotHasKey('type', $voce);
+    }
+
+    /**
+     * ⚠️ Un tipo per una seduta che non esiste **non parte**: la lista bianca e'
+     * sull'`id`, non sulla buona fede del client.
+     */
+    #[Test]
+    public function un_tipo_per_una_seduta_di_nessuno_non_entra(): void
+    {
+        $this->iscritto->registraConsenso('sleep_ai_consent_at', true);
+        $this->seduta(1);
+
+        $voce = $this->contestoMandato([
+            'training_types' => [999999 => 'RUNNING'],
+        ])['training']['this_week'][0];
+
+        $this->assertArrayNotHasKey('type', $voce);
+    }
+
+    /**
+     * 💡 Chiave assente e non `null`: un `null` direbbe al modello «di questo so
+     * che non ha un tipo», che e' falso. La verita' e' «non lo so», e il prompt
+     * (regola 8-bis) dice di non indovinare.
+     */
+    #[Test]
+    public function senza_tipo_la_chiave_non_ce_proprio(): void
+    {
+        $this->seduta(1);
+
+        $this->assertArrayNotHasKey('type', $this->contestoMandato()['training']['this_week'][0]);
     }
 
     /** ⚠️ I due conteggi di prima non si toccano: servono a un'altra domanda. */

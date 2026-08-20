@@ -776,9 +776,14 @@ class AiController extends Controller
      * esattamente il difetto per cui esiste `VOLATILI`.
      *
      * @param  array<string, mixed>  $riepilogo
+     * @param  array<int, string>  $tipi  id della seduta => codice del tipo
      * @return list<array<string, mixed>>
      */
-    private static function allenamentiDellaSettimana(array $riepilogo, GiornoLocale $oggi): array
+    private static function allenamentiDellaSettimana(
+        array $riepilogo,
+        GiornoLocale $oggi,
+        array $tipi = [],
+    ): array
     {
         $recenti = $riepilogo['training']['recent'] ?? [];
 
@@ -800,10 +805,21 @@ class AiController extends Controller
                 continue;
             }
 
+            $id = isset($s['id']) ? (int) $s['id'] : null;
+
             $fuori[] = [
                 // 💡 Il giorno e l'ora, non l'ISO completo: al modello serve
                 // sapere «giovedi' sera», non il millisecondo.
                 'day' => $inizio->locale('it')->isoFormat('ddd D/MM'),
+
+                /*
+                 * 🆕 20/08 — il tipo, quando il telefono ce l'ha detto.
+                 *
+                 * ⚠️ **La chiave c'e' solo se il tipo c'e'.** Un `null` esplicito
+                 * direbbe al modello «di questo allenamento so che non ha un
+                 * tipo», che e' falso: la verita' e' «non lo so».
+                 */
+                ...($id !== null && isset($tipi[$id]) ? ['type' => $tipi[$id]] : []),
                 'time' => $inizio->format('H:i'),
                 'duration_minutes' => $s['duration_minutes'] ?? null,
                 'kcal' => $s['kcal'] ?? null,
@@ -933,6 +949,91 @@ class AiController extends Controller
         return ['recovery' => $recupero];
     }
 
+    /**
+     * Quanti tipi di allenamento si accettano dall'app, al massimo.
+     *
+     * 💡 Sette giorni di allenamenti sono al massimo una decina. Il tetto non
+     * serve a limitare l'uso normale: serve perche' senza, un client modificato
+     * potrebbe allegare mille voci a una richiesta che poi finisce in un prompt
+     * pagato a token.
+     */
+    private const TIPI_AL_MASSIMO = 20;
+
+    /**
+     * Il **tipo** degli allenamenti, che lo sa solo il telefono — 20/08/2026.
+     *
+     * ── 🚨 Perche' arriva dall'app e non dal database ─────────────────────────
+     *
+     * Perche' sul server il tipo **non esiste**: `workout_sessions` ha date,
+     * calorie e note, `workout_plans` ha un nome. ⚠️ L'unico posto dove esiste
+     * «Pesi» e' l'orologio, che scrive `STRENGTH_TRAINING` in Health Connect, e
+     * quello sta sul telefono.
+     *
+     * 📌 Richiesta del committente: *«il tipo di allenamento deve partire: se il
+     * mio allenamento e' Pesi questo deve passare»*.
+     *
+     * ── ══ 🚨 PARTE IL CODICE, NON UN'ETICHETTA ══ ────────────────────────────
+     *
+     * `STRENGTH_TRAINING`, `RUNNING`, `BIKING`: **vocabolario chiuso**, in
+     * maiuscolo e senza spazi. E' la ragione per cui questa strada e' stata
+     * scelta al posto del nome della scheda.
+     *
+     * ⚠️ Il nome della scheda e' **testo libero**: il giorno che qualcuno chiama
+     * una scheda «Riabilitazione spalla — fase 2», quel nome partirebbe verso un
+     * modello e nessuna riga di codice potrebbe distinguerlo da «Pesi». Un
+     * codice `[A-Z_]+` non puo' contenere quella frase — non per convenzione, ma
+     * perche' la validazione la rifiuta.
+     *
+     * 💡 **La regex E' la garanzia**, non un controllo di forma: e' quello che
+     * rende vera la promessa scritta in T4 e in \S3.4 dell'informativa.
+     *
+     * ── ⚠️ Ed e' una lista bianca, come il recupero ───────────────────────────
+     *
+     * Chiave = `id` della seduta, valore = codice. Quello che l'app manda e non
+     * corrisponde a una seduta di questa settimana **non parte**: senza, il
+     * contesto sarebbe «tutto cio' che il telefono ha voglia di allegare».
+     *
+     * @return array<int, string>
+     */
+    private function tipiDallApp(Request $request): array
+    {
+        /*
+         * 🚨 Lo stesso consenso del recupero, e non e' una scorciatoia: e' un
+         * dato sanitario letto dal telefono che parte verso un modello, cioe'
+         * esattamente la cosa che quel consenso copre.
+         */
+        if ($request->user()?->sleep_ai_consent_at === null) {
+            return [];
+        }
+
+        $grezzi = $request->input('training_types');
+
+        if (! is_array($grezzi)) {
+            return [];
+        }
+
+        $fuori = [];
+
+        foreach ($grezzi as $idSeduta => $codice) {
+            if (count($fuori) >= self::TIPI_AL_MASSIMO) {
+                break;
+            }
+
+            if (! is_numeric($idSeduta) || ! is_string($codice)) {
+                continue;
+            }
+
+            // ⚠️ Qui casca il nome della scheda, e deve cascare.
+            if (preg_match('/^[A-Z_]{2,48}$/', $codice) !== 1) {
+                continue;
+            }
+
+            $fuori[(int) $idSeduta] = $codice;
+        }
+
+        return $fuori;
+    }
+
     private function contestoConsiglio(Request $request): array
     {
         $utente = $request->user();
@@ -1042,7 +1143,11 @@ class AiController extends Controller
                  * fanno lo stesso `last_30_days`, e chiedono due consigli
                  * diversi su cosa mangiare oggi.
                  */
-                'this_week' => self::allenamentiDellaSettimana($riepilogo, $oggi),
+                'this_week' => self::allenamentiDellaSettimana(
+                    $riepilogo,
+                    $oggi,
+                    $this->tipiDallApp($request),
+                ),
             ],
             'body' => $riepilogo['body'],
 
