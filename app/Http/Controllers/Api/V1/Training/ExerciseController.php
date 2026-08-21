@@ -51,6 +51,22 @@ class ExerciseController extends Controller
                 // caricata. `null` quando non c'e': l'app disegna un segnaposto
                 // invece di una miniatura rotta.
                 'image_url' => $e->imageUrl(),
+
+                /*
+                 * 🆕 **Il MET viaggia con l'esercizio** — FASE 11.2, 21/08/2026.
+                 *
+                 * 🚨 Da quando gli allenamenti stanno sul telefono, il calcolo
+                 * delle calorie (`MET x kg x ore`) gira **li'**. Ma il catalogo
+                 * degli esercizi resta sul server — e' roba condivisa, non e' di
+                 * nessuno (`plan_tutto_sul_telefono.md` §2.2) — quindi il MET
+                 * deve arrivare insieme all'esercizio, o l'app dovrebbe chiedere
+                 * il catalogo ogni volta che ricalcola.
+                 *
+                 * ⚠️ `null` per i pochi esercizi che non ce l'hanno (1 su 121) e
+                 * per quelli scritti a mano dalle palestre: l'app usa il ripiego
+                 * generico, esattamente come faceva `metOf()` qui.
+                 */
+                'met' => $e->met,
             ])->all(),
         ]);
     }
