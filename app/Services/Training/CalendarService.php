@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Training;
 
-use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\GiornoLocale;
 
@@ -20,7 +18,6 @@ use App\Support\Tempo\GiornoLocale;
 class CalendarService
 {
     public function __construct(
-        private readonly WorkoutCalorieService $calorie,
         private readonly DiaryService $diario,
     ) {}
 
@@ -88,36 +85,25 @@ class CalendarService
             ->orderBy('eaten_at')
             ->get();
 
-        $sessioni = WorkoutSession::query()
-            ->forUser($utente)
-            ->onDate($giorno)
-            ->with('plan')
-            ->withCount('sets')
-            ->orderBy('started_at')
-            ->get();
-
-        $bruciate = $this->calorie->dailyBurned($utente, $giorno);
-        $kg = $this->calorie->bodyweight($utente);
+        /*
+         * ⛔ **Le sedute e le bruciate non si leggono piu' qui** — FASE 11.6,
+         * 21/08/2026.
+         *
+         * 📌 Il committente: *«Nessun allenamento deve risiedere sul server,
+         * devono stare tutti nell'app»*.
+         *
+         * 🚨 Il calendario e' l'ultima schermata in cui cibo e allenamento
+         * convivevano, e da qui in poi hanno **due case diverse**: le calorie
+         * mangiate stanno ancora sul server, gli allenamenti no. ⚠️ L'app le
+         * unisce a valle (`calendarProvider`), che e' l'unico posto dove le due
+         * fonti possono incontrarsi senza che una menta per l'altra.
+         */
 
         return [
             'date' => $giorno->etichetta,
             'title' => ucfirst($giorno->locale()->translatedFormat('l d F Y')),
             'kcal' => (int) round($voci->sum('kcal')),
-            'burned' => $bruciate->toArray(),
             'entries' => $voci->map(fn (FoodEntry $v): array => $this->diario->voce($v))->all(),
-            'sessions' => $sessioni->map(fn (WorkoutSession $s): array => [
-                'id' => $s->id,
-                'plan_name' => $s->plan?->name,
-                'started_at' => $s->started_at->toIso8601String(),
-                'ended_at' => $s->ended_at?->toIso8601String(),
-                'duration_min' => $s->ended_at === null
-                    ? null
-                    : max(1, (int) round($s->started_at->diffInMinutes($s->ended_at))),
-                'sets_count' => $s->sets_count,
-                'kcal' => $s->ended_at === null ? null : $this->calorie->kcalOf($s, $kg),
-                'kcal_source' => $s->kcal_source?->value,
-                'is_open' => $s->ended_at === null,
-            ])->all(),
         ];
     }
 
@@ -146,29 +132,17 @@ class CalendarService
             ->map(fn ($g): int => (int) round($g->sum('kcal')))
             ->all();
 
-        $kg = $this->calorie->bodyweight($utente);
-
-        $sessioni = WorkoutSession::query()
-            ->forUser($utente)
-            ->whereBetween('started_at', $da->finestraFinoA($a))
-            ->get()
-            ->groupBy(fn (WorkoutSession $s): string => GiornoLocale::etichettaDi($s->started_at, $fuso));
-
-        // ⚠️ `daily_burns.date` e' gia' un'etichetta: qui niente finestra.
-        $manuali = DailyBurn::query()
-            ->forUser($utente)
-            ->whereBetween('date', [$da->etichetta, $a->etichetta])
-            ->get(['date', 'kcal'])
-            ->mapWithKeys(fn (DailyBurn $d): array => [$d->date->toDateString() => (int) $d->kcal])
-            ->all();
+        /*
+         * ⛔ Come sopra: allenamenti e bruciate stanno sul telefono — FASE 11.6.
+         * 🚨 Un `workouts` a zero per ogni cella sarebbe stato un mese vuoto e
+         * credibile, senza nessun errore da nessuna parte.
+         */
 
         $oggi = $utente->giornoDiOggi();
         $celle = [];
 
         foreach ($da->finoA($a) as $g) {
             $chiave = $g->etichetta;
-            $delGiorno = $sessioni[$chiave] ?? collect();
-
             $celle[] = [
                 'date' => $chiave,
                 'day' => $g->locale()->day,
@@ -185,10 +159,6 @@ class CalendarService
                  */
                 'kcal' => array_key_exists($chiave, $assunte) ? $assunte[$chiave] : null,
 
-                'workouts' => $delGiorno->count(),
-                'burned' => $manuali[$chiave] ?? (int) $delGiorno->sum(
-                    fn (WorkoutSession $s): int => $this->calorie->kcalOf($s, $kg),
-                ),
                 'in_month' => $meseCorrente === null || $g->locale()->month === $meseCorrente,
 
                 /*

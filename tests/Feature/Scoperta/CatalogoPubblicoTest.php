@@ -55,7 +55,7 @@ class CatalogoPubblicoTest extends TestCase
     // ───────────────────────── il vincolo XOR ─────────────────────────
 
     #[Test]
-    public function una_scheda_non_puo_essere_di_una_palestra_E_di_un_trainer(): void
+    public function una_scheda_non_puo_essere_di_una_palestra_e_di_un_trainer(): void
     {
         /*
          * 🚨 Il vincolo sta nel **database**, non nel modello.
@@ -109,7 +109,7 @@ class CatalogoPubblicoTest extends TestCase
     // ───────────────────────── chi lo vede ─────────────────────────
 
     #[Test]
-    public function il_catalogo_lo_vede_anche_chi_NON_e_autenticato(): void
+    public function il_catalogo_lo_vede_anche_chi_no_n_e_autenticato(): void
     {
         /*
          * 🚨 **Il test che difende la correzione del committente.**
@@ -295,7 +295,7 @@ class CatalogoPubblicoTest extends TestCase
     // ───────────────────────── cosa NON esce ─────────────────────────
 
     #[Test]
-    public function il_catalogo_NON_pubblica_gli_id_dei_proprietari(): void
+    public function il_catalogo_no_n_pubblica_gli_id_dei_proprietari(): void
     {
         /*
          * 🚨 Per aprire una conversazione l'app manda **l'id della scheda**, e il

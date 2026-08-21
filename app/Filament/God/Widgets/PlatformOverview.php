@@ -9,7 +9,6 @@ use App\Models\AiUsageLog;
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\DB;
@@ -65,10 +64,13 @@ class PlatformOverview extends StatsOverviewWidget
             ->where('is_active', true)
             ->count();
 
-        $allenamenti = WorkoutSession::query()
-            ->withoutGlobalScopes([TenantScope::class])
-            ->where('started_at', '>=', now()->startOfMonth())
-            ->count();
+        /*
+         * ⛔ **«Allenamenti del mese» non c'e' piu'** — FASE 11.6, 21/08/2026.
+         *
+         * 🚨 Nemmeno l'amministrazione li vede: le sedute stanno sul telefono di
+         * chi le fa. ⚠️ Non e' una scelta di riservatezza applicata al pannello,
+         * e' che il dato **non esiste piu' qui**.
+         */
 
         $token = (int) AiUsageLog::query()
             ->withoutGlobalScopes([TenantScope::class])
@@ -95,11 +97,6 @@ class PlatformOverview extends StatsOverviewWidget
                 ->description(number_format($token, 0, ',', '.').' token')
                 ->icon('heroicon-m-banknotes')
                 ->color($costo > 0 ? 'warning' : 'gray'),
-
-            Stat::make('Allenamenti del mese', number_format($allenamenti, 0, ',', '.'))
-                ->description('Sessioni registrate dalle app')
-                ->icon('heroicon-m-fire')
-                ->color('success'),
         ];
     }
 }

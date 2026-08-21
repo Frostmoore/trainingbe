@@ -43,8 +43,21 @@ class DiaryService
             ->orderBy('eaten_at')
             ->get();
 
-        $bruciate = $this->calorie->dailyBurned($user, $giorno);
-        $target = $this->targetsFor($user, $giorno, $bruciate->kcal);
+        /*
+         * ⛔ **Le calorie bruciate non si calcolano piu' qui** — FASE 11.6,
+         * 21/08/2026.
+         *
+         * 🚨 Nascevano da `workout_sessions` e `daily_burns`, che dopo il
+         * trasloco stanno sul telefono. ⚠️ Lasciare il campo avrebbe voluto dire
+         * mandare **zero a tutti senza un errore**: l'obiettivo calorico
+         * avrebbe smesso di comprendere l'allenamento, e chi si allena avrebbe
+         * mangiato meno di quanto poteva credendo di essere in regola.
+         *
+         * 💡 Il campo esce dalla risposta invece di valere zero: cosi' l'app
+         * che lo cercasse trova `null` — «non lo so» — e non uno zero che
+         * afferma qualcosa di falso.
+         */
+        $target = $this->targetsFor($user, $giorno);
 
         $totali = FoodEntry::totals($voci);
 
@@ -57,7 +70,6 @@ class DiaryService
             'date' => $giorno->etichetta,
             'meals' => $this->perPasto($voci),
             'totals' => $totali,
-            'burned' => $bruciate->toArray(),
             'targets' => $target,
             'remaining' => $target === null ? null : [
                 'kcal' => round(($target['kcal'] ?? 0) - $totali['kcal'], 2),
@@ -79,9 +91,20 @@ class DiaryService
      *
      * @return array<string, mixed>|null
      */
-    public function targetsFor(User $user, GiornoLocale $giorno, ?int $burnedKcal = null): ?array
+    public function targetsFor(User $user, GiornoLocale $giorno): ?array
     {
-        $bruciate = $burnedKcal ?? $this->calorie->dailyBurned($user, $giorno)->kcal;
+        /*
+         * 🚨 **Il target NON comprende piu' le bruciate** — FASE 11.5.
+         *
+         * ⚠️ Prima era `piano + bruciate`, e l'app sapeva di non doverle
+         * risommare. Adesso il server le bruciate non le conosce, quindi manda
+         * il numero del piano **e basta**: la somma la fa `TargetDelGiorno`
+         * nell'app, che e' l'unico posto dove quella regola vive.
+         *
+         * 💡 E' anche piu' semplice di prima: il doppio conteggio non e' piu'
+         * possibile, perche' non c'e' piu' nessun altro che possa sommare.
+         */
+        $bruciate = 0;
 
         $piano = NutritionPlan::activeFor($user, $giorno);
 

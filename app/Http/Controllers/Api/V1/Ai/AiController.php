@@ -879,6 +879,88 @@ class AiController extends Controller
      *
      * @return array<string, mixed>|null
      */
+    /**
+     * Le calorie bruciate, **mandate dall'app** — FASE 11.6, 21/08/2026.
+     *
+     * == 🚨 IL SERVER NON LE HA PIU' =======================================
+     *
+     * 📌 Il committente: *«Nessun allenamento deve risiedere sul server, devono
+     * stare tutti nell'app»*. Sedute, serie e dichiarazioni a mano stanno
+     * nell'archivio del telefono.
+     *
+     * ⚠️ Prima venivano da `DiaryService::forDate()`, che le calcolava da
+     * `workout_sessions` e `daily_burns`. 🚨 Togliendole senza sostituirle, il
+     * consiglio del giorno avrebbe detto a chi si e' allenato due ore che non
+     * si e' mosso — e lo avrebbe detto **con la stessa sicurezza** di un
+     * consiglio giusto.
+     *
+     * -- ⚠️ Perche' un tetto, e perche' cosi' basso ------------------------
+     *
+     * E' la stessa difesa di [targetDallApp]: questo numero finisce **dentro un
+     * prompt**, e un valore assurdo non produce un errore — produce un
+     * consiglio assurdo. 🚨 6.000 kcal bruciate in un giorno non le fa nessuno:
+     * il vincitore del Tour de France ne fa 8.000 in una tappa di montagna.
+     *
+     * 💡 `null` quando l'app non lo manda: il prompt sa gia' distinguere «zero»
+     * da «non lo so», ed e' la distinzione che regge mezza applicazione.
+     *
+     * @return array<string, mixed>|null
+     */
+    /**
+     * Da quanto ci si allena, **secondo il telefono** — FASE 11.6.
+     *
+     * 🚨 *«Non ti alleni da 5 giorni»* e' la frase che fa tornare in palestra, e
+     * il consiglio del giorno la usa. ⚠️ Con i due conteggi mancanti direbbe
+     * «non ti alleni da sempre» a chi si e' allenato ieri.
+     *
+     * 💡 Il tetto e' la solita difesa da prompt: `days_since_last` oltre l'anno
+     * non aggiunge niente, e `last_30_days` sopra 30 e' impossibile per
+     * costruzione.
+     *
+     * @return array<string, mixed>
+     */
+    private function allenamentoDallApp(Request $request): array
+    {
+        $dati = $request->validate([
+            'training_last_30_days' => ['nullable', 'integer', 'min:0', 'max:60'],
+            'training_days_since_last' => ['nullable', 'integer', 'min:0', 'max:365'],
+        ]);
+
+        if (($dati['training_last_30_days'] ?? null) === null
+            && ($dati['training_days_since_last'] ?? null) === null) {
+            return [];
+        }
+
+        return [
+            'training' => [
+                'last_30_days' => $dati['training_last_30_days'] ?? 0,
+
+                // ⛔ `null` = «non si e' mai allenato», che e' un'altra cosa da
+                // «oggi»: il prompt le tratta diversamente.
+                'days_since_last' => $dati['training_days_since_last'] ?? null,
+            ],
+        ];
+    }
+
+    private function bruciateDallApp(Request $request): ?array
+    {
+        $dati = $request->validate([
+            'burned_kcal' => ['nullable', 'integer', 'min:0', 'max:6000'],
+        ]);
+
+        if (($dati['burned_kcal'] ?? null) === null) {
+            return null;
+        }
+
+        return [
+            'kcal' => (int) $dati['burned_kcal'],
+
+            // 🚨 Dice al modello che il numero arriva dal telefono e non da un
+            // calcolo nostro: e' la stessa onesta' di `targetDallApp`.
+            'source' => 'app',
+        ];
+    }
+
     private function targetDallApp(Request $request): ?array
     {
         $dati = $request->validate([
@@ -964,85 +1046,6 @@ class AiController extends Controller
      */
     private const LUCCHETTO_ATTESA = 12;
 
-    /**
-     * Gli allenamenti degli ultimi sette giorni, ridotti a quello che il modello
-     * puo' usare — 20/08/2026.
-     *
-     * ══ 🚨 IL NOME DELLA SCHEDA NON PARTE. MAI. ═══════════════════════════
-     *
-     * `$riepilogo['training']['recent']` contiene anche `name`, ed e' l'unico
-     * campo di questo elenco che **non deve uscire di qui**.
-     *
-     * ⚠️ E' la regola gia' scritta in \S3.2 dell'informativa e nell'accordo con le
-     * palestre: *«da un programma post-infortunio si capisce cos'e' successo a
-     * chi lo esegue»*. Un nome come «Riabilitazione spalla — fase 2» e' un dato
-     * sanitario travestito da etichetta, e mandarlo a un modello sarebbe il modo
-     * piu' distratto di trasferirlo.
-     *
-     * 💡 E non serve: al consiglio interessa **quanto e' costata** la seduta, non
-     * come si chiamava. Durata, calorie e numero di serie dicono tutto quello
-     * che c'e' da sapere per decidere cosa mangiare oggi.
-     *
-     * ── ⚠️ Sette giorni, e le sedute aperte restano fuori ──────────────────
-     *
-     * Una seduta ancora in corso non ha una durata: ce l'ha «finora», e cresce
-     * mentre il modello legge. 🚨 Entrerebbe anche nell'hash della cache, quindi
-     * il consiglio si rigenererebbe a ogni apertura della schermata — che e'
-     * esattamente il difetto per cui esiste `VOLATILI`.
-     *
-     * @param  array<string, mixed>  $riepilogo
-     * @param  array<int, string>  $tipi  id della seduta => codice del tipo
-     * @return list<array<string, mixed>>
-     */
-    private static function allenamentiDellaSettimana(
-        array $riepilogo,
-        GiornoLocale $oggi,
-        array $tipi = [],
-    ): array {
-        $recenti = $riepilogo['training']['recent'] ?? [];
-
-        if (! is_array($recenti)) {
-            return [];
-        }
-
-        $daQuando = $oggi->menoGiorni(7)->inizio();
-        $fuori = [];
-
-        foreach ($recenti as $s) {
-            if (! is_array($s) || ($s['is_open'] ?? false) === true) {
-                continue;
-            }
-
-            $inizio = Carbon::parse((string) $s['started_at']);
-
-            if ($inizio->lessThan($daQuando)) {
-                continue;
-            }
-
-            $id = isset($s['id']) ? (int) $s['id'] : null;
-
-            $fuori[] = [
-                // 💡 Il giorno e l'ora, non l'ISO completo: al modello serve
-                // sapere «giovedi' sera», non il millisecondo.
-                'day' => $inizio->locale('it')->isoFormat('ddd D/MM'),
-
-                /*
-                 * 🆕 20/08 — il tipo, quando il telefono ce l'ha detto.
-                 *
-                 * ⚠️ **La chiave c'e' solo se il tipo c'e'.** Un `null` esplicito
-                 * direbbe al modello «di questo allenamento so che non ha un
-                 * tipo», che e' falso: la verita' e' «non lo so».
-                 */
-                ...($id !== null && isset($tipi[$id]) ? ['type' => $tipi[$id]] : []),
-                'time' => $inizio->format('H:i'),
-                'duration_minutes' => $s['duration_minutes'] ?? null,
-                'kcal' => $s['kcal'] ?? null,
-                'sets_count' => $s['sets_count'] ?? null,
-            ];
-        }
-
-        return $fuori;
-    }
 
     /**
      * Il contesto ridotto a **ciò che deve invalidare la cache**.
@@ -1441,7 +1444,7 @@ class AiController extends Controller
              * diverso da quello che la persona ha davanti agli occhi.
              */
             'targets' => $giornata['targets'] ?? $this->targetDallApp($request),
-            'burned' => $giornata['burned'],
+            'burned' => $this->bruciateDallApp($request),
             'meals_logged' => count(array_filter(
                 $giornata['meals'],
                 static fn (array $m): bool => $m['entries'] !== [],
@@ -1467,28 +1470,23 @@ class AiController extends Controller
              * 🚨 Chi volesse rimetterli deve prima leggere §C12, dove c'e' la
              * ragione legale per cui non ci sono.
              */
-            'training' => [
-                'last_30_days' => $riepilogo['training']['last_30_days'],
-                'days_since_last' => $riepilogo['training']['days_since_last'],
+            /*
+             * ══ 🚨 L'ALLENAMENTO LO MANDA L'APP — FASE 11.6, 21/08/2026 ═══
+             *
+             * ⚠️ Questo blocco nasceva da `$riepilogo['training']`, cioe' da
+             * `workout_sessions`. Dopo il trasloco il server le sedute non ce
+             * le ha piu'.
+             *
+             * 🚨 **E `this_week` era gia' un doppione**: l'app manda
+             * `week_workouts` da 20/08 (vedi `SETTIMANA`), con giorno, minuti,
+             * tipo e calorie. Il server ricostruiva la stessa settimana dalle
+             * sue righe, e le due versioni potevano gia' divergere.
+             *
+             * 💡 Restano i due conteggi, che ora arrivano anche loro dal
+             * telefono: sono l'unica cosa che `week_workouts` non dice.
+             */
+            ...$this->allenamentoDallApp($request),
 
-                /*
-                 * 🆕 20/08/2026 — gli allenamenti della settimana, non solo i
-                 * conteggi.
-                 *
-                 * 📌 Richiesta del committente: *«passa anche gli ultimi
-                 * allenamenti della settimana al prompt»*.
-                 *
-                 * 💡 Due numeri dicono **quanto** ci si allena; questi dicono
-                 * **come**. Tre sedute da venti minuti e tre da un'ora e mezza
-                 * fanno lo stesso `last_30_days`, e chiedono due consigli
-                 * diversi su cosa mangiare oggi.
-                 */
-                'this_week' => self::allenamentiDellaSettimana(
-                    $riepilogo,
-                    $oggi,
-                    $this->tipiDallApp($request),
-                ),
-            ],
             'body' => $riepilogo['body'],
 
             // 🆕 20/08 — la settimana: sonno, HRV, battito e allenamenti.

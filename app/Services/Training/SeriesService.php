@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\Training;
 
-use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Support\Tempo\GiornoLocale;
 
 /**
  * Le serie temporali per i grafici — C3.
  *
- * Due metriche sole: **peso** e **calorie assunte contro bruciate**. Sono quelle
+ * Due metriche sole: **peso** e **calorie assunte**. Sono quelle
  * dell'app storica, e sono quelle su cui una persona prende decisioni.
  *
  * 🚨 **Perché un servizio e non due query nel controller.** Le regole qui sotto
@@ -36,9 +34,11 @@ class SeriesService
     /** Il passato che «tutto lo storico» copre davvero. */
     private const ANNI_INDIETRO = 10;
 
-    public function __construct(
-        private readonly WorkoutCalorieService $calorie,
-    ) {}
+    /*
+     * ⛔ **Niente piu' `WorkoutCalorieService`** — FASE 11.6: le calorie
+     * dell'allenamento le calcola il telefono (`CalorieAllenamento`), e qui
+     * restano solo quelle **assunte**, che vengono dal diario.
+     */
 
     /**
      * Il peso nel tempo: una serie di punti datati, non una griglia di giorni.
@@ -66,7 +66,15 @@ class SeriesService
         [$da, $a, $tutto] = $this->finestra($utente, $giorni, $offset);
 
         $assunte = $this->kcalAssunte($utente, $da, $a);
-        $bruciate = $this->kcalBruciate($utente, $da, $a);
+        /*
+         * ⛔ **Niente piu' bruciate** — FASE 11.6, 21/08/2026.
+         *
+         * Nascevano da `workout_sessions` e `daily_burns`, che dopo il trasloco
+         * stanno sul telefono. 🚨 Un array di zeri sarebbe stato un grafico
+         * credibile che dice che nessuno si muove: il campo **esce dalla
+         * risposta**, cosi' chi lo cercasse trova `null` — «non lo so» — e non
+         * uno zero che afferma qualcosa di falso.
+         */
         $proteine = $this->proteine($utente, $da, $a);
 
         $perMese = $tutto || $giorni > self::GIORNI_PRIMA_DI_AGGREGARE;
@@ -77,8 +85,8 @@ class SeriesService
              * di grammi non risponde a nessuna domanda che qualcuno si faccia,
              * e chi chiede questa serie la chiede per i sette giorni.
              */
-            ? $this->perMese($da, $a, $assunte, $bruciate, $tutto)
-            : $this->perGiorno($da, $a, $assunte, $bruciate, $proteine);
+            ? $this->perMese($da, $a, $assunte, $tutto)
+            : $this->perGiorno($da, $a, $assunte, $proteine);
     }
 
     // ───────────────────────── la finestra ─────────────────────────
@@ -162,67 +170,23 @@ class SeriesService
             ->all();
     }
 
-    /**
-     * Calorie bruciate per giorno.
-     *
-     * 🚨 **Il valore manuale vince e NON si somma alle sessioni**: è una
-     * dichiarazione complessiva («oggi ho bruciato 800»), non un contributo.
-     * Sommarlo raddoppierebbe la giornata di chi corregge il numero dopo essersi
-     * allenato. È la stessa regola di `WorkoutCalorieService::dailyBurned()`,
-     * applicata qui in blocco perché chiamarla giorno per giorno vorrebbe dire
-     * due query per ogni giorno — 730 su una finestra di un anno.
-     *
-     * @return array<string, int>
-     */
-    private function kcalBruciate(User $utente, GiornoLocale $da, GiornoLocale $a): array
-    {
-        /*
-         * ⚠️ `daily_burns.date` e' una colonna `date`, cioe' **gia' un'etichetta**:
-         * qui si confrontano etichette con etichette, e non ci va la finestra.
-         * E' la meta' di A3 che si sbaglia nel verso opposto.
-         */
-        $manuali = DailyBurn::query()
-            ->forUser($utente)
-            ->whereBetween('date', [$da->etichetta, $a->etichetta])
-            ->get(['date', 'kcal'])
-            ->mapWithKeys(fn (DailyBurn $d): array => [$d->date->toDateString() => (int) $d->kcal])
-            ->all();
-
-        $kg = $this->calorie->bodyweight($utente);
-
-        $daSessioni = WorkoutSession::query()
-            ->forUser($utente)
-            ->whereBetween('started_at', $da->finestraFinoA($a))
-            ->get()
-            ->groupBy(fn (WorkoutSession $s): string => GiornoLocale::etichettaDi($s->started_at, $da->fuso))
-            ->map(fn ($gruppo): int => (int) $gruppo->sum(
-                fn (WorkoutSession $s): int => $this->calorie->kcalOf($s, $kg),
-            ))
-            ->all();
-
-        return array_replace($daSessioni, $manuali);
-    }
-
     // ───────────────────────── le due granularità ─────────────────────────
 
     /**
      * @param  array<string, int>  $assunte
-     * @param  array<string, int>  $bruciate
      * @return array<string, mixed>
      */
-    private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate, array $proteine = []): array
+    private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $proteine = []): array
     {
         $etichette = [];
         $giorni = [];
         $consumate = [];
-        $spese = [];
         $grammi = [];
 
         foreach ($da->finoA($a) as $g) {
             $etichette[] = $g->locale()->format('d/m');
             $giorni[] = $g->etichetta;
             $consumate[] = $assunte[$g->etichetta] ?? 0;
-            $spese[] = $bruciate[$g->etichetta] ?? 0;
             $grammi[] = $proteine[$g->etichetta] ?? 0;
         }
 
@@ -244,7 +208,6 @@ class SeriesService
              */
             'dates' => $giorni,
             'consumed' => $consumate,
-            'burned' => $spese,
 
             /*
              * 🆕 **Le proteine per giorno** — 3b-O.7.3, 21/08/2026.
@@ -259,7 +222,7 @@ class SeriesService
 
             'granularity' => 'day',
             'period' => $da->locale()->format('d/m').' – '.$a->locale()->format('d/m/Y'),
-            'averages' => $this->medie($consumate, $spese),
+            'averages' => $this->medie($consumate),
         ];
     }
 
@@ -270,15 +233,13 @@ class SeriesService
      * calorie, e confrontata con un target giornaliero non vuol dire niente.
      *
      * @param  array<string, int>  $assunte
-     * @param  array<string, int>  $bruciate
      * @return array<string, mixed>
      */
-    private function perMese(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate, bool $tutto): array
+    private function perMese(GiornoLocale $da, GiornoLocale $a, array $assunte, bool $tutto): array
     {
         $etichette = [];
         $giorni = [];
         $consumate = [];
-        $spese = [];
 
         for ($mese = $da->inizioMese(); $mese->nonDopoDi($a); $mese = $mese->piuMesi(1)) {
             $inizio = $mese;
@@ -294,20 +255,14 @@ class SeriesService
             $giorni[] = $inizio->etichetta;
 
             $c = [];
-            $b = [];
 
             foreach ($inizio->finoA($fine) as $g) {
                 if (($assunte[$g->etichetta] ?? 0) > 0) {
                     $c[] = $assunte[$g->etichetta];
                 }
-
-                if (($bruciate[$g->etichetta] ?? 0) > 0) {
-                    $b[] = $bruciate[$g->etichetta];
-                }
             }
 
             $consumate[] = $c === [] ? 0 : (int) round(array_sum($c) / count($c));
-            $spese[] = $b === [] ? 0 : (int) round(array_sum($b) / count($b));
         }
 
         return [
@@ -315,12 +270,11 @@ class SeriesService
             'labels' => $etichette,
             'dates' => $giorni,
             'consumed' => $consumate,
-            'burned' => $spese,
             'granularity' => 'month',
             'period' => $tutto
                 ? 'tutto lo storico (media al giorno, per mese)'
                 : $da->locale()->format('m/y').' – '.$a->locale()->format('m/y').' (media al giorno)',
-            'averages' => $this->medie($consumate, $spese),
+            'averages' => $this->medie($consumate),
         ];
     }
 
@@ -334,17 +288,14 @@ class SeriesService
      * raccomanda di restare prudenti.
      *
      * @param  list<int>  $consumate
-     * @param  list<int>  $spese
      * @return array{consumed: int, burned: int, days_with_data: int}
      */
-    private function medie(array $consumate, array $spese): array
+    private function medie(array $consumate): array
     {
         $conDati = array_values(array_filter($consumate, static fn (int $v): bool => $v > 0));
-        $bruciati = array_values(array_filter($spese, static fn (int $v): bool => $v > 0));
 
         return [
             'consumed' => $conDati === [] ? 0 : (int) round(array_sum($conDati) / count($conDati)),
-            'burned' => $bruciati === [] ? 0 : (int) round(array_sum($bruciati) / count($bruciati)),
             'days_with_data' => count($conDati),
         ];
     }

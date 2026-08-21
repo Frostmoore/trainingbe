@@ -7,7 +7,6 @@ namespace App\Filament\Gym\Widgets;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Support\Tenancy\TenantContext;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -31,21 +30,27 @@ class GymOverview extends StatsOverviewWidget
         $iscritti = $this->idIscritti();
         $totale = count($iscritti);
 
-        $inattivi = $totale === 0 ? 0 : User::query()
-            ->whereIn('id', $iscritti)
-            ->whereDoesntHave('workoutSessions',
-                fn ($q) => $q->where('started_at', '>=', now()->subDays(30)))
-            ->count();
-
         $senzaScheda = $totale === 0 ? 0 : User::query()
             ->whereIn('id', $iscritti)
             ->whereDoesntHave('workoutPlans',
                 fn ($q) => $q->where('status', PlanStatus::Published->value))
             ->count();
 
-        $allenamentiSettimana = WorkoutSession::query()
-            ->where('started_at', '>=', now()->startOfWeek())
-            ->count();
+        /*
+         * ⛔ **«Non si allenano da 30 giorni» e «Allenamenti questa settimana»
+         * non ci sono piu'** — FASE 11.6, 21/08/2026.
+         *
+         * 📌 *«Niente, nemmeno se si allena»* (16/08). Gli allenamenti stanno
+         * sul telefono di chi li fa: non e' che non li mostriamo, il server non
+         * ce li ha piu'.
+         *
+         * ⚠️ **E' una perdita vera, dichiarata**: erano i due numeri con cui una
+         * palestra capiva chi stava per abbandonare. 🚨 Lasciarli avrebbe voluto
+         * dire mostrare **zero a tutti**, che e' peggio di non mostrarli: una
+         * palestra avrebbe creduto che nessuno si allena piu'.
+         *
+         * 💡 Resta «Senza scheda», che nasce dalle schede — quelle restano.
+         */
 
         return [
             Stat::make('Iscritti attivi', (string) $totale)
@@ -53,20 +58,11 @@ class GymOverview extends StatsOverviewWidget
                 ->icon('heroicon-m-user-group')
                 ->color('primary'),
 
-            Stat::make('Non si allenano da 30 giorni', (string) $inattivi)
-                ->description($inattivi > 0 ? 'Sono quelli che stai per perdere' : 'Nessuno: va bene cosi\'')
-                ->icon('heroicon-m-exclamation-triangle')
-                ->color($inattivi > 0 ? 'danger' : 'success'),
-
             Stat::make('Senza scheda pubblicata', (string) $senzaScheda)
                 ->description($senzaScheda > 0 ? 'Aprono l\'app e non trovano niente' : 'Tutti hanno una scheda')
                 ->icon('heroicon-m-clipboard-document-list')
                 ->color($senzaScheda > 0 ? 'warning' : 'success'),
 
-            Stat::make('Allenamenti questa settimana', (string) $allenamentiSettimana)
-                ->description('Sessioni registrate dall\'app')
-                ->icon('heroicon-m-fire')
-                ->color('info'),
         ];
     }
 

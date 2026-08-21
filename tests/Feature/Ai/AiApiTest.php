@@ -20,6 +20,7 @@ use App\Services\Billing\PortafoglioGettoni;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -82,7 +83,7 @@ class AiApiTest extends TestCase
      * no: chi legge questo aiuto non deve credere che sia istantaneo.
      *
      * @param  array<string, mixed>  $dati
-     * @return array<string, mixed>  `estimate`, `warnings`, `entries`, `saved`
+     * @return array<string, mixed> `estimate`, `warnings`, `entries`, `saved`
      */
     private function stimaDaTesto(array $dati, ?User $chi = null): array
     {
@@ -104,7 +105,7 @@ class AiApiTest extends TestCase
      *
      * @param  array<string, mixed>  $stima
      */
-    private function conferma(array $stima, string $fonte = 'ai_text', ?User $chi = null): \Illuminate\Testing\TestResponse
+    private function conferma(array $stima, string $fonte = 'ai_text', ?User $chi = null): TestResponse
     {
         return $this->comeIscritto($chi)->postJson('/api/v1/ai/food/confirm', [
             'items' => $stima['estimate']['items'],

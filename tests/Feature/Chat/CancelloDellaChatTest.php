@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Chat;
 
+use App\Enums\TenantKind;
+use App\Enums\TenantStatus;
 use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
 use App\Events\MessageSent;
@@ -18,9 +20,12 @@ use App\Services\Chat\CancelloDellaChat;
 use App\Services\Chat\LimiteDeiTreMessaggi;
 use App\Services\Chat\Permesso;
 use App\Services\Scoperta\ChiaveComune;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
+use Spatie\Permission\Models\Role;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
@@ -139,7 +144,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function un_estraneo_NON_vede_il_filo_di_altri(): void
+    public function un_estraneo_no_n_vede_il_filo_di_altri(): void
     {
         /*
          * 🚨 Il `tenant_id` nullo non è un buco: il controllo vero è
@@ -170,7 +175,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function finiti_i_tre_si_propone_l_abbonamento_e_NON_i_gettoni(): void
+    public function finiti_i_tre_si_propone_l_abbonamento_e_no_n_i_gettoni(): void
     {
         /*
          * 🚨 M4.3-bis. Un gettone vuol dire **una chiamata all'AI**, dietro cui
@@ -192,7 +197,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function il_limite_e_di_CIASCUNO_non_di_entrambi(): void
+    public function il_limite_e_di_ciascun_o_non_di_entrambi(): void
     {
         /*
          * 🚨 **Il test che giustifica il JSON invece di un contatore unico.**
@@ -236,7 +241,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function leggere_si_puo_SEMPRE_anche_a_limite_finito(): void
+    public function leggere_si_puo_sempr_e_anche_a_limite_finito(): void
     {
         /*
          * 🚨 Il cancello decide **solo la scrittura**. ⚠️ Nascondere la storia a
@@ -276,7 +281,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function restanti_null_NON_e_restanti_zero(): void
+    public function restanti_null_no_n_e_restanti_zero(): void
     {
         /*
          * 🚨 `null` = «nessun limite», `0` = «finiti». ⚠️ Un `?? 0` scritto di
@@ -298,7 +303,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function la_risposta_HTTP_e_il_cancello_non_si_contraddicono_mai(): void
+    public function la_risposta_htt_p_e_il_cancello_non_si_contraddicono_mai(): void
     {
         /*
          * 🚨 **Il test che tiene insieme le due meta'.**
@@ -320,7 +325,7 @@ class CancelloDellaChatTest extends TestCase
     // ────────────── i fili normali non hanno limiti ──────────────
 
     #[Test]
-    public function chi_e_coperto_dall_abbonamento_della_propria_palestra_NON_ha_limiti(): void
+    public function chi_e_coperto_dall_abbonamento_della_propria_palestra_no_n_ha_limiti(): void
     {
         /*
          * 🚨 **La regola vale a livello di piano, non di persona**, ed è giusto:
@@ -413,7 +418,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function iscriversi_NON_sblocca_i_fili_con_ALTRE_palestre(): void
+    public function iscriversi_no_n_sblocca_i_fili_con_altr_e_palestre(): void
     {
         /*
          * 🚨 ⚠️ Sbloccarli tutti vorrebbe dire che il limite si aggira
@@ -448,7 +453,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     #[Test]
-    public function sbloccare_NON_azzera_il_contatore(): void
+    public function sbloccare_no_n_azzera_il_contatore(): void
     {
         /*
          * 💡 Il numero dice quante volte quella persona ha provato prima di
@@ -465,7 +470,7 @@ class CancelloDellaChatTest extends TestCase
     // ────────────── aprire dal catalogo ──────────────
 
     #[Test]
-    public function si_apre_con_l_id_della_SCHEDA_e_non_della_persona(): void
+    public function si_apre_con_l_id_della_sched_a_e_non_della_persona(): void
     {
         /*
          * 🚨 Un `user_id` in ingresso avrebbe voluto dire pubblicare nel
@@ -542,8 +547,8 @@ class CancelloDellaChatTest extends TestCase
             'slug' => 'spazio-'.md5($email),
             'join_code' => strtoupper(substr(md5($email), 0, 8)),
             'contact_email' => $email,
-            'status' => \App\Enums\TenantStatus::Active,
-            'kind' => \App\Enums\TenantKind::Personal,
+            'status' => TenantStatus::Active,
+            'kind' => TenantKind::Personal,
         ]);
 
         $this->ctxRuoli($suo);
@@ -554,9 +559,9 @@ class CancelloDellaChatTest extends TestCase
     /** 💡 I ruoli spatie vivono dentro il tenant: vanno creati lì. */
     private function ctxRuoli(Tenant $tenant): void
     {
-        app(\App\Support\Tenancy\TenantContext::class)->runAs($tenant, function () use ($tenant): void {
+        app(TenantContext::class)->runAs($tenant, function () use ($tenant): void {
             foreach (UserRole::tenantScoped() as $ruolo) {
-                \Spatie\Permission\Models\Role::firstOrCreate([
+                Role::firstOrCreate([
                     'name' => $ruolo->value,
                     'guard_name' => 'web',
                     'tenant_id' => $tenant->id,
@@ -576,7 +581,7 @@ class CancelloDellaChatTest extends TestCase
     }
 
     /** 💡 Una busta di forma valida: il server non ha le chiavi, ma pretende la forma. */
-    private function scrivi(User $chi, Conversation $c): \Illuminate\Testing\TestResponse
+    private function scrivi(User $chi, Conversation $c): TestResponse
     {
         return $this->actingAs($chi)->postJson("/api/v1/conversations/{$c->id}/messages", [
             'envelope_version' => 1,

@@ -79,7 +79,7 @@ class ComuniTest extends TestCase
     }
 
     #[Test]
-    public function la_chiave_NON_toglie_le_parole_di_riempimento(): void
+    public function la_chiave_no_n_toglie_le_parole_di_riempimento(): void
     {
         /*
          * 🚨 E' la differenza deliberata con `ChiaveAlimento`, ed e' il motivo

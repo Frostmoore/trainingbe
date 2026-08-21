@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Services\Dashboard;
 
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Nutrition\DiaryService;
 use App\Services\Training\WorkoutCalorieService;
 use App\Support\Tempo\GiornoLocale;
@@ -106,7 +105,16 @@ class DashboardService
             'day_progress_pct' => $this->quantaGiornataEPassata($adessoLocale),
 
             'nutrition' => $this->nutrizione($utente, $oggi),
-            'training' => $this->allenamento($utente, $oggi),
+            /*
+             * ⛔ **`training` non c'e' piu'** — FASE 11.6, 21/08/2026.
+             *
+             * 🚨 Era il riassunto degli allenamenti: ultimo, conteggio a 30
+             * giorni, sedute recenti. Tutto da `workout_sessions`.
+             *
+             * ⚠️ L'app non lo legge gia' piu' da `v8.2.0`: la scheda
+             * «Allenamento» si contraddiceva da sola proprio perche' meta'
+             * veniva da qui e meta' dallo storico unificato (difetto O.D.8).
+             */
             'body' => $this->corpo($utente),
 
             /*
@@ -158,57 +166,8 @@ class DashboardService
         return [
             'totals' => $giornata['totals'] ?? null,
             'targets' => $giornata['targets'] ?? null,
-            'burned' => $giornata['burned'] ?? null,
             'entries_count' => collect($giornata['meals'] ?? [])
                 ->sum(fn (array $m): int => count($m['entries'] ?? [])),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function allenamento(User $utente, GiornoLocale $oggi): array
-    {
-        $recenti = WorkoutSession::query()
-            ->forUser($utente)
-            ->with('plan')
-            ->withCount('sets')
-            ->orderByDesc('started_at')
-            ->limit(self::ULTIMI_ALLENAMENTI)
-            ->get();
-
-        $kg = $this->calorie->bodyweight($utente);
-
-        return [
-            'last_30_days' => WorkoutSession::query()
-                ->forUser($utente)
-                ->where('started_at', '>=', $oggi->menoGiorni(30)->inizio())
-                ->count(),
-
-            /*
-             * Serve a dire «non ti alleni da 5 giorni», che è l'informazione
-             * che fa tornare in palestra. Un elenco senza questo numero
-             * costringe a fare il conto a mente.
-             *
-             * ⚠️ Il conto e' fra **etichette di giorni**, non fra istanti: un
-             * allenamento delle 23:00 di ieri e uno delle 07:00 di oggi distano
-             * otto ore, ma la risposta giusta e' «1 giorno» e non «0».
-             */
-            'days_since_last' => $recenti->isEmpty()
-                ? null
-                : GiornoLocale::perIstante($recenti->first()->started_at, $oggi->fuso)->giorniDa($oggi),
-
-            'open_session_id' => $recenti->firstWhere('ended_at', null)?->id,
-
-            'recent' => $recenti->map(fn (WorkoutSession $s): array => [
-                'id' => $s->id,
-                'name' => $s->plan?->name ?? 'Sessione libera',
-                'started_at' => $s->started_at->toIso8601String(),
-                'duration_minutes' => $s->durationMinutes(),
-                'sets_count' => $s->sets_count,
-                'kcal' => $s->ended_at === null ? null : $this->calorie->kcalOf($s, $kg),
-                'is_open' => $s->ended_at === null,
-            ])->all(),
         ];
     }
 

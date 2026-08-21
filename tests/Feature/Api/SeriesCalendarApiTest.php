@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\DailyBurn;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
@@ -148,22 +147,30 @@ class SeriesCalendarApiTest extends TestCase
      * Sommarlo alle sessioni raddoppierebbe la giornata di chi corregge il
      * numero dopo essersi allenato.
      */
+    /**
+     * ⛔ **Le bruciate non passano piu' di qui** — FASE 11.6, 21/08/2026.
+     *
+     * 🚨 La regola «il valore manuale vince e non si somma» **non e' sparita**:
+     * si e' spostata in `CalorieAllenamento.bruciateDelGiorno()` sul telefono,
+     * dove ha i suoi test. ⚠️ Qui resta il controllo che il server non le mandi
+     * piu' — perche' un array di zeri sarebbe stato un grafico credibile che
+     * dice che nessuno si muove.
+     */
     #[Test]
-    public function the_manual_burn_replaces_the_sessions_it_does_not_add_up(): void
+    public function the_series_no_longer_carries_burned_calories(): void
     {
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
         $this->allena($this->oggi()->setTime(18, 0));
-
-        $this->ctx()->runAs($this->alfa, fn () => DailyBurn::create([
-            'user_id' => $this->iscritto->getKey(),
-            'date' => $this->iscritto->giornoDiOggi()->etichetta,
-            'kcal' => 800,
-        ]));
 
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=7')
             ->assertOk();
 
-        $this->assertSame(800, $risposta->json('data.burned.6'));
+        // ⚠️ `null` = la chiave non c'e'. Uno `0` avrebbe affermato qualcosa.
+        $this->assertNull($risposta->json('data.burned'));
+
+        // 💡 Le calorie **assunte** restano: il diario non e' stato traslocato.
+        $this->assertSame(2000, $risposta->json('data.consumed.6'));
     }
 
     #[Test]
@@ -369,8 +376,18 @@ class SeriesCalendarApiTest extends TestCase
 
         $this->assertCount(7, $celle);
         $this->assertArrayHasKey('kcal', $celle[0]);
-        $this->assertArrayHasKey('burned', $celle[0]);
-        $this->assertArrayHasKey('workouts', $celle[0]);
+
+        /*
+         * ⛔ **`burned` e `workouts` non ci sono piu'** — FASE 11.6, 21/08/2026.
+         *
+         * 🚨 Il calendario e' l'ultima schermata in cui cibo e allenamento
+         * convivevano, e da qui in poi hanno due case diverse: le calorie
+         * mangiate stanno sul server, gli allenamenti sul telefono. ⚠️ L'app le
+         * unisce a valle (`calendarProvider`), che e' l'unico posto dove le due
+         * fonti possono incontrarsi senza che una menta per l'altra.
+         */
+        $this->assertArrayNotHasKey('burned', $celle[0]);
+        $this->assertArrayNotHasKey('workouts', $celle[0]);
     }
 
     #[Test]

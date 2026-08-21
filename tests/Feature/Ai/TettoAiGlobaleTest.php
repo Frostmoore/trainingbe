@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Providers\FakeAiProvider;
+use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
@@ -63,7 +64,7 @@ final class TettoAiGlobaleTest extends TestCase
      * 💡 È l'unico modo di provare la **contemporaneità** in un test che di
      * processi ne ha uno: gli slot occupati *sono* le altre richieste.
      *
-     * @return list<\Illuminate\Contracts\Cache\Lock>
+     * @return list<Lock>
      */
     private function occupa(int $quanti): array
     {

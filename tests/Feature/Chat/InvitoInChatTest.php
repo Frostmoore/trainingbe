@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Services\Scoperta\ChiaveComune;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -93,7 +94,7 @@ class InvitoInChatTest extends TestCase
     }
 
     #[Test]
-    public function chi_riscatta_un_invito_NON_deve_essere_abbonato(): void
+    public function chi_riscatta_un_invito_no_n_deve_essere_abbonato(): void
     {
         /*
          * 🚨 **La decisione del committente, testuale**: «anche se non
@@ -229,7 +230,7 @@ class InvitoInChatTest extends TestCase
     }
 
     #[Test]
-    public function riscattare_NON_sposta_la_persona_nel_tenant_del_trainer(): void
+    public function riscattare_no_n_sposta_la_persona_nel_tenant_del_trainer(): void
     {
         /*
          * 🚨 Chi si allena da solo resta nel proprio spazio: il legame
@@ -257,7 +258,7 @@ class InvitoInChatTest extends TestCase
             ->json('data.token');
     }
 
-    private function scrivi(User $chi, Conversation $c): \Illuminate\Testing\TestResponse
+    private function scrivi(User $chi, Conversation $c): TestResponse
     {
         return $this->actingAs($chi)->postJson("/api/v1/conversations/{$c->id}/messages", [
             'envelope_version' => 1,

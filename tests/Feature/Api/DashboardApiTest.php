@@ -86,8 +86,16 @@ class DashboardApiTest extends TestCase
                 'now',
                 'hour',
                 'day_progress_pct',
-                'nutrition' => ['totals', 'targets', 'burned', 'entries_count'],
-                'training' => ['last_30_days', 'days_since_last', 'recent'],
+                /*
+                 * ⛔ **Niente piu' `burned` ne' `training`** — FASE 11.6,
+                 * 21/08/2026. Nascevano da `workout_sessions` e `daily_burns`,
+                 * che stanno sul telefono di chi si allena.
+                 *
+                 * 🚨 I campi sono usciti dalla risposta invece di valere zero:
+                 * uno zero avrebbe detto «non ti sei mosso» a chi si e'
+                 * allenato due ore, e nessuno se ne sarebbe accorto.
+                 */
+                'nutrition' => ['totals', 'targets', 'entries_count'],
                 // ⚠️ Solo il peso OBIETTIVO: peso e scostamento sono dati del
                 // corpo e da S5 non stanno piu' sul server (D9-bis).
                 'body' => ['target_weight_kg'],
@@ -155,8 +163,18 @@ class DashboardApiTest extends TestCase
         $this->assertSame(0, $alle3['day_progress_pct']);
     }
 
+    /**
+     * ⛔ **Il riepilogo non conta piu' gli allenamenti** — FASE 11.6.
+     *
+     * 📌 Il committente, 16/08: *«Niente, nemmeno se si allena»*. Le sedute
+     * stanno sul telefono: non e' che non le mostriamo, il server non ce le ha.
+     *
+     * 🚨 Il test resta — rovesciato — perche' e' il posto dove qualcuno
+     * cercherebbe di rimettercele. ⚠️ Chi lo facesse rimetterebbe anche il dato
+     * sul server, che e' esattamente cio' che questa fase ha tolto.
+     */
     #[Test]
-    public function the_dashboard_counts_the_days_since_the_last_workout(): void
+    public function the_dashboard_no_longer_knows_about_workouts(): void
     {
         $this->ctx()->runAs($this->alfa, fn () => WorkoutSession::create([
             'user_id' => $this->iscritto->getKey(),
@@ -166,10 +184,9 @@ class DashboardApiTest extends TestCase
 
         $risposta = $this->comeApp($this->iscritto)->getJson('/api/v1/dashboard')->assertOk();
 
-        // «Non ti alleni da 5 giorni» è l'informazione che fa tornare in
-        // palestra; un elenco di date costringe a fare il conto a mente.
-        $this->assertSame(5, $risposta->json('data.training.days_since_last'));
-        $this->assertSame(1, $risposta->json('data.training.last_30_days'));
+        // ⚠️ `null` perche' la chiave non c'e', non perche' vale zero.
+        $this->assertNull($risposta->json('data.training'));
+        $this->assertNull($risposta->json('data.nutrition.burned'));
     }
 
     #[Test]

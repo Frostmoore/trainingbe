@@ -103,7 +103,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function una_campagna_SPENTA_non_compare_in_cima_e_non_e_etichettata(): void
+    public function una_campagna_spent_a_non_compare_in_cima_e_non_e_etichettata(): void
     {
         $campagna = $this->accendi($this->schedaB, budgetEuro: 10);
         $campagna->update(['attiva' => false]);
@@ -117,7 +117,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function una_campagna_ESAURITA_non_compare_in_cima(): void
+    public function una_campagna_esaurit_a_non_compare_in_cima(): void
     {
         /*
          * 🚨 ⚠️ Guardare solo `campagna_id` avrebbe lasciato in testa le
@@ -168,7 +168,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function la_stessa_persona_nello_stesso_giorno_conta_UNA_volta(): void
+    public function la_stessa_persona_nello_stesso_giorno_conta_un_a_volta(): void
     {
         /*
          * 🚨 **La regola che decide la fattura.**
@@ -206,7 +206,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function chi_NON_e_autenticato_non_fa_spendere_niente(): void
+    public function chi_no_n_e_autenticato_non_fa_spendere_niente(): void
     {
         /*
          * 🚨 **Le visite anonime sono gratis, ed è una decisione.**
@@ -225,7 +225,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function una_scheda_NON_sponsorizzata_non_conta_niente(): void
+    public function una_scheda_no_n_sponsorizzata_non_conta_niente(): void
     {
         Sanctum::actingAs($this->chiGuarda);
         $this->getJson('/api/v1/catalogo')->assertOk();
@@ -234,7 +234,7 @@ class PubblicitaTest extends TestCase
     }
 
     #[Test]
-    public function si_conta_solo_quello_che_e_stato_MOSTRATO(): void
+    public function si_conta_solo_quello_che_e_stato_mostrato(): void
     {
         /*
          * 🚨 M5.3. ⚠️ Contare prima di applicare il limite vorrebbe dire

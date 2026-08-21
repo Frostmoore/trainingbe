@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\Members\Tables;
 
 use App\Models\User;
-use App\Models\WorkoutSession;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -44,14 +43,19 @@ class MembersTable
                     ->placeholder('nessuno')
                     ->color('info'),
 
-                TextColumn::make('ultimo_allenamento')
-                    ->label('Ultimo allenamento')
-                    ->getStateUsing(fn (User $r): ?string => WorkoutSession::query()
-                        ->forUser($r)
-                        ->latest('started_at')
-                        ->value('started_at')?->diffForHumans())
-                    ->placeholder('mai')
-                    ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray'),
+                /*
+                 * ⛔ **Qui c'era «Ultimo allenamento», e non e' stata tolta per
+                 * ripulire: e' stata tolta perche' NON DEVE ESSERCI** — FASE
+                 * 11.6, 21/08/2026.
+                 *
+                 * 📌 Il committente, 16/08: *«Niente, nemmeno se si allena»*.
+                 * Gli allenamenti stanno sul telefono di chi li fa, e il server
+                 * non li vede piu' — non e' che non li mostriamo, non ce li ha.
+                 *
+                 * 🚨 E' la stessa scelta gia' fatta per il peso (D9-bis) e per
+                 * il diario alimentare: la palestra sa **chi e' iscritto** e
+                 * **cosa ha comprato**, non come vive.
+                 */
 
                 /*
                  * 🚨 Qui c'era la colonna «Peso», e non e' stata tolta per

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -27,7 +28,7 @@ final class VersioneMinimaTest extends TestCase
     use RefreshDatabase;
 
     /** @param  array<string, string>  $intestazioni */
-    private function chiama(array $intestazioni = []): \Illuminate\Testing\TestResponse
+    private function chiama(array $intestazioni = []): TestResponse
     {
         return $this->getJson('/api/v1/branding/lookup?code=NONESISTE', $intestazioni);
     }

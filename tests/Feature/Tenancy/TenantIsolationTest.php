@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Tenancy;
 
+use App\Models\Campagna;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
+use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -63,7 +65,7 @@ class TenantIsolationTest extends TestCase
          * 💡 E non è un dato sensibile: sono il nome e la città di un'attività
          * commerciale che ha **chiesto** di comparire.
          */
-        \App\Models\ProfiloPubblico::class => 'Catalogo pubblico (M2): deve essere visibile fuori dal proprio tenant. Isolamento tramite `visibile`.',
+        ProfiloPubblico::class => 'Catalogo pubblico (M2): deve essere visibile fuori dal proprio tenant. Isolamento tramite `visibile`.',
 
         /*
          * 🚨 `campagne` viene letta **mentre si risponde a chiunque**.
@@ -82,7 +84,7 @@ class TenantIsolationTest extends TestCase
          * si stia facendo pubblicità è, per definizione, quello che vuole far
          * sapere. Gli importi restano nel pannello, non escono dall'API.
          */
-        \App\Models\Campagna::class => 'Pubblicità nel catalogo (M5): la legge il catalogo pubblico, anche per gli anonimi. Scrittura solo dalla propria pagina, con chiave esplicita.',
+        Campagna::class => 'Pubblicità nel catalogo (M5): la legge il catalogo pubblico, anche per gli anonimi. Scrittura solo dalla propria pagina, con chiave esplicita.',
     ];
 
     private Tenant $alfa;

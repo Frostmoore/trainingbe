@@ -52,7 +52,7 @@ class AvatarTest extends TestCase
     }
 
     #[Test]
-    public function il_nome_del_file_lo_decide_il_SERVER(): void
+    public function il_nome_del_file_lo_decide_il_server(): void
     {
         /*
          * 🚨 ⚠️ Usare il nome originale vorrebbe dire lasciare a chi carica il
@@ -74,7 +74,7 @@ class AvatarTest extends TestCase
     }
 
     #[Test]
-    public function un_SVG_non_si_carica(): void
+    public function un_sv_g_non_si_carica(): void
     {
         /*
          * 🚨 Un SVG è un documento XML che può contenere script: è un'immagine

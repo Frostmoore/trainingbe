@@ -39,7 +39,7 @@ class ChiaviDiStripeTest extends TestCase
     // ───────────────── la regola, interrogata direttamente ─────────────────
 
     #[Test]
-    public function la_regola_vuole_TUTTE_E_DUE_le_condizioni(): void
+    public function la_regola_vuole_tutt_e_e_du_e_le_condizioni(): void
     {
         /*
          * 🚨 La tabella della verita' per intero, in un test solo.
@@ -63,7 +63,7 @@ class ChiaviDiStripeTest extends TestCase
     }
 
     #[Test]
-    public function un_APP_DEBUG_scritto_male_NON_apre_le_chiavi_vere(): void
+    public function un_ap_p_debu_g_scritto_male_no_n_apre_le_chiavi_vere(): void
     {
         /*
          * 🚨 `APP_DEBUG=0` e `APP_DEBUG="false"` sono modi plausibili di scrivere
@@ -117,7 +117,7 @@ class ChiaviDiStripeTest extends TestCase
     }
 
     #[Test]
-    public function in_produzione_MA_con_il_debug_acceso_e_ancora_sandbox(): void
+    public function in_produzione_m_a_con_il_debug_acceso_e_ancora_sandbox(): void
     {
         /*
          * 🚨 **E' la meta' della regola che il committente ha chiesto**, ed e' la
@@ -133,7 +133,7 @@ class ChiaviDiStripeTest extends TestCase
     }
 
     #[Test]
-    public function senza_APP_DEBUG_si_assume_acceso_quindi_sandbox(): void
+    public function senza_ap_p_debu_g_si_assume_acceso_quindi_sandbox(): void
     {
         /*
          * 🚨 Il valore predefinito di un interruttore di sicurezza deve stare dal
@@ -148,7 +148,7 @@ class ChiaviDiStripeTest extends TestCase
     // ───────────────── quando si usano quelle vere ─────────────────
 
     #[Test]
-    public function solo_produzione_E_debug_spento_insieme_danno_le_chiavi_vere(): void
+    public function solo_produzione_e_debug_spento_insieme_danno_le_chiavi_vere(): void
     {
         $this->configura(env: 'production', debug: false, segreta: self::ESCA_VERA_SEGRETA);
 
@@ -161,7 +161,7 @@ class ChiaviDiStripeTest extends TestCase
     // ───────────────── la guardia che ferma l'incidente ─────────────────
 
     #[Test]
-    public function una_chiave_segreta_VERA_fuori_produzione_fa_fallire_la_chiamata(): void
+    public function una_chiave_segreta_ver_a_fuori_produzione_fa_fallire_la_chiamata(): void
     {
         /*
          * 🚨 **Il test piu' importante del file.**
@@ -181,7 +181,7 @@ class ChiaviDiStripeTest extends TestCase
     }
 
     #[Test]
-    public function anche_la_chiave_pubblica_VERA_fuori_produzione_fa_fallire(): void
+    public function anche_la_chiave_pubblica_ver_a_fuori_produzione_fa_fallire(): void
     {
         // 💡 La pubblicabile non muove soldi da sola, ma finisce nell'app e nel
         // browser: sbagliarla vuol dire mandare le persone sulla cassa vera.

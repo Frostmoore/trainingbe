@@ -32,7 +32,6 @@ use App\Http\Controllers\Api\V1\Training\CalendarController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
 use App\Http\Controllers\Api\V1\Training\SeriesController;
 use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
-use App\Http\Controllers\Api\V1\Training\WorkoutSessionController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -271,13 +270,22 @@ Route::prefix('v1')->group(function (): void {
         Route::put('workout-plans/{plan}', [WorkoutPlanController::class, 'update'])->whereNumber('plan');
         Route::delete('workout-plans/{plan}', [WorkoutPlanController::class, 'destroy'])->whereNumber('plan');
 
-        Route::get('workout-sessions', [WorkoutSessionController::class, 'index']);
-        Route::post('workout-sessions', [WorkoutSessionController::class, 'store']);
-        Route::get('workout-sessions/{session}', [WorkoutSessionController::class, 'show'])->whereNumber('session');
-        Route::post('workout-sessions/{session}/sets', [WorkoutSessionController::class, 'storeSet'])->whereNumber('session');
-        Route::post('workout-sessions/{session}/finish', [WorkoutSessionController::class, 'finish'])->whereNumber('session');
-        Route::patch('workout-sessions/{session}/kcal', [WorkoutSessionController::class, 'updateKcal'])->whereNumber('session');
-        Route::delete('workout-sessions/{session}', [WorkoutSessionController::class, 'destroy'])->whereNumber('session');
+        /*
+        | ⛔ **`workout-sessions` e `daily-burn` NON esistono piu'** — FASE 11.6,
+        | 21/08/2026.
+        |
+        | 📌 Il committente: *«Nessun allenamento deve risiedere sul server,
+        | devono stare tutti nell'app»*. Era gia' scritto in
+        | `plan_tutto_sul_telefono.md` §2.1 dal 16/08.
+        |
+        | 🚨 Le sedute, le serie e le calorie bruciate dichiarate a mano vivono
+        | nell'archivio del telefono. Chi non ha ancora traslocato lo fa da
+        | `migrazione/allenamenti`, che sta qui sopra.
+        |
+        | ⚠️ Restano **le schede** (`workout-plans`): sono il patrimonio del
+        | trainer, sono gia' anonime (D4), e non dicono se e quando qualcuno le
+        | ha eseguite.
+        */
 
         /*
         | 🏋️ FASE 11.3 — il trasloco degli allenamenti sul telefono.
@@ -378,7 +386,11 @@ Route::prefix('v1')->group(function (): void {
         Route::post('food-favorites/{favorite}/add', [FoodFavoriteController::class, 'add'])->whereNumber('favorite');
         Route::delete('food-favorites/{favorite}', [FoodFavoriteController::class, 'destroy'])->whereNumber('favorite');
 
-        Route::post('daily-burn', [DiaryController::class, 'storeBurn']);
+        /*
+        | ⛔ `daily-burn` e' andato con gli altri — FASE 11.6. La dichiarazione
+        | «oggi ho bruciato 800» adesso si scrive in `BruciateDichiarate`,
+        | sull'archivio del telefono.
+        */
 
         // ── AI (B6.6) ────────────────────────────────────────────────────
         //

@@ -141,7 +141,7 @@ class SchedaPubblicaTest extends TestCase
     }
 
     #[Test]
-    public function un_trainer_dipendente_NON_puo_aprire_la_pagina(): void
+    public function un_trainer_dipendente_no_n_puo_aprire_la_pagina(): void
     {
         /*
          * 🚨 Chi risponde ai messaggi che arrivano dal catalogo e' il
@@ -179,7 +179,7 @@ class SchedaPubblicaTest extends TestCase
     // ───────────────────── il trainer indipendente ─────────────────────
 
     #[Test]
-    public function un_trainer_indipendente_pubblica_una_scheda_SUA_e_non_della_palestra(): void
+    public function un_trainer_indipendente_pubblica_una_scheda_su_a_e_non_della_palestra(): void
     {
         /*
          * 🚨 **Il test che difende la distinzione piu' facile da sbagliare.**
