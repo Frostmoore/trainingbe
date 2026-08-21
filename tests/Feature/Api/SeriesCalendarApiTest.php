@@ -67,7 +67,7 @@ class SeriesCalendarApiTest extends TestCase
         return $this->iscritto->giornoDiOggi()->menoGiorni($giorniFa)->locale();
     }
 
-    private function mangia(Carbon $quando, int $kcal, ?User $chi = null): FoodEntry
+    private function mangia(Carbon $quando, int $kcal, ?User $chi = null, ?float $proteine = null): FoodEntry
     {
         $chi ??= $this->iscritto;
 
@@ -77,6 +77,7 @@ class SeriesCalendarApiTest extends TestCase
             'meal' => MealType::Lunch,
             'description' => 'Pasto',
             'kcal' => $kcal,
+            'protein' => $proteine,
         ]));
     }
 
@@ -390,5 +391,61 @@ class SeriesCalendarApiTest extends TestCase
     {
         $this->getJson('/api/v1/series?metric=weight')->assertUnauthorized();
         $this->getJson('/api/v1/calendar')->assertUnauthorized();
+    }
+
+    /**
+     * Le proteine per giorno — 3b-O.7.3, 21/08/2026.
+     *
+     * 📌 Servono alla scheda «Allenamento» dell'app, che riassume gli ultimi
+     * sette giorni.
+     *
+     * 🚨 **Il test che conta non e' che il campo esista**: e' che sia
+     * raggruppato **nel fuso di chi guarda**, come le calorie. ⚠️ Copiare la
+     * forma di `kcalAssunte` senza copiarne la sostanza darebbe grammi giusti
+     * sui giorni sbagliati — un difetto che nessuno vede, perche' il totale
+     * della settimana torna lo stesso.
+     */
+    #[Test]
+    public function the_calorie_series_also_carries_protein_per_day(): void
+    {
+        $this->mangia($this->oggi()->setTime(13, 0), 2000, proteine: 120.0);
+        $this->mangia($this->oggi()->setTime(20, 0), 600, proteine: 30.0);
+        $this->mangia($this->oggi(1)->setTime(13, 0), 1800, proteine: 90.0);
+
+        $risposta = $this->comeApp($this->iscritto)
+            ->getJson('/api/v1/series?metric=calories&days=7')
+            ->assertOk()
+            ->assertJsonCount(7, 'data.protein');
+
+        // I due pasti di oggi si sommano; ieri sta nel suo giorno.
+        $this->assertSame(150, $risposta->json('data.protein.6'));
+        $this->assertSame(90, $risposta->json('data.protein.5'));
+
+        // ⛔ Un giorno senza pasti e' `0` qui, e chi disegna decide che
+        // significa: l'app lo tratta come «non lo so» e nasconde la voce.
+        $this->assertSame(0, $risposta->json('data.protein.0'));
+    }
+
+    /**
+     * ⚠️ Un pasto senza proteine dichiarate non fa esplodere la somma.
+     *
+     * 🚨 `protein` e' facoltativo su `food_entries`: chi scrive solo le calorie
+     * — che e' il caso piu' comune quando si segna al volo — lascia `null`, e
+     * un `sum()` su `null` in PHP e' `0`, non un errore. Questo test lo fissa,
+     * perche' il giorno che diventasse un errore fallirebbe **tutta** la serie,
+     * non solo le proteine.
+     */
+    #[Test]
+    public function meals_without_protein_do_not_break_the_series(): void
+    {
+        $this->mangia($this->oggi()->setTime(13, 0), 2000);
+        $this->mangia($this->oggi()->setTime(20, 0), 600, proteine: 40.0);
+
+        $risposta = $this->comeApp($this->iscritto)
+            ->getJson('/api/v1/series?metric=calories&days=7')
+            ->assertOk();
+
+        $this->assertSame(40, $risposta->json('data.protein.6'));
+        $this->assertSame(2600, $risposta->json('data.consumed.6'));
     }
 }

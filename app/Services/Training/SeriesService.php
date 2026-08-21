@@ -67,12 +67,18 @@ class SeriesService
 
         $assunte = $this->kcalAssunte($utente, $da, $a);
         $bruciate = $this->kcalBruciate($utente, $da, $a);
+        $proteine = $this->proteine($utente, $da, $a);
 
         $perMese = $tutto || $giorni > self::GIORNI_PRIMA_DI_AGGREGARE;
 
         return $perMese
+            /*
+             * ⛔ **Le proteine solo nella vista per giorno.** Una media mensile
+             * di grammi non risponde a nessuna domanda che qualcuno si faccia,
+             * e chi chiede questa serie la chiede per i sette giorni.
+             */
             ? $this->perMese($da, $a, $assunte, $bruciate, $tutto)
-            : $this->perGiorno($da, $a, $assunte, $bruciate);
+            : $this->perGiorno($da, $a, $assunte, $bruciate, $proteine);
     }
 
     // ───────────────────────── la finestra ─────────────────────────
@@ -128,6 +134,35 @@ class SeriesService
     }
 
     /**
+     * Proteine assunte per giorno, in grammi — 3b-O.7.3, 21/08/2026.
+     *
+     * 📌 Servono alla scheda «Allenamento», che riassume gli ultimi sette
+     * giorni: *«quante proteine ho assunto»*.
+     *
+     * 🚨 **Sta qui e non in sette chiamate a `/diary` dal telefono.** La query
+     * gira gia' su questa stessa tabella e questa stessa finestra: aggiungere
+     * una colonna alla `select` costa zero, sette richieste HTTP a ogni
+     * apertura della pagina «Oggi» no.
+     *
+     * ⚠️ **Stesso raggruppamento nel fuso di chi guarda** di [kcalAssunte], e
+     * per la stessa ragione: una cena delle 00:30 di Roma finirebbe nel giorno
+     * prima. Copiare la forma e non la sostanza qui sarebbe un difetto
+     * silenzioso — i grammi tornerebbero, sui giorni sbagliati.
+     *
+     * @return array<string, int>
+     */
+    private function proteine(User $utente, GiornoLocale $da, GiornoLocale $a): array
+    {
+        return FoodEntry::query()
+            ->forUser($utente)
+            ->whereBetween('eaten_at', $da->finestraFinoA($a))
+            ->get(['eaten_at', 'protein'])
+            ->groupBy(fn (FoodEntry $v): string => GiornoLocale::etichettaDi($v->eaten_at, $da->fuso))
+            ->map(fn ($gruppo): int => (int) round($gruppo->sum('protein')))
+            ->all();
+    }
+
+    /**
      * Calorie bruciate per giorno.
      *
      * 🚨 **Il valore manuale vince e NON si somma alle sessioni**: è una
@@ -175,18 +210,20 @@ class SeriesService
      * @param  array<string, int>  $bruciate
      * @return array<string, mixed>
      */
-    private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate): array
+    private function perGiorno(GiornoLocale $da, GiornoLocale $a, array $assunte, array $bruciate, array $proteine = []): array
     {
         $etichette = [];
         $giorni = [];
         $consumate = [];
         $spese = [];
+        $grammi = [];
 
         foreach ($da->finoA($a) as $g) {
             $etichette[] = $g->locale()->format('d/m');
             $giorni[] = $g->etichetta;
             $consumate[] = $assunte[$g->etichetta] ?? 0;
             $spese[] = $bruciate[$g->etichetta] ?? 0;
+            $grammi[] = $proteine[$g->etichetta] ?? 0;
         }
 
         return [
@@ -208,6 +245,18 @@ class SeriesService
             'dates' => $giorni,
             'consumed' => $consumate,
             'burned' => $spese,
+
+            /*
+             * 🆕 **Le proteine per giorno** — 3b-O.7.3, 21/08/2026.
+             *
+             * 💡 Un campo **aggiunto**, non una modifica: un'app precedente che
+             * non lo conosce continua a funzionare, e un'app nuova contro un
+             * server vecchio trova `null` e nasconde la voce. Nessuna delle due
+             * si rompe, che e' il motivo per cui non serve alzare la versione
+             * minima (FASE 10).
+             */
+            'protein' => $grammi,
+
             'granularity' => 'day',
             'period' => $da->locale()->format('d/m').' – '.$a->locale()->format('d/m/Y'),
             'averages' => $this->medie($consumate, $spese),
