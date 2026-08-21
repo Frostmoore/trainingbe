@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\StimaCibo;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
@@ -157,7 +158,7 @@ Schedule::command('queue:prune-failed --hours=168')
     ->withoutOverlapping(30)
     ->runInBackground();
 
-Schedule::command('model:prune', ['--model' => \App\Models\StimaCibo::class])
+Schedule::command('model:prune', ['--model' => StimaCibo::class])
     ->hourly()
     ->withoutOverlapping(15)
     ->runInBackground();

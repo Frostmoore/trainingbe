@@ -94,6 +94,14 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             // N22.2 — quando ha dichiarato l'albo, non se.
             'albo_dichiarato_il' => 'datetime',
             'last_login_at' => 'datetime',
+
+            /*
+             * FASE 11.3 — quando ha portato i suoi allenamenti sul telefono.
+             * 🚨 Volutamente **fuori da `$fillable`**: lo scrive il server dopo
+             * aver verificato i conteggi, e una richiesta che se lo scrivesse da
+             * sola sarebbe un modo per farsi cancellare i propri dati.
+             */
+            'workouts_migrated_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_super_admin' => 'boolean',

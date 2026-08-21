@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Chat;
 
+use App\Enums\TipoConversazione;
 use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -110,7 +111,7 @@ class LimiteDeiTreMessaggi
             return;
         }
 
-        $c->tipo = \App\Enums\TipoConversazione::Iscritto;
+        $c->tipo = TipoConversazione::Iscritto;
         $c->save();
     }
 }

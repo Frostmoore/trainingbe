@@ -137,6 +137,7 @@ class Listino
             'margine' => $ricavo - $scelto['prezzo'],
         ];
     }
+
     /**
      * 📣 Quanto costa una visualizzazione pubblicitaria, in centesimi — M5.
      *
@@ -146,7 +147,7 @@ class Listino
      */
     public function costoVisualizzazione(): int
     {
-        return (int) config("listino.pubblicita.costo_visualizzazione_cent", 2);
+        return (int) config('listino.pubblicita.costo_visualizzazione_cent', 2);
     }
 
     /**
@@ -158,6 +159,6 @@ class Listino
      */
     public function budgetMinimoPubblicita(): int
     {
-        return (int) config("listino.pubblicita.budget_minimo_cent", 1000);
+        return (int) config('listino.pubblicita.budget_minimo_cent', 1000);
     }
 }

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Ai;
 
-use App\Jobs\StimaIlCibo;
 use App\Enums\AiFeature;
 use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
+use App\Jobs\StimaIlCibo;
 use App\Models\AiAdvice;
 use App\Models\FoodEntry;
 use App\Models\StimaCibo;
@@ -18,10 +18,10 @@ use App\Services\Ai\AiManager;
 use App\Services\Ai\CancelloDeiGettoni;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\FoodItem;
-use App\Services\Ai\StimaConRitentativo;
 use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
+use App\Services\Ai\StimaConRitentativo;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
@@ -792,7 +792,6 @@ class AiController extends Controller
         $this->cancello->consuma($utente, $funzione, $conGettoni);
     }
 
-
     /**
      * Scrive le voci di una stima. **L'unico punto che le crea**, usato sia da
      * `save: true` sia dalla conferma.
@@ -999,8 +998,7 @@ class AiController extends Controller
         array $riepilogo,
         GiornoLocale $oggi,
         array $tipi = [],
-    ): array
-    {
+    ): array {
         $recenti = $riepilogo['training']['recent'] ?? [];
 
         if (! is_array($recenti)) {

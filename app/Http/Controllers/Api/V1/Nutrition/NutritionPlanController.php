@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Nutrition;
 
 use App\Enums\PlanStatus;
-use App\Enums\TipoPianoAlimentare;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\NutritionPlanRequest;
 use App\Models\NutritionPlan;

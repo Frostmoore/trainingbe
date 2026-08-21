@@ -11,14 +11,15 @@ use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BrandingController;
+use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\AllegatoCifratoController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
 use App\Http\Controllers\Api\V1\Chat\ConversationController;
-use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InvitoController;
+use App\Http\Controllers\Api\V1\MigrazioneAllenamentiController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -64,7 +65,7 @@ Route::prefix('v1')->group(function (): void {
      * ⚠️ Pubblica e senza autenticazione: la domanda arriva anche da chi non ha
      * fatto l'accesso, e la risposta non contiene niente di personale.
      */
-    Route::get('versione', function (\Illuminate\Http\Request $r) {
+    Route::get('versione', function (Request $r) {
         $piattaforma = strtolower((string) $r->header('X-App-Platform', 'android'));
 
         return response()->json(['data' => [
@@ -277,6 +278,19 @@ Route::prefix('v1')->group(function (): void {
         Route::post('workout-sessions/{session}/finish', [WorkoutSessionController::class, 'finish'])->whereNumber('session');
         Route::patch('workout-sessions/{session}/kcal', [WorkoutSessionController::class, 'updateKcal'])->whereNumber('session');
         Route::delete('workout-sessions/{session}', [WorkoutSessionController::class, 'destroy'])->whereNumber('session');
+
+        /*
+        | 🏋️ FASE 11.3 — il trasloco degli allenamenti sul telefono.
+        |
+        | 🚨 In due passi, e il secondo e' un contratto: l'app scarica, scrive,
+        | conta, e dichiara. Il server **verifica** e segna «fatto» solo se i
+        | conteggi tornano. ⛔ Meglio non segnare che segnare per sbaglio: un
+        | «fatto» accettato a torto diventa una perdita di dati il giorno che le
+        | tabelle cadranno.
+        */
+        Route::get('migrazione/allenamenti', [MigrazioneAllenamentiController::class, 'pacchetto']);
+        Route::get('migrazione/allenamenti/stato', [MigrazioneAllenamentiController::class, 'stato']);
+        Route::post('migrazione/allenamenti/fatta', [MigrazioneAllenamentiController::class, 'fatta']);
 
         Route::get('exercises', [ExerciseController::class, 'index']);
 
