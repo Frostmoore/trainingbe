@@ -229,14 +229,27 @@ return [
     | processi finiscono non si ferma l'AI, si ferma il sito.
     |
     | `slot` e' quanti processi al massimo possono stare dentro una chiamata AI.
-    | Tre su sei: gli altri tre restano a chi sta facendo il login o guardando la
-    | scheda. Metterlo a 0 spegne il tetto.
+    | Metterlo a 0 spegne il tetto.
+    |
+    | 🚨 **Era 3, ed era sbagliato** — corretto il 21/08 prima di andare in
+    | produzione. Il committente: *«se la pubblico e cinque persone all'ora di
+    | pranzo scrivono il pranzo si impalla tutto?»*. Con tre slot la QUARTA
+    | richiesta contemporanea prendeva 429: cioe' a cinque persone a pranzo due
+    | vedevano un errore. ⚠️ Un fusibile giusto contro una valanga, e sbagliato
+    | per il funzionamento normale dell'app — il cibo si scrive tutto alla stessa
+    | ora, per definizione.
+    |
+    | 💡 A 5 resta comunque un processo libero per chi apre l'app, e il fusibile
+    | scatta solo quando la valanga c'e' davvero.
+    |
+    | ⛔ E resta un RIPIEGO: la difesa vera e' la FASE 9 (le stime del cibo in
+    | coda), che toglie l'attesa dai processi web invece di respingerla.
     |
     | ⚠️ `ttl` deve superare la chiamata piu' lenta mai vista (8,8s): serve solo
     | a liberare lo slot se il processo che lo teneva e' morto.
     */
     'concorrenza' => [
-        'slot' => (int) env('AI_SLOT_CONTEMPORANEI', 3),
+        'slot' => (int) env('AI_SLOT_CONTEMPORANEI', 5),
         'ttl' => (int) env('AI_SLOT_TTL', 30),
         'riprova_fra' => (int) env('AI_SLOT_RIPROVA_FRA', 5),
     ],
