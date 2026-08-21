@@ -75,15 +75,35 @@ class VersioneMinima
         }
 
         /*
-         * `426 Upgrade Required` e non `403`: dice **cosa fare**, non «non puoi».
-         * ⚠️ Un 403 l'app lo confonderebbe con il cancello del consenso, che e'
-         * un'altra cosa e ha un'altra schermata.
+         * ══ 🚨 PERCHE' 409 E NON 426, CHE SAREBBE STATO PIU' GIUSTO ══════
+         *
+         * `426 Upgrade Required` e' **semanticamente perfetto** per questo caso,
+         * ed e' stato il primo tentativo. ⚠️ **Non funziona su Android**: lo
+         * stack HTTP del sistema tratta il 426 come un codice di *protocollo*
+         * — «cambia protocollo» — e **butta via il corpo della risposta**.
+         *
+         * 🚨 Misurato il 21/08/2026 su telefono vero: `response.data` arrivava
+         * `null`, quindi niente `store` e niente `minima`. ⚠️ E non era il nostro
+         * client: i corpi di 401, 403 e 422 arrivano benissimo. Era **solo** il
+         * 426.
+         *
+         * 💡 `409 Conflict` e' meno elegante e **arriva**: la versione del
+         * client e' in conflitto con quella che il server pretende. Nessuno
+         * stack lo intercetta, perche' non vuol dire niente a livello di
+         * protocollo.
+         *
+         * ⛔ **Non tornare al 426 perche' «è quello giusto»**: e' gia' stato
+         * provato, e il prezzo e' che l'app non sa nemmeno dove mandare la
+         * persona ad aggiornare.
+         *
+         * ⚠️ E non 403, che l'app confonderebbe con il cancello del consenso:
+         * altra cosa, altra schermata.
          */
         return response()->json([
             'message' => __('Questa versione dell\'app non è più supportata. Aggiornala per continuare.'),
             'code' => 'app_da_aggiornare',
             'minima' => $minima,
             'store' => config("app_versione.store.$piattaforma") ?: null,
-        ], 426);
+        ], 409);
     }
 }

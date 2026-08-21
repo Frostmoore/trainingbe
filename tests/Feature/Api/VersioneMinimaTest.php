@@ -33,6 +33,32 @@ final class VersioneMinimaTest extends TestCase
     }
 
     #[Test]
+    public function il_corpo_della_risposta_arriva_davvero(): void
+    {
+        /*
+         * ══ 🚨 IL TEST NATO DA UN DIFETTO SUL TELEFONO ═══════════════════════
+         *
+         * Il primo tentativo usava `426 Upgrade Required`, che è
+         * **semanticamente perfetto**. ⚠️ Su Android lo stack HTTP di sistema lo
+         * tratta come un codice di *protocollo* e **butta via il corpo**:
+         * misurato il 21/08 su telefono vero, `response.data` arrivava `null`,
+         * quindi niente `store` e niente `minima`.
+         *
+         * 🚨 Qui non si prova solo lo stato: si prova che **i campi ci siano**.
+         * Un test sul solo codice sarebbe passato anche con il 426 — cioè
+         * proprio nel caso che dal vivo era rotto.
+         */
+        config()->set('app_versione.minima.android', 74500);
+
+        $risposta = $this->chiama(['X-App-Build' => '1'])->assertStatus(409);
+
+        $this->assertSame('app_da_aggiornare', $risposta->json('code'));
+        $this->assertSame(74500, $risposta->json('minima'));
+        $this->assertNotEmpty($risposta->json('store'));
+        $this->assertNotEmpty($risposta->json('message'));
+    }
+
+    #[Test]
     public function di_serie_non_blocca_nessuno(): void
     {
         /*
@@ -49,14 +75,14 @@ final class VersioneMinimaTest extends TestCase
     }
 
     #[Test]
-    public function una_build_sotto_il_minimo_riceve_426_e_l_indirizzo_dello_store(): void
+    public function una_build_sotto_il_minimo_riceve_409_e_l_indirizzo_dello_store(): void
     {
         config()->set('app_versione.minima.android', 74500);
 
         $risposta = $this->chiama([
             'X-App-Build' => '74400',
             'X-App-Platform' => 'android',
-        ])->assertStatus(426);
+        ])->assertStatus(409);
 
         $risposta->assertJsonPath('code', 'app_da_aggiornare');
         $risposta->assertJsonPath('minima', 74500);
@@ -106,7 +132,7 @@ final class VersioneMinimaTest extends TestCase
         config()->set('app_versione.minima.ios', 0);
 
         $this->chiama(['X-App-Build' => '1', 'X-App-Platform' => 'android'])
-            ->assertStatus(426);
+            ->assertStatus(409);
 
         $this->chiama(['X-App-Build' => '1', 'X-App-Platform' => 'ios'])
             ->assertStatus(404);
@@ -144,6 +170,6 @@ final class VersioneMinimaTest extends TestCase
         config()->set('app_versione.minima.android', 9000);
 
         $this->chiama(['X-App-Build' => '74500'])->assertStatus(404);
-        $this->chiama(['X-App-Build' => '8999'])->assertStatus(426);
+        $this->chiama(['X-App-Build' => '8999'])->assertStatus(409);
     }
 }
