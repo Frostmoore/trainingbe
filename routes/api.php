@@ -360,7 +360,21 @@ Route::prefix('v1')->group(function (): void {
         // *hai acconsentito* (il consenso), poi *quanto ne resta* (la quota,
         // dentro il controller). Un utente gratuito non deve arrivare nemmeno a
         // vedersi chiedere il consenso per una funzione che non ha comprato.
-        Route::middleware(['ai.plan', 'ai.consent', 'throttle:ai'])->group(function (): void {
+        /*
+         * 🆕 **`ai.tetto` per ultimo, dopo il `throttle`** — FASE 8.2.
+         *
+         * L'ordine e' deliberato e va letto da sinistra: prima *hai diritto* (il
+         * piano), poi *hai acconsentito*, poi *non stai insistendo tu*
+         * (`throttle:ai`, 6 al minuto **per utente**), e infine *c'e' posto per
+         * tutti* (`ai.tetto`, quante chiamate insieme in tutto).
+         *
+         * 🚨 Le ultime due sembrano la stessa cosa e non lo sono: il `throttle`
+         * ferma una persona che insiste, il tetto ferma **mille persone che ne
+         * fanno una a testa**. ⚠️ E il tetto va per ultimo perche' occupa uno
+         * slot: darlo a chi verrebbe respinto per il consenso vorrebbe dire
+         * togliere posto a una richiesta buona.
+         */
+        Route::middleware(['ai.plan', 'ai.consent', 'throttle:ai', 'ai.tetto'])->group(function (): void {
             Route::post('ai/food/text', [AiController::class, 'foodFromText']);
             Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
             Route::get('ai/advice', [AiController::class, 'advice']);

@@ -11,6 +11,7 @@ use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
+use Closure;
 use Throwable;
 
 /**
@@ -45,6 +46,17 @@ class FakeAiProvider implements AiProvider
     private ?int $nextKcal = null;
 
     private ?string $nextAdvice = null;
+
+    /**
+     * Cosa succede **mentre** il modello sta «pensando» — FASE 2-septies.
+     *
+     * 🚨 Serve a provare una **corsa** senza avere due processi. La corsa vera
+     * e' questa: mentre la nostra richiesta e' ferma dentro `dailyAdvice()`,
+     * un'altra richiesta identica finisce e scrive la riga. ⚠️ Senza un gancio
+     * qui, quel momento non e' riproducibile in un test — e un difetto che non
+     * si riesce a riprodurre e' un difetto che torna.
+     */
+    private ?Closure $duranteIlConsiglio = null;
 
     public int $fakeInputTokens = 500;
 
@@ -144,9 +156,30 @@ class FakeAiProvider implements AiProvider
         return $this->nextKcal ?? 420;
     }
 
+    /**
+     * Fa succedere qualcosa **durante** la generazione del consiglio.
+     *
+     * 💡 Si spara una volta sola: una corsa e' un evento, non uno stato. Un
+     * gancio che resta armato farebbe scrivere la riga a ogni chiamata, e il
+     * test proverebbe un'altra cosa senza dirlo.
+     */
+    public function duranteIlConsiglio(?Closure $f): self
+    {
+        $this->duranteIlConsiglio = $f;
+
+        return $this;
+    }
+
     public function dailyAdvice(array $context, AiCallContext $ctx): string
     {
         $this->record('dailyAdvice', $context, $ctx);
+
+        if ($this->duranteIlConsiglio !== null) {
+            $f = $this->duranteIlConsiglio;
+            $this->duranteIlConsiglio = null;
+
+            $f($context);
+        }
 
         return $this->nextAdvice ?? 'Ti mancano circa 30 g di proteine per arrivare al target di oggi.';
     }

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\RequireAiConsent;
+use App\Http\Middleware\TettoAiGlobale;
 use App\Http\Middleware\RequirePlanWithAi;
 use App\Http\Middleware\ResolveTenant;
 use Illuminate\Foundation\Application;
@@ -46,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // Va **dopo** `auth:sanctum`: ha bisogno dell'utente per sapere
             // cosa ha acconsentito.
             'ai.consent' => RequireAiConsent::class,
+            'ai.tetto' => TettoAiGlobale::class,
 
             // 🚨 F4.2 (D2) — «hai diritto all'AI?» è una domanda diversa da
             // «quanti token ti restano», e va risolta **prima**. Nella catena

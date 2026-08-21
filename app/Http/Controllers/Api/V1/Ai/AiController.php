@@ -25,10 +25,13 @@ use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -300,16 +303,24 @@ class AiController extends Controller
          */
         $manuale = $request->boolean('manuale');
 
+        /*
+         * 🚨 **L'hash si calcola UNA volta** — FASE 2-septies.
+         *
+         * ⚠️ Prima veniva ricalcolato in tre punti (cache, scrittura, e ora
+         * anche lucchetto e `catch`): tre chiamate a `chiaveDiCache()` sullo
+         * stesso array sono tre occasioni perche' un domani una diverga dalle
+         * altre — e una cache che cerca con una chiave e scrive con un'altra
+         * **non sbaglia mai in modo visibile**: genera semplicemente sempre.
+         */
+        $chiaveCache = self::chiaveDiCache($contesto);
+        $hash = AiAdvice::hashOf($chiaveCache);
+
         $cache = $manuale
             ? null
-            : AiAdvice::cached($utente, $oggi, 'daily', self::chiaveDiCache($contesto));
+            : AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache);
 
         if ($cache !== null) {
-            return response()->json(['data' => [
-                'body' => $cache->body,
-                'cached' => true,
-                'generated_at' => $cache->created_at?->toIso8601String(),
-            ]]);
+            return $this->rispostaConsiglio($cache, cached: true);
         }
 
         /*
@@ -328,6 +339,92 @@ class AiController extends Controller
             return response()->json(['data' => null]);
         }
 
+        /*
+         * ══ 🚨 IL LUCCHETTO — FASE 2-septies, 21/08/2026 ═══════════════════
+         *
+         * **Il difetto**: fra il «guardo se c'e' in cache» e lo «scrivo» passano
+         * i secondi della chiamata al modello. Una seconda richiesta identica
+         * arrivata in quella finestra trovava la cache **ancora vuota**, partiva
+         * anche lei, e al momento di scrivere sbatteva contro
+         * `ai_advices_unique` → `23000` → **500**. Gli orari nel log del 20/08
+         * combaciano al secondo con le righe scritte.
+         *
+         * ⚠️ **Ma il 500 era il sintomo meno costoso.** Il danno vero e' che
+         * *tutt'e due* avevano gia' chiamato il modello e **pagato**
+         * (`consumaGettoniSeServe` sta prima della scrittura): una delle due
+         * risposte si buttava. Con un utente e' rumore; con mille e' una
+         * percentuale fissa di soldi.
+         *
+         * 💡 Il lucchetto e' la parte che **risparmia**; il `catch` piu' sotto
+         * e' quella che **non fa fallire**. Servono tutt'e due e fanno due
+         * lavori diversi: chi non prende il lucchetto entro `LUCCHETTO_ATTESA`
+         * genera lo stesso, e li' il `catch` lo raccoglie.
+         *
+         * ── ⚠️ Perche' NON sul percorso manuale ─────────────────────────
+         *
+         * Perche' «Rigenera» esiste apposta per **saltare la cache e pagare**:
+         * farlo aspettare e poi consegnargli il testo di un altro sarebbe
+         * disattivare il pulsante di nascosto. 💡 Il doppio tocco accidentale lo
+         * ferma gia' l'app, che disabilita il bottone mentre e' in corso.
+         */
+        $lucchetto = $manuale
+            ? null
+            : Cache::lock('ai:advice:'.$utente->getKey().':'.$oggi->etichetta.':'.$hash, self::LUCCHETTO_SECONDI);
+
+        if ($lucchetto !== null) {
+            try {
+                $lucchetto->block(self::LUCCHETTO_ATTESA);
+            } catch (LockTimeoutException) {
+                /*
+                 * ⚠️ **Scaduta l'attesa si va avanti lo stesso, e non e' una
+                 * resa.** L'alternativa sarebbe rispondere con un errore a chi
+                 * ha solo avuto la sfortuna di arrivare secondo: si preferisce
+                 * spendere una chiamata in piu' che far vedere un guasto.
+                 */
+                $lucchetto = null;
+            }
+
+            /*
+             * 🚨 **Si riguarda la cache DOPO aver aspettato.** E' tutto il
+             * senso del lucchetto: chi ha aspettato trova la risposta gia'
+             * scritta da chi e' arrivato primo, e non chiama il modello.
+             */
+            $giaFatto = AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache);
+
+            if ($giaFatto !== null) {
+                $lucchetto?->release();
+
+                return $this->rispostaConsiglio($giaFatto, cached: true);
+            }
+        }
+
+        try {
+            return $this->generaEScrivi($request, $utente, $oggi, $contesto, $chiaveCache, $manuale);
+        } finally {
+            // ⚠️ `finally`: un'eccezione dentro la generazione non deve lasciare
+            // la chiave occupata per un minuto a tutti gli altri.
+            $lucchetto?->release();
+        }
+    }
+
+    /**
+     * Genera il consiglio, lo scrive e risponde — estratto da `advice()`.
+     *
+     * 💡 Sta a parte solo perche' `advice()` deve poterlo avvolgere in un
+     * `try/finally` che rilascia il lucchetto: con tutto in linea, il `finally`
+     * avrebbe dovuto abbracciare mezzo metodo.
+     *
+     * @param  array<string, mixed>  $contesto
+     * @param  array<string, mixed>  $chiaveCache
+     */
+    private function generaEScrivi(
+        Request $request,
+        User $utente,
+        GiornoLocale $oggi,
+        array $contesto,
+        array $chiaveCache,
+        bool $manuale,
+    ): JsonResponse {
         $conGettoni = $this->assertQuota($request->user(), AiFeature::DailyAdvice);
 
         $testo = $this->ai->for(AiFeature::DailyAdvice)->dailyAdvice(
@@ -352,15 +449,45 @@ class AiController extends Controller
                 ->delete();
         }
 
-        $riga = AiAdvice::create([
-            'tenant_id' => $utente->tenant_id,
-            'user_id' => $utente->getKey(),
-            'date' => $oggi->etichetta,
-            'kind' => 'daily',
-            'context_hash' => AiAdvice::hashOf(self::chiaveDiCache($contesto)),
-            'body' => $testo,
-            'model' => $this->ai->modelFor(AiFeature::DailyAdvice),
-        ]);
+        try {
+            $riga = AiAdvice::create([
+                'tenant_id' => $utente->tenant_id,
+                'user_id' => $utente->getKey(),
+                'date' => $oggi->etichetta,
+                'kind' => 'daily',
+                'context_hash' => AiAdvice::hashOf($chiaveCache),
+                'body' => $testo,
+                'model' => $this->ai->modelFor(AiFeature::DailyAdvice),
+            ]);
+        } catch (QueryException $errore) {
+            /*
+             * ══ 🚨 CHI PERDE LA CORSA RICEVE IL CONSIGLIO, NON UN 500 ══════
+             *
+             * Per chi usa l'app le due richieste erano **la stessa domanda**, e
+             * devono avere la stessa risposta. Un errore qui verrebbe letto
+             * come «l'AI non ha funzionato», che non e' vero: ha funzionato due
+             * volte.
+             *
+             * ⚠️ **Ma solo se e' davvero la nostra corsa.** Un `23000` che non
+             * sia il nostro duplicato — un altro vincolo, una colonna sballata
+             * — va **rilanciato**: un `catch` che ingoia tutto trasforma un
+             * difetto in un mistero, ed e' il modo classico di rendere
+             * invisibile il prossimo.
+             *
+             * 💡 La prova che e' la nostra corsa non e' il codice d'errore: e'
+             * che **la riga adesso c'e'**. Se non c'e', il 23000 parlava
+             * d'altro.
+             */
+            $vinta = $errore->getCode() === '23000'
+                ? AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache)
+                : null;
+
+            if ($vinta === null) {
+                throw $errore;
+            }
+
+            return $this->rispostaConsiglio($vinta, cached: true);
+        }
 
         /*
          * 🚨 **Si pota qui, subito dopo aver scritto** — 16/08/2026.
@@ -376,9 +503,22 @@ class AiController extends Controller
          */
         AiAdvice::pota((int) $utente->getKey(), $oggi);
 
+        return $this->rispostaConsiglio($riga, cached: false);
+    }
+
+    /**
+     * La risposta del consiglio, con la stessa forma in tutti e quattro i punti
+     * da cui puo' uscire.
+     *
+     * 💡 Quattro `response()->json` copiati sarebbero quattro posti in cui
+     * dimenticare `generated_at` — che e' il campo da cui l'app decide se
+     * scrivere «di ieri».
+     */
+    private function rispostaConsiglio(AiAdvice $riga, bool $cached): JsonResponse
+    {
         return response()->json(['data' => [
             'body' => $riga->body,
-            'cached' => false,
+            'cached' => $cached,
             'generated_at' => $riga->created_at?->toIso8601String(),
         ]]);
     }
@@ -748,6 +888,31 @@ class AiController extends Controller
      * @var list<string>
      */
     private const VOLATILI = ['time', 'day_progress_pct', 'now'];
+
+    /**
+     * Quanto vive il lucchetto del consiglio, in secondi — FASE 2-septies.
+     *
+     * 🚨 **Deve superare la generazione piu' lenta.** Se scade mentre il
+     * primo sta ancora parlando col modello, il secondo entra e la corsa torna:
+     * cioe' il lucchetto sembrerebbe esserci e non servirebbe a niente.
+     *
+     * ⚠️ Che sia piu' lungo del timeout del client (30s) **non e' un problema
+     * qui**, e vale la pena scriverlo perche' sembra esserlo: nessuno aspetta il
+     * lucchetto per tutta la sua durata: si aspetta al massimo `LUCCHETTO_ATTESA`
+     * e poi si va avanti comunque. Il TTL serve solo a **liberare** la chiave se
+     * il processo che la teneva e' morto.
+     */
+    private const LUCCHETTO_SECONDI = 60;
+
+    /**
+     * Quanto si aspetta il proprio turno, in secondi.
+     *
+     * 💡 Tarato sul timeout del client: 12s di attesa piu' una generazione
+     * stanno dentro i 30s di `receiveTimeout` dell'app. ⚠️ Chi scade **non
+     * fallisce**: genera per conto suo, e al peggio si ricade nel caso di prima
+     * — che ora il `catch` sul duplicato copre.
+     */
+    private const LUCCHETTO_ATTESA = 12;
 
     /**
      * Gli allenamenti degli ultimi sette giorni, ridotti a quello che il modello

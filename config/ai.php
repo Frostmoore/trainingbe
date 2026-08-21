@@ -217,4 +217,27 @@ return [
     'advice' => [
         'enabled' => (bool) env('AI_ADVICE_ENABLED', true),
     ],
+
+    /*
+    |---------------------------------------------------------------------------
+    | Quante chiamate AI insieme — FASE 8.2
+    |---------------------------------------------------------------------------
+    |
+    | Misurato il 21/08/2026: una chiamata dura ~3s (mediana) e il pool PHP-FPM
+    | di questo dominio ha `pm.max_children = 6`. Sei processi diviso tre secondi
+    | fa ~2 richieste AI al secondo prima che il dominio sia pieno — e quando i
+    | processi finiscono non si ferma l'AI, si ferma il sito.
+    |
+    | `slot` e' quanti processi al massimo possono stare dentro una chiamata AI.
+    | Tre su sei: gli altri tre restano a chi sta facendo il login o guardando la
+    | scheda. Metterlo a 0 spegne il tetto.
+    |
+    | ⚠️ `ttl` deve superare la chiamata piu' lenta mai vista (8,8s): serve solo
+    | a liberare lo slot se il processo che lo teneva e' morto.
+    */
+    'concorrenza' => [
+        'slot' => (int) env('AI_SLOT_CONTEMPORANEI', 3),
+        'ttl' => (int) env('AI_SLOT_TTL', 30),
+        'riprova_fra' => (int) env('AI_SLOT_RIPROVA_FRA', 5),
+    ],
 ];
