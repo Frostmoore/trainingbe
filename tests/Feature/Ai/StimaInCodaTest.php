@@ -62,6 +62,65 @@ final class StimaInCodaTest extends TestCase
         $this->iscritto->registraConsenso('ai_consent_at', true);
     }
 
+    #[Test]
+    public function il_pasto_sopravvive_alla_cancellazione_della_richiesta(): void
+    {
+        /*
+         * 🚨 **FASE 9.7**: chi riprende una stima dopo aver chiuso l'app deve
+         * ritrovare il foglio di conferma **nel pasto giusto**.
+         *
+         * ⚠️ E la distinzione è quella che regge tutta la privacy di questa
+         * tabella: `richiesta` dice **cosa** ha mangiato una persona ed è il dato
+         * personale — si cancella; `pasto` dice solo **quando**, ed è
+         * un'etichetta. 💡 Cancellarlo insieme all'altro sarebbe stato
+         * prudente in modo inutile, e avrebbe costretto a richiedere a chi
+         * l'aveva già detto.
+         */
+        $utente = $this->iscritto->fresh();
+
+        $id = $this->comeApp($utente)
+            ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'meal' => 'breakfast'])
+            ->json('data.id');
+
+        $riga = StimaCibo::withoutGlobalScopes()->findOrFail($id);
+
+        $this->assertNull($riga->richiesta);
+        $this->assertSame('breakfast', $riga->pasto);
+
+        $this->comeApp($utente)
+            ->getJson('/api/v1/ai/food/stime/'.$id)
+            ->assertJsonPath('data.pasto', 'breakfast')
+            ->assertJsonPath('data.origine', 'testo');
+    }
+
+    #[Test]
+    public function le_stime_vecchie_si_potano(): void
+    {
+        /*
+         * ⚠️ `stime_cibo` è una **cache**, non uno storico: vale la regola già
+         * imparata su `ai_advices` (§46 dell'atlante). Una stima non confermata
+         * dopo 24 ore non interessa più a nessuno, e tenerla vorrebbe dire
+         * conservare cosa ha mangiato una persona senza che serva a niente.
+         *
+         * 🚨 E la potatura gira **senza scope di palestra**, perché un comando
+         * schedulato non ne ha uno: con lo scope attivo non troverebbe niente e
+         * la tabella crescerebbe **senza dare nessun errore**.
+         */
+        $utente = $this->iscritto->fresh();
+
+        $id = $this->comeApp($utente)
+            ->postJson('/api/v1/ai/food/text', ['text' => 'mela'])
+            ->json('data.id');
+
+        StimaCibo::withoutGlobalScopes()
+            ->whereKey($id)
+            ->update(['created_at' => now()->subHours(StimaCibo::DURATA_ORE + 1)]);
+
+        $this->artisan('model:prune', ['--model' => StimaCibo::class])->assertSuccessful();
+
+        $this->assertNull(StimaCibo::withoutGlobalScopes()->find($id));
+    }
+
     private function quanteChiamate(): int
     {
         return count(array_filter(

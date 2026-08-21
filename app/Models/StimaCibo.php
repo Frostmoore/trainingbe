@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -36,6 +38,7 @@ use Illuminate\Support\Str;
 class StimaCibo extends Model
 {
     use BelongsToTenant;
+    use Prunable;
 
     protected $table = 'stime_cibo';
 
@@ -64,7 +67,7 @@ class StimaCibo extends Model
     public const DURATA_ORE = 24;
 
     protected $fillable = [
-        'tenant_id', 'user_id', 'stato', 'origine',
+        'tenant_id', 'user_id', 'stato', 'origine', 'pasto',
         'richiesta', 'risultato', 'errore', 'paga_con_gettoni',
     ];
 
@@ -75,6 +78,32 @@ class StimaCibo extends Model
             'risultato' => 'array',
             'paga_con_gettoni' => 'boolean',
         ];
+    }
+
+    /**
+     * Cosa si pota — FASE 9.8.
+     *
+     * 🚨 **Senza scope**: `model:prune` gira da un comando schedulato, dove
+     * non c'è nessuna palestra corrente. Con lo scope attivo non troverebbe
+     * niente e la tabella crescerebbe **senza dare nessun errore** — che è il
+     * modo peggiore in cui una potatura può non funzionare.
+     */
+    public function prunable(): Builder
+    {
+        return static::withoutGlobalScopes()
+            ->where('created_at', '<', now()->subHours(self::DURATA_ORE));
+    }
+
+    /**
+     * ⚠️ La foto se ne va con la riga.
+     *
+     * 💡 Nel caso normale non c'è già più — `completa()` e `fallisce()` la
+     * cancellano — ma una stima rimasta `in_coda` per un giorno (worker fermo,
+     * server riavviato) ce l'ha ancora.
+     */
+    protected function pruning(): void
+    {
+        $this->buttaLaFoto();
     }
 
     public function user(): BelongsTo
@@ -96,6 +125,7 @@ class StimaCibo extends Model
             'user_id' => $chi->getKey(),
             'stato' => self::IN_CODA,
             'origine' => self::TESTO,
+            'pasto' => $richiesta['meal'] ?? null,
             'richiesta' => $richiesta,
             'paga_con_gettoni' => $pagaConGettoni,
         ]);
@@ -126,6 +156,7 @@ class StimaCibo extends Model
             'user_id' => $chi->getKey(),
             'stato' => self::IN_CODA,
             'origine' => self::FOTO,
+            'pasto' => $richiesta['meal'] ?? null,
             'richiesta' => [...$richiesta, 'token' => $token, 'mime' => $mime],
             'paga_con_gettoni' => $pagaConGettoni,
         ]);
@@ -206,6 +237,8 @@ class StimaCibo extends Model
             'id' => (int) $this->getKey(),
             'stato' => $this->stato,
             'origine' => $this->origine,
+            // 💡 Serve a riaprire il foglio di conferma nel pasto giusto.
+            'pasto' => $this->pasto,
             'risultato' => $this->risultato,
             'errore' => $this->errore,
             'creata_il' => $this->created_at?->toIso8601String(),

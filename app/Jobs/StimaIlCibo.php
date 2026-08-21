@@ -86,9 +86,22 @@ class StimaIlCibo implements ShouldBeUnique, ShouldQueue
         return 'stima-cibo-'.$this->stimaId;
     }
 
+    /**
+     * 🚨 **Coda dedicata** — FASE 9.8.
+     *
+     * ⚠️ Sulla coda comune, l'importazione di un PDF da 40 secondi terrebbe
+     * in ostaggio le stime del pranzo: un lavoro lungo e raro davanti a molti
+     * lavori corti e frequenti è il modo classico di far sembrare lenta una
+     * cosa che non lo è.
+     *
+     * 💡 Il worker va avviato con `--queue=ai,default`: l'ordine conta, e
+     * mette `ai` per prima.
+     */
     public function __construct(
         public readonly int $stimaId,
-    ) {}
+    ) {
+        $this->onQueue('ai');
+    }
 
     public function handle(
         AiManager $ai,

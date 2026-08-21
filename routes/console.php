@@ -135,3 +135,29 @@ Schedule::command('piani:pota-importazioni')
     ->onFailure(function (): void {
         Log::error('Potatura delle importazioni fallita: PDF di piani alimentari restano oltre i 7 giorni.');
     });
+
+/*
+|------------------------------------------------------------------------------
+| 🆕 La potatura della coda — FASE 9.8
+|------------------------------------------------------------------------------
+|
+| 🚨 `failed_jobs` **non si svuota da sola**, e cresce. Da quando le stime
+| del cibo passano dalla coda, i lavori sono molti e piccoli: un fallimento ogni
+| tanto è fisiologico, e in un anno diventa una tabella che nessuno guarda piena
+| di righe che non servono a niente.
+|
+| ⚠️ Sette giorni e non di piu': un lavoro fallito serve a capire **perche'**
+| era fallito, e quella domanda si fa nei giorni successivi. Dopo, e' peso morto.
+|
+| 💡 Le `stime_cibo` si potano insieme: sono una **cache** (come `ai_advices`,
+| §46), e una stima non confermata dopo 24 ore non interessa piu' a nessuno.
+*/
+Schedule::command('queue:prune-failed --hours=168')
+    ->dailyAt('4:05')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
+Schedule::command('model:prune', ['--model' => \App\Models\StimaCibo::class])
+    ->hourly()
+    ->withoutOverlapping(15)
+    ->runInBackground();

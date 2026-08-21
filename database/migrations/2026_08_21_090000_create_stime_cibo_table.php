@@ -41,6 +41,18 @@ return new class extends Migration
             $tabella->string('origine', 10);
 
             /*
+             * 🚨 **Il pasto sopravvive alla cancellazione della richiesta**, e la
+             * differenza va capita: `richiesta` contiene *cosa* ha mangiato una
+             * persona ed è il dato personale; `pasto` dice solo **quando** —
+             * `lunch`, `dinner` — ed è un'etichetta.
+             *
+             * ⚠️ Serve a chi riprende una stima dopo aver chiuso l'app (FASE
+             * 9.7): senza, il foglio di conferma non saprebbe in quale pasto
+             * scrivere, e bisognerebbe richiederlo a chi l'aveva già detto.
+             */
+            $tabella->string('pasto', 20)->nullable();
+
+            /*
              * 🚨 Il testo del pasto, o il riferimento alla foto depositata.
              * ⚠️ **E' il dato personale di questa tabella**: si svuota appena la
              * stima e' pronta — vedi `StimaCibo::completa()`.
