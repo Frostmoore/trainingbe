@@ -394,6 +394,26 @@ Route::prefix('v1')->group(function (): void {
             Route::post('ai/food/confirm', [AiController::class, 'confirm']);
         });
 
+        /*
+         * 🆕 **Chiedere «e' pronta?» non chiama nessun modello** — FASE 9.4.
+         *
+         * 🚨 Fuori da `ai.tetto` di proposito: occupare uno degli slot del
+         * semaforo per un controllo di stato vorrebbe dire **togliere posto a
+         * una stima vera**, cioè rallentare proprio la cosa che si sta
+         * aspettando.
+         *
+         * ⚠️ Ma sotto un `throttle` suo sì, e largo: l'app lo chiede **ogni
+         * secondo e mezzo** finché la stima non è pronta. Con `throttle:ai` (6 al
+         * minuto) si sarebbe bloccata da sola dopo nove secondi d'attesa.
+         *
+         * 💡 E resta sotto `ai.consent`: chi ha revocato il consenso non deve
+         * poter leggere una stima che quel consenso ha prodotto.
+         */
+        Route::middleware(['ai.plan', 'ai.consent', 'throttle:60,1'])->group(function (): void {
+            Route::get('ai/food/stime/in-corso', [AiController::class, 'stimaInCorso']);
+            Route::get('ai/food/stime/{stima}', [AiController::class, 'statoStima']);
+        });
+
         Route::get('ai/usage', [AiController::class, 'usage']);
 
         /*

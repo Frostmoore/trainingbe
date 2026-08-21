@@ -4,18 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Ai;
 
+use App\Jobs\StimaIlCibo;
 use App\Enums\AiFeature;
 use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Models\AiAdvice;
 use App\Models\FoodEntry;
+use App\Models\StimaCibo;
 use App\Models\User;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\CancelloDeiGettoni;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\FoodItem;
+use App\Services\Ai\StimaConRitentativo;
 use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
@@ -57,87 +60,180 @@ class AiController extends Controller
         private readonly MealValidator $validatore,
         private readonly PortafoglioGettoni $portafoglio,
         private readonly CancelloDeiGettoni $cancello,
+        private readonly StimaConRitentativo $stimatore,
     ) {}
 
     // ───────────────────────── cibo ─────────────────────────
 
+    /**
+     * Accoda la stima di un pasto **scritto** — FASE 9.4.
+     *
+     * ══ 🚨 NON CHIAMA PIU' IL MODELLO, E QUESTO E' IL PUNTO ═══════════════
+     *
+     * Prima questo metodo restava fermo **2–8 secondi** dentro la chiamata al
+     * modello, e con lui il processo PHP che serviva la richiesta. I processi di
+     * questo dominio sono **sei** (`pm.max_children = 6`, misurato in FASE 8.1):
+     * a sette persone che scrivevano il pranzo insieme **non si fermava l'AI, si
+     * fermava il sito** — chi faceva il login, chi guardava la scheda, tutti in
+     * coda dietro a una stima.
+     *
+     * ⚠️ E il cibo si scrive a pranzo e a cena, cioe' **per definizione tutti
+     * insieme**: non era un picco immaginario da grande scala, era il
+     * funzionamento normale dell'app con sette utenti.
+     *
+     * 💡 Adesso qui dentro si valida, si apre il cancello, si scrive una riga e
+     * si accoda: **~50 ms**. L'attesa sta su un worker, dove non toglie posto a
+     * nessuno.
+     *
+     * ── 🚨 `save` non esiste piu' su questa strada, ed e' una decisione ────
+     *
+     * L'app manda **sempre** `save: false` e poi conferma da
+     * `POST ai/food/confirm`: quella e' la strada vera, e passa di li' perche'
+     * `source` e `ai_raw` devono sopravvivere alla conferma.
+     *
+     * ⚠️ Ma soprattutto `save: true` **vorrebbe dire un'altra cosa adesso**: la
+     * stima finisce minuti dopo, magari con l'app chiusa, e scrivere in diario
+     * mentre nessuno guarda non e' la stessa funzione di prima. 🚨 Si rifiuta con
+     * un `422` che lo dice, invece di ignorarlo in silenzio: un parametro
+     * accettato e non applicato e' peggio di uno rifiutato.
+     */
     public function foodFromText(Request $request): JsonResponse
     {
         $dati = $request->validate([
             'text' => ['required', 'string', 'min:2', 'max:1000'],
             'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
-            // Se `false`, si restituisce la stima senza scrivere niente: serve
-            // all'app per far confermare una stima poco sicura prima di
-            // registrarla.
-            'save' => ['nullable', 'boolean'],
+            /*
+             * ⚠️ `sometimes` e non `nullable`: `declined` è una regola
+             * **implicita**, cioè fallisce anche quando il campo **manca**.
+             * Con `nullable` ogni richiesta senza `save` prendeva 422 — cioè
+             * tutte quelle dell'app.
+             */
+            'save' => ['sometimes', 'declined'],
+        ], [
+            'save.declined' => __('Le stime si confermano da /ai/food/confirm.'),
         ]);
-
-        $conGettoni = $this->assertQuota($request->user(), AiFeature::FoodText);
 
         $utente = $request->user();
 
         /*
-         * 🚨 **Il retry riscrive il MESSAGGIO UTENTE, mai il prompt di sistema.**
-         *
-         * Il prompt di sistema e' il prefisso identico di ogni chiamata di ogni
-         * utente, ed e' cio' che lo rende cachabile a un decimo del costo.
-         * Infilarci l'elenco degli errori di *questa* richiesta lo invaliderebbe
-         * per tutti, **senza dare nessun errore**: si vedrebbe solo in fattura.
+         * 🚨 **Il cancello PRIMA di accodare.** Aprirlo nel worker vorrebbe dire
+         * accettare la richiesta, far vedere «sto pensando», e poi dire di no —
+         * cioe' far aspettare qualcuno per un rifiuto che si sapeva gia'.
          */
-        [$stima, $avvisi] = $this->stimaValidata(
-            fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::FoodText)->foodFromText(
-                $dati['text'].$appendice,
-                AiCallContext::for($utente, AiFeature::FoodText),
-            ),
-        );
+        $conGettoni = $this->assertQuota($utente, AiFeature::FoodText);
 
-        $this->consumaGettoniSeServe($utente, AiFeature::FoodText, $conGettoni);
+        $stima = StimaCibo::daTesto($utente, [
+            'text' => $dati['text'],
+            'meal' => $dati['meal'] ?? null,
+            'eaten_at' => $dati['eaten_at'] ?? null,
+        ], $conGettoni);
 
-        return $this->rispostaStima($request, $stima, FoodSource::AiText, $dati, $avvisi);
+        StimaIlCibo::dispatch((int) $stima->getKey());
+
+        return response()->json(['data' => $stima->perLApp()], 202);
     }
 
+    /**
+     * Accoda la stima di un pasto **fotografato** — FASE 9.4.
+     *
+     * 🚨 **La foto si deposita, perche' il worker deve poterla leggere.** Il file
+     * temporaneo dell'upload sparisce con la richiesta, e la richiesta finisce
+     * fra 50 millisecondi.
+     *
+     * ⚠️ **Ed e' il pezzo che cambia il registro dei trattamenti**: una foto di
+     * un pasto passava e basta, adesso **sta a riposo sul nostro disco** per i
+     * secondi che separano l'accodamento dal turno. 💡 `StimaCibo::completa()` la
+     * cancella appena la stima esiste — anche quando fallisce.
+     */
     public function foodFromPhoto(Request $request): JsonResponse
     {
         $dati = $request->validate([
             'photo' => ['required', 'image', 'max:12288'],
             'meal' => ['nullable', Rule::enum(MealType::class)],
             'eaten_at' => ['nullable', 'date'],
-            'save' => ['nullable', 'boolean'],
+            /*
+             * ⚠️ `sometimes` e non `nullable`: `declined` è una regola
+             * **implicita**, cioè fallisce anche quando il campo **manca**.
+             * Con `nullable` ogni richiesta senza `save` prendeva 422 — cioè
+             * tutte quelle dell'app.
+             */
+            'save' => ['sometimes', 'declined'],
+        ], [
+            'save.declined' => __('Le stime si confermano da /ai/food/confirm.'),
         ]);
-
-        $conGettoni = $this->assertQuota($request->user(), AiFeature::FoodPhoto);
 
         $utente = $request->user();
         $file = $request->file('photo');
 
-        /*
-         * 🚨 **Stesso trattamento del testo**: stesso prompt di sistema, stesso
-         * schema, stesso validatore e **stesso retry**. Il 13/08/2026 il retry
-         * dalla foto era un debito dichiarato — `foodFromImage()` non aveva un
-         * posto in cui mettere l'appendice — ed e' stato chiuso aggiungendo un
-         * parametro `$extra` al contratto dei fornitori.
-         *
-         * ⚠️ Perche' contava: un errore grave e' un'unita' vietata o un enum
-         * sbagliato, e non c'e' nessuna ragione per cui il modello debba
-         * sbagliarli meno guardando una foto. Chi fotografa il pranzo aveva
-         * meno garanzie di chi lo scrive, senza che niente lo dicesse.
-         */
-        $percorso = $file->getRealPath();
-        $mime = (string) $file->getMimeType();
+        $conGettoni = $this->assertQuota($utente, AiFeature::FoodPhoto);
 
-        [$stima, $avvisi] = $this->stimaValidata(
-            fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::FoodPhoto)->foodFromImage(
-                $percorso,
-                $mime,
-                AiCallContext::for($utente, AiFeature::FoodPhoto),
-                $appendice,
-            ),
+        $stima = StimaCibo::daFoto(
+            $utente,
+            (string) file_get_contents($file->getRealPath()),
+            (string) $file->getMimeType(),
+            [
+                'meal' => $dati['meal'] ?? null,
+                'eaten_at' => $dati['eaten_at'] ?? null,
+            ],
+            $conGettoni,
         );
 
-        $this->consumaGettoniSeServe($utente, AiFeature::FoodPhoto, $conGettoni);
+        StimaIlCibo::dispatch((int) $stima->getKey());
 
-        return $this->rispostaStima($request, $stima, FoodSource::AiPhoto, $dati, $avvisi);
+        return response()->json(['data' => $stima->perLApp()], 202);
+    }
+
+    /**
+     * A che punto e' una stima — FASE 9.4.
+     *
+     * ── 🚨 Perche' NON sta sotto `ai.tetto` ───────────────────────────────
+     *
+     * Perche' chiedere «e' pronta?» non chiama nessun modello, e occupare uno
+     * degli slot del semaforo per un controllo di stato vorrebbe dire togliere
+     * posto a una stima vera. ⚠️ Sotto un `throttle` suo pero' si': l'app lo
+     * chiede ogni secondo e mezzo.
+     *
+     * ── 🚨 Si controlla il PROPRIETARIO, non solo la palestra ─────────────
+     *
+     * Una stima e' cosa ha mangiato una persona. Lo scope di tenant fermerebbe
+     * un'altra palestra e **non** un compagno di palestra: qui serve
+     * l'appartenenza, ed e' esattamente la regola gia' scritta per i messaggi e
+     * per il diario.
+     */
+    public function statoStima(Request $request, int $stima): JsonResponse
+    {
+        $riga = StimaCibo::query()
+            ->where('user_id', $request->user()->getKey())
+            ->find($stima);
+
+        if ($riga === null) {
+            return response()->json(['message' => __('Stima non trovata.')], 404);
+        }
+
+        return response()->json(['data' => $riga->perLApp()]);
+    }
+
+    /**
+     * L'ultima stima non ancora finita, se c'e' — FASE 9.7.
+     *
+     * 🚨 **Serve a chi ha chiuso l'app mentre pensava.** Il lavoro continua sul
+     * server: al rientro l'app deve **ritrovarlo**, non ricominciare — che
+     * vorrebbe dire una seconda chiamata al modello per lo stesso piatto.
+     *
+     * 💡 L'app tiene l'id in `LocalCache`, ma non basta: chi cambia telefono, o
+     * chi ha svuotato i dati, quell'id non ce l'ha. Questa rotta e' la rete di
+     * sicurezza che non dipende dal telefono.
+     */
+    public function stimaInCorso(Request $request): JsonResponse
+    {
+        $riga = StimaCibo::query()
+            ->where('user_id', $request->user()->getKey())
+            ->whereIn('stato', [StimaCibo::IN_CODA, StimaCibo::IN_LAVORAZIONE])
+            ->latest('id')
+            ->first();
+
+        return response()->json(['data' => $riga?->perLApp()]);
     }
 
     /**
@@ -161,19 +257,7 @@ class AiController extends Controller
      */
     private function stimaValidata(callable $chiamata): array
     {
-        $esito = $this->validatore->valida($chiamata(''));
-
-        if ($esito['gravi'] === []) {
-            return [$esito['stima'], $esito['avvisi']];
-        }
-
-        $appendice = "\n\n[SISTEMA] Il tuo output precedente violava lo schema: "
-            .implode(' ', $esito['gravi'])
-            .' Correggi e restituisci solo il JSON.';
-
-        $secondo = $this->validatore->valida($chiamata($appendice));
-
-        return [$secondo['stima'], array_merge($secondo['avvisi'], $secondo['gravi'])];
+        return $this->stimatore->esegui($chiamata);
     }
 
     /**
@@ -708,39 +792,6 @@ class AiController extends Controller
         $this->cancello->consuma($utente, $funzione, $conGettoni);
     }
 
-    /**
-     * @param  array<string, mixed>  $dati
-     */
-    private function rispostaStima(
-        Request $request,
-        FoodEstimate $stima,
-        FoodSource $fonte,
-        array $dati,
-        array $avvisi = [],
-    ): JsonResponse {
-        $salva = (bool) ($dati['save'] ?? true);
-
-        if (! $salva || $stima->items === []) {
-            return response()->json(['data' => [
-                'estimate' => $stima->toArray(),
-                // ⚠️ Gli avvisi del validatore viaggiano insieme alla stima: sono
-                // cio' che il foglio di conferma mostra quando il backend ha
-                // corretto qualcosa o ha trovato un numero implausibile.
-                'warnings' => $avvisi,
-                'entries' => [],
-                'saved' => false,
-            ]]);
-        }
-
-        $voci = $this->scriviVoci($request->user(), $stima, $fonte, $dati);
-
-        return response()->json(['data' => [
-            'estimate' => $stima->toArray(),
-            'warnings' => $avvisi,
-            'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
-            'saved' => true,
-        ]], 201);
-    }
 
     /**
      * Scrive le voci di una stima. **L'unico punto che le crea**, usato sia da

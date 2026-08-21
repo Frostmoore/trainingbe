@@ -70,6 +70,49 @@ class AiApiTest extends TestCase
         return $this->comeApp($u ?? $this->iscritto);
     }
 
+    /**
+     * Accoda una stima e restituisce il risultato — FASE 9.
+     *
+     * 🚨 **Dalla FASE 9 `POST /ai/food/text` non chiama piu' il modello**: apre
+     * il cancello, scrive una riga e accoda. La stima si legge dopo, da
+     * `GET /ai/food/stime/{id}`.
+     *
+     * 💡 Nei test la coda e' `sync` (`phpunit.xml`), quindi il lavoro gira
+     * dentro la `POST` e il risultato c'e' gia' alla riga dopo. ⚠️ In produzione
+     * no: chi legge questo aiuto non deve credere che sia istantaneo.
+     *
+     * @param  array<string, mixed>  $dati
+     * @return array<string, mixed>  `estimate`, `warnings`, `entries`, `saved`
+     */
+    private function stimaDaTesto(array $dati, ?User $chi = null): array
+    {
+        $id = $this->comeIscritto($chi)
+            ->postJson('/api/v1/ai/food/text', $dati)
+            ->assertStatus(202)
+            ->json('data.id');
+
+        return $this->comeIscritto($chi)
+            ->getJson('/api/v1/ai/food/stime/'.$id)
+            ->assertOk()
+            ->assertJsonPath('data.stato', 'pronta')
+            ->json('data.risultato');
+    }
+
+    /**
+     * Conferma una stima, che dalla FASE 9 e' **l'unico** modo di far entrare
+     * una voce in diario da una stima AI.
+     *
+     * @param  array<string, mixed>  $stima
+     */
+    private function conferma(array $stima, string $fonte = 'ai_text', ?User $chi = null): \Illuminate\Testing\TestResponse
+    {
+        return $this->comeIscritto($chi)->postJson('/api/v1/ai/food/confirm', [
+            'items' => $stima['estimate']['items'],
+            'source' => $fonte,
+            'meal' => 'lunch',
+        ]);
+    }
+
     // ───────────────────────── cibo ─────────────────────────
 
     #[Test]
@@ -83,13 +126,21 @@ class AiApiTest extends TestCase
             'confidence' => 0.85,
         ]));
 
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/text', ['text' => 'pasta al pomodoro', 'meal' => 'lunch'])
+        /*
+         * 🆕 **Due passi invece di uno, dalla FASE 9**: prima la stima (che ora
+         * nasce in coda), poi la conferma. ⚠️ Il `save: true` che faceva tutto
+         * in una volta non esiste piu' — vedi `StimaInCodaTest`.
+         */
+        $stima = $this->stimaDaTesto(['text' => 'pasta al pomodoro', 'meal' => 'lunch']);
+
+        $this->assertSame(0.85, $stima['estimate']['confidence']);
+        $this->assertFalse($stima['saved']);
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
+
+        $this->conferma($stima)
             ->assertCreated()
-            ->assertJsonPath('data.saved', true)
             ->assertJsonCount(2, 'data.entries')
-            ->assertJsonPath('data.entries.0.description', 'Pasta')
-            ->assertJsonPath('data.estimate.confidence', 0.85);
+            ->assertJsonPath('data.entries.0.description', 'Pasta');
 
         $this->assertSame(2, FoodEntry::withoutGlobalScopes()->count());
         $this->assertSame('ai_text', FoodEntry::withoutGlobalScopes()->first()->source->value);
@@ -107,12 +158,10 @@ class AiApiTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/text', ['text' => 'un panino', 'save' => false])
-            ->assertOk()
-            ->assertJsonPath('data.saved', false)
-            ->assertJsonCount(0, 'data.entries');
+        $stima = $this->stimaDaTesto(['text' => 'un panino', 'save' => false]);
 
+        $this->assertFalse($stima['saved']);
+        $this->assertSame([], $stima['entries']);
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
@@ -130,8 +179,9 @@ class AiApiTest extends TestCase
             'confidence' => 0.9,
         ]));
 
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/text', ['text' => 'un cucchiaio d\'olio'])
+        $stima = $this->stimaDaTesto(['text' => 'un cucchiaio d\'olio']);
+
+        $this->conferma($stima)
             ->assertCreated()
             ->assertJsonPath('data.entries.0.grams', 14.0);
     }
@@ -322,11 +372,11 @@ class AiApiTest extends TestCase
 
         $this->alfa->update(['ai_monthly_calls_per_member' => 2]);
 
-        // Prima chiamata: una su due.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
+        // Prima chiamata: una su due. 🆕 `202` dalla FASE 9: si accoda.
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertStatus(202);
 
         // Seconda: il tetto e' raggiunto.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertCreated();
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertStatus(202);
 
         $chiamateFinora = count($finta->calls);
 
@@ -405,15 +455,15 @@ class AiApiTest extends TestCase
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
         $altro->registraConsenso('ai_consent_at', true);
 
-        // Il primo esaurisce il proprio tetto.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertCreated();
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertCreated();
+        // Il primo esaurisce il proprio tetto. 🆕 `202` dalla FASE 9.
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertStatus(202);
+        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertStatus(202);
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'banana'])->assertStatus(429);
 
         // Il secondo non se ne accorge nemmeno.
         $this->comeIscritto($altro)
             ->postJson('/api/v1/ai/food/text', ['text' => 'mela'])
-            ->assertCreated();
+            ->assertStatus(202);
     }
 
     #[Test]
@@ -705,7 +755,7 @@ class AiApiTest extends TestCase
         $this->comeIscritto()->postJson('/api/v1/ai/food/photo', [
             'photo' => UploadedFile::fake()->image('piatto.jpg', 400, 400),
             'save' => false,
-        ])->assertOk();
+        ])->assertStatus(202);
 
         $chiamate = collect($finta->calls)->pluck('method');
 
@@ -726,14 +776,20 @@ class AiApiTest extends TestCase
     {
         $this->aiFinta();
 
-        $risposta = $this->comeIscritto()->postJson('/api/v1/ai/food/photo', [
+        $id = $this->comeIscritto()->postJson('/api/v1/ai/food/photo', [
             'photo' => UploadedFile::fake()->image('piatto.jpg', 400, 400),
             'save' => false,
-        ])->assertOk();
+        ])->assertStatus(202)->json('data.id');
 
-        $this->assertSame([], $risposta->json('data.warnings'));
-        $this->assertSame('g', $risposta->json('data.estimate.items.0.unit'));
-        $this->assertSame('per_100g', $risposta->json('data.estimate.items.0.basis'));
+        $stima = $this->comeIscritto()
+            ->getJson('/api/v1/ai/food/stime/'.$id)
+            ->assertOk()
+            ->assertJsonPath('data.stato', 'pronta')
+            ->json('data.risultato');
+
+        $this->assertSame([], $stima['warnings']);
+        $this->assertSame('g', $stima['estimate']['items'][0]['unit']);
+        $this->assertSame('per_100g', $stima['estimate']['items'][0]['basis']);
     }
 
     // ───────────────────── conferma della stima (A4.8) ─────────────────────
@@ -765,12 +821,13 @@ class AiApiTest extends TestCase
         ]));
 
         // 1. La stima: niente in diario, ma la nota e la confidenza arrivano.
-        $stima = $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una cotoletta di pollo impanata', 'save' => false])
-            ->assertOk()
-            ->assertJsonPath('data.saved', false)
-            ->assertJsonPath('data.estimate.note', 'Impanatura e olio assorbito compresi.')
-            ->json('data.estimate.items');
+        //    🆕 Dalla FASE 9 passa dalla coda, e la nota sopravvive al viaggio.
+        $risultato = $this->stimaDaTesto(['text' => 'una cotoletta di pollo impanata', 'save' => false]);
+
+        $this->assertFalse($risultato['saved']);
+        $this->assertSame('Impanatura e olio assorbito compresi.', $risultato['estimate']['note']);
+
+        $stima = $risultato['estimate']['items'];
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
 

@@ -84,7 +84,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'la chiamata inclusa', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         $this->iscritto = $this->iscritto->fresh();
     }
@@ -143,7 +143,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($utente->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
     }
 
     /**
@@ -172,7 +172,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($utente->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 🎯 **La prima chiamata paga.** Se il saldo fosse ancora 10, vorrebbe
@@ -245,7 +245,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($this->iscritto)
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 🚨 **Un gettone speso a quota piena e' un gettone rubato**, e non se
@@ -282,7 +282,7 @@ final class CicloDeiGettoniTest extends TestCase
         for ($i = 1; $i <= 3; $i++) {
             $this->comeApp($this->iscritto->fresh())
                 ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-                ->assertOk();
+                ->assertStatus(202);
 
             $this->assertSame(10 - $i, $this->saldo(), "dopo {$i} chiamate il saldo non torna");
         }
@@ -320,7 +320,7 @@ final class CicloDeiGettoniTest extends TestCase
         foreach ([1, 2] as $n) {
             $this->comeApp($this->iscritto->fresh())
                 ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-                ->assertOk();
+                ->assertStatus(202);
         }
 
         $this->assertSame(0, $this->saldo());
@@ -414,7 +414,7 @@ final class CicloDeiGettoniTest extends TestCase
         // chiamata** lascerebbe partire la foto e andrebbe in negativo.
         $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         $this->assertSame(2, $this->saldo());
     }
@@ -428,7 +428,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
@@ -476,11 +476,11 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->comeApp($altro->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'inclusa', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         $this->comeApp($altro->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'a gettoni', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 💡 **I gettoni sono un monte condiviso, ed e' voluto** (D16): la quota

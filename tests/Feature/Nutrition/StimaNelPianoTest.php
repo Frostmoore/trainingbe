@@ -85,7 +85,7 @@ final class StimaNelPianoTest extends TestCase
 
         $this->actingAs($this->trainer->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 💡 **Due chiamate, due etichette.** E' il motivo per cui `PlanFood`

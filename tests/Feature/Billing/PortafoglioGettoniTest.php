@@ -105,7 +105,7 @@ final class PortafoglioGettoniTest extends TestCase
 
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 🚨 **Il saldo non si e' mosso.** La quota inclusa bastava, e i gettoni
@@ -131,7 +131,7 @@ final class PortafoglioGettoniTest extends TestCase
 
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         /*
          * 🚨 **Il difetto che questo test esiste per impedire.**
@@ -161,12 +161,12 @@ final class PortafoglioGettoniTest extends TestCase
         // La prima chiamata usa la quota inclusa.
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         // La seconda no: la quota e' finita.
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'tre uova', 'save' => false])
-            ->assertOk();
+            ->assertStatus(202);
 
         $this->assertSame(99, $this->portafoglio()->saldo($utente->fresh()));
 
@@ -187,9 +187,9 @@ final class PortafoglioGettoniTest extends TestCase
 
         // Quota (1) + gettoni (1) = due chiamate possibili.
         $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertOk();
+            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertStatus(202);
         $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due mele', 'save' => false])->assertOk();
+            ->postJson('/api/v1/ai/food/text', ['text' => 'due mele', 'save' => false])->assertStatus(202);
 
         /*
          * 🚨 **402 con un codice suo**, non il 429 della quota. Dire «hai
@@ -213,7 +213,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertOk();
+            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertStatus(202);
 
         /*
          * ⚠️ **Chi non ha mai comprato gettoni non deve sentirsi dire di
