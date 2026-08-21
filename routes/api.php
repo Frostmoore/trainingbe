@@ -51,6 +51,28 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
 
+    /*
+     * 🆕 **Che versione devo avere?** — FASE 10.
+     *
+     * 🚨 Sta **fuori dal cancello che descrive** (`VersioneMinima::SEMPRE_APERTE`):
+     * un'app bloccata deve poter chiedere «sono ancora vecchia?», o il pulsante
+     * «Riprova» della schermata di blocco non avrebbe niente da interrogare.
+     *
+     * 💡 Serve quando il blocco è stato **un errore nostro**: senza, per
+     * toglierlo servirebbe un'altra pubblicazione sullo store.
+     *
+     * ⚠️ Pubblica e senza autenticazione: la domanda arriva anche da chi non ha
+     * fatto l'accesso, e la risposta non contiene niente di personale.
+     */
+    Route::get('versione', function (\Illuminate\Http\Request $r) {
+        $piattaforma = strtolower((string) $r->header('X-App-Platform', 'android'));
+
+        return response()->json(['data' => [
+            'minima' => (int) config("app_versione.minima.$piattaforma", 0),
+            'store' => config("app_versione.store.$piattaforma") ?: null,
+        ]]);
+    })->middleware('throttle:60,1');
+
     // ── Pubblica, senza autenticazione ───────────────────────────────────
     // L'app la chiama PRIMA del login per vestirsi dei colori della palestra.
     // Throttle stretto: senza credenziali da indovinare, è il modo più comodo

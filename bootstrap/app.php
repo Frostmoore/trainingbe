@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\RequireAiConsent;
 use App\Http\Middleware\TettoAiGlobale;
+use App\Http\Middleware\VersioneMinima;
 use App\Http\Middleware\RequirePlanWithAi;
 use App\Http\Middleware\ResolveTenant;
 use Illuminate\Foundation\Application;
@@ -33,6 +34,23 @@ return Application::configure(basePath: dirname(__DIR__))
          * token di sessione.
          */
         $middleware->validateCsrfTokens(except: ['stripe/webhook']);
+
+        /*
+         * 🆕 **Il cancello della versione su TUTTE le rotte API** — FASE 10.4.
+         *
+         * 🚨 Comprese quelle pubbliche. Se il login restasse aperto, una copia
+         * vecchia entrerebbe e poi sbatterebbe **una schermata alla volta**: la
+         * persona vedrebbe l'app rompersi a pezzi invece di leggere una frase
+         * che le dice cosa fare.
+         *
+         * ⚠️ `prependToGroup` e non `appendToGroup`: deve rispondere **prima**
+         * di `auth:sanctum` e di tutto il resto. Un'app da aggiornare non deve
+         * prima sentirsi dire che il token è scaduto.
+         *
+         * 💡 Di serie non blocca nessuno (`minima = 0`), e chi non manda
+         * l'intestazione passa: vedi `VersioneMinima`.
+         */
+        $middleware->prependToGroup('api', VersioneMinima::class);
 
         // L'ordine in cui si applicano nelle rotte conta:
         //   auth:sanctum → tenant → tenant.active
