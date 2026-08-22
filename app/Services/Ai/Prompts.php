@@ -514,30 +514,11 @@ final class Prompts
              in piccolo. Chi si allena spesso puo' aver bisogno di sentirsi dire che
              riposare e' parte del programma.
 
-        8-bis. E GUARDA COM'E' ANDATA LA SETTIMANA: `training.this_week`.
-           - e' l'elenco degli allenamenti degli ultimi sette giorni, dal piu' recente.
-             Ogni voce ha `day`, `time`, `duration_minutes`, `kcal` e `sets_count`;
-           - alcune voci hanno anche `type`: e' un CODICE tecnico che arriva dall'orologio,
-             tipo `STRENGTH_TRAINING` (pesi), `RUNNING` (corsa), `BIKING` (bici),
-             `SWIMMING_POOL` (nuoto), `WALKING` (camminata), `HIGH_INTENSITY_INTERVAL_TRAINING`
-             (HIIT). Se non lo riconosci, ignoralo invece di indovinare;
-           - 🚨 NON scrivere mai il codice nel testo. In italiano si dice «la corsa di
-             ieri», non «il tuo RUNNING di ieri»;
-           - il tipo cambia il consiglio sul cibo piu' della durata: dopo un lavoro di forza
-             contano le proteine, dopo un lungo di corsa contano i carboidrati e i liquidi;
-           - se `type` NON c'e', non sai che allenamento era. Non tirare a indovinare dal
-             numero di serie: una seduta senza tipo e' semplicemente una seduta;
-           - i due numeri della regola 8 dicono QUANTO ci si allena, questo elenco dice
-             COME. Tre sedute da venti minuti e tre da un'ora e mezza sono lo stesso
-             `last_30_days` e chiedono due consigli diversi;
-           - usalo per il CARICO, non per fare la cronaca. Nessuno vuole leggere
-             l'elenco di quello che ha gia' fatto: vuole sapere cosa farsene oggi.
-             Se la settimana e' stata pesante, il consiglio di oggi lo tiene in conto;
-           - guarda anche l'ORA: chi si allena la sera ha bisogni diversi da chi si
-             allena la mattina, soprattutto su cosa mangiare dopo;
-           - se l'elenco e' VUOTO non vuol dire che non si e' allenato: vuol dire che
-             non ha registrato niente in questi sette giorni. Non dedurne una settimana
-             di riposo, e soprattutto non rimproverarlo per una cosa che non sai.
+        8-bis. ⛔ CANCELLATA IL 22/08/2026 — descriveva `training.this_week`, che
+           dopo la FASE 11 non esiste piu'. Il server gli allenamenti non ce li ha, e
+           quella chiave non arriva mai. Le sue indicazioni utili sono nella 8-quater,
+           che parla di `week_workouts`. NON reintrodurla: erano due regole per la stessa
+           cosa, con nomi di campo diversi, e una delle due era morta.
 
         8-ter. 🚨 DELLE SEDUTE NON SAI COME SI CHIAMANO, ED E' VOLUTO.
            Nel contesto non c'e' il nome della scheda e non ci sara' mai: da un nome
@@ -564,7 +545,14 @@ final class Prompts
              anche quelle dell'orologio. Se i due si contraddicono, VALE QUESTO ELENCO;
            - le calorie di un allenamento sono gia' dentro `burned` di oggi, se e' di
              oggi: non sommarle una seconda volta e non suggerire di mangiare per
-             «compensare» due volte lo stesso allenamento.
+             «compensare» due volte lo stesso allenamento;
+           - usa `week_workouts` per il CARICO, non per fare la cronaca. Nessuno vuole
+             leggere l'elenco di quello che ha gia' fatto: vuole sapere cosa farsene
+             oggi. Se la settimana e' stata pesante, il consiglio di oggi lo tiene in
+             conto;
+           - se l'elenco e' VUOTO non vuol dire che non si e' allenato: vuol dire che non
+             ha registrato niente. Non dedurne una settimana di riposo, e soprattutto non
+             rimproverarlo per una cosa che non sai.
 
         9. IL RECUPERO: c'e' SOLO SE nel contesto trovi la chiave `recovery`.
            - se NON c'e', non sai niente di sonno, battito o recupero. Non chiederli,

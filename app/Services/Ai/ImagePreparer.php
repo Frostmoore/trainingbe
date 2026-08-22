@@ -18,6 +18,26 @@ use App\Services\Ai\Exceptions\AiUnavailableException;
  *
  * Usa GD, che e' nell'interprete di progetto (vedi `php.ini` di `php84`): niente
  * dipendenze aggiuntive per una cosa che deve funzionare sempre.
+ *
+ * ══ 🚨 E RICODIFICARE NON E' SOLO RISPARMIO: TOGLIE I METADATI ════════════
+ *
+ * ⚠️ **Difetto trovato il 22/08/2026, verificando cosa arriva davvero ad
+ * Anthropic.** Una foto JPEG porta dentro l'EXIF: modello del telefono, data,
+ * orientamento e — quando la fotocamera ha il permesso di posizione — le
+ * **coordinate GPS** di dove e' stata scattata.
+ *
+ * 🚨 Fino a oggi la ricodifica avveniva **solo se la foto era piu' grande di
+ * 1568 px**: chi mandava una foto gia' piccola — una ricevuta su WhatsApp, uno
+ * screenshot, un'immagine dalla galleria gia' ridotta — la mandava **con i byte
+ * originali**, EXIF compreso.
+ *
+ * ⛔ Non era un rischio teorico e non lo diceva nessun errore: la stessa
+ * funzione, con la stessa firma, si comportava in due modi diversi a seconda
+ * della dimensione dell'ingresso.
+ *
+ * 💡 **Adesso si ricodifica sempre.** Costa qualche millisecondo su una foto
+ * gia' piccola, e rende vera una frase che l'app dice all'utente: quello che
+ * mandiamo non ha dentro niente che lo identifichi.
  */
 class ImagePreparer
 {
@@ -35,8 +55,16 @@ class ImagePreparer
         $immagine = $this->load($absolutePath, $mimeType);
 
         if ($immagine === null) {
-            // Formato che GD non apre: si manda com'e'. Meglio una chiamata piu'
-            // cara di una funzione che non funziona.
+            /*
+             * ⛔ **L'unica via d'uscita che manda i byte originali.**
+             *
+             * ⚠️ Si arriva qui solo con un formato che GD non apre. La
+             * validazione accetta `image`, cioe' anche GIF e BMP: quelli
+             * passerebbero di qui **con i metadati dentro**.
+             *
+             * 🚨 Chi allarga i formati accettati deve allargare anche `load()`,
+             * o riapre il buco del 22/08 senza che niente lo segnali.
+             */
             return [
                 'data' => base64_encode((string) file_get_contents($absolutePath)),
                 'mime' => $mimeType,
@@ -47,30 +75,37 @@ class ImagePreparer
         $h = imagesy($immagine);
         $lato = max($w, $h);
 
-        if ($lato <= $maxEdge) {
-            imagedestroy($immagine);
+        /*
+         * 💡 Si ridimensiona solo se serve, ma si **ricodifica sempre**: sono
+         * due cose diverse, e prima erano legate. Il ridimensionamento e' un
+         * risparmio; la ricodifica e' quella che butta via l'EXIF.
+         */
+        $daMandare = $immagine;
 
-            return [
-                'data' => base64_encode((string) file_get_contents($absolutePath)),
-                'mime' => $mimeType,
-            ];
-        }
+        if ($lato > $maxEdge) {
+            $scala = $maxEdge / $lato;
+            $ridotta = imagescale($immagine, (int) round($w * $scala), (int) round($h * $scala));
 
-        $scala = $maxEdge / $lato;
-        $ridotta = imagescale($immagine, (int) round($w * $scala), (int) round($h * $scala));
-        imagedestroy($immagine);
-
-        if ($ridotta === false) {
-            return [
-                'data' => base64_encode((string) file_get_contents($absolutePath)),
-                'mime' => $mimeType,
-            ];
+            if ($ridotta !== false) {
+                imagedestroy($immagine);
+                $daMandare = $ridotta;
+            }
         }
 
         ob_start();
-        imagejpeg($ridotta, null, (int) config('ai.image.jpeg_quality', 85));
+        imagejpeg($daMandare, null, (int) config('ai.image.jpeg_quality', 85));
         $binario = (string) ob_get_clean();
-        imagedestroy($ridotta);
+        imagedestroy($daMandare);
+
+        /*
+         * 🚨 Se la ricodifica non produce niente si **rinuncia**, non si ripiega
+         * sui byte originali: un ripiego silenzioso qui vorrebbe dire mandare
+         * l'EXIF proprio nel caso strano, che e' l'unico in cui nessuno
+         * guarderebbe.
+         */
+        if ($binario === '') {
+            throw new AiUnavailableException('ai_image_unreadable', 'Immagine non leggibile.');
+        }
 
         // Sempre JPEG in uscita: un PNG di una foto pesa il triplo e il modello
         // non ne trae nessun vantaggio.
