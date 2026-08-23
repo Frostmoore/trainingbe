@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\ImportStatus;
+use App\Enums\MuscleGroup;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Models\Concerns\BelongsToTenant;
@@ -152,7 +153,26 @@ class WorkoutPlanImport extends Model implements HasMedia
                     continue;
                 }
 
-                $esercizio = $matcher->match($nome, $this->tenant_id, $da);
+                /*
+                 * 🆕 3b-A.3.4 — i muscoli letti dal modello entrano nella
+                 * libreria insieme all'esercizio.
+                 *
+                 * ⚠️ `array_key_exists` e non `isset`: una riga corretta a mano
+                 * che manda un elenco **vuoto** sta dicendo «questo esercizio
+                 * isola», ed e' una risposta da conservare — `isset` la
+                 * confonderebbe con «non lo so».
+                 */
+                $primario = $riga['muscle_group'] ?? null;
+
+                $esercizio = $matcher->match(
+                    $nome,
+                    $this->tenant_id,
+                    $da,
+                    is_string($primario) ? MuscleGroup::tryFrom($primario) : null,
+                    array_key_exists('secondary_muscles', $riga) && is_array($riga['secondary_muscles'])
+                        ? array_values(array_map(strval(...), $riga['secondary_muscles']))
+                        : null,
+                );
 
                 $piano->exercises()->create([
                     // G4 — la colonna e' NOT NULL: il giorno lo crea il piano.

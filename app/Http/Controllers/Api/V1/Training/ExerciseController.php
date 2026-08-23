@@ -42,6 +42,7 @@ class ExerciseController extends Controller
                 'id' => $e->id,
                 'name' => $e->name,
                 'muscle_group' => $e->muscle_group?->value,
+                'secondary_muscles' => $e->secondary_muscles ?? [],
                 'equipment' => $e->equipment,
                 // Serve all'app per distinguere «esercizio della piattaforma» da
                 // «aggiunto dalla mia palestra», che e' l'unica differenza
@@ -91,6 +92,19 @@ class ExerciseController extends Controller
         $dati = $request->validate([
             'name' => ['required', 'string', 'min:2', 'max:160'],
             'muscle_group' => ['nullable', Rule::enum(MuscleGroup::class)],
+
+            /*
+             * 🆕 I muscoli secondari — 3b-A.3.4, 23/08/2026.
+             *
+             * ⚠️ **`nullable` e non `required`, per ora.** L'app di oggi non li
+             * manda, e pretenderli spezzerebbe la creazione al volo di un
+             * esercizio durante un allenamento — cioe' in palestra, a meta'
+             * serie. 🚨 Diventeranno obbligatori (A.3.5) **dopo** che il
+             * compositore li chiede: prima sarebbe rompere per anticipare.
+             */
+            'secondary_muscles' => ['nullable', 'array', 'max:6'],
+            'secondary_muscles.*' => [Rule::enum(MuscleGroup::class)],
+
             'equipment' => ['nullable', 'string', 'max:64'],
         ]);
 
@@ -105,10 +119,17 @@ class ExerciseController extends Controller
         // I dettagli si scrivono solo su ciò che è appena nato: sovrascrivere il
         // gruppo muscolare di un esercizio della piattaforma perché un iscritto
         // ha mandato un valore diverso lo cambierebbe per tutta la palestra.
-        if ($creato && ($dati['muscle_group'] ?? $dati['equipment'] ?? null) !== null) {
+        if ($creato && ($dati['muscle_group'] ?? $dati['equipment'] ?? $dati['secondary_muscles'] ?? null) !== null) {
             $esercizio->forceFill(array_filter([
                 'muscle_group' => $dati['muscle_group'] ?? null,
                 'equipment' => $dati['equipment'] ?? null,
+
+                // ⚠️ `array_filter` scarta i vuoti, e un elenco vuoto **e' una
+                // risposta**: «Leg extension» il quadricipite lo isola davvero.
+                // Per questo si scrive a parte.
+                ...(isset($dati['secondary_muscles'])
+                    ? ['secondary_muscles' => $dati['secondary_muscles']]
+                    : []),
             ]))->save();
         }
 
@@ -117,6 +138,7 @@ class ExerciseController extends Controller
                 'id' => $esercizio->id,
                 'name' => $esercizio->name,
                 'muscle_group' => $esercizio->muscle_group?->value,
+                'secondary_muscles' => $esercizio->secondary_muscles ?? [],
                 'equipment' => $esercizio->equipment,
                 'is_global' => $esercizio->isGlobal(),
                 // Dice all'app se ha creato qualcosa o se ha ritrovato ciò che

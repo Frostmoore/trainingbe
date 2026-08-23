@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -37,17 +38,63 @@ class Exercise extends Model implements HasMedia
     ];
 
     protected $fillable = [
-        'tenant_id', 'created_by', 'name', 'muscle_group', 'equipment',
-        'description', 'is_custom', 'met',
+        'tenant_id', 'created_by', 'name', 'muscle_group', 'secondary_muscles',
+        'equipment', 'description', 'is_custom', 'met',
     ];
 
     protected function casts(): array
     {
         return [
             'muscle_group' => MuscleGroup::class,
+            'secondary_muscles' => 'array',
             'is_custom' => 'boolean',
             'met' => 'float',
         ];
+    }
+
+    /**
+     * Tutti i muscoli, con quanto pesano — 3b-A.3, 23/08/2026.
+     *
+     * ══ 🚨 SERVE UN PESO, NON UN ELENCO ═══════════════════════════════════
+     *
+     * ⛔ Un elenco piatto direbbe che in una panca il petto e i tricipiti
+     * valgono uguale, e la figura del corpo li colorerebbe allo stesso modo.
+     *
+     * 💡 **Primario 1, secondari 0,5.** Non e' fisiologia misurata: e' una
+     * proporzione dichiarata, che serve a ordinare le tinte. ⚠️ Chi un giorno
+     * volesse pesi veri deve cambiare **qui** e in nessun altro posto — ed e'
+     * la ragione per cui questo metodo esiste invece di lasciare il calcolo a
+     * chi disegna.
+     *
+     * ⛔ `cardio` e `full_body` **non entrano**: descrivono la natura
+     * dell'esercizio, non una zona del corpo. Una corsa colora le gambe perche'
+     * le ha fra i secondari, non perche' «cardio» sia un muscolo.
+     *
+     * @return array<string, float> gruppo muscolare => peso
+     */
+    public function muscoliConPeso(): array
+    {
+        $pesi = [];
+
+        $primario = $this->muscle_group;
+
+        if ($primario !== null && $primario->eUnMuscolo()) {
+            $pesi[$primario->value] = 1.0;
+        }
+
+        foreach ($this->secondary_muscles ?? [] as $valore) {
+            $muscolo = MuscleGroup::tryFrom((string) $valore);
+
+            if ($muscolo === null || ! $muscolo->eUnMuscolo()) {
+                continue;
+            }
+
+            // ⚠️ `max` e non `+=`: se un muscolo comparisse in tutti e due i
+            // posti conta come primario, non come uno e mezzo.
+            $pesi[$muscolo->value] = max($pesi[$muscolo->value] ?? 0.0, 0.5);
+        }
+
+        return $pesi;
     }
 
     protected static function booted(): void
@@ -94,6 +141,45 @@ class Exercise extends Model implements HasMedia
     public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderByRaw('tenant_id IS NOT NULL')->orderBy('name');
+    }
+
+    /**
+     * Gli esercizi che **nessuno ha ancora classificato** — 3b-A.3.4, 24/08/2026.
+     *
+     * ══ 🚨 `NULL` E `[]` SONO DUE COSE OPPOSTE ═════════════════════════════
+     *
+     * ⛔ `secondary_muscles = []` vuol dire **«questo esercizio isola davvero»**:
+     * e' una decisione presa, e non e' una lacuna. `NULL` vuol dire «nessuno ci
+     * ha pensato». 💡 Confonderle riempirebbe la pagina di righe gia' a posto,
+     * e a quel punto nessuno la guarderebbe piu'.
+     *
+     * ⚠️ **Sta qui e non nel filtro di Filament** perche' e' la definizione di
+     * un fatto, non di una schermata: la usano il pannello e i test, e una
+     * definizione scritta in due posti diverge al primo ripensamento.
+     *
+     * ⛔ Le parentesi non sono decorative: senza, l'`or` uscirebbe dalla
+     * condizione e si porterebbe dietro la ricerca e gli altri filtri.
+     */
+    public function scopeSenzaMuscoliDecisi(Builder $query): Builder
+    {
+        /*
+         * 🚨 **Il `where` annidato passa dal query builder, non da Eloquent.**
+         *
+         * ⛔ La forma naturale — `$query->where(fn ($w) => ...)` — dentro un
+         * filtro di Filament fa esplodere il **disegno della pagina**: il
+         * builder arriva senza modello, e `Eloquent\Builder::where()` con una
+         * closure chiama `$this->model->newQueryWithoutRelationships()`.
+         * L'errore («on null») salta fuori nella vista, dove nessun test sui
+         * dati lo prenderebbe.
+         *
+         * 💡 `getQuery()` scende al query builder, il cui `where()` annidato
+         * non ha bisogno di nessun modello.
+         */
+        $query->getQuery()->where(static function (QueryBuilder $w): void {
+            $w->whereNull('muscle_group')->orWhereNull('secondary_muscles');
+        });
+
+        return $query;
     }
 
     public function scopeSearch(Builder $query, string $term): Builder

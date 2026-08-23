@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Ai\Data;
 
+use App\Enums\MuscleGroup;
+
 /**
  * Un esercizio letto da un PDF, prima della riconciliazione con la libreria.
  *
@@ -22,6 +24,21 @@ final readonly class ParsedWorkoutExercise
         public ?int $restSec,
         public ?float $targetWeight,
         public ?string $notes,
+
+        /**
+         * 🆕 3b-A.3.4 — i muscoli, come li ha detti il modello.
+         *
+         * 🚨 Gia' **validati contro l'enum** in `fromArray`: quello che arriva e'
+         * testo di un modello, e un `pettorali` scritto in italiano finirebbe
+         * dritto nella libreria come gruppo muscolare inesistente.
+         *
+         * ⚠️ `null` vuol dire «non lo so», e resta diverso da un elenco vuoto.
+         */
+        public ?MuscleGroup $muscleGroup,
+
+        /** @var list<string> */
+        public array $secondaryMuscles,
+
         public float $confidence,
     ) {}
 
@@ -35,6 +52,17 @@ final readonly class ParsedWorkoutExercise
             restSec: isset($data['rest_sec']) ? (int) $data['rest_sec'] : null,
             targetWeight: isset($data['target_weight']) ? (float) $data['target_weight'] : null,
             notes: isset($data['notes']) ? (string) $data['notes'] : null,
+            muscleGroup: isset($data['muscle_group'])
+                ? MuscleGroup::tryFrom((string) $data['muscle_group'])
+                : null,
+
+            // ⛔ I valori che l'enum non conosce si buttano, non si tengono: una
+            // libreria con dentro `pettorali` non si colora e non si filtra.
+            secondaryMuscles: array_values(array_filter(array_map(
+                static fn (mixed $v): ?string => MuscleGroup::tryFrom((string) $v)?->value,
+                (array) ($data['secondary_muscles'] ?? []),
+            ))),
+
             confidence: (float) ($data['confidence'] ?? 0.0),
         );
     }
@@ -49,6 +77,8 @@ final readonly class ParsedWorkoutExercise
             'rest_sec' => $this->restSec,
             'target_weight' => $this->targetWeight,
             'notes' => $this->notes,
+            'muscle_group' => $this->muscleGroup?->value,
+            'secondary_muscles' => $this->secondaryMuscles,
             'confidence' => $this->confidence,
         ];
     }

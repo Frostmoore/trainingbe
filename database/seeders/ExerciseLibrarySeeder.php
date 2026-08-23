@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Enums\MuscleGroup;
 use App\Models\Exercise;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Training\MuscoliSecondari;
 use Illuminate\Database\Seeder;
 
 /**
@@ -209,6 +210,21 @@ class ExerciseLibrarySeeder extends Seeder
                     [
                         'name' => $nome,
                         'muscle_group' => $gruppo,
+
+                        /*
+                         * 🆕 I secondari — 3b-A.3, 23/08/2026.
+                         *
+                         * 🚨 **Devono stare qui e non solo nella migrazione.**
+                         * Su un'installazione pulita le migrazioni girano su un
+                         * database senza esercizi, poi questo seeder li crea: se
+                         * il dato stesse solo di la', un ambiente nuovo
+                         * nascerebbe con centoventuno esercizi **senza
+                         * secondari** — e la figura del corpo sarebbe grigia.
+                         *
+                         * 💡 La mappa e' una sola, in `MuscoliSecondari`.
+                         */
+                        'secondary_muscles' => MuscoliSecondari::di($nome),
+
                         'equipment' => $attrezzo,
                         'met' => $met,
                         'is_custom' => false,

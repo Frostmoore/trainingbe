@@ -104,7 +104,23 @@ class ExerciseResource extends Resource
 
                     Select::make('muscle_group')
                         ->label('Gruppo muscolare')
+                        ->helperText('Quello che fa il lavoro principale.')
                         ->options(MuscleGroup::options())
+                        ->native(false),
+
+                    /*
+                     * 🆕 I secondari — 3b-A.3.4.
+                     *
+                     * 💡 **Un elenco vuoto e' una risposta**, non un campo da
+                     * compilare per forza: «Leg extension» il quadricipite lo
+                     * isola davvero, e inventargli dei secondari sarebbe peggio
+                     * che lasciarlo solo.
+                     */
+                    Select::make('secondary_muscles')
+                        ->label('Muscoli secondari')
+                        ->helperText('Quelli che aiutano. Lascia vuoto se l\'esercizio isola.')
+                        ->options(MuscleGroup::options())
+                        ->multiple()
                         ->native(false),
 
                     TextInput::make('equipment')
@@ -157,6 +173,25 @@ class ExerciseResource extends Resource
                     ->formatStateUsing(fn (?MuscleGroup $state): string => $state?->label() ?? '—')
                     ->color('gray'),
 
+                /*
+                 * 🆕 3b-A.3.4 — i secondari accanto al primario.
+                 *
+                 * ⚠️ Il segnaposto dice **«da decidere»** e non «—»: `null` e
+                 * elenco vuoto sono due cose opposte — «nessuno l'ha deciso» e
+                 * «questo esercizio isola davvero» — e una colonna che le mostra
+                 * uguali rende invisibile proprio la riga da sistemare.
+                 */
+                TextColumn::make('secondary_muscles')
+                    ->label('Aiutano')
+                    ->badge()
+                    ->placeholder('da decidere')
+                    ->formatStateUsing(
+                        fn (?string $state): string => MuscleGroup::tryFrom((string) $state)?->label()
+                            ?? (string) $state,
+                    )
+                    ->color('gray')
+                    ->toggleable(),
+
                 TextColumn::make('tenant.name')
                     ->label('Di chi e\'')
                     ->placeholder('Piattaforma')
@@ -201,6 +236,31 @@ class ExerciseResource extends Resource
                 Filter::make('da_import')
                     ->label('Nati da un import non riconosciuto')
                     ->query(fn (Builder $q): Builder => $q->where('is_custom', true)),
+
+                /*
+                 * 🆕 **Gli esercizi muti** — 3b-A.3.4, 23/08/2026.
+                 *
+                 * 🚨 Il catalogo di piattaforma i muscoli ce li ha tutti, e c'e'
+                 * un test che lo garantisce. ⛔ Ma gli esercizi che **nascono**
+                 * da un nome scritto a mano o letto da un PDF possono non
+                 * averli: quando nessuno lo sa, `ExerciseMatcher` scrive `null`
+                 * invece di inventare un muscolo.
+                 *
+                 * 💡 Questo filtro e' il posto dove quelle righe si vedono e si
+                 * sistemano. Senza, sedimenterebbero — e una figura del corpo
+                 * grigia non dice a nessuno *perche'* e' grigia.
+                 *
+                 * ⚠️ Un elenco vuoto **non** compare qui: e' una decisione
+                 * presa, non una lacuna.
+                 *
+                 * ⛔ **La condizione sta in `Exercise::scopeSenzaMuscoliDecisi()`**,
+                 * non qui: e' la definizione di un fatto, non di una schermata.
+                 * La' c'e' anche la trappola di Filament che ha reso necessaria
+                 * quella forma — e i test che la tengono ferma.
+                 */
+                Filter::make('senza_muscoli')
+                    ->label('Senza muscoli decisi')
+                    ->query(fn (Builder $q): Builder => $q->senzaMuscoliDecisi()),
             ])
             ->recordActions([
                 EditAction::make(),

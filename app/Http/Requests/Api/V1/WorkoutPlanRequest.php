@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Enums\MuscleGroup;
 use App\Rules\AlMassimoTreAlternative;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * La scheda che l'iscritto si scrive da solo — C2.2.
@@ -42,6 +44,21 @@ class WorkoutPlanRequest extends FormRequest
             // l'app a creare l'esercizio prima, in due richieste che possono
             // fallire a metà.
             'exercises.*.name' => ['required', 'string', 'max:160'],
+
+            /*
+             * 🆕 I muscoli, riga per riga — 3b-A.3.4, 23/08/2026.
+             *
+             * 💡 Servono perche' un esercizio scritto a mano nel compositore
+             * **nasce qui**, dentro `ExerciseMatcher`. Senza, ogni nome nuovo
+             * entrava nel catalogo muto.
+             *
+             * ⚠️ Facoltativi: l'app gia' installata non li manda, e una scheda
+             * che smette di salvarsi e' molto peggio di un esercizio da
+             * completare dopo.
+             */
+            'exercises.*.muscle_group' => ['nullable', Rule::enum(MuscleGroup::class)],
+            'exercises.*.secondary_muscles' => ['nullable', 'array', 'max:6'],
+            'exercises.*.secondary_muscles.*' => [Rule::enum(MuscleGroup::class)],
 
             'exercises.*.sets' => ['nullable', 'integer', 'min:1', 'max:30'],
 
@@ -115,6 +132,11 @@ class WorkoutPlanRequest extends FormRequest
     {
         return [
             "{$prefisso}.name" => ['required', 'string', 'max:160'],
+
+            // 🆕 3b-A.3.4 — vedi la nota sulle righe piatte qui sopra.
+            "{$prefisso}.muscle_group" => ['nullable', Rule::enum(MuscleGroup::class)],
+            "{$prefisso}.secondary_muscles" => ['nullable', 'array', 'max:6'],
+            "{$prefisso}.secondary_muscles.*" => [Rule::enum(MuscleGroup::class)],
             "{$prefisso}.sets" => ['nullable', 'integer', 'min:1', 'max:30'],
             // 🚨 Stringa, sempre: vedi la nota sopra su `reps`.
             "{$prefisso}.reps" => ['nullable', 'string', 'max:32'],

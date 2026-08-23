@@ -612,6 +612,16 @@ final class Prompts
            scrivilo nelle note.
         7. Non inventare esercizi che non sono nel documento. Se una parte e'
            illeggibile, salta la riga e segnalalo nelle note.
+        8. I MUSCOLI di ogni esercizio: `muscle_group` e' quello che fa il lavoro
+           principale, `secondary_muscles` sono quelli che aiutano (al massimo
+           quattro, elenco vuoto se l'esercizio isola davvero). Valori ammessi:
+           chest, back, shoulders, biceps, triceps, forearms, abs, glutes, quads,
+           hamstrings, calves, full_body, cardio.
+           Questo NON lo leggi dal documento: lo sai tu. Un esercizio di corsa ha
+           `cardio` come principale e le gambe fra i secondari.
+           Se il nome e' cosi' illeggibile da non farti capire che esercizio sia,
+           metti `null` e un elenco vuoto: un muscolo indovinato colora una figura
+           del corpo con una cosa falsa, ed e' peggio di una zona grigia.
         TXT;
 
     /**
@@ -765,9 +775,22 @@ final class Prompts
                     'items' => [
                         'type' => 'object',
                         'additionalProperties' => false,
-                        'required' => ['name', 'sets', 'reps', 'rest_sec', 'target_weight', 'notes', 'confidence'],
+                        /*
+                         * 🆕 3b-A.3.4 — i muscoli si chiedono qui, e non e' un
+                         * capriccio: un esercizio letto da un PDF **nasce**
+                         * nella libreria passando da `ExerciseMatcher`, e senza
+                         * questi due campi nascerebbe muto. ⚠️ Chiederli al
+                         * modello costa zero token in ingresso e li fa arrivare
+                         * gia' insieme alla riga giusta.
+                         */
+                        'required' => [
+                            'name', 'sets', 'reps', 'rest_sec', 'target_weight', 'notes',
+                            'muscle_group', 'secondary_muscles', 'confidence',
+                        ],
                         'properties' => [
                             'name' => ['type' => 'string'],
+                            'muscle_group' => ['type' => ['string', 'null']],
+                            'secondary_muscles' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'sets' => ['type' => ['integer', 'null']],
                             'reps' => ['type' => ['string', 'null']],
                             'rest_sec' => ['type' => ['integer', 'null']],

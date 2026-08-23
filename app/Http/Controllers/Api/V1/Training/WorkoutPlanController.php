@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Training;
 
+use App\Enums\MuscleGroup;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Http\Controllers\Controller;
@@ -353,6 +354,30 @@ class WorkoutPlanController extends Controller
     }
 
     /**
+     * I muscoli dichiarati per una riga, pronti da passare al matcher.
+     *
+     * 🚨 Torna `null` per «non lo so», non `[]`: le due cose vogliono dire
+     * l'opposto, e il matcher le distingue. ⚠️ `array_key_exists` e non
+     * `isset`, perche' `isset` su un valore nullo e' falso — e una riga che
+     * manda `secondary_muscles: []` sta dicendo **«nessuno»**, che e' una
+     * risposta legittima e va conservata.
+     *
+     * @param  array<string, mixed>  $riga
+     * @return array{primario: MuscleGroup|null, secondari: list<string>|null}
+     */
+    private static function muscoliDi(array $riga): array
+    {
+        $primario = $riga['muscle_group'] ?? null;
+
+        return [
+            'primario' => is_string($primario) ? MuscleGroup::tryFrom($primario) : null,
+            'secondari' => array_key_exists('secondary_muscles', $riga) && is_array($riga['secondary_muscles'])
+                ? array_values(array_map(strval(...), $riga['secondary_muscles']))
+                : null,
+        ];
+    }
+
+    /**
      * @param  array<string, mixed>  $riga
      */
     private function creaEsercizio(
@@ -368,7 +393,14 @@ class WorkoutPlanController extends Controller
         // «panca manubri» scritta come alternativa deve finire sullo stesso
         // esercizio di quando e' scritta come principale, o il progresso su
         // quel movimento risulta diviso in due.
-        $esercizio = $matcher->match((string) $riga['name'], $utente->tenant_id, $utente);
+        $esercizio = $matcher->match(
+            (string) $riga['name'],
+            $utente->tenant_id,
+            $utente,
+            // 🆕 3b-A.3.4 — quello che il compositore sa dei muscoli entra nel
+            // catalogo insieme all'esercizio, invece di andare perso.
+            ...self::muscoliDi($riga),
+        );
 
         return $piano->exercisesConAlternative()->create([
             'workout_plan_day_id' => $giorno->getKey(),
@@ -404,7 +436,12 @@ class WorkoutPlanController extends Controller
             // dopo un mese la libreria ha «Panca piana», «panca piana» e «Panca
             // Piana bilanciere», e il progresso su quell'esercizio risulta
             // diviso su tre righe diverse.
-            $esercizio = $matcher->match((string) $riga['name'], $utente->tenant_id, $utente);
+            $esercizio = $matcher->match(
+                (string) $riga['name'],
+                $utente->tenant_id,
+                $utente,
+                ...self::muscoliDi($riga),
+            );
 
             $piano->exercises()->create([
                 'workout_plan_day_id' => $giorno->getKey(),

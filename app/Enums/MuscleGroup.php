@@ -29,6 +29,22 @@ enum MuscleGroup: string
     case FullBody = 'full_body';
     case Cardio = 'cardio';
 
+    /**
+     * Se corrisponde a una **zona del corpo** che si puo' colorare.
+     *
+     * 🚨 `cardio` e `full_body` sono valori legittimi — dicono che natura ha
+     * l'esercizio — ma **non sono muscoli**. ⛔ Colorare una figura con «cardio»
+     * non vuol dire niente, e chi disegna deve poterlo sapere senza tenere a
+     * mente un elenco di eccezioni.
+     *
+     * 💡 Un esercizio cardio colora comunque le gambe: non perche' «cardio» sia
+     * una zona, ma perche' ha i muscoli veri fra i secondari.
+     */
+    public function eUnMuscolo(): bool
+    {
+        return $this !== self::Cardio && $this !== self::FullBody;
+    }
+
     public function label(): string
     {
         return match ($this) {
