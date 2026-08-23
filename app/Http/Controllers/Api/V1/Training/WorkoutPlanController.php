@@ -203,12 +203,17 @@ class WorkoutPlanController extends Controller
         }
 
         if ($utente->cannot('delete', $piano)) {
-            // La policy nega anche quando la scheda ha allenamenti gia' fatti:
-            // cancellarla lascerebbe uno storico senza origine.
+            /*
+             * ⛔ **Un motivo solo, adesso.** Il messaggio si sdoppiava per
+             * distinguere «non e' tua» da «ha allenamenti registrati», e la
+             * seconda non esiste piu': dalla FASE 11.6.3 il server le sedute
+             * non ce le ha, quindi l'unico motivo per negare e' la proprieta'.
+             *
+             * 💡 Meglio un messaggio solo e vero che due di cui uno non puo'
+             * mai capitare.
+             */
             return response()->json([
-                'message' => $piano->sessions()->exists()
-                    ? __('Questa scheda ha allenamenti registrati: non si può eliminare.')
-                    : __('Questa scheda non è tua da eliminare.'),
+                'message' => __('Questa scheda non è tua da eliminare.'),
                 'code' => 'plan_not_deletable',
             ], 403);
         }

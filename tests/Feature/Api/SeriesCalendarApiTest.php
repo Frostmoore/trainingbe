@@ -9,7 +9,6 @@ use App\Enums\UserRole;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Training\SeriesService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -80,14 +79,12 @@ class SeriesCalendarApiTest extends TestCase
         ]));
     }
 
-    private function allena(Carbon $inizio, int $minuti = 60): WorkoutSession
-    {
-        return $this->ctx()->runAs($this->alfa, fn () => WorkoutSession::create([
-            'user_id' => $this->iscritto->getKey(),
-            'started_at' => $inizio,
-            'ended_at' => $inizio->copy()->addMinutes($minuti),
-        ]));
-    }
+    /*
+     * ⛔ `allena()` non esiste piu': `workout_sessions` e' caduta con la FASE
+     * 11.6.3. I test che la usavano verificavano che le serie e il calendario
+     * **non** contengano gli allenamenti — e ora non possono contenerli per
+     * costruzione.
+     */
 
     /*
      * ⚠️ Qui c'era `pesa()`, e i due test sulla serie del peso. Cancellati in
@@ -160,8 +157,6 @@ class SeriesCalendarApiTest extends TestCase
     public function the_series_no_longer_carries_burned_calories(): void
     {
         $this->mangia($this->oggi()->setTime(13, 0), 2000);
-        $this->allena($this->oggi()->setTime(18, 0));
-
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/series?metric=calories&days=7')
             ->assertOk();
@@ -328,18 +323,26 @@ class SeriesCalendarApiTest extends TestCase
     }
 
     #[Test]
-    public function the_day_detail_lists_meals_and_sessions(): void
+    public function the_day_detail_lists_meals_but_no_longer_sessions(): void
     {
+        /*
+         * ⛔ Il dettaglio del giorno elencava anche le sedute. Dalla FASE
+         * 11.6.3 il server non ne ha piu': gli allenamenti stanno sul telefono,
+         * e la chiave sparisce invece di valere lista vuota.
+         *
+         * 💡 `assertNull` e non `assertJsonCount(0, ...)`: zero sedute e
+         * «il server non lo sa» sono due affermazioni diverse, e qui vale la
+         * seconda.
+         */
         $this->mangia($this->oggi()->setTime(13, 0), 700);
-        $this->allena($this->oggi()->setTime(18, 0));
 
-        $this->comeApp($this->iscritto)
+        $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/calendar/'.$this->iscritto->giornoDiOggi()->etichetta)
             ->assertOk()
             ->assertJsonPath('data.kcal', 700)
-            ->assertJsonCount(1, 'data.entries')
-            ->assertJsonCount(1, 'data.sessions')
-            ->assertJsonPath('data.sessions.0.duration_min', 60);
+            ->assertJsonCount(1, 'data.entries');
+
+        $this->assertNull($risposta->json('data.sessions'));
     }
 
     /**

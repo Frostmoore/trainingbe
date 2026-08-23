@@ -77,13 +77,24 @@ class AccountEraser
     {
         $id = $utente->getKey();
 
-        // Le serie prima delle sessioni: `session_sets` ha la foreign key.
-        DB::table('session_sets')
-            ->whereIn('workout_session_id', WorkoutSession::withoutGlobalScopes()
-                ->where('user_id', $id)->select('id'))
-            ->delete();
-
-        WorkoutSession::withoutGlobalScopes()->where('user_id', $id)->forceDelete();
+        /*
+         * ══ ⛔ GLI ALLENAMENTI NON SI CANCELLANO PIU' DA QUI — 11.6.4 ═══════
+         *
+         * 🚨 `session_sets`, `workout_sessions` e `daily_burns` **non esistono
+         * piu'**: sono cadute con la FASE 11.6.3 il 23/08/2026, e i dati stanno
+         * sul telefono. Cercarle qui farebbe **esplodere la cancellazione
+         * dell'account** — cioe' rompere qualcosa nel momento peggiore, a meta'
+         * di un'operazione irreversibile.
+         *
+         * ⚠️ **E non c'e' niente da mettere al loro posto**: quei dati sono
+         * sull'apparecchio della persona. Li cancella disinstallando l'app, o
+         * dal pulsante in «Privacy e consensi». Il server non li ha, quindi non
+         * puo' e non deve cancellarli — ed e' scritto nell'informativa.
+         *
+         * 💡 Questo commento resta al posto del codice: chi legge
+         * `cancellaDatiPersonali` deve capire **perche'** gli allenamenti non
+         * ci sono, invece di crederli dimenticati.
+         */
 
         WorkoutPlan::withoutGlobalScopes()
             ->where('member_id', $id)
@@ -95,7 +106,6 @@ class AccountEraser
 
         FoodEntry::withoutGlobalScopes()->where('user_id', $id)->delete();
         FoodFavorite::withoutGlobalScopes()->where('user_id', $id)->delete();
-        DailyBurn::withoutGlobalScopes()->where('user_id', $id)->delete();
         AiAdvice::withoutGlobalScopes()->where('user_id', $id)->delete();
 
         /*

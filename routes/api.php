@@ -19,7 +19,6 @@ use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InvitoController;
-use App\Http\Controllers\Api\V1\MigrazioneAllenamentiController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -238,6 +237,14 @@ Route::prefix('v1')->group(function (): void {
          * ⚠️ Sotto `throttle:auth-login`: prova a prova, è un modo per
          * indovinare codici palestra validi.
          */
+        /*
+         * 🆕 **I dettagli della palestra** — 3b-P.13.1, 23/08/2026.
+         *
+         * 💡 Sola lettura, e risponde `null` a chi non ne ha una: non e' un
+         * errore non avere una palestra.
+         */
+        Route::get('account/gym', [AccountController::class, 'gym']);
+
         Route::post('account/join-gym', [AccountController::class, 'joinGym'])
             ->middleware('throttle:auth-login');
         Route::delete('account', [AccountController::class, 'destroy']);
@@ -296,9 +303,22 @@ Route::prefix('v1')->group(function (): void {
         | «fatto» accettato a torto diventa una perdita di dati il giorno che le
         | tabelle cadranno.
         */
-        Route::get('migrazione/allenamenti', [MigrazioneAllenamentiController::class, 'pacchetto']);
-        Route::get('migrazione/allenamenti/stato', [MigrazioneAllenamentiController::class, 'stato']);
-        Route::post('migrazione/allenamenti/fatta', [MigrazioneAllenamentiController::class, 'fatta']);
+        /*
+         * ⛔ **Le rotte del trasloco non esistono piu'** — 11.6.3, 23/08/2026.
+         *
+         * 🚨 Consegnavano al telefono gli allenamenti che stavano sul server, e
+         * le tabelle da cui leggevano **sono cadute**. Tenerle vive vorrebbe
+         * dire tre endpoint che rispondono 500 a ogni avvio dell'app, per i
+         * tredici utenti che non avevano ancora traslocato.
+         *
+         * 📌 La decisione, del committente: *«sono tutti allenamenti mock fatti
+         * da un seeder, l'unico altro utente e' un mio amico che ha l'app di
+         * tipo 10 versioni fa, non fa niente rasa tutto»*.
+         *
+         * ⚠️ Prima di cancellare e' stata fatta una copia SQL delle tre tabelle
+         * (`memory/scripts/salva-e-lascia-cadere.sh`): ventuno righe costano
+         * nulla da tenere, e sono l'unica cosa che le riporterebbe indietro.
+         */
 
         Route::get('exercises', [ExerciseController::class, 'index']);
 

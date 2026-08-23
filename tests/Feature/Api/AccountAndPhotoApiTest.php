@@ -12,7 +12,6 @@ use App\Models\Message;
 use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Account\AccountEraser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -53,16 +52,11 @@ class AccountAndPhotoApiTest extends TestCase
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'coach@alfa.test');
     }
 
-    private function sessione(?User $di = null): WorkoutSession
-    {
-        $di ??= $this->iscritto;
-
-        return $this->ctx()->runAs($di->tenant, fn () => WorkoutSession::create([
-            'user_id' => $di->getKey(),
-            'started_at' => now()->subHour(),
-            'ended_at' => now(),
-        ]));
-    }
+    /*
+     * ⛔ `sessione()` non esiste piu': `workout_sessions` e' caduta con la FASE
+     * 11.6.3, e la cancellazione dell'account non ha piu' niente da cancellare
+     * di la'. Quei dati stanno sul telefono.
+     */
 
     // ───────────────── C5: foto legate all'allenamento ─────────────────
 
@@ -109,7 +103,6 @@ class AccountAndPhotoApiTest extends TestCase
             'kcal' => 500,
         ]));
 
-        $this->sessione();
 
         $this->comeApp($this->iscritto)
             ->deleteJson('/api/v1/account', ['password' => TestCase::FAKE_PASSWORD])
@@ -118,7 +111,6 @@ class AccountAndPhotoApiTest extends TestCase
         $id = $this->iscritto->getKey();
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->where('user_id', $id)->count());
-        $this->assertSame(0, WorkoutSession::withoutGlobalScopes()->where('user_id', $id)->count());
         $this->assertSame(0, Profile::withoutGlobalScopes()->where('user_id', $id)->count());
     }
 

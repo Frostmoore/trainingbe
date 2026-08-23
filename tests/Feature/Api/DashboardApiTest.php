@@ -9,7 +9,6 @@ use App\Enums\UserRole;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Dashboard\DashboardService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -176,12 +175,12 @@ class DashboardApiTest extends TestCase
     #[Test]
     public function the_dashboard_no_longer_knows_about_workouts(): void
     {
-        $this->ctx()->runAs($this->alfa, fn () => WorkoutSession::create([
-            'user_id' => $this->iscritto->getKey(),
-            'started_at' => $this->oggi(5)->setTime(18, 0),
-            'ended_at' => $this->oggi(5)->setTime(19, 0),
-        ]));
-
+        /*
+         * Qui si creava una seduta per dimostrare che la dashboard la ignora.
+         * Dalla FASE 11.6.3 la tabella non esiste piu': la premessa non si puo'
+         * costruire, e l'asserzione vale ancora di piu' — la chiave `training`
+         * non c'e' perche' non c'e' proprio da nessuna parte.
+         */
         $risposta = $this->comeApp($this->iscritto)->getJson('/api/v1/dashboard')->assertOk();
 
         // ⚠️ `null` perche' la chiave non c'e', non perche' vale zero.

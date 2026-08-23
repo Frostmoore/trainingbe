@@ -3,6 +3,7 @@
 use App\Models\StimaCibo;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
@@ -147,16 +148,60 @@ Schedule::command('piani:pota-importazioni')
 | tanto è fisiologico, e in un anno diventa una tabella che nessuno guarda piena
 | di righe che non servono a niente.
 |
-| ⚠️ Sette giorni e non di piu': un lavoro fallito serve a capire **perche'**
-| era fallito, e quella domanda si fa nei giorni successivi. Dopo, e' peso morto.
+| ══ 🚨 VENTIQUATTR'ORE, NON SETTE GIORNI — FASE 8.6, 23/08/2026 ══════════════
+|
+| 📌 Il committente: *«devono restare per max 24h poi si cancellano»*.
+|
+| ⛔ **Erano 168 ore, e il motivo per cui non vanno piu' bene non e' la
+| dimensione della tabella: e' cosa c'e' dentro.** Un lavoro in coda conserva il
+| suo `payload`, e per le stime del cibo quel payload contiene **la foto di un
+| pasto** e il contesto alimentare.
+|
+| 🚨 Sono dati che oggi **passano e basta** — il server li inoltra ad Anthropic e
+| non li conserva. Un lavoro fallito li rende **dati a riposo**, per una
+| settimana, in una tabella che nessuno guarda. E' una categoria di trattamento
+| diversa, e l'informativa non la prevedeva.
+|
+| ⚠️ Ventiquattro ore restano perche' un fallimento va capito, e la domanda
+| «perche' e' fallito» si fa il giorno stesso. Dopo, il diagnostico vale meno del
+| dato che si tiene.
 |
 | 💡 Le `stime_cibo` si potano insieme: sono una **cache** (come `ai_advices`,
 | §46), e una stima non confermata dopo 24 ore non interessa piu' a nessuno.
 */
-Schedule::command('queue:prune-failed --hours=168')
+Schedule::command('queue:prune-failed --hours=24')
     ->dailyAt('4:05')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+/*
+| ══ 🚨 E I LAVORI CHE NON SONO MAI PARTITI ═══════════════════════════════════
+|
+| ⚠️ `queue:prune-failed` pota `failed_jobs`. ⛔ **Non tocca `jobs`**, dove sta
+| un lavoro *in attesa* — con il suo payload dentro, foto compresa.
+|
+| 🚨 In condizioni normali un lavoro resta li' per secondi. Ma se il worker
+| muore, o se una riga si incaglia per un bug, quel payload resta a riposo **per
+| sempre**: nessuno lo pota, e non compare in nessun conteggio.
+|
+| 💡 Un lavoro fermo da piu' di ventiquattr'ore non va eseguito comunque: la
+| persona ha gia' visto un errore e ha gia' rifatto la stima. Cancellarlo non
+| perde niente, e chiude l'unico posto dove una foto poteva restare per sempre.
+*/
+Schedule::call(static function (): void {
+    DB::table('jobs')
+        ->where('created_at', '<', now()->subDay()->getTimestamp())
+        ->delete();
+})
+    // ⚠️ `name()` PRIMA di `withoutOverlapping()`: su una closure il lucchetto
+    // si chiama come il lavoro, e senza nome Laravel non sa cosa bloccare —
+    // lancia, e lo fa solo quando lo schedulatore gira davvero.
+    ->name('pota-i-lavori-incagliati')
+    ->dailyAt('4:10')
+    // ⛔ Niente `runInBackground()`: su una closure non esiste — girerebbe in un
+    // processo che non ha il codice da eseguire. Una DELETE su una tabella
+    // piccola costa meno del processo che si sarebbe risparmiata.
+    ->withoutOverlapping(30);
 
 Schedule::command('model:prune', ['--model' => StimaCibo::class])
     ->hourly()

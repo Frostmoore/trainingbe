@@ -9,14 +9,12 @@ use App\Enums\UserRole;
 use App\Models\AiAdvice;
 use App\Models\ChatKey;
 use App\Models\Conversation;
-use App\Models\DailyBurn;
 use App\Models\DeviceToken;
 use App\Models\FoodEntry;
 use App\Models\FoodFavorite;
 use App\Models\RecoveryKey;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Models\WorkoutSession;
 use App\Services\Account\AccountEraser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -312,19 +310,17 @@ class AccountErasureSweepTest extends TestCase
                 'user_id' => $id, 'description' => 'Yogurt', 'kcal' => 120,
             ]);
 
-            DailyBurn::create([
-                'user_id' => $id, 'date' => Carbon::today(), 'kcal' => 300,
-            ]);
+            /*
+             * 'daily_burns' e 'workout_sessions' non si seminano piu': le
+             * tabelle sono cadute con la FASE 11.6.3 (23/08/2026) e gli
+             * allenamenti stanno sul telefono. La spazzata le trovava
+             * sopravvissute perche' AccountEraser non le cancellava piu' —
+             * giustamente, visto che non esistono.
+             */
 
             AiAdvice::create([
                 'user_id' => $id, 'date' => Carbon::today(),
                 'context_hash' => 'abc', 'body' => 'Bevi acqua.',
-            ]);
-
-            WorkoutSession::create([
-                'user_id' => $id,
-                'started_at' => Carbon::now()->subHour(),
-                'ended_at' => Carbon::now(),
             ]);
 
             DeviceToken::create([

@@ -45,6 +45,56 @@ class AccountController extends Controller
      * aspetta di vederla, e vedere ancora la schermata neutra farebbe pensare
      * che non abbia funzionato.
      */
+    /**
+     * I dettagli della palestra a cui si e' iscritti — 3b-P.13.1, 23/08/2026.
+     *
+     * 📌 Il committente: *«una volta connesso con una palestra ci dovranno
+     * essere i dettagli della palestra»*.
+     *
+     * ── ⚠️ Perche' non basta il branding che l'app ha gia' ──────────────────
+     *
+     * `GET /branding/lookup` e' **pubblico** e serve a vestire la schermata di
+     * accesso: da' insegna, logo e colori, e si ferma li' per forza — e' quello
+     * che vede chiunque conosca il codice.
+     *
+     * 💡 Qui si e' dentro, autenticati, e si puo' dire **di piu'**: da quando
+     * si e' iscritti, e come si contatta la palestra. Sono le due cose che uno
+     * cerca quando apre questa scheda.
+     *
+     * ⛔ **E niente di piu' di cosi'.** Non il numero di iscritti, non il piano
+     * commerciale, non chi altro c'e' dentro: sono affari della palestra, e chi
+     * ne fa parte non ha per questo il diritto di leggerli.
+     *
+     * 🚨 **Chi non ha una palestra riceve `null`, non un errore.** Un 404 qui
+     * vorrebbe dire che l'app deve distinguere «non ce l'hai» da «e' andata
+     * storta», e sono due cose diverse che meritano due schermate diverse.
+     */
+    public function gym(Request $request): JsonResponse
+    {
+        $palestra = $request->user()?->tenant;
+
+        if ($palestra === null || $palestra->ePersonale()) {
+            return response()->json(['data' => null]);
+        }
+
+        return response()->json(['data' => [
+            'name' => $palestra->name,
+            'slug' => $palestra->slug,
+            'logo_url' => $palestra->logo_path ? url($palestra->logo_path) : null,
+            'contact_email' => $palestra->contact_email,
+
+            /*
+             * 💡 Da quando ne fai parte: e' `created_at` **dell'utente dentro
+             * quel tenant**, non del tenant. ⚠️ Chi e' entrato con `join-gym`
+             * ha portato con se' la propria data di iscrizione originale, che
+             * e' la risposta giusta alla domanda «da quando sono qui?» solo se
+             * ci si e' iscritti da li'. Per gli altri e' comunque la data piu'
+             * onesta che abbiamo.
+             */
+            'iscritto_dal' => $request->user()?->created_at?->toDateString(),
+        ]]);
+    }
+
     public function joinGym(Request $request): JsonResponse
     {
         $dati = $request->validate([

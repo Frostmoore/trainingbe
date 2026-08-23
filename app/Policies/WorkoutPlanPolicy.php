@@ -119,16 +119,33 @@ class WorkoutPlanPolicy
             && $piano->created_by === $utente->getKey();
     }
 
+    /**
+     * ══ ⛔ IL VINCOLO SULLE SEDUTE E' CADUTO CON LE SEDUTE — 23/08/2026 ═════
+     *
+     * 🚨 Qui c'era: *«una scheda con allenamenti gia' fatti non si cancella: le
+     * sessioni ci puntano, e cancellarla lascerebbe uno storico senza
+     * origine»*. Era giusto, e non e' piu' possibile: `workout_sessions` **non
+     * esiste** (FASE 11.6.3), e la domanda «questa scheda e' stata usata?» sul
+     * server non ha piu' risposta.
+     *
+     * ⚠️ **Il difetto che ha fatto emergere la cosa**: il pannello chiama la
+     * policy per decidere se mostrare il pulsante «elimina», e l'editor delle
+     * schede rispondeva **500** — non un errore di logica, una tabella
+     * mancante. Lo ha trovato `PannelloDeiPianiTest`.
+     *
+     * ── 💡 Perche' si puo' permettere la cancellazione ──────────────────────
+     *
+     * Lo storico adesso sta **sul telefono**, e non e' una riga che punta a una
+     * scheda: e' una copia completa della seduta, con il suo titolo dentro
+     * (`SeduteAllenamento.titolo`). ⛔ Cancellare la scheda sul server **non
+     * lascia orfano niente** — l'allenamento resta leggibile perche' non
+     * dipendeva da lei.
+     *
+     * 🚨 E il vincolo a database (`restrictOnDelete`) e' caduto insieme alla
+     * tabella che lo portava: non c'e' piu' nemmeno l'errore SQL da evitare.
+     */
     public function delete(User $utente, WorkoutPlan $piano): bool
     {
-        // 🚨 Una scheda con allenamenti gia' fatti non si cancella: si archivia.
-        // Le sessioni ci puntano, e cancellarla lascerebbe uno storico senza
-        // origine. Il vincolo e' anche a database (`restrictOnDelete`), ma un
-        // errore SQL in faccia a un trainer non e' una risposta.
-        if ($piano->sessions()->exists()) {
-            return false;
-        }
-
         return $this->update($utente, $piano);
     }
 }

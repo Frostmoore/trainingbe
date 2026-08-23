@@ -135,10 +135,17 @@ class WorkoutPlan extends Model implements HasMedia
         return $this->hasMany(PlanExercise::class)->orderBy('position');
     }
 
-    public function sessions(): HasMany
-    {
-        return $this->hasMany(WorkoutSession::class);
-    }
+    /*
+     * ⛔ `sessions()` non esiste piu' — FASE 11.6.3, 23/08/2026.
+     *
+     * 🚨 Puntava a `workout_sessions`, che e' caduta: gli allenamenti stanno
+     * sul telefono. Una relazione verso una tabella che non c'e' non da'
+     * errore quando la si dichiara — lo da' quando qualcuno la usa, e in
+     * quel momento e' un 500 in faccia a chi apre una schermata.
+     *
+     * 💡 E' successo davvero: l'editor delle schede nel pannello rispondeva
+     * 500 perche' la policy chiedeva `$piano->sessions()->exists()`.
+     */
 
     // ───────────────────────── stato ─────────────────────────
 
