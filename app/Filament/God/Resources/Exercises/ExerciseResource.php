@@ -102,10 +102,17 @@ class ExerciseResource extends Resource
                         )
                         ->columnSpanFull(),
 
+                    /*
+                     * ⛔ **Obbligatorio — 3b-A.3.5.** Un esercizio del catalogo
+                     * senza primario non colora nessuna zona, e nessuno tornera'
+                     * a completarlo: le lacune del catalogo comune si notano
+                     * mesi dopo, su una figura del corpo che resta grigia.
+                     */
                     Select::make('muscle_group')
                         ->label('Gruppo muscolare')
                         ->helperText('Quello che fa il lavoro principale.')
                         ->options(MuscleGroup::options())
+                        ->required()
                         ->native(false),
 
                     /*

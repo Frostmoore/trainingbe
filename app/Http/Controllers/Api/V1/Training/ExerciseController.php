@@ -94,13 +94,13 @@ class ExerciseController extends Controller
             'muscle_group' => ['nullable', Rule::enum(MuscleGroup::class)],
 
             /*
-             * 🆕 I muscoli secondari — 3b-A.3.4, 23/08/2026.
+             * 🆕 I muscoli secondari — 3b-A.3.4/A.3.5.
              *
-             * ⚠️ **`nullable` e non `required`, per ora.** L'app di oggi non li
-             * manda, e pretenderli spezzerebbe la creazione al volo di un
-             * esercizio durante un allenamento — cioe' in palestra, a meta'
-             * serie. 🚨 Diventeranno obbligatori (A.3.5) **dopo** che il
-             * compositore li chiede: prima sarebbe rompere per anticipare.
+             * ⚠️ **`nullable` qui e obbligatori piu' sotto**, e non e' una
+             * contraddizione: se il nome corrisponde a un esercizio che esiste
+             * gia', i muscoli non servono — il server li sa. 🚨 Servono solo
+             * quando la riga **sta per nascere**, e chi lo sa e' il matcher,
+             * non la validazione: la risposta e' 422 `muscoli_non_decisi`.
              */
             'secondary_muscles' => ['nullable', 'array', 'max:6'],
             'secondary_muscles.*' => [Rule::enum(MuscleGroup::class)],
@@ -112,25 +112,30 @@ class ExerciseController extends Controller
 
         $esistenti = Exercise::query()->count();
 
-        $esercizio = $this->matcher->match($dati['name'], $utente->tenant_id, $utente);
+        /*
+         * 🚨 **I muscoli entrano dal matcher, non dopo** — 3b-A.3.5.
+         *
+         * ⛔ Prima si chiamava `match()` a mani vuote e si scriveva dopo con un
+         * `forceFill`. Due scritture per lo stesso fatto, e una guardia che non
+         * poteva esistere: quando il matcher creava, non sapeva niente.
+         */
+        $esercizio = $this->matcher->match(
+            $dati['name'],
+            $utente->tenant_id,
+            $utente,
+            isset($dati['muscle_group']) ? MuscleGroup::from((string) $dati['muscle_group']) : null,
+            array_key_exists('secondary_muscles', $dati) && is_array($dati['secondary_muscles'])
+                ? array_values(array_map(strval(...), $dati['secondary_muscles']))
+                : null,
+        );
 
         $creato = Exercise::query()->count() > $esistenti;
 
-        // I dettagli si scrivono solo su ciò che è appena nato: sovrascrivere il
-        // gruppo muscolare di un esercizio della piattaforma perché un iscritto
-        // ha mandato un valore diverso lo cambierebbe per tutta la palestra.
-        if ($creato && ($dati['muscle_group'] ?? $dati['equipment'] ?? $dati['secondary_muscles'] ?? null) !== null) {
-            $esercizio->forceFill(array_filter([
-                'muscle_group' => $dati['muscle_group'] ?? null,
-                'equipment' => $dati['equipment'] ?? null,
-
-                // ⚠️ `array_filter` scarta i vuoti, e un elenco vuoto **e' una
-                // risposta**: «Leg extension» il quadricipite lo isola davvero.
-                // Per questo si scrive a parte.
-                ...(isset($dati['secondary_muscles'])
-                    ? ['secondary_muscles' => $dati['secondary_muscles']]
-                    : []),
-            ]))->save();
+        // L'attrezzo si scrive solo su ciò che è appena nato: cambiarlo su un
+        // esercizio della piattaforma perché un iscritto ha mandato un valore
+        // diverso lo cambierebbe per tutta la palestra.
+        if ($creato && ($dati['equipment'] ?? null) !== null) {
+            $esercizio->forceFill(['equipment' => $dati['equipment']])->save();
         }
 
         return response()->json([

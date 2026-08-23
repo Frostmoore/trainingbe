@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Training;
 
 use App\Enums\MuscleGroup;
+use App\Exceptions\MuscoliNonDecisiException;
 use App\Models\Exercise;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -101,9 +102,23 @@ class ExerciseMatcher
      * gia' esistente ma **incompleto**. Il secondo caso e' quello che fa
      * guarire il catalogo invece di lasciarlo marcire.
      *
+     * ── ⛔ 3b-A.3.5: un esercizio nuovo senza muscoli NON SI CREA ───────────
+     *
+     * 🚨 Se trova, torna quello che ha trovato e i muscoli non servono: il
+     * server li sa gia'. Se **deve creare** e nessuno glieli ha detti, solleva
+     * `MuscoliNonDecisiException` (422) invece di scrivere una riga muta.
+     *
+     * ⛔ **Non c'e' un interruttore per saltare la guardia**, ed e' voluto: un
+     * parametro «crea lo stesso» sarebbe messo a `true` dal primo che incontra
+     * l'errore, e la porta tornerebbe aperta senza che nessuno lo decida
+     * davvero. Chi crea un esercizio deve poter rispondere; se non puo', il
+     * posto giusto per accorgersene e' adesso.
+     *
      * @param  int|null  $tenantId  la palestra proprietaria; `null` usa il contesto
      * @param  MuscleGroup|null  $primario  il muscolo che fa il lavoro, se chi chiama lo sa
      * @param  list<string>|null  $secondari  quelli che aiutano; `null` = «non lo so», `[]` = «nessuno»
+     *
+     * @throws MuscoliNonDecisiException se deve creare e i muscoli non ci sono
      */
     public function match(
         string $nome,
@@ -140,6 +155,21 @@ class ExerciseMatcher
             return $this->completa($trovato, $tenantId, $primario, $secondari);
         }
 
+        /*
+         * ⛔ **3b-A.3.5 — qui si crea, quindi qui si pretende una risposta.**
+         *
+         * 🚨 Servono **tutti e due**: il primario, e i secondari **anche
+         * vuoti**. `[]` dice «questo esercizio isola davvero» ed e' una
+         * decisione; `null` dice «non ci ho pensato». Accettare `null` sui
+         * secondari vorrebbe dire lasciare aperta la stessa porta di prima.
+         *
+         * ⚠️ Al 24/08/2026, prima di questa riga, in staging c'erano gia'
+         * **sette** esercizi nati muti da questo esatto punto di codice.
+         */
+        if ($primario === null || $secondari === null) {
+            throw new MuscoliNonDecisiException(trim($nome) !== '' ? trim($nome) : 'Esercizio');
+        }
+
         // 🚨 Non riconosciuto: si crea, ma marcato. `is_custom = true` e' cio'
         // che permette al pannello di piattaforma di mostrare la lista delle
         // cose da riconciliare a mano invece di lasciarle sedimentare.
@@ -151,13 +181,11 @@ class ExerciseMatcher
             'created_by' => $da?->getKey(),
 
             /*
-             * ⚠️ **`null` e non `[]` quando non si sa** — 3b-A.3.4.
-             *
-             * 🚨 Sono due affermazioni diverse: `[]` dice «questo esercizio
-             * isola davvero», `null` dice «nessuno l'ha ancora deciso». ⛔
-             * Scrivere `[]` per comodita' vorrebbe dire riempire il catalogo di
-             * esercizi che *dichiarano* di non avere secondari — e la guardia
-             * che cerca i buchi non ne troverebbe piu' nessuno.
+             * 💡 Da A.3.5 non possono piu' essere nulli: la guardia qui sopra
+             * si e' gia' assicurata che qualcuno abbia risposto. ⚠️ La
+             * distinzione fra `[]` e `null` resta comunque vera per le righe
+             * **gia' in tabella**, ed e' su quella che lavora il filtro
+             * «Senza muscoli decisi» del pannello.
              */
             'muscle_group' => $primario,
             'secondary_muscles' => $secondari,

@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Services\Tenancy\CreaTenantPersonale;
+use Database\Seeders\ExerciseLibrarySeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -37,6 +38,19 @@ final class ScritturaDeiPianiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        /*
+         * 🆕 **Il catalogo si semina — 3b-A.3.5, 24/08/2026.**
+         *
+         * ⛔ Da A.3.5 un esercizio che **non esiste** non si crea senza dire che
+         * muscoli allena. Questi test scrivono schede con nomi veri («Panca
+         * piana», «Squat»): senza il catalogo il database e' vuoto, quindi ogni
+         * nome ne crea uno nuovo, quindi ogni salvataggio prende 422.
+         *
+         * 💡 Seminandolo, i test somigliano a come stanno le cose davvero: in
+         * produzione quei nomi ci sono, e nessuno deve dichiarare niente.
+         */
+        $this->seed(ExerciseLibrarySeeder::class);
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         /*
@@ -324,7 +338,7 @@ final class ScritturaDeiPianiTest extends TestCase
                             'name' => 'Panca piana',
                             'sets' => 4,
                             'reps' => '8-10',
-                            'alternatives' => [['name' => 'Panca con manubri', 'sets' => 4, 'reps' => '10']],
+                            'alternatives' => [['name' => 'Panca piana con manubri', 'sets' => 4, 'reps' => '10']],
                         ]],
                     ],
                     ['name' => 'Giorno B — tirata', 'exercises' => [['name' => 'Trazioni', 'sets' => 4]]],
@@ -371,7 +385,7 @@ final class ScritturaDeiPianiTest extends TestCase
         $r = $this->actingAs($this->iscritto, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Cedimento',
-                'days' => [['exercises' => [['name' => 'Curl', 'reps' => 'cedimento']]]],
+                'days' => [['exercises' => [['name' => 'Curl bicipiti', 'reps' => 'cedimento']]]],
             ])
             ->assertCreated();
 
@@ -411,7 +425,7 @@ final class ScritturaDeiPianiTest extends TestCase
                             'sets' => 4,
                             'reps' => '8-10',
                             'notes' => 'fermo un secondo al petto',
-                            'alternatives' => [['name' => 'Panca con manubri', 'sets' => 4, 'reps' => '10']],
+                            'alternatives' => [['name' => 'Panca piana con manubri', 'sets' => 4, 'reps' => '10']],
                         ]],
                     ],
                     ['name' => 'Giorno B', 'exercises' => [['name' => 'Trazioni', 'sets' => 4]]],
@@ -431,7 +445,7 @@ final class ScritturaDeiPianiTest extends TestCase
             ->assertJsonPath('data.days.0.exercises.0.notes', 'fermo un secondo al petto')
             // 🚨 L'alternativa e' li' dentro, e **non** fra gli esercizi da fare.
             ->assertJsonCount(1, 'data.days.0.exercises.0.alternatives')
-            ->assertJsonPath('data.days.0.exercises.0.alternatives.0.name', 'Panca con manubri');
+            ->assertJsonPath('data.days.0.exercises.0.alternatives.0.name', 'Panca piana con manubri');
 
         /*
          * 💡 **E il `name` in cima all'esercizio, non solo dentro `exercise`.**
@@ -458,7 +472,7 @@ final class ScritturaDeiPianiTest extends TestCase
                 'days' => [[
                     'exercises' => [[
                         'name' => 'Panca piana',
-                        'alternatives' => [['name' => 'Panca con manubri']],
+                        'alternatives' => [['name' => 'Panca piana con manubri']],
                     ]],
                 ]],
             ])

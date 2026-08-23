@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\PlanImports\Pages;
 
 use App\Enums\ImportStatus;
+use App\Enums\MuscleGroup;
 use App\Filament\Gym\Resources\PlanImports\PlanImportResource;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\EditWorkoutPlan;
 use App\Models\WorkoutPlanImport;
@@ -103,6 +104,38 @@ class ReviewPlanImport extends Page
                                     ->required()
                                     ->columnSpan(2)
                                     ->helperText('Il nome viene riconciliato con la libreria alla pubblicazione.'),
+
+                                /*
+                                 * 🆕 I muscoli — 3b-A.3.4/A.3.5.
+                                 *
+                                 * 🚨 **Li propone il modello**, che li legge
+                                 * insieme alla riga: qui si correggono, non si
+                                 * scrivono da zero.
+                                 *
+                                 * ⛔ E devono esserci: alla pubblicazione, un
+                                 * esercizio che **non e' in libreria** e non
+                                 * dice che muscoli allena viene rifiutato
+                                 * (`MuscoliNonDecisiException`), e la scheda
+                                 * non nasce a meta'. 💡 Il posto per accorgersene
+                                 * e' questo, dove c'e' qualcuno che guarda.
+                                 *
+                                 * ⚠️ Per un esercizio **gia' in libreria** non
+                                 * servono, e lasciarli vuoti va benissimo: il
+                                 * server i suoi muscoli li sa gia'.
+                                 */
+                                Select::make('muscle_group')
+                                    ->label('Muscolo principale')
+                                    ->options(MuscleGroup::options())
+                                    ->native(false)
+                                    ->columnSpan(2),
+
+                                Select::make('secondary_muscles')
+                                    ->label('Quelli che aiutano')
+                                    ->options(MuscleGroup::options())
+                                    ->multiple()
+                                    ->native(false)
+                                    ->columnSpan(3)
+                                    ->helperText('Vuoto = l\'esercizio isola. E\' una risposta, non un campo saltato.'),
 
                                 TextInput::make('sets')->label('Serie')->numeric(),
                                 TextInput::make('reps')->label('Ripetizioni'),

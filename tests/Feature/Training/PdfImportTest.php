@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Training;
 
 use App\Enums\ImportStatus;
+use App\Enums\MuscleGroup;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Exceptions\MuscoliNonDecisiException;
 use App\Jobs\ParseWorkoutPdf;
 use App\Models\Exercise;
 use App\Models\Tenant;
@@ -98,15 +100,40 @@ class PdfImportTest extends TestCase
      *
      * `is_custom` e' cio' che permette di ritrovare a fine mese tutto quello che
      * l'import non ha riconosciuto, invece di lasciarlo sedimentare.
+     *
+     * 🆕 **E da 3b-A.3.5 nasce anche con i muscoli.** ⛔ Prima questa chiamata
+     * scriveva una riga muta: `is_custom` diceva «guardami», ma nessuno
+     * guardava, e in staging se n'erano accumulate sette.
      */
     #[Test]
     public function an_unknown_name_creates_a_flagged_exercise(): void
     {
-        $nuovo = app(ExerciseMatcher::class)->match('Pulley basso presa stretta', $this->alfa->id);
+        $nuovo = app(ExerciseMatcher::class)->match(
+            'Pulley basso presa stretta',
+            $this->alfa->id,
+            null,
+            MuscleGroup::Back,
+            ['biceps'],
+        );
 
         $this->assertTrue($nuovo->is_custom);
         $this->assertSame($this->alfa->id, $nuovo->tenant_id);
         $this->assertSame('pulley basso presa stretta', $nuovo->slug_normalized);
+        $this->assertSame(['biceps'], $nuovo->secondary_muscles);
+    }
+
+    /**
+     * ⛔ E senza muscoli **non nasce affatto** — 3b-A.3.5.
+     *
+     * 🚨 E' la stessa porta di sopra, guardata dall'altro lato: quello che
+     * `is_custom` segnalava a posteriori adesso viene impedito prima.
+     */
+    #[Test]
+    public function but_an_unknown_name_without_muscles_is_refused(): void
+    {
+        $this->expectException(MuscoliNonDecisiException::class);
+
+        app(ExerciseMatcher::class)->match('Attrezzo che nessuno conosce', $this->alfa->id);
     }
 
     /** Non si riconosce due volte lo stesso nome creando due righe. */
@@ -115,7 +142,10 @@ class PdfImportTest extends TestCase
     {
         $matcher = app(ExerciseMatcher::class);
 
-        $a = $matcher->match('Macchina strana', $this->alfa->id);
+        // ⚠️ I muscoli servono solo al primo: al secondo giro l'esercizio
+        // esiste gia', e la guardia di A.3.5 non si applica. E' anche il test
+        // che dimostra che la regola non da' fastidio a chi non crea niente.
+        $a = $matcher->match('Macchina strana', $this->alfa->id, null, MuscleGroup::Chest, []);
         $b = $matcher->match('macchina  strana', $this->alfa->id);
 
         $this->assertSame($a->id, $b->id);
@@ -210,7 +240,13 @@ class PdfImportTest extends TestCase
             'name' => 'Scheda A',
             'exercises' => [
                 ['name' => 'Bench press', 'sets' => 4, 'reps' => '8-12', 'rest_sec' => 90, 'confidence' => 0.9],
-                ['name' => 'Esercizio mai visto', 'sets' => 3, 'reps' => '10', 'confidence' => 0.6],
+                // 🆕 3b-A.3.5: la riga che crea un esercizio nuovo porta i
+                // muscoli, che dal 24/08/2026 il modello legge insieme al resto.
+                [
+                    'name' => 'Esercizio mai visto', 'sets' => 3, 'reps' => '10',
+                    'muscle_group' => 'back', 'secondary_muscles' => ['biceps'],
+                    'confidence' => 0.6,
+                ],
             ],
             'confidence' => 0.8,
         ]), 'claude-sonnet-5');
@@ -247,7 +283,14 @@ class PdfImportTest extends TestCase
         ]), 'claude-sonnet-5');
 
         $piano = $this->ctx()->runAs($this->alfa, fn () => $import->publishAsPlan([
-            ['name' => 'Panca piana', 'sets' => 4, 'reps' => '10'],
+            [
+                'name' => 'Panca piana', 'sets' => 4, 'reps' => '10',
+                // 🆕 3b-A.3.5 — «Panca piana» qui non e' in libreria (questo
+                // test non semina il catalogo), quindi la riga la crea, quindi
+                // i muscoli servono. E' esattamente quello che vede chi
+                // corregge a mano nella pagina di revisione.
+                'muscle_group' => 'chest', 'secondary_muscles' => ['triceps'],
+            ],
         ], $this->trainer));
 
         $this->assertSame(1, $piano->exercises()->count());
