@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Enums\UserRole;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
@@ -48,6 +49,71 @@ class FusoOrarioTest extends TestCase
     private Tenant $alfa;
 
     private User $mario;
+
+    /**
+     * 🚨 Le 00:30 del 12 agosto **a Roma** — cioe' le 22:30 dell'11 in UTC.
+     *
+     * ⚠️ E' l'istante che fa la differenza: in UTC il giorno e' ancora l'11, e
+     * un raggruppamento fatto su quella colonna mette la cena nella casella del
+     * giorno prima. Di giorno lo stesso codice funziona, ed e' il motivo per cui
+     * il difetto era sopravvissuto a una suite verde.
+     */
+    private const MEZZANOTTE_E_MEZZA_A_ROMA = '2026-08-12 00:30:00';
+
+    /**
+     * ⛔ **RICOSTRUITO IL 23/08/2026.**
+     *
+     * 🚨 Questo file dichiarava `$alfa` e `$mario` **senza inizializzarli mai**,
+     * e chiamava un `alleOre()` che non esisteva: il test del calendario **non
+     * e' mai stato eseguibile**, e la suite lo riportava come *errore* invece
+     * che come fallimento — che e' il modo in cui e' passato inosservato.
+     *
+     * ⚠️ Un test che non gira e' peggio di un test che manca: il file esiste, il
+     * commento in cima spiega un difetto vero e circostanziato, e chi lo legge
+     * crede che quel difetto sia sorvegliato.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->alfa = $this->creaPalestra();
+
+        /*
+         * 💡 Il fuso si mette **sull'utente**, non sul tenant: e' il primo
+         * anello della catena che `User::fusoOrario()` percorre
+         * (`users.timezone` → `tenants.timezone` → `Europe/Rome`), ed e' quello
+         * che decide davvero.
+         */
+        $this->mario = $this->creaUtente(
+            $this->alfa,
+            UserRole::Member,
+            'mario@demo.test',
+            ['timezone' => 'Europe/Rome'],
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        /*
+         * ⚠️ **L'orologio fermo non si sgela da solo.** Senza questa riga il
+         * test successivo eredita il 12 agosto 2026 e sbaglia per una ragione
+         * che non ha niente a che vedere con lui — il genere di rosso che si
+         * insegue nel file sbagliato.
+         */
+        Carbon::setTestNow();
+
+        parent::tearDown();
+    }
+
+    /** Ferma l'orologio a un'ora di Roma, e restituisce quell'istante. */
+    private function alleOre(string $oraDiRoma): Carbon
+    {
+        $adesso = Carbon::parse($oraDiRoma, 'Europe/Rome');
+
+        Carbon::setTestNow($adesso);
+
+        return $adesso;
+    }
 
     // ───────────────────────── il calendario ─────────────────────────
 

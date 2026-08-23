@@ -245,6 +245,15 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::get('account/gym', [AccountController::class, 'gym']);
 
+        /*
+         * 🆕 **Uscire da una palestra** — 3b-P.13.3, 23/08/2026.
+         *
+         * ⛔ Nessun limite di frequenza qui: non è un'operazione che si possa
+         * ripetere: dopo la prima non si è più in nessuna palestra, e la
+         * seconda chiamata rifiuta da sola.
+         */
+        Route::post('account/leave-gym', [AccountController::class, 'leaveGym']);
+
         Route::post('account/join-gym', [AccountController::class, 'joinGym'])
             ->middleware('throttle:auth-login');
         Route::delete('account', [AccountController::class, 'destroy']);

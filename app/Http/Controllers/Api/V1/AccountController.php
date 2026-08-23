@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Account\AccountEraser;
 use App\Services\Audit\AuditLogger;
+use App\Services\Tenancy\EsciDaUnaPalestra;
 use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ class AccountController extends Controller
         private readonly AccountEraser $eraser,
         private readonly AuditLogger $audit,
         private readonly UnisciAUnaPalestra $unisci,
+        private readonly EsciDaUnaPalestra $esci,
     ) {}
 
     /**
@@ -69,6 +71,43 @@ class AccountController extends Controller
      * vorrebbe dire che l'app deve distinguere «non ce l'hai» da «e' andata
      * storta», e sono due cose diverse che meritano due schermate diverse.
      */
+    /**
+     * Esce dalla palestra — 3b-P.13.3, 23/08/2026.
+     *
+     * 🚨 **Il lavoro vero è in `EsciDaUnaPalestra`**, e il perché sta lì: non è
+     * l'inverso simmetrico di `join-gym`. Entrare sposta tutte le righe di un
+     * tenant che ha una persona sola; uscire deve estrarre le righe di **una**
+     * persona da un tenant che ne ha molte.
+     *
+     * ⚠️ **Si risponde con il branding nuovo**, come `joinGym`: l'app deve
+     * poter togliere colori e insegna subito. Chi esce da una palestra si
+     * aspetta di smettere di vederla.
+     */
+    public function leaveGym(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        if ($utente === null) {
+            return response()->json(['message' => __('Non autenticato.')], 401);
+        }
+
+        $vecchia = $utente->tenant?->name;
+        $personale = ($this->esci)($utente);
+
+        /*
+         * ⚖️ **Va nel registro**, e non è burocrazia: è la traccia che permette
+         * di rispondere alla domanda «dov'è finito quell'iscritto?» il giorno in
+         * cui la palestra la fa. ⛔ Senza, l'unica risposta sarebbe «non lo
+         * sappiamo».
+         */
+        $this->audit->log('account.left_gym', $utente, ['gym' => $vecchia]);
+
+        return response()->json([
+            'message' => __('Sei uscito da :palestra.', ['palestra' => $vecchia ?? '—']),
+            'branding' => $personale->branding(),
+        ]);
+    }
+
     public function gym(Request $request): JsonResponse
     {
         $palestra = $request->user()?->tenant;
