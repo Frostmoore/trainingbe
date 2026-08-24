@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Support\Training\MuscoliSecondari;
+use App\Support\Training\MuscoliDegliEsercizi;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +68,7 @@ return new class extends Migration
          * migrazione non deve mai usare i modelli.
          */
         /*
-         * 🚨 **La mappa sta in `MuscoliSecondari`, non qui.**
+         * 🚨 **La mappa sta in `MuscoliDegliEsercizi`, non qui.**
          *
          * ⚠️ Una migrazione di norma congela i suoi dati, per poter girare
          * identica fra un anno. Questa no, ed e' una scelta consapevole:
@@ -80,10 +80,10 @@ return new class extends Migration
          * non lasciato a puntare nel vuoto: sulle righe gia' sistemate non
          * serve piu' a niente.
          */
-        foreach (MuscoliSecondari::tutti() as $nome => $muscoli) {
+        foreach (MuscoliDegliEsercizi::tutti() as $nome => $muscoli) {
             DB::table('exercises')
                 ->where('name', $nome)
-                ->update(['secondary_muscles' => json_encode($muscoli)]);
+                ->update(['secondary_muscles' => json_encode($muscoli[1])]);
         }
     }
 

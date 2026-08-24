@@ -7,7 +7,7 @@ namespace Database\Seeders;
 use App\Enums\MuscleGroup;
 use App\Models\Exercise;
 use App\Support\Tenancy\TenantContext;
-use App\Support\Training\MuscoliSecondari;
+use App\Support\Training\MuscoliDegliEsercizi;
 use Illuminate\Database\Seeder;
 
 /**
@@ -221,9 +221,9 @@ class ExerciseLibrarySeeder extends Seeder
                          * nascerebbe con centoventuno esercizi **senza
                          * secondari** — e la figura del corpo sarebbe grigia.
                          *
-                         * 💡 La mappa e' una sola, in `MuscoliSecondari`.
+                         * 💡 La mappa e' una sola, in `MuscoliDegliEsercizi`.
                          */
-                        'secondary_muscles' => MuscoliSecondari::di($nome),
+                        'secondary_muscles' => MuscoliDegliEsercizi::secondariDi($nome),
 
                         'equipment' => $attrezzo,
                         'met' => $met,
