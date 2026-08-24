@@ -87,6 +87,17 @@ final class MuscoliDegliEsercizi
         'Concentration Curl' => ['biceps', ['forearms']], // Concentration Curls
         'Curl Invertito (Manubrio)' => ['biceps', ['forearms']], // Reverse Barbell Curl
         'Crunch Inverso' => ['abs', []], // Reverse Crunch
+        'Rematore Inclinato (Bilanciere)' => ['back', ['biceps', 'shoulders']], // Bent Over Barbell Row
+        'Rematore Inclinato (Manubrio)' => ['back', ['biceps', 'shoulders']], // Bent Over Two-Dumbbell Row
+        'Rematore corda' => ['back', ['biceps', 'shoulders']], // Seated Cable Rows
+        'Croci Inverse (Manubrio)' => ['shoulders', []], // Reverse Flyes
+        'Push Press' => ['shoulders', ['quads', 'triceps']], // Push Press
+        'Lento in Avanti (Manubrio)' => ['shoulders', ['triceps']], // Seated Dumbbell Press
+        'Alzate Laterali (Cavo)' => ['shoulders', ['back']], // Cable Seated Lateral Raise
+        'Alzata Frontale (Manubrio)' => ['shoulders', []], // Front Dumbbell Raise
+        'Estensione Tricipiti Braccio Singolo (Manubrio)' => ['triceps', []], // Dumbbell One-Arm Triceps Extension
+        'Squat (Corpo Libero)' => ['quads', ['glutes', 'hamstrings']], // Bodyweight Squat
+        'Curl Bicipiti (Manubrio)' => ['biceps', ['forearms']], // Dumbbell Bicep Curl
         'Squat' => ['quads', ['calves', 'glutes', 'hamstrings', 'back']], // Barbell Squat
         'Squat frontale' => ['quads', ['calves', 'glutes', 'hamstrings']], // Front Barbell Squat
         'Stacco da terra' => ['back', ['calves', 'forearms', 'glutes', 'hamstrings', 'quads']], // Barbell Deadlift

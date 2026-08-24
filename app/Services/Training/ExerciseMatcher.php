@@ -9,6 +9,7 @@ use App\Exceptions\MuscoliNonDecisiException;
 use App\Models\Exercise;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Training\MuscoliDegliEsercizi;
 
 /**
  * Riconcilia il nome letto da un PDF con la libreria esercizi — B7.3.
@@ -149,10 +150,33 @@ class ExerciseMatcher
             }
         }
 
-        $trovato = $this->cercaPerContenimento($canonico, $tenantId);
+        /*
+         * ══ ⛔ UN NOME CHE CONOSCIAMO NON E' L'ALIAS DI UN ALTRO ═══════════
+         *
+         * 🚨 Difetto vero, trovato il 24/08/2026 creando le schede del
+         * committente: **«Rematore corda» e' finito su «Corda»** — cioe' sul
+         * saltare la corda, categoria `cardio`. Il contenimento aveva visto la
+         * parola «corda» dentro il nome e aveva accoppiato due esercizi che non
+         * c'entrano niente.
+         *
+         * ⚠️ Il danno non e' solo il nome: quell'esercizio avrebbe colorato
+         * **polpacci e spalle** invece di schiena e bicipiti, e le calorie
+         * sarebbero state stimate con il MET del salto della corda.
+         *
+         * 💡 `MuscoliDegliEsercizi` e' l'elenco degli esercizi che **sappiamo**
+         * esistere. Se un nome sta li', e' un esercizio a se': va creato, non
+         * accoppiato per somiglianza a qualcos'altro.
+         *
+         * ⛔ Il controllo sta **prima** del contenimento e **dopo** la ricerca
+         * esatta: se l'esercizio esiste gia' si riusa quello, ed e' giusto — e'
+         * solo l'accoppiamento per somiglianza che va scavalcato.
+         */
+        if (MuscoliDegliEsercizi::di(trim($nome)) === null) {
+            $trovato = $this->cercaPerContenimento($canonico, $tenantId);
 
-        if ($trovato !== null) {
-            return $this->completa($trovato, $tenantId, $primario, $secondari);
+            if ($trovato !== null) {
+                return $this->completa($trovato, $tenantId, $primario, $secondari);
+            }
         }
 
         /*
