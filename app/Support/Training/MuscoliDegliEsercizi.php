@@ -85,7 +85,7 @@ final class MuscoliDegliEsercizi
         'Croci (Manubrio)' => ['chest', []], // Dumbbell Flyes
         'Curl Bicipiti (Bilanciere)' => ['biceps', ['forearms']], // Barbell Curl
         'Concentration Curl' => ['biceps', ['forearms']], // Concentration Curls
-        'Curl Invertito (Manubrio)' => ['biceps', ['forearms']], // Reverse Barbell Curl
+        'Curl Invertito (Manubrio)' => ['biceps', ['forearms']], // Standing Dumbbell Reverse Curl
         'Crunch Inverso' => ['abs', []], // Reverse Crunch
         'Rematore Inclinato (Bilanciere)' => ['back', ['biceps', 'shoulders']], // Bent Over Barbell Row
         'Rematore Inclinato (Manubrio)' => ['back', ['biceps', 'shoulders']], // Bent Over Two-Dumbbell Row
@@ -93,7 +93,7 @@ final class MuscoliDegliEsercizi
         'Croci Inverse (Manubrio)' => ['shoulders', []], // Reverse Flyes
         'Push Press' => ['shoulders', ['quads', 'triceps']], // Push Press
         'Lento in Avanti (Manubrio)' => ['shoulders', ['triceps']], // Seated Dumbbell Press
-        'Alzate Laterali (Cavo)' => ['shoulders', ['back']], // Cable Seated Lateral Raise
+        'Alzate Laterali (Cavo)' => ['shoulders', []], // Side Lateral Raise
         'Alzata Frontale (Manubrio)' => ['shoulders', []], // Front Dumbbell Raise
         'Estensione Tricipiti Braccio Singolo (Manubrio)' => ['triceps', []], // Dumbbell One-Arm Triceps Extension
         'Squat (Corpo Libero)' => ['quads', ['glutes', 'hamstrings']], // Bodyweight Squat
