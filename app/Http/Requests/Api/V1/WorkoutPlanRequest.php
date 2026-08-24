@@ -32,6 +32,15 @@ class WorkoutPlanRequest extends FormRequest
             'name' => ['required', 'string', 'max:160'],
             'notes' => ['nullable', 'string', 'max:2000'],
 
+            /*
+             * Su che versione stava scrivendo chi manda — 3b-B.16.6.
+             *
+             * ⚠️ **Facoltativo, e deve restarlo**: l'app gia' installata non lo
+             * manda, e pretenderlo spegnerebbe il salvataggio a chi non ha
+             * ancora aggiornato. Vedi la nota in `update()`.
+             */
+            'base_updated_at' => ['sometimes', 'nullable', 'string', 'max:40'],
+
             // Il tetto non è pignoleria: `syncRows()` scrive una riga per
             // elemento, e senza limite una richiesta malformata (o un ciclo
             // nell'app) può generare migliaia di righe in una transazione sola.

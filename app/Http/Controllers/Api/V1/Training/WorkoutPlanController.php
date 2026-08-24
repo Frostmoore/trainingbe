@@ -172,6 +172,33 @@ class WorkoutPlanController extends Controller
             ], 403);
         }
 
+        /*
+         * ══ 🚨 SU CHE VERSIONE STAVI SCRIVENDO — 3b-B.16.6, 24/08/2026 ═════
+         *
+         * 📌 Nasce da un danno vero: il 24/08 un salvataggio a fine allenamento
+         * ha cancellato due esercizi dalla scheda del committente, e il server
+         * ha eseguito senza fiatare perche' **non aveva modo di sapere che chi
+         * scriveva stava lavorando su una versione vecchia**.
+         *
+         * 💡 Chi scrive puo' dichiarare su cosa stava scrivendo. Se nel
+         * frattempo la scheda e' cambiata, si risponde **409 con la versione
+         * attuale** invece di sovrascriverla: chi ha mandato la scrittura
+         * decide cosa fare, e nessuno perde niente in silenzio.
+         *
+         * ⚠️ **Facoltativo, e deve restarlo.** L'app gia' installata non lo
+         * manda: pretenderlo spegnerebbe il salvataggio a tutti quelli che non
+         * hanno ancora aggiornato. Chi non lo manda si comporta come prima.
+         */
+        $base = $request->validated()['base_updated_at'] ?? null;
+
+        if ($base !== null && $piano->updated_at?->toIso8601String() !== $base) {
+            return response()->json([
+                'message' => __('La scheda è cambiata da un\'altra parte.'),
+                'code' => 'plan_conflict',
+                'data' => $this->dettaglio($piano->load(['exercises.exercise', 'creator'])),
+            ], 409);
+        }
+
         DB::transaction(function () use ($request, $piano, $utente): void {
             $dati = [
                 'name' => $request->validated()['name'],
@@ -474,6 +501,23 @@ class WorkoutPlanController extends Controller
             'starts_at' => $p->starts_at?->toDateString(),
             'ends_at' => $p->ends_at?->toDateString(),
             'published_at' => $p->published_at?->toIso8601String(),
+
+            /*
+             * ══ 🚨 QUANDO E' CAMBIATA — 3b-B.16.5, 24/08/2026 ══════════════
+             *
+             * 📌 *«le schede sul server si sincronizzano sul telefono quando
+             * apro l'app e per le modifiche vince sempre la piu' recente»*.
+             *
+             * 💡 E' l'unico dato che permette al telefono di sapere se la sua
+             * copia e' ancora buona **senza riscaricare tutta la scheda**.
+             *
+             * ⚠️ Vale anche quando cambia solo una riga: `PlanExercise` e
+             * `WorkoutPlanDay` hanno `$touches = ['plan']` apposta. Senza,
+             * aggiungere un esercizio dal pannello non avrebbe toccato questo
+             * campo, e il telefono avrebbe tenuto la versione vecchia
+             * **credendola aggiornata**.
+             */
+            'updated_at' => $p->updated_at?->toIso8601String(),
 
             /*
              * 🚨 Chi puo' modificarla lo dice il server.

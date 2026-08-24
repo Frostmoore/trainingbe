@@ -28,6 +28,15 @@ class WorkoutPlanDay extends Model
         'workout_plan_id', 'alternativa_di_id', 'position', 'name', 'notes',
     ];
 
+    /**
+     * 🚨 Come per `PlanExercise`: rinominare un giorno o spostarlo **e' una
+     * modifica alla scheda**, e il telefono deve poterlo sapere. Vedi la nota
+     * lunga li' — 3b-B.16.5.
+     *
+     * @var list<string>
+     */
+    protected $touches = ['plan'];
+
     protected function casts(): array
     {
         return [

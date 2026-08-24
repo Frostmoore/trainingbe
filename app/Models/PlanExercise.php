@@ -39,6 +39,31 @@ class PlanExercise extends Model
         'rest_sec', 'target_weight', 'duration_sec', 'notes',
     ];
 
+    /**
+     * ══ 🚨 TOCCARE LA SCHEDA QUANDO CAMBIA UNA SUA RIGA — 3b-B.16.5 ════════
+     *
+     * 📌 Serve alla sincronizzazione col telefono: *«le schede sul server si
+     * sincronizzano sul telefono quando apro l'app e per le modifiche vince
+     * sempre la piu' recente»*.
+     *
+     * ⛔ Senza questo, `workout_plans.updated_at` cambia **solo** quando cambia
+     * la riga della scheda — nome, note, stato. Un trainer che dal pannello
+     * aggiunge un esercizio, cambia le serie o ne toglie uno **non la
+     * toccherebbe affatto**, e il telefono continuerebbe a credere di avere la
+     * versione buona.
+     *
+     * 🚨 Sarebbe il difetto peggiore possibile per una sincronizzazione: non
+     * darebbe nessun errore, mostrerebbe una scheda vecchia con l'aria di
+     * essere aggiornata, e nessuno avrebbe modo di accorgersene.
+     *
+     * ⚠️ `$touches` copre `save()` e `delete()` sul modello. Le scritture in
+     * blocco (`->delete()` su una query, `insert()`) **non** passano di qui: chi
+     * le usa deve toccare la scheda a mano, ed e' scritto dove succede.
+     *
+     * @var list<string>
+     */
+    protected $touches = ['plan'];
+
     protected function casts(): array
     {
         return [
