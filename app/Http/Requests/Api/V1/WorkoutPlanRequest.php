@@ -33,14 +33,20 @@ class WorkoutPlanRequest extends FormRequest
             'notes' => ['nullable', 'string', 'max:2000'],
 
             /*
-             * Su che versione stava scrivendo chi manda — 3b-B.16.6.
+             * ⛔ **`base_updated_at` NON esiste piu'** — 3b-B.17.7, 25/08/2026.
              *
-             * ⚠️ **Facoltativo, e deve restarlo**: l'app gia' installata non lo
-             * manda, e pretenderlo spegnerebbe il salvataggio a chi non ha
-             * ancora aggiornato. Vedi la nota in `update()`.
+             * Era il protocollo di conflitto di B.16.6: chi scriveva dichiarava
+             * su quale versione stava lavorando e prendeva un 409 se nel
+             * frattempo la scheda era cambiata. 🚨 Se n'e' andato con la
+             * sincronizzazione che serviva: le schede dell'iscritto vivono sul
+             * telefono, e **nessun client lo mandava** — era facoltativo, e
+             * l'unico che avrebbe potuto mandarlo (il compositore del trainer)
+             * non e' mai stato insegnato a farlo.
+             *
+             * 💡 Se un giorno servisse davvero — due trainer sullo stesso
+             * modello — si rifa': la forma sta nel commit `v11.6.0`, e rifarla
+             * costa meno che tenere in piedi un protocollo che nessuno parla.
              */
-            'base_updated_at' => ['sometimes', 'nullable', 'string', 'max:40'],
-
             // Il tetto non è pignoleria: `syncRows()` scrive una riga per
             // elemento, e senza limite una richiesta malformata (o un ciclo
             // nell'app) può generare migliaia di righe in una transazione sola.

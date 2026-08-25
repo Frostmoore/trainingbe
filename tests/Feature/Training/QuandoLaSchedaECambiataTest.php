@@ -19,23 +19,35 @@ use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
 /**
- * Quello che serve al telefono per sincronizzare le schede — 3b-B.16, 24/08/2026.
+ * Il timbro di una scheda: quando e' cambiata davvero — 3b-B.16.5, 24/08/2026,
+ * potato in 3b-B.17.7 il 25/08.
  *
- * ══ 🚨 COSA DIFENDE QUESTO FILE ═══════════════════════════════════════════
+ * ══ 🚨 PERCHE' SOPRAVVIVE A B.16 ══════════════════════════════════════════
  *
- * 📌 *«le schede sul server si sincronizzano sul telefono quando apro l'app e
- * per le modifiche vince sempre la piu' recente»*.
+ * ⛔ Questo file era nato per la **sincronizzazione delle schede col telefono**,
+ * cancellata poche ore dopo (B.17): le schede dell'iscritto vivono sul telefono
+ * e non si sincronizza piu' niente. 🚨 Ci si aspetterebbe che se ne andasse
+ * insieme a lei, e invece **serve ancora**, per un motivo che con l'app non
+ * c'entra:
  *
- * ⛔ Perche' quella regola funzioni servono due cose dal server, e **nessuna
- * delle due c'era**: sapere **quando** una scheda e' cambiata, e potersi
- * accorgere che sta cambiando **sotto le mani di qualcun altro**.
+ * 💡 **La colonna «Modificato» del pannello.** `WorkoutPlansTable` mostra
+ * `updated_at` e ci ordina sopra. Senza i `$touches` su `PlanExercise` e
+ * `WorkoutPlanDay`, `workout_plans.updated_at` cambierebbe **solo** quando
+ * cambia la riga della scheda: un trainer che aggiunge un esercizio non la
+ * toccherebbe affatto, e il pannello direbbe che quella scheda non si tocca da
+ * marzo mentre l'ha modificata cinque minuti fa.
  *
- * 🚨 Il difetto che ha reso urgente tutto questo: il 24/08 un salvataggio a
- * fine allenamento ha cancellato due esercizi dalla scheda del committente, e
- * il server ha eseguito senza fiatare — non aveva modo di sapere che chi
- * scriveva stava lavorando su una versione vecchia.
+ * ⚠️ **Una cosa nata per un motivo puo' guadagnarsene un altro**, e il momento
+ * di accorgersene e' quando si cancella il primo. ⛔ Togliere i `$touches`
+ * «perche' erano di B.16» avrebbe rotto il pannello in silenzio, senza un solo
+ * test rosso — perche' i test erano questi.
+ *
+ * ── ⛔ Cosa se n'e' andato davvero ────────────────────────────────────────
+ *
+ * Il protocollo di conflitto (`base_updated_at` → 409) di B.16.6: era
+ * facoltativo e **nessun client lo mandava**. Vedi `WorkoutPlanController@update`.
  */
-final class LaSchedaSiSincronizzaTest extends TestCase
+final class QuandoLaSchedaECambiataTest extends TestCase
 {
     use ChiamaComeApp;
     use CreaAmbiente;
@@ -109,14 +121,21 @@ final class LaSchedaSiSincronizzaTest extends TestCase
         $this->assertTrue($piano->fresh()->updated_at->greaterThan($prima));
     }
 
+
     /**
-     * ⛔ **Chi scrive su una versione vecchia non sovrascrive: prende un 409.**
+     * ⛔ **Chi manda ancora `base_updated_at` non prende un errore.**
      *
-     * 🚨 E nella risposta c'e' la versione attuale, cosi' chi ha mandato la
-     * scrittura puo' decidere cosa fare invece di riprovare alla cieca.
+     * 🚨 Il campo se n'e' andato con il protocollo di conflitto (3b-B.17.7), e
+     * questo test fissa **come** se n'e' andato: la scrittura passa e il campo
+     * viene ignorato, non rifiutato.
+     *
+     * ⚠️ E' la differenza fra togliere una regola e aggiungerne una al
+     * contrario: se una validazione lo rifiutasse, un client rimasto indietro
+     * si vedrebbe **spegnere il salvataggio** da una modifica che doveva solo
+     * semplificare il server.
      */
     #[Test]
-    public function scrivere_su_una_versione_vecchia_da_409(): void
+    public function chi_manda_ancora_la_versione_di_base_scrive_lo_stesso(): void
     {
         $piano = $this->pianoDi();
 
@@ -131,55 +150,11 @@ final class LaSchedaSiSincronizzaTest extends TestCase
                 'base_updated_at' => $vecchia,
                 'exercises' => [['name' => 'Piegamenti']],
             ])
-            ->assertStatus(409)
-            ->assertJsonPath('code', 'plan_conflict')
-            ->assertJsonPath('data.name', 'Cambiata da un\'altra parte');
-
-        $this->assertSame(
-            'Cambiata da un\'altra parte',
-            $piano->fresh()->name,
-            'Il 409 ha comunque scritto: e\' il difetto che doveva impedire.',
-        );
-    }
-
-    /** 💡 E con la versione giusta si scrive, come sempre. */
-    #[Test]
-    public function ma_con_la_versione_giusta_si_scrive(): void
-    {
-        $piano = $this->pianoDi();
-
-        $this->comeApp($this->iscritto)
-            ->putJson("/api/v1/workout-plans/{$piano->getKey()}", [
-                'name' => 'Aggiornata',
-                'base_updated_at' => $piano->updated_at->toIso8601String(),
-                'exercises' => [['name' => 'Piegamenti']],
-            ])
             ->assertOk();
 
-        $this->assertSame('Aggiornata', $piano->fresh()->name);
+        $this->assertSame('Quella che avevo io', $piano->fresh()->name);
     }
 
-    /**
-     * ⚠️ **Chi non lo manda si comporta come prima.**
-     *
-     * ⛔ L'app gia' installata non conosce `base_updated_at`: pretenderlo
-     * spegnerebbe il salvataggio a tutti quelli che non hanno ancora
-     * aggiornato — cioe' romperebbe l'app di chi non ha fatto niente di male.
-     */
-    #[Test]
-    public function e_chi_non_lo_manda_scrive_come_prima(): void
-    {
-        $piano = $this->pianoDi();
-
-        $this->comeApp($this->iscritto)
-            ->putJson("/api/v1/workout-plans/{$piano->getKey()}", [
-                'name' => 'Senza dichiarare niente',
-                'exercises' => [['name' => 'Piegamenti']],
-            ])
-            ->assertOk();
-
-        $this->assertSame('Senza dichiarare niente', $piano->fresh()->name);
-    }
 
     private function pianoDi(): WorkoutPlan
     {

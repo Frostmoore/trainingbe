@@ -173,32 +173,25 @@ class WorkoutPlanController extends Controller
         }
 
         /*
-         * ══ 🚨 SU CHE VERSIONE STAVI SCRIVENDO — 3b-B.16.6, 24/08/2026 ═════
+         * ══ ⛔ IL 409 DI CONFLITTO NON C'E' PIU' — 3b-B.17.7, 25/08/2026 ════
          *
-         * 📌 Nasce da un danno vero: il 24/08 un salvataggio a fine allenamento
-         * ha cancellato due esercizi dalla scheda del committente, e il server
-         * ha eseguito senza fiatare perche' **non aveva modo di sapere che chi
-         * scriveva stava lavorando su una versione vecchia**.
+         * B.16.6 aveva aggiunto un protocollo: chi scriveva dichiarava con
+         * `base_updated_at` su quale versione stava lavorando, e se nel
+         * frattempo la scheda era cambiata prendeva un **409** invece di
+         * sovrascriverla. Nasceva da un danno vero — il 24/08 un salvataggio a
+         * fine allenamento aveva cancellato due esercizi.
          *
-         * 💡 Chi scrive puo' dichiarare su cosa stava scrivendo. Se nel
-         * frattempo la scheda e' cambiata, si risponde **409 con la versione
-         * attuale** invece di sovrascriverla: chi ha mandato la scrittura
-         * decide cosa fare, e nessuno perde niente in silenzio.
+         * 🚨 **Quel danno non e' piu' possibile da qui**: il salvataggio a fine
+         * allenamento non passa piu' dal server. Le schede dell'iscritto vivono
+         * sul telefono (B.17), e questa rotta la usa solo il compositore del
+         * trainer — che il campo non l'ha mai mandato.
          *
-         * ⚠️ **Facoltativo, e deve restarlo.** L'app gia' installata non lo
-         * manda: pretenderlo spegnerebbe il salvataggio a tutti quelli che non
-         * hanno ancora aggiornato. Chi non lo manda si comporta come prima.
+         * ⚠️ **Se ne va perche' era facoltativo e nessuno lo mandava**, non
+         * perche' l'idea fosse sbagliata: un protocollo che nessuno parla non
+         * protegge niente e va tenuto in piedi lo stesso. 💡 Il giorno in cui
+         * due trainer scrivessero sullo stesso modello, si rifa' — la forma sta
+         * nel commit `v11.6.0`.
          */
-        $base = $request->validated()['base_updated_at'] ?? null;
-
-        if ($base !== null && $piano->updated_at?->toIso8601String() !== $base) {
-            return response()->json([
-                'message' => __('La scheda è cambiata da un\'altra parte.'),
-                'code' => 'plan_conflict',
-                'data' => $this->dettaglio($piano->load(['exercises.exercise', 'creator'])),
-            ], 409);
-        }
-
         DB::transaction(function () use ($request, $piano, $utente): void {
             $dati = [
                 'name' => $request->validated()['name'],

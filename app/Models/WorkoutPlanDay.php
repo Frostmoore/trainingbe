@@ -30,8 +30,9 @@ class WorkoutPlanDay extends Model
 
     /**
      * 🚨 Come per `PlanExercise`: rinominare un giorno o spostarlo **e' una
-     * modifica alla scheda**, e il telefono deve poterlo sapere. Vedi la nota
-     * lunga li' — 3b-B.16.5.
+     * modifica alla scheda**, e la colonna «Modificato» del pannello deve
+     * poterlo dire. Vedi la nota lunga li' — 3b-B.16.5, sopravvissuta a
+     * B.17.7.
      *
      * @var list<string>
      */

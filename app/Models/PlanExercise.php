@@ -42,19 +42,28 @@ class PlanExercise extends Model
     /**
      * ══ 🚨 TOCCARE LA SCHEDA QUANDO CAMBIA UNA SUA RIGA — 3b-B.16.5 ════════
      *
-     * 📌 Serve alla sincronizzazione col telefono: *«le schede sul server si
-     * sincronizzano sul telefono quando apro l'app e per le modifiche vince
-     * sempre la piu' recente»*.
+     * ══ 🚨 NATO PER LA SINCRONIZZAZIONE, RESTA PER IL PANNELLO ════════════
+     *
+     * 📌 Era per il telefono: *«le schede sul server si sincronizzano sul
+     * telefono quando apro l'app e per le modifiche vince sempre la piu'
+     * recente»*. ⛔ **Quella sincronizzazione non esiste piu'** (B.17): le
+     * schede dell'iscritto vivono sul telefono e non si sincronizza niente.
+     *
+     * 💡 **E questa riga resta lo stesso**, perche' nel frattempo se n'e'
+     * guadagnato un altro di motivo: `WorkoutPlansTable` nel pannello mostra la
+     * colonna **«Modificato»** e ci ordina sopra.
      *
      * ⛔ Senza questo, `workout_plans.updated_at` cambia **solo** quando cambia
      * la riga della scheda — nome, note, stato. Un trainer che dal pannello
      * aggiunge un esercizio, cambia le serie o ne toglie uno **non la
-     * toccherebbe affatto**, e il telefono continuerebbe a credere di avere la
-     * versione buona.
+     * toccherebbe affatto**, e la sua palestra vedrebbe scritto che quella
+     * scheda non si tocca da marzo mentre l'ha modificata cinque minuti fa.
      *
-     * 🚨 Sarebbe il difetto peggiore possibile per una sincronizzazione: non
-     * darebbe nessun errore, mostrerebbe una scheda vecchia con l'aria di
-     * essere aggiornata, e nessuno avrebbe modo di accorgersene.
+     * 🚨 **Non si toglie «perche' era di B.16».** E' esattamente la mossa che
+     * romperebbe il pannello in silenzio: nessun errore, una data sbagliata con
+     * l'aria di essere giusta. I test stanno in
+     * `tests/Feature/Training/QuandoLaSchedaECambiataTest.php`, e sono l'unica
+     * cosa che se ne accorgerebbe.
      *
      * ⚠️ `$touches` copre `save()` e `delete()` sul modello. Le scritture in
      * blocco (`->delete()` su una query, `insert()`) **non** passano di qui: chi
