@@ -175,6 +175,66 @@ class PianoAttivo
     }
 
     /**
+     * 🎯 **Questa persona e' abbonata?** — 3b-C.8, 25/08/2026.
+     *
+     * 📌 Il committente: *«aggiusta anche il server in modo che gli utenti (free
+     * users o iscritti in una palestra o con un trainer) abbiano il flag
+     * abbonato e il flag tier»*.
+     *
+     * ── 🚨 «Abbonato» NON e' «ha l'AI illimitata» ─────────────────────────
+     *
+     * ⛔ L'app le aveva confuse, e il committente l'ha corretto: *«ovviamente AI
+     * illimitata e abbonato sono due cose diverse, non va bene che siano
+     * trattati come una cosa singola»*.
+     *
+     * ⚠️ Oggi si somigliano perche' l'abbonamento concede la quota illimitata,
+     * ma sono due domande: una riguarda **il contratto**, l'altra **cosa puoi
+     * fare adesso** — e chi compra dei gettoni su un piano gratuito ha l'AI
+     * senza essere abbonato.
+     *
+     * ── ⚠️ L'abbonamento e' del TENANT, e va saputo ───────────────────────
+     *
+     * 💡 In questo impianto **paga il tenant, non la persona**: la palestra
+     * compra i posti (`max_members`, `ai_monthly_calls_per_member`) e i suoi
+     * iscritti sono coperti da quello. Un iscritto a una palestra abbonata
+     * **e' abbonato**, ed e' voluto: e' il modello di vendita.
+     *
+     * ⚠️ Chi non sta in nessuna palestra ha un **tenant personale** (F3), e li'
+     * l'abbonamento e' davvero suo. 🚨 Quindi la stessa riga risponde bene a
+     * tutti e tre i casi del committente — *«free users o iscritti in una
+     * palestra o con un trainer»* — senza doverli distinguere.
+     *
+     * ⛔ **Non si guarda `Tenant::isActive()`**: quello dice che la palestra
+     * puo' entrare, non che ha comprato qualcosa. Un trial e' attivo e non e'
+     * un abbonamento.
+     *
+     * 💡 La risposta e' una sola: **c'e' un abbonamento attivo e non e' quello
+     * gratuito**. Il ripiego di [piadinoDiRiserva] non conta, ed e' il punto:
+     * quando non si trova niente si ricade sul `free`, e ricadere non e' essere
+     * abbonati.
+     */
+    public function eAbbonato(User $utente): bool
+    {
+        return $this->per($utente)->code !== Plan::FREE;
+    }
+
+    /**
+     * Il **livello** del piano, per l'app.
+     *
+     * 💡 E' il `code` del piano — `free`, `plus`, `gym`, `trainer_pro`… — e non
+     * un'etichetta nuova: inventarne una vorrebbe dire una seconda tabella da
+     * tenere allineata al listino, e la seconda diverge sempre.
+     *
+     * ⚠️ **Mai `null`**: chi non ha niente e' `free`, che e' un livello e non
+     * un'assenza. Un `null` costringerebbe ogni client a un ramo in piu' per
+     * dire la stessa cosa.
+     */
+    public function livello(User $utente): string
+    {
+        return $this->per($utente)->code;
+    }
+
+    /**
      * Il piano gratuito, o un piano finto che nega tutto.
      *
      * 🚨 Il nome è volutamente buffo perché questo metodo va letto: qui si

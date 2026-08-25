@@ -92,6 +92,32 @@ class UserResource extends JsonResource
              * metodo. Due implementazioni della stessa regola divergono sempre.
              */
             'ai_enabled' => app(PianoAttivo::class)->aiUtilizzabile($this->resource),
+
+            /*
+             * 🚨 **`abbonato` e `tier`, e sono due cose diverse da `ai_enabled`**
+             * — 3b-C.8, 25/08/2026.
+             *
+             * 📌 *«aggiusta anche il server in modo che gli utenti (free users o
+             * iscritti in una palestra o con un trainer) abbiano il flag
+             * abbonato e il flag tier»*.
+             *
+             * ⛔ **L'app le aveva confuse**, appoggiandosi al fatto che oggi
+             * l'abbonamento concede la quota illimitata: un'osservazione sul
+             * presente, non una definizione. Il giorno in cui si vendesse un
+             * pacchetto AI senza abbonamento quella riga avrebbe sbagliato **in
+             * silenzio**.
+             *
+             * 💡 `ai_enabled` risponde *«puoi usare l'AI adesso»* — e comprende
+             * i gettoni comprati. `abbonato` risponde *«hai un contratto»*.
+             * ⚠️ Chi compra gettoni su un piano gratuito ha il primo e non il
+             * secondo, ed e' un caso vero, non teorico.
+             *
+             * 🚨 E restano **informativi**: i cancelli veri stanno sul server.
+             * Un client non decide mai i permessi — e' la stessa nota di
+             * `ai_enabled` qui sopra.
+             */
+            'abbonato' => app(PianoAttivo::class)->eAbbonato($this->resource),
+            'tier' => app(PianoAttivo::class)->livello($this->resource),
             /*
              * C7.2 — il profilo c'è **sempre**, anche vuoto.
              *
