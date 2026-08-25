@@ -374,6 +374,50 @@ class WorkoutPlanController extends Controller
     }
 
     /**
+     * I numeri di una riga: le serie, e il riassunto vecchio — 3b-D.10.
+     *
+     * ══ 🚨 UN POSTO SOLO PER TUTTE E DUE LE STRADE DI SCRITTURA ═══════════
+     *
+     * ⛔ `sets`, `reps`, `rest_sec` e `target_weight` erano copiati **due
+     * volte**: una per gli esercizi dentro i giorni e una per la lista piatta.
+     * 🚨 Aggiungendo le serie sarebbero diventate due copie che divergono — e
+     * la prima a divergere sarebbe stata quella meno usata, cioe' quella che
+     * nessuno prova.
+     *
+     * ── 💡 E il riassunto si RICAVA dalle righe, quando ci sono ───────────
+     *
+     * Chi manda le serie non deve anche calcolare `sets` e `reps`: lo fa il
+     * server, cosi' i due formati **non possono** contraddirsi. ⚠️ Chi non le
+     * manda — l'app gia' installata, l'importatore di PDF — continua a mandare
+     * i numeri vecchi, e si scrivono quelli.
+     *
+     * @param  array<string, mixed>  $riga
+     * @return array<string, mixed>
+     */
+    private static function numeriDi(array $riga): array
+    {
+        $serie = $riga['serie'] ?? null;
+
+        /*
+         * 💡 **Il riassunto non si calcola qui.** Ci pensa `PlanExercise` a
+         * ogni salvataggio (vedi `booted()`), cosi' vale anche per il pannello
+         * del trainer e per l'importatore di PDF, che non passano di qua.
+         *
+         * ⚠️ I numeri vecchi si passano lo stesso: servono a chi le serie non
+         * le manda — l'app gia' installata — e quando le manda vengono
+         * sovrascritti da quelli veri.
+         */
+        return [
+            'serie' => is_array($serie) && $serie !== [] ? $serie : null,
+            'carico' => $riga['carico'] ?? 'peso',
+            'sets' => $riga['sets'] ?? null,
+            'reps' => $riga['reps'] ?? null,
+            'rest_sec' => $riga['rest_sec'] ?? null,
+            'target_weight' => $riga['target_weight'] ?? null,
+        ];
+    }
+
+    /**
      * I muscoli dichiarati per una riga, pronti da passare al matcher.
      *
      * 🚨 Torna `null` per «non lo so», non `[]`: le due cose vogliono dire
@@ -427,12 +471,9 @@ class WorkoutPlanController extends Controller
             'alternativa_di_id' => $alternativaDi,
             'exercise_id' => $esercizio->getKey(),
             'position' => $posizione,
-            'sets' => $riga['sets'] ?? null,
-            'reps' => $riga['reps'] ?? null,
-            'rest_sec' => $riga['rest_sec'] ?? null,
             'duration_sec' => $riga['duration_sec'] ?? null,
-            'target_weight' => $riga['target_weight'] ?? null,
             'notes' => $riga['notes'] ?? null,
+            ...self::numeriDi($riga),
         ]);
     }
 
@@ -467,12 +508,9 @@ class WorkoutPlanController extends Controller
                 'workout_plan_day_id' => $giorno->getKey(),
                 'exercise_id' => $esercizio->getKey(),
                 'position' => $posizione++,
-                'sets' => $riga['sets'] ?? null,
-                'reps' => $riga['reps'] ?? null,
-                'rest_sec' => $riga['rest_sec'] ?? null,
                 'duration_sec' => $riga['duration_sec'] ?? null,
-                'target_weight' => $riga['target_weight'] ?? null,
                 'notes' => $riga['notes'] ?? null,
+                ...self::numeriDi($riga),
             ]);
         }
     }
@@ -692,6 +730,15 @@ class WorkoutPlanController extends Controller
             'target_weight' => $r->target_weight,
             'notes' => $r->notes,
             'prescription' => $r->prescription(),
+
+            /*
+             * 🆕 3b-D.10 — le serie riga per riga. 🚨 **Sempre presenti**, anche
+             * per una scheda scritta prima che la colonna esistesse: li'
+             * `serieRighe()` le deriva. 💡 Cosi' l'app non ha un ramo «se e'
+             * vecchia», che e' il ramo che non si prova mai.
+             */
+            'serie' => $r->serieRighe(),
+            'carico' => $r->carico,
 
             // Le alternative arrivano solo quando l'esercizio sta dentro un
             // giorno: nella lista piatta non c'e' il giorno da cui prenderle.

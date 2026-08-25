@@ -52,46 +52,17 @@ class WorkoutPlanRequest extends FormRequest
             // nell'app) può generare migliaia di righe in una transazione sola.
             'exercises' => ['sometimes', 'array', 'max:60'],
 
-            // 🚨 Si manda il NOME, non l'id. L'app non deve conoscere la
-            // libreria per salvare una scheda: la riconciliazione è compito di
-            // `ExerciseMatcher`, che sa che «panca piana bilanciere» e «Bench
-            // press» sono la stessa cosa. Un id obbligatorio costringerebbe
-            // l'app a creare l'esercizio prima, in due richieste che possono
-            // fallire a metà.
-            'exercises.*.name' => ['required', 'string', 'max:160'],
-
             /*
-             * 🆕 I muscoli, riga per riga — 3b-A.3.4, 23/08/2026.
+             * ══ 🚨 LE REGOLE DELL'ESERCIZIO STANNO IN UN POSTO SOLO ════════
              *
-             * 💡 Servono perche' un esercizio scritto a mano nel compositore
-             * **nasce qui**, dentro `ExerciseMatcher`. Senza, ogni nome nuovo
-             * entrava nel catalogo muto.
-             *
-             * ⚠️ Facoltativi: l'app gia' installata non li manda, e una scheda
-             * che smette di salvarsi e' molto peggio di un esercizio da
-             * completare dopo.
+             * ⛔ Fino al 25/08/2026 erano scritte **due volte**: qui per le
+             * righe piatte, e in `regoleEsercizio()` per quelle dentro i
+             * giorni. 🚨 Due copie della stessa regola diventano due regole
+             * diverse alla prima modifica — ed e' successo appena si sono
+             * aggiunte le serie riga per riga, che nella prima stesura
+             * valevano solo per una delle due strade.
              */
-            'exercises.*.muscle_group' => ['nullable', Rule::enum(MuscleGroup::class)],
-            'exercises.*.secondary_muscles' => ['nullable', 'array', 'max:6'],
-            'exercises.*.secondary_muscles.*' => [Rule::enum(MuscleGroup::class)],
-
-            'exercises.*.sets' => ['nullable', 'integer', 'min:1', 'max:30'],
-
-            /*
-             * 🚨 `reps` è una STRINGA e deve restarlo.
-             *
-             * «8-12», «cedimento», «max», «10+10» sono prescrizioni legittime e
-             * frequentissime. Chi la converte in intero credendo di correggere
-             * una svista rompe metà delle schede reali — ed è lo stesso motivo
-             * per cui la regola 3 del prompt di importazione PDF lo dice
-             * esplicitamente.
-             */
-            'exercises.*.reps' => ['nullable', 'string', 'max:32'],
-
-            'exercises.*.rest_sec' => ['nullable', 'integer', 'min:0', 'max:1200'],
-            'exercises.*.duration_sec' => ['nullable', 'integer', 'min:0', 'max:7200'],
-            'exercises.*.target_weight' => ['nullable', 'numeric', 'min:0', 'max:1000'],
-            'exercises.*.notes' => ['nullable', 'string', 'max:200'],
+            ...$this->regoleEsercizio('exercises.*'),
 
             // ── G4/G5 — D3: il promemoria privato del trainer ──────────────
             //
@@ -159,6 +130,35 @@ class WorkoutPlanRequest extends FormRequest
             "{$prefisso}.duration_sec" => ['nullable', 'integer', 'min:0', 'max:7200'],
             "{$prefisso}.target_weight" => ['nullable', 'numeric', 'min:0', 'max:1000'],
             "{$prefisso}.notes" => ['nullable', 'string', 'max:200'],
+
+            /*
+             * ══ 🆕 LE SERIE, RIGA PER RIGA — 3b-D.10, 25/08/2026 ═══════════
+             *
+             * 📌 *«ogni serie deve avere Ripetizioni, Peso (o niente o Iso.) e
+             * Recupero»*.
+             *
+             * ⚠️ **Facoltative, e devono restarlo**: l'app gia' installata
+             * manda `sets` + `reps` e basta, e pretendere le righe le
+             * spegnerebbe il salvataggio. 💡 Chi non le manda si comporta come
+             * prima, e `PlanExercise::serieRighe()` le deriva leggendo.
+             *
+             * 🚨 **Il tetto e' `max:30` come `sets`**, e non e' un dettaglio:
+             * senza, una richiesta malformata scriverebbe migliaia di righe
+             * dentro una colonna JSON — piu' difficile da notare di migliaia di
+             * righe in tabella, perche' non si vedono contando le righe.
+             */
+            "{$prefisso}.serie" => ['nullable', 'array', 'max:30'],
+            "{$prefisso}.serie.*.reps" => ['nullable', 'integer', 'min:0', 'max:999'],
+            "{$prefisso}.serie.*.weight" => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            "{$prefisso}.serie.*.iso_sec" => ['nullable', 'integer', 'min:0', 'max:7200'],
+            "{$prefisso}.serie.*.rest_sec" => ['nullable', 'integer', 'min:0', 'max:1200'],
+
+            /*
+             * ⚠️ **Non e' deducibile dalle righe**: «peso con i campi vuoti» e
+             * «a corpo libero» hanno le stesse righe e vogliono dire due cose
+             * diverse.
+             */
+            "{$prefisso}.carico" => ['nullable', 'in:peso,niente,iso'],
         ];
     }
 

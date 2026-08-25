@@ -37,6 +37,9 @@ class PlanExercise extends Model
         'workout_plan_id', 'workout_plan_day_id', 'alternativa_di_id',
         'exercise_id', 'position', 'sets', 'reps',
         'rest_sec', 'target_weight', 'duration_sec', 'notes',
+
+        // 🆕 3b-D.10 — le serie riga per riga, e con che cosa si carica.
+        'serie', 'carico',
     ];
 
     /**
@@ -81,6 +84,7 @@ class PlanExercise extends Model
             'rest_sec' => 'integer',
             'duration_sec' => 'integer',
             'target_weight' => 'float',
+            'serie' => 'array',
         ];
     }
 
@@ -152,6 +156,57 @@ class PlanExercise extends Model
                 $riga->workout_plan_id = $giorno?->workout_plan_id;
             }
         });
+
+        /*
+         * ══ 🚨 IL RIASSUNTO VECCHIO SI RICALCOLA DALLE RIGHE — 3b-D.10 ═════
+         *
+         * ⛔ Farlo nel controller dell'API avrebbe coperto **una** delle strade
+         * che scrivono queste righe. Ci scrivono anche il pannello del trainer
+         * (Filament, con Eloquent diretto), l'importatore di PDF, i seeder, e
+         * chiunque apra tinker — ed e' lo stesso identico motivo per cui i due
+         * ganci qui sopra stanno nel modello e non in chi chiama.
+         *
+         * 🚨 Ognuna di quelle avrebbe potuto lasciare `sets: 3` accanto a
+         * cinque righe di serie: **due formati che si contraddicono nella
+         * stessa riga**, senza un errore da nessuna parte. Il pannello direbbe
+         * una cosa e l'app un'altra, e chi guarda non ha modo di sapere quale
+         * delle due mente.
+         *
+         * 💡 Cosi' invece non e' possibile: chi scrive le righe non deve
+         * ricordarsi del riassunto, e chi se lo ricorda scrive numeri che
+         * vengono sovrascritti da quelli veri.
+         */
+        static::saving(static function (self $riga): void {
+            $serie = $riga->serie;
+
+            /*
+             * ⚠️ **Il pannello manda `[]` e `null`, non «niente».** Un
+             * `Repeater` di Filament che nessuno ha aperto scrive un array
+             * vuoto, e una `Select` non toccata scrive `null` — su una colonna
+             * `NOT NULL DEFAULT 'peso'`, che il default lo applica solo quando
+             * la colonna **non compare** nella `INSERT`.
+             *
+             * 🚨 Risultato: un 500 salvando dal pannello una scheda in cui non
+             * si era toccato niente di nuovo. Trovato da un test, e i due casi
+             * si normalizzano **qui** per la stessa ragione di sempre: chi
+             * scrive e' piu' di uno.
+             */
+            if ($riga->carico === null || $riga->carico === '') {
+                $riga->carico = 'peso';
+            }
+
+            if (is_array($serie) && $serie === []) {
+                $riga->serie = null;
+            }
+
+            if (! is_array($serie) || $serie === []) {
+                return;
+            }
+
+            foreach (self::riassuntoDelle($serie) as $campo => $valore) {
+                $riga->{$campo} = $valore;
+            }
+        });
     }
 
     public function day(): BelongsTo
@@ -167,6 +222,110 @@ class PlanExercise extends Model
     public function exercise(): BelongsTo
     {
         return $this->belongsTo(Exercise::class);
+    }
+
+    /**
+     * Le serie **riga per riga**, da qualunque formato arrivi — 3b-D.10.
+     *
+     * ══ 🚨 L'UNICO POSTO CHE SA CHE ESISTONO DUE FORMATI ══════════════════
+     *
+     * ⛔ Le righe scritte prima del 25/08/2026 hanno `serie = null` e dicono la
+     * stessa cosa in modo piu' povero: `sets` righe uguali, con `reps`,
+     * `target_weight` e `rest_sec` ripetuti. Qui si espandono.
+     *
+     * 💡 **Non c'e' stato nessun backfill**, ed e' voluto: le righe senza
+     * `serie` continueranno a nascere — l'importatore di PDF, un `create()` in
+     * un test, il pannello di chi compila solo «serie x ripetizioni». Derivare
+     * copre anche loro; una migrazione sarebbe passata ieri.
+     *
+     * 🚨 **La stessa forma che usa l'app** (`serie_prevista.dart`,
+     * `serieDellEsercizio`), chiave per chiave: due formati per la stessa cosa
+     * avrebbero voluto dire una conversione a ogni confine.
+     *
+     * ⛔ **Mai un elenco vuoto**: un esercizio senza serie non e' mostrabile.
+     *
+     * @return list<array{reps: ?int, weight: ?float, iso_sec: ?int, rest_sec: ?int}>
+     */
+    public function serieRighe(): array
+    {
+        $scritte = $this->serie;
+
+        if (is_array($scritte) && $scritte !== []) {
+            return array_values(array_map(
+                static fn (array $r): array => [
+                    'reps' => isset($r['reps']) ? (int) $r['reps'] : null,
+                    'weight' => isset($r['weight']) ? (float) $r['weight'] : null,
+                    'iso_sec' => isset($r['iso_sec']) ? (int) $r['iso_sec'] : null,
+                    'rest_sec' => isset($r['rest_sec']) ? (int) $r['rest_sec'] : null,
+                ],
+                $scritte,
+            ));
+        }
+
+        /*
+         * ⚠️ **Il numero piu' basso di un intervallo**: «8-12» diventa 8. E' la
+         * stessa prudenza che l'app applica leggendo la prescrizione —
+         * sovrastimare il lavoro prescritto porta a credersi piu' avanti di
+         * dove si e'.
+         */
+        preg_match('/\d+/', (string) $this->reps, $trovato);
+
+        $riga = [
+            'reps' => $trovato === [] ? null : (int) $trovato[0],
+            'weight' => $this->target_weight,
+            'iso_sec' => $this->duration_sec,
+            'rest_sec' => $this->rest_sec,
+        ];
+
+        return array_fill(0, max(1, $this->sets ?? 1), $riga);
+    }
+
+    /**
+     * Il riassunto nel formato vecchio, ricavato dalle righe — 3b-D.10.
+     *
+     * ══ ⚠️ PERCHE' SI CONTINUA A SCRIVERLO ════════════════════════════════
+     *
+     * ⛔ Non e' ridondanza per pigrizia. `sets`, `reps` e `target_weight` li
+     * leggono ancora: il **pannello** (che mostra la prescrizione in una riga),
+     * `prescription()`, l'app gia' installata che le serie non le conosce, e
+     * ogni client futuro che non le implementera'.
+     *
+     * ⚠️ **Il riassunto perde le differenze fra le serie** — 12, 10 e 8
+     * diventano `'12-8'` — ed e' il prezzo dichiarato della compatibilita'.
+     *
+     * @param  list<array<string, mixed>>  $righe
+     * @return array{sets: int, reps: ?string, rest_sec: ?int, target_weight: ?float}
+     */
+    public static function riassuntoDelle(array $righe): array
+    {
+        $ripetizioni = array_values(array_filter(
+            array_map(static fn (array $r): ?int => isset($r['reps']) ? (int) $r['reps'] : null, $righe),
+            static fn (?int $v): bool => $v !== null,
+        ));
+
+        $primo = $ripetizioni[0] ?? null;
+        $ultimo = $ripetizioni === [] ? null : $ripetizioni[count($ripetizioni) - 1];
+
+        $pesi = array_values(array_filter(
+            array_map(static fn (array $r): ?float => isset($r['weight']) ? (float) $r['weight'] : null, $righe),
+            static fn (?float $v): bool => $v !== null,
+        ));
+
+        $recuperi = array_values(array_filter(
+            array_map(static fn (array $r): ?int => isset($r['rest_sec']) ? (int) $r['rest_sec'] : null, $righe),
+            static fn (?int $v): bool => $v !== null,
+        ));
+
+        return [
+            'sets' => count($righe),
+            'reps' => match (true) {
+                $primo === null => null,
+                $primo === $ultimo => (string) $primo,
+                default => $primo.'-'.$ultimo,
+            },
+            'rest_sec' => $recuperi[0] ?? null,
+            'target_weight' => $pesi[0] ?? null,
+        ];
     }
 
     /** «3 × 8-12» oppure «3 × 45s»: la prescrizione in una riga. */

@@ -256,11 +256,28 @@ class WorkoutPlanForm
                     'created_by' => auth()->id(),
                 ])->getKey()),
 
+            /*
+             * ══ 🚨 IL MODO SVELTO, E QUELLO PRECISO — 3b-D.10, 25/08/2026 ══
+             *
+             * 📌 *«queste modifiche devono riguardare anche l'editor del trainer
+             * e quello del server, mi pare ovvio»*.
+             *
+             * 💡 **Restano tutti e due**, e non e' indecisione: «4 × 8-12» e' il
+             * modo in cui si scrive la maggior parte delle schede, e
+             * costringere a compilare quattro righe identiche sarebbe un
+             * peggioramento per il caso normale.
+             *
+             * ⚠️ Quando si compilano le righe, **vincono loro**: questi quattro
+             * campi diventano il riassunto e li ricalcola `PlanExercise` a ogni
+             * salvataggio. 🚨 Per questo l'aiuto sotto lo dice — un campo che si
+             * riscrive da solo senza avvisare sembra un difetto.
+             */
             TextInput::make('sets')
                 ->label('Serie')
                 ->numeric()
                 ->minValue(1)
-                ->maxValue(50),
+                ->maxValue(50)
+                ->helperText('Se compili le righe qui sotto, questo lo calcolo io.'),
 
             TextInput::make('reps')
                 ->label('Ripetizioni')
@@ -279,6 +296,77 @@ class WorkoutPlanForm
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(999),
+
+            Select::make('carico')
+                ->label('Tipo di carico')
+                ->options([
+                    'peso' => 'Peso (kg)',
+                    'niente' => 'Nessuno (corpo libero)',
+                    'iso' => 'Isometria (secondi)',
+                ])
+                ->default('peso')
+                ->selectablePlaceholder(false)
+                /*
+                 * ⚠️ **Non e' deducibile dalle righe**: «peso con i campi
+                 * vuoti» e «a corpo libero» hanno le stesse righe e vogliono
+                 * dire due cose diverse.
+                 */
+                ->helperText('A corpo libero il campo dei chili sparisce nell\'app.'),
+
+            /*
+             * ══ 📋 LE SERIE, UNA PER RIGA ══════════════════════════════════
+             *
+             * 📌 *«ogni serie deve avere Ripetizioni, Peso (o niente o Iso.) e
+             * Recupero»*.
+             *
+             * 💡 Serve a dire la cosa che il modello vecchio non sapeva dire:
+             * **12 a 40 kg, 10 a 45, 8 a 50**. ⚠️ Chiuso di default, perche' e'
+             * il caso preciso e non quello comune: chi scrive «4 × 8-12» non
+             * deve nemmeno vederlo.
+             */
+            Repeater::make('serie')
+                ->label('Serie riga per riga')
+                ->helperText('Facoltative. Se ci sono, comandano loro.')
+                ->columnSpanFull()
+                ->collapsed()
+                ->defaultItems(0)
+                ->maxItems(30)
+                ->addActionLabel('Aggiungi serie')
+                ->itemLabel(fn (array $state): string => trim(
+                    ($state['reps'] ?? '?').' rip.'
+                    .(($state['weight'] ?? null) !== null ? ' × '.$state['weight'].' kg' : '')
+                    .(($state['iso_sec'] ?? null) !== null ? ' · '.$state['iso_sec'].'s' : ''),
+                ))
+                ->schema([
+                    TextInput::make('reps')
+                        ->label('Ripetizioni')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(999),
+
+                    TextInput::make('weight')
+                        ->label('Kg')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(1000)
+                        // ⚠️ Vuoto **resta vuoto**: vuol dire «lo decidi li'»,
+                        // mentre uno zero direbbe «a corpo libero» — che e'
+                        // un'altra cosa e ha la sua voce nel tipo di carico.
+                        ->helperText('Si può lasciare vuoto.'),
+
+                    TextInput::make('iso_sec')
+                        ->label('Secondi (iso)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(7200),
+
+                    TextInput::make('rest_sec')
+                        ->label('Recupero (s)')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(1200),
+                ])
+                ->columns(4),
 
             Textarea::make('notes')
                 ->label('Note')
