@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Billing\BillingController;
 use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\CittaController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
@@ -492,6 +493,22 @@ Route::prefix('v1')->group(function (): void {
         });
 
         Route::get('ai/usage', [AiController::class, 'usage']);
+
+        /*
+         * ── 💳 Il pagamento — 3b-H, 26/08/2026 ────────────────────────────
+         *
+         * 🚨 **Fuori da `ai.plan`, ed e' il punto.** Queste due rotte servono
+         * proprio a chi il piano NON ce l'ha: metterle dietro il cancello
+         * dell'AI vorrebbe dire che per comprare l'abbonamento bisogna gia'
+         * averlo.
+         *
+         * ⚠️ `throttle` stretto su `checkout`: ogni chiamata apre una sessione
+         * vera su Stripe, e una raffica riempirebbe il loro pannello di
+         * sessioni mai pagate.
+         */
+        Route::get('billing/listino', [BillingController::class, 'listino']);
+        Route::post('billing/checkout', [BillingController::class, 'checkout'])
+            ->middleware('throttle:10,1');
 
         /*
          * ── «I miei utenti» — F5.1 / F6 ──────────────────────────────────

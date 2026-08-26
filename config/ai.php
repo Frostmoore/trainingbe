@@ -175,8 +175,29 @@ return [
          * **avendo gia' superato `RequirePlanWithAi`**: chi non ha diritto
          * all'AI e' stato fermato prima e non arriva mai qui.
          */
-        'default_monthly_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_CALLS_PER_USER', 400),
-        'default_monthly_photo_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_PHOTO_CALLS_PER_USER', 40),
+        /*
+         * ══ 🚨 400 → 150 il 26/08/2026, ed e' il numero che COMANDA ════════
+         *
+         * 📌 *«non va bene 300 chiamate per gli abbonati, facciamo 150»* ·
+         * *«uniformali tutti a 150»*.
+         *
+         * ⛔ **Lo stesso numero viveva in CINQUE posti**, e nessuno era
+         * d'accordo con gli altri:
+         *
+         * | Dove | Diceva | Chi lo leggeva |
+         * |---|---|---|
+         * | `listino.gettoni_mensili` | 300 | il sito e l'app |
+         * | `PlanSeeder::CHIAMATE` | 450 | solo chi lancia il seeder |
+         * | la migration dei piani | **niente** | il database vero |
+         * | questo default | **400** | 🚨 **la guardia, cioe' la realta'** |
+         * | la schermata dell'app | 400 scritto a mano | il cliente |
+         *
+         * 💡 Il tetto vero era **questo**: la migration lascia
+         * `ai_monthly_calls_per_member` a `null` sul piano `plus`, quindi
+         * `QuotaAi::capFor()` scendeva fino al livello 5 e trovava 400.
+         */
+        'default_monthly_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_CALLS_PER_USER', 150),
+        'default_monthly_photo_calls_per_user' => (int) env('AI_DEFAULT_MONTHLY_PHOTO_CALLS_PER_USER', 15),
     ],
 
     /*

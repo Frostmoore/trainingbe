@@ -96,3 +96,41 @@ Route::get('/impersonation/stop', function (Impersonator $impersonator) {
             : '/admin',
     );
 })->middleware('auth')->name('impersonation.stop');
+
+
+/*
+|--------------------------------------------------------------------------
+| 💳 Il ritorno da Stripe — 3b-H, 26/08/2026
+|--------------------------------------------------------------------------
+|
+| 🚨 **Servono a esistere**, non a fare qualcosa. Stripe pretende un
+| `success_url` e un `cancel_url`, e mandare la persona su un 404 dopo che ha
+| pagato e' il modo piu' rapido per farle credere che i soldi siano spariti.
+|
+| ⚠️ **Qui NON si accredita niente.** L'accredito lo fa il webhook, che e'
+| firmato: questa pagina la puo' aprire chiunque scrivendo l'indirizzo, e
+| accreditare da qui vorrebbe dire regalare gettoni a chi conosce l'URL.
+|
+| 💡 Per questo il testo dice «ci stiamo pensando» e non «fatto»: al ritorno il
+| webhook potrebbe non essere ancora arrivato, e promettere un saldo che non
+| c'e' ancora farebbe ricaricare la schermata dell'app per niente.
+*/
+Route::get('/pagamento/ok', fn () => response(
+    '<!doctype html><meta charset="utf-8">'
+    .'<meta name="viewport" content="width=device-width,initial-scale=1">'
+    .'<title>Pagamento ricevuto</title>'
+    .'<div style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:0 1.5rem;text-align:center">'
+    .'<h1 style="font-size:1.4rem">Pagamento ricevuto</h1>'
+    .'<p>Puoi tornare all\'app: fra qualche secondo trovi tutto al suo posto.</p>'
+    .'</div>',
+))->name('pagamento.ok');
+
+Route::get('/pagamento/annullato', fn () => response(
+    '<!doctype html><meta charset="utf-8">'
+    .'<meta name="viewport" content="width=device-width,initial-scale=1">'
+    .'<title>Pagamento annullato</title>'
+    .'<div style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:0 1.5rem;text-align:center">'
+    .'<h1 style="font-size:1.4rem">Non hai pagato niente</h1>'
+    .'<p>Puoi tornare all\'app e riprovare quando vuoi.</p>'
+    .'</div>',
+))->name('pagamento.annullato');

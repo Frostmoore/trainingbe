@@ -59,7 +59,21 @@ return [
     /**
      * I gettoni che l'abbonamento accredita ogni mese. Si azzerano al rinnovo.
      *
-     * ── 🚨 Erano 500, portati a 300 il 16/08/2026 ─────────────────────────
+     * ── 🚨 500 → 300 (16/08) → 150 (26/08/2026) ───────────────────────────
+     *
+     * 📌 *«non va bene 300 chiamate per gli abbonati, facciamo 150, stesso
+     * prezzo»*.
+     *
+     * ⚠️ **E questo numero non era quello che comandava.** Il tetto vero di un
+     * abbonato `plus` e' `plans.ai_monthly_calls_per_member`, cioe'
+     * `PlanSeeder::CHIAMATE`, che valeva **450**: questo qui era solo quello
+     * *raccontato*. 🚨 Tre numeri per la stessa cosa — 300 qui, 450 nel piano,
+     * 400 scritti a mano nella schermata dell'app — e nessuno che li tenesse
+     * allineati.
+     *
+     * ✅ Dal 26/08 sono **150 tutti e tre**, e la schermata dell'app il numero
+     * lo **chiede all'API** invece di scriverlo.
+     *
      *
      * Decisione del committente: **«ci devono arrivare a mala pena a fine mese
      * facendo una o due foto»**. Dieci richieste al giorno per trenta giorni.
@@ -72,7 +86,7 @@ return [
      * per non invitare al confronto con i pacchetti; poi il committente:
      * *«a sto punto diciamolo, tanto sta scritto nelle condizioni d'uso»*.
      */
-    'gettoni_mensili' => 300,
+    'gettoni_mensili' => 150,
 
     /*
      * I pacchetti di gettoni, per chi finisce quelli del mese o non si abbona.

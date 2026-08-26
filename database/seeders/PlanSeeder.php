@@ -70,9 +70,23 @@ class PlanSeeder extends Seeder
      * compra più allievi, non allievi migliori — ed è più facile da spiegare e
      * da fatturare.
      */
-    private const CHIAMATE = 450;
+    /*
+     * 🚨 **QUESTO e' il tetto vero di un abbonato**, non `listino.gettoni_mensili`:
+     * finisce in `plans.ai_monthly_calls_per_member`, che e' quello che
+     * `QuotaAi::capFor()` legge per dire si' o no a una richiesta.
+     *
+     * 📌 450 → **150** il 26/08/2026: *«non va bene 300 chiamate per gli
+     * abbonati, facciamo 150, stesso prezzo»*.
+     *
+     * ⚠️ Il committente diceva «300» perche' 300 e' il numero che l'app gli
+     * mostrava. Quello vero era 450: si e' portato a 150 **anche questo**, o
+     * l'app avrebbe continuato a promettere una cosa e il server a concederne
+     * un'altra — nel verso piu' generoso, che e' quello che non si scopre mai.
+     */
+    private const CHIAMATE = 150;
 
-    private const CHIAMATE_FOTO = 45;
+    /** 💡 Un decimo delle chiamate, com'era prima: 45 su 450, 15 su 150. */
+    private const CHIAMATE_FOTO = 15;
 
     public function run(): void
     {

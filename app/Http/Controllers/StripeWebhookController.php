@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\StripeEvent;
+use App\Services\Billing\Stripe\Cassa;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +34,8 @@ use Stripe\Webhook;
  */
 class StripeWebhookController extends Controller
 {
+    public function __construct(private readonly Cassa $cassa) {}
+
     public function __invoke(Request $request): JsonResponse
     {
         $segreto = config('services.stripe.webhook_secret');
@@ -96,7 +99,19 @@ class StripeWebhookController extends Controller
             return response()->json(['message' => 'Gia\' ricevuto.']);
         }
 
-        // 📌 Qui, e in nessun altro punto, si attaccheranno i flussi.
+        /*
+         * 💳 **Qui, e in nessun altro punto** — 3b-H, 26/08/2026.
+         *
+         * 🚨 **Dopo l'insert e non prima.** L'unicita' di `event_id` e' tutta
+         * la difesa contro il doppio accredito: Stripe rimanda lo stesso
+         * evento quando la nostra risposta tarda, e se l'incasso stesse sopra
+         * girerebbe due volte. ⛔ Chi sposta questa riga regala gettoni.
+         *
+         * ⚠️ `applica()` non lancia mai: un `500` farebbe ritentare Stripe per
+         * ore su un evento che ha gia' registrato, e ogni ritentativo
+         * troverebbe il doppione e uscirebbe **prima** di riprovare l'accredito.
+         */
+        $this->cassa->applica($evento->toArray());
 
         return response()->json(['message' => 'Ricevuto.']);
     }
