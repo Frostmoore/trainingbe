@@ -11,6 +11,7 @@ use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
 use App\Services\Ai\Data\WorkoutAiContext;
+use App\Services\Ai\Prompts;
 use Closure;
 use Throwable;
 
@@ -101,6 +102,9 @@ class FakeAiProvider implements AiProvider
         return $this;
     }
 
+    /** @var list<array{id: int, andamento: string, riga: string}>|null */
+    private ?array $nextProgresso = null;
+
     public function willReturnAdvice(string $advice): self
     {
         $this->nextAdvice = $advice;
@@ -182,6 +186,33 @@ class FakeAiProvider implements AiProvider
         }
 
         return $this->nextAdvice ?? 'Ti mancano circa 30 g di proteine per arrivare al target di oggi.';
+    }
+
+    /**
+     * Le righe che il finto fornitore restituira' alla prossima analisi.
+     *
+     * @param  list<array{id: int, andamento: string, riga: string}>  $righe
+     */
+    public function willReturnProgresso(array $righe): self
+    {
+        $this->nextProgresso = $righe;
+
+        return $this;
+    }
+
+    /**
+     * 🚨 **Passa dal setaccio come i fornitori veri.** ⛔ Se il Fake tornasse le
+     * righe cosi' come gliele hanno date, il test che prova «una riga che
+     * prescrive non arriva al telefono» proverebbe soltanto che il Fake ubbidisce
+     * — cioe' non proverebbe niente.
+     */
+    public function progressoScheda(array $context, AiCallContext $ctx): array
+    {
+        $this->record('progressoScheda', $context, $ctx);
+
+        return Prompts::ripulisciProgresso($this->nextProgresso ?? [
+            ['id' => 1, 'andamento' => 'in_salita', 'riga' => 'Sei salito di 5 kg nelle ultime tre sedute.'],
+        ]);
     }
 
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan

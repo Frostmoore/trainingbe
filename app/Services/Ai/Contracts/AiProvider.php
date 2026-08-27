@@ -58,6 +58,21 @@ interface AiProvider
      */
     public function dailyAdvice(array $context, AiCallContext $ctx): string;
 
+    /**
+     * L'analisi della progressione degli esercizi di una scheda — 3b-I.A.
+     *
+     * 🚨 **Una chiamata per scheda, non per esercizio**: il contesto porta tutti
+     * gli esercizi insieme e la risposta li riporta divisi. E' il motivo per cui
+     * torna una lista e non una stringa.
+     *
+     * ⚖️ Ogni implementazione deve far passare la risposta da
+     * `Prompts::ripulisciProgresso()`: e' li' che vive il divieto di prescrivere.
+     *
+     * @param  array<string, mixed>  $context  gli esercizi con la loro storia
+     * @return list<array{id: int, andamento: string, riga: string}>
+     */
+    public function progressoScheda(array $context, AiCallContext $ctx): array;
+
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan;
 
     /**

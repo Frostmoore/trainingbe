@@ -23,6 +23,7 @@ use App\Services\Ai\Guardie\MealValidator;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Ai\StimaConRitentativo;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
+use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
@@ -61,6 +62,7 @@ class AiController extends Controller
         private readonly PortafoglioGettoni $portafoglio,
         private readonly CancelloDeiGettoni $cancello,
         private readonly StimaConRitentativo $stimatore,
+        private readonly PianoAttivo $piani,
     ) {}
 
     // ───────────────────────── cibo ─────────────────────────
@@ -676,6 +678,94 @@ class AiController extends Controller
             ], $stima->items),
             'warnings' => $avvisi,
         ]]);
+    }
+
+    // ───────────────────────── progressione ─────────────────────────
+
+    /**
+     * L'analisi della progressione degli esercizi di una scheda — 3b-I.A.
+     *
+     * ══ 🚨 IL CONTESTO LO MANDA L'APP, E NON E' UNA SCORCIATOIA ═══════════
+     *
+     * ⛔ Il server **non ha** lo storico delle serie: sta sul telefono
+     * (`SerieDelleSedute`), perche' *«tutti i dati che possono essere anche
+     * LONTANAMENTE sensibili devono restare solo on-device»*. Quindi qui non si
+     * puo' ricostruire niente: o lo manda l'app, o non c'e'.
+     *
+     * ⚠️ **Conseguenza da non dimenticare**: il contenuto di questa richiesta e'
+     * l'unico momento in cui quei numeri escono dal telefono. Non si scrivono a
+     * database — ne' la domanda ne' la risposta: l'analisi torna indietro e vive
+     * sul telefono. E' il motivo per cui non esiste una tabella `plan_progress`.
+     *
+     * ══ ⚖️ IL GATE E' L'ABBONAMENTO, NON I GETTONI ════════════════════════
+     *
+     * 📌 *«la versione gratuita NON DEVE guadagnare niente»*. Chi non e' abbonato
+     * prende **403** anche se ha gettoni da spendere: i gettoni comprano le
+     * chiamate, l'abbonamento compra le **funzioni**. 💡 Sono due monete diverse,
+     * e questa e' l'unica riga in cui la differenza si vede.
+     *
+     * ⚠️ E il controllo sta **qui**, non solo nell'app: un pulsante grigio e'
+     * un'indicazione, non una serratura.
+     *
+     * ══ 💡 Perche' sincrono, quando il cibo non lo e' piu' ════════════════
+     *
+     * `foodFromText` e' diventato asincrono perche' si scrive a pranzo e a cena,
+     * cioe' tutti insieme, e sei processi PHP finivano occupati. ⚠️ Questa
+     * chiamata invece la fa **un abbonato, per una scheda, non piu' di una volta
+     * a settimana**: la coda costerebbe un job, una notifica e uno stato da
+     * mostrare per un problema che non esiste. Se un giorno esistesse, il posto
+     * dove guardare e' questo commento.
+     */
+    public function progressoScheda(Request $request): JsonResponse
+    {
+        $utente = $request->user();
+
+        /*
+         * ⚠️ **`abort` e non un'eccezione di quota.** Un 429 direbbe «riprova piu'
+         * tardi», e chi non e' abbonato riprovando non otterrebbe niente. Il 403
+         * con il suo codice e' quello che l'app traduce nella modale.
+         */
+        abort_unless($utente !== null && $this->piani->eAbbonato($utente), 403, 'Serve l\'abbonamento.');
+
+        $dati = $request->validate([
+            /*
+             * 🚨 **Il tetto sta nella validazione, non nel prompt.** E' l'unica
+             * cosa che tiene sotto controllo la fattura: senza `max`, una scheda
+             * costruita a mano con duemila esercizi sarebbe una richiesta da
+             * duemila esercizi — pagata da noi, al prezzo di un gettone.
+             */
+            'esercizi' => ['required', 'array', 'min:1', 'max:40'],
+            'esercizi.*.id' => ['required', 'integer'],
+            'esercizi.*.nome' => ['required', 'string', 'max:120'],
+            'esercizi.*.sedute' => ['required', 'array', 'max:12'],
+            'esercizi.*.sedute.*.data' => ['required', 'date'],
+            'esercizi.*.sedute.*.carico' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'esercizi.*.sedute.*.ripetizioni' => ['nullable', 'integer', 'min:0', 'max:1000'],
+        ]);
+
+        $conGettoni = $this->assertQuota($utente, AiFeature::PlanProgress);
+
+        $righe = $this->ai->for(AiFeature::PlanProgress)->progressoScheda(
+            $dati,
+            AiCallContext::for($utente, AiFeature::PlanProgress),
+        );
+
+        $this->consumaGettoniSeServe($utente, AiFeature::PlanProgress, $conGettoni);
+
+        /*
+         * ⛔ **Si tengono solo gli id chiesti.** Un modello che inventa un id
+         * farebbe comparire una riga sotto un esercizio che non c'entra — e
+         * sarebbe una riga *plausibile*, cioe' del tipo che non si scopre
+         * guardando.
+         */
+        $chiesti = array_column($dati['esercizi'], 'id');
+
+        return response()->json([
+            'data' => array_values(array_filter(
+                $righe,
+                fn (array $r): bool => in_array($r['id'], $chiesti, true),
+            )),
+        ]);
     }
 
     // ───────────────────────── quota ─────────────────────────

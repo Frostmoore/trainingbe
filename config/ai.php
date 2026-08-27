@@ -74,6 +74,21 @@ return [
              * Quindi il primo tentativo dev'essere gia' quello buono.
              */
             'nutrition_pdf_import' => env('AI_MODEL_NUTRITION_PDF_IMPORT', 'claude-sonnet-5'),
+
+            /*
+             * 3b-I.A - l'analisi della progressione degli esercizi.
+             *
+             * 💡 **Il modello piccolo, e va bene cosi'.** Il compito non e'
+             * capire l'allenamento: e' guardare otto numeri e dire se salgono.
+             * Un modello grande costerebbe di piu' per scrivere la stessa riga.
+             *
+             * 🚨 **Ma il rischio non e' la qualita', e' il divieto.** Un modello
+             * piccolo sbaglia piu' facilmente a stare dentro le regole - ed e'
+             * esattamente per questo che il setaccio
+             * (`Prompts::ripulisciProgresso()`) non e' facoltativo: la scelta di
+             * risparmiare qui e' sostenibile **solo** perche' c'e' quello dopo.
+             */
+            'plan_progress' => env('AI_MODEL_PLAN_PROGRESS', 'claude-haiku-4-5'),
         ],
         'openai' => [
             'food_text' => env('AI_MODEL_OPENAI_FOOD_TEXT', 'gpt-4.1-mini'),
@@ -91,6 +106,7 @@ return [
              * sbagliati.
              */
             'nutrition_pdf_import' => env('AI_MODEL_OPENAI_NUTRITION_PDF_IMPORT', 'gpt-4.1'),
+            'plan_progress' => env('AI_MODEL_OPENAI_PLAN_PROGRESS', 'gpt-4.1-mini'),
         ],
     ],
 

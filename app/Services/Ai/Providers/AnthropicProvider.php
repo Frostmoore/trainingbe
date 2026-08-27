@@ -135,6 +135,22 @@ class AnthropicProvider implements AiProvider
         return trim($messaggio);
     }
 
+    // ───────────────────────── progressione ─────────────────────────
+
+    public function progressoScheda(array $context, AiCallContext $ctx): array
+    {
+        $dati = $this->call(
+            $ctx,
+            $this->manager->modelFor(AiFeature::PlanProgress, 'anthropic'),
+            Prompts::PROGRESSO_SYSTEM,
+            [['role' => 'user', 'content' => json_encode($context, JSON_UNESCAPED_UNICODE) ?: '{}']],
+            Prompts::progressoSchema(),
+            maxTokens: 2048,
+        );
+
+        return Prompts::ripulisciProgresso($dati['esercizi'] ?? []);
+    }
+
     // ───────────────────────── PDF ─────────────────────────
 
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan

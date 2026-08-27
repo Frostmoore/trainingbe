@@ -746,6 +746,165 @@ final class Prompts
     }
 
     /** @return array<string, mixed> */
+    /**
+     * 📈 L'analisi della progressione — 3b-I.A, 27/08/2026.
+     *
+     * ══ ⚖️ I TRE DIVIETI SONO IL CUORE, NON UN CONTORNO ═══════════════════
+     *
+     * 📌 Il committente: *«legalmente 1 e 3 non si possono fare, serve un
+     * medico»* — la progressione automatica dei carichi e le alternative agli
+     * esercizi. ⛔ La linea non e' «parlare di allenamento»: e' **prescrivere**.
+     *
+     * | Si puo' | Non si puo' |
+     * |---|---|
+     * | «hai chiuso tutte le serie tre volte di fila» | «la prossima volta metti 62,5» |
+     *
+     * 🚨 E i divieti stanno nel **prompt di sistema**, non nella richiesta: la
+     * richiesta la compone l'app, e un giorno qualcuno potrebbe cambiarla senza
+     * sapere cosa sta togliendo.
+     *
+     * ⚠️ **E non basta il prompt**: dopo la risposta c'e' un filtro
+     * (`Prompts::rigaProibita()`). La frase che converte di piu' e' sempre
+     * quella che non si puo' scrivere, e un modello prima o poi la scrive.
+     */
+    public const PROGRESSO_SYSTEM = <<<'TXT'
+Sei un osservatore che DESCRIVE la storia di un esercizio. Non sei un allenatore.
+
+Ricevi, per ogni esercizio, le ultime sedute con carichi, ripetizioni e date.
+Per ognuno scrivi UNA riga in italiano che dica cosa e' successo.
+
+REGOLE ASSOLUTE, senza eccezioni:
+1. MAI un numero riferito al futuro. Nessun carico da mettere, nessuna
+   ripetizione da fare, nessun «prova a», «passa a», «puoi salire a».
+   Solo cio' che e' gia' successo.
+2. MAI un giudizio sul corpo, sulla salute, sulla forma fisica o sui
+   progressi della persona. Il soggetto e' l'esercizio, non chi lo fa.
+3. MAI un consiglio di tecnica o di esecuzione.
+
+Scrivi al massimo 90 caratteri per riga. Niente elenchi, niente emoji.
+Se le sedute sono meno di due, usa andamento "poco_storico" e riga vuota.
+
+andamento:
+- "in_salita"  il carico o le ripetizioni sono cresciuti
+- "fermo"      sono rimasti uguali
+- "in_calo"    sono scesi
+- "poco_storico" non ci sono abbastanza sedute
+TXT;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public static function progressoSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'required' => ['esercizi'],
+            'properties' => [
+                'esercizi' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'required' => ['id', 'andamento', 'riga'],
+                        'properties' => [
+                            'id' => ['type' => 'integer'],
+
+                            /*
+                             * 🚨 **Un enum e non testo libero.** L'app ci
+                             * decide il colore della sparkline: ricavarlo
+                             * leggendo la frase italiana vorrebbe dire che il
+                             * colore cambia perche' il modello ha scelto un
+                             * sinonimo.
+                             */
+                            'andamento' => [
+                                'type' => 'string',
+                                'enum' => ['in_salita', 'fermo', 'in_calo', 'poco_storico'],
+                            ],
+
+                            /*
+                             * ⚠️ **Il tetto di lunghezza sta QUI**, non nel
+                             * testo del prompt. E' l'unica cosa che tiene la
+                             * riga *una riga*: se il modello risponde tre frasi
+                             * per esercizio, ogni blocco dell'elenco triplica —
+                             * ed e' li' che la pagina diventa illeggibile, non
+                             * nel numero di righe.
+                             */
+                            'riga' => ['type' => 'string', 'maxLength' => 120],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * ⛔ La riga viola uno dei divieti? — 3b-I.A.
+     *
+     * 🚨 **Il filtro dopo la risposta**, che non e' ridondante rispetto al
+     * prompt: un prompt e' una richiesta, questo e' un controllo. Dieci righe
+     * di codice contro la classe di problema piu' cara che ci sia.
+     *
+     * 💡 Cerca **numeri al futuro** e i verbi della prescrizione. Non pretende
+     * di capire l'italiano: pretende di riconoscere le forme in cui un consiglio
+     * si scrive.
+     */
+    public static function rigaProibita(string $riga): bool
+    {
+        $r = mb_strtolower($riga);
+
+        foreach (['prova a', 'puoi salire', 'puoi passare', 'dovresti', 'ti conviene',
+            'la prossima volta', 'aumenta', 'diminuisci', 'passa a', 'porta a',
+            'consiglio', 'consigliato', 'ti suggerisco'] as $spia) {
+            if (str_contains($r, $spia)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ⛔ Toglie le righe che prescrivono, invece di scartare tutta la risposta.
+     *
+     * 🚨 **Sta qui e non nei provider** perche' e' una regola *legale*, non un
+     * dettaglio di trasporto: se vivesse dentro `AnthropicProvider`, il giorno
+     * in cui `.env` passa a `openai` la promessa smetterebbe di valere — e
+     * nessun test se ne accorgerebbe, perche' i test girano sul Fake.
+     *
+     * 💡 **Si tiene l'andamento e si butta la frase.** L'andamento e' un enum:
+     * non puo' prescrivere niente, e serve alla sparkline. Buttare l'intera
+     * risposta vorrebbe dire far perdere un gettone per una riga scritta male.
+     *
+     * @param  array<int, mixed>  $righe
+     * @return list<array{id: int, andamento: string, riga: string}>
+     */
+    public static function ripulisciProgresso(array $righe): array
+    {
+        $fuori = [];
+
+        foreach ($righe as $r) {
+            if (! is_array($r) || ! isset($r['id'])) {
+                continue;
+            }
+
+            $riga = trim((string) ($r['riga'] ?? ''));
+            $andamento = (string) ($r['andamento'] ?? 'poco_storico');
+
+            if (! in_array($andamento, ['in_salita', 'fermo', 'in_calo', 'poco_storico'], true)) {
+                $andamento = 'poco_storico';
+            }
+
+            $fuori[] = [
+                'id' => (int) $r['id'],
+                'andamento' => $andamento,
+                'riga' => self::rigaProibita($riga) ? '' : $riga,
+            ];
+        }
+
+        return $fuori;
+    }
+
     public static function workoutKcalSchema(): array
     {
         return [

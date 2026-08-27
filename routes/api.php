@@ -457,6 +457,10 @@ Route::prefix('v1')->group(function (): void {
             Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
             Route::get('ai/advice', [AiController::class, 'advice']);
 
+            // 3b-I.A — l'analisi della progressione: solo abbonati, il gate
+            // e' dentro il metodo (403) perche' l'app lo traduce in modale.
+            Route::post('ai/scheda/progresso', [AiController::class, 'progressoScheda']);
+
             /*
              * 🚨 **La conferma sta dentro `ai.consent` ma NON consuma quota.**
              * Non chiama nessun modello: scrive una stima gia' pagata dalla

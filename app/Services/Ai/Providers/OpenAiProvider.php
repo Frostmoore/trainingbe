@@ -109,6 +109,21 @@ class OpenAiProvider implements AiProvider
         ));
     }
 
+    public function progressoScheda(array $context, AiCallContext $ctx): array
+    {
+        $dati = $this->json(
+            $ctx,
+            $this->manager->modelFor(AiFeature::PlanProgress, 'openai'),
+            Prompts::PROGRESSO_SYSTEM,
+            [['type' => 'text', 'text' => json_encode($context, JSON_UNESCAPED_UNICODE) ?: '{}']],
+            Prompts::progressoSchema(),
+            'plan_progress',
+            2048,
+        );
+
+        return Prompts::ripulisciProgresso($dati['esercizi'] ?? []);
+    }
+
     /**
      * 🚨 Questo driver **non** legge PDF nativamente.
      *

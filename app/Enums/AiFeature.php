@@ -27,6 +27,23 @@ enum AiFeature: string
     case PdfImport = 'pdf_import';
 
     /**
+     * 📈 L'analisi della progressione degli esercizi di una scheda — 3b-I.A.
+     *
+     * ── 🚨 UNA CHIAMATA PER SCHEDA, NON PER ESERCIZIO ──────────────────────
+     *
+     * 📌 *«facciamoglielo fare una sola volta per scheda con tutti gli esercizi
+     * insieme poi li dividiamo noi»*. Costa **un gettone** (non multimodale) e
+     * torna un oggetto per esercizio: la divisione la fa il server.
+     *
+     * ── ⚠️ Etichetta sua anche se costa come le altre ──────────────────────
+     *
+     * `ai_usage_logs.feature` e' la contabilita': senza un valore proprio,
+     * «quanto ci costa l'analisi delle schede» non si potrebbe piu' sapere. E'
+     * la stessa ragione scritta per `PlanFood`.
+     */
+    case PlanProgress = 'plan_progress';
+
+    /**
      * L'importazione di un **piano alimentare** da PDF — N20.
      *
      * 🚨 **Voce sua e non `PdfImport`**, che e' quella delle schede di
@@ -65,6 +82,7 @@ enum AiFeature: string
             self::PdfImport => 'Import scheda PDF',
             self::NutritionPdfImport => 'Import piano alimentare PDF',
             self::PlanFood => 'Alimento nel piano del trainer',
+            self::PlanProgress => 'Progressione degli esercizi',
         };
     }
 
