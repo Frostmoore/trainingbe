@@ -62,6 +62,41 @@ class Cassa
             'mode' => $tipo === self::ABBONAMENTO ? 'subscription' : 'payment',
 
             /*
+             * ══ 🚨 I MANAGED PAYMENTS SI SPENGONO — 27/08/2026 ═════════════
+             *
+             * ⛔ **Senza questa riga il pagamento non si apre proprio.** Stripe:
+             *
+             *     Invalid line_items[0]: the product tax code is missing.
+             *     Product tax code is required for Managed Payments, which is
+             *     enabled by default on your account.
+             *
+             * I *Managed Payments* sono la modalita' in cui **Stripe fa da
+             * venditore** e calcola lui l'imposta: in quel caso ogni prodotto
+             * creato al volo deve dichiarare un codice fiscale di prodotto.
+             *
+             * ── 🚨 E QUI NON E' NEMMENO UNA SCELTA: E' IL REGIME FISCALE ────
+             *
+             * 📌 Il committente, 27/08/2026: *«io sono al forfettario, non la
+             * pago l'IVA»*.
+             *
+             * ⛔ Con i Managed Payments accesi **Stripe fa da venditore e
+             * applica l'imposta**: su una fattura che per legge non deve averla.
+             * Non e' una preferenza commerciale, e' un numero sbagliato su un
+             * documento fiscale.
+             *
+             * ⚠️ E si vedrebbe **tardi**: il prezzo nell'app resterebbe 7,99, il
+             * cliente ne pagherebbe di piu', e la differenza salterebbe fuori
+             * dalla ricevuta o dalla contabilita' — non da un errore.
+             *
+             * ⏳ **Il giorno che il regime cambia** (uscita dal forfettario, o
+             * vendite UE da gestire con l'OSS) questa riga si toglie e si
+             * aggiunge `tax_code` a **ogni** `product_data`, con `tax_behavior`
+             * a `inclusive` se il prezzo a schermo non deve muoversi. Fino ad
+             * allora, spenti.
+             */
+            'managed_payments' => ['enabled' => false],
+
+            /*
              * 🚨 **I metadata sono il contratto fra le due meta'.** Quello che
              * non e' scritto qui, al ritorno non esiste: la sessione di Stripe
              * non sa niente della nostra applicazione.
