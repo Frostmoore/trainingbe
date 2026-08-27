@@ -53,6 +53,17 @@ enum AuditAction: string
      */
     case AiQuotaChanged = 'user.ai_quota_changed';
 
+    /**
+     * 🎁 Un abbonamento dato (o tolto) a mano dal pannello god — 3b-H.10.
+     *
+     * 🚨 **Causale sua e non `AiQuotaChanged`**: sono due concessioni diverse.
+     * L'AI illimitata regala **consumo** e costa a noi in chiamate; questa
+     * regala **il prodotto** e costa in mancato incasso. ⚠️ Con una causale
+     * sola, la domanda «a quanta gente abbiamo regalato l'abbonamento» non si
+     * potrebbe piu' fare.
+     */
+    case AbbonamentoRegalato = 'user.abbonamento_regalato';
+
     public function label(): string
     {
         return match ($this) {
@@ -69,6 +80,7 @@ enum AuditAction: string
             self::EmailChanged => 'Email modificata',
             self::PasswordChanged => 'Password modificata',
             self::AiQuotaChanged => 'Quota AI modificata',
+            self::AbbonamentoRegalato => 'Abbonamento regalato',
         };
     }
 
@@ -78,7 +90,7 @@ enum AuditAction: string
         return match ($this) {
             self::ImpersonationStarted, self::UserDeleted, self::TenantSuspended => 'danger',
             self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged,
-            self::AiQuotaChanged => 'warning',
+            self::AiQuotaChanged, self::AbbonamentoRegalato => 'warning',
             default => 'gray',
         };
     }

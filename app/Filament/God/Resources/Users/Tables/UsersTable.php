@@ -7,6 +7,8 @@ namespace App\Filament\God\Resources\Users\Tables;
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Http\Responses\RoleAwareLoginResponse;
+use App\Models\Plan;
+use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Quota\MemberAiQuota;
@@ -211,6 +213,119 @@ class UsersTable
                  * rimane accesa per sempre — su un ambiente di prova diventa la
                  * bolletta del mese dopo.
                  */
+                /*
+                 * ══ 🎁 «ABBONAMENTO ILLIMITATO» — 3b-H.10, 27/08/2026 ═══════
+                 *
+                 * 📌 *«mettimi anche l'opzione per dare a un utente abbonamento
+                 * illimitato, cosi' mi posso abilitare e disabilitare quando
+                 * voglio per fare i test e regalare abbonamenti a chi cazzo mi
+                 * pare»*.
+                 *
+                 * ── ⚠️ NON E' LA STESSA COSA DI «AI ILLIMITATA» ─────────────
+                 *
+                 * | | Cosa sblocca |
+                 * |---|---|
+                 * | **AI illimitata** | le chiamate al modello, senza tetto |
+                 * | **Abbonamento** | tutto cio' che sta dietro `eAbbonato()`: le schede oltre tre, le multiday, e il gate di 3b-I |
+                 *
+                 * 💡 Si sovrappongono solo in parte: `limiti_delle_schede.dart`
+                 * si apre con **una delle due**. Ma la modale, il listino e il
+                 * gate guardano `eAbbonato()`, che l'AI illimitata non tocca.
+                 *
+                 * ── 🚨 LA TRAPPOLA: L'ABBONAMENTO STA SUL TENANT ────────────
+                 *
+                 * `PlanSubscription` ha `tenant_id`, non `user_id`. ⛔ Su un
+                 * iscritto di una **palestra** questo pulsante regalerebbe
+                 * l'abbonamento a **tutta la palestra**, e nessuno se ne
+                 * accorgerebbe finche' non arriva il conto delle chiamate.
+                 *
+                 * ✅ Per questo l'azione **c'e' solo sui tenant personali**, e
+                 * su una palestra dice perche' non si puo' invece di sparire:
+                 * un pulsante che manca fa cercare, uno spiegato fa capire.
+                 */
+                Action::make('abbonamento_regalato')
+                    ->label(fn (User $r): string => self::haRegalo($r) ? 'Togli abbonamento' : 'Regala abbonamento')
+                    ->icon('heroicon-m-gift')
+                    ->color(fn (User $r): string => self::haRegalo($r) ? 'gray' : 'success')
+                    ->visible(fn (User $r): bool => $r->tenant?->ePersonale() ?? false)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r): string => self::haRegalo($r)
+                        ? "Togliere l'abbonamento a {$r->name}?"
+                        : "Regalare l'abbonamento a {$r->name}?")
+                    ->modalDescription(fn (User $r): string => self::haRegalo($r)
+                        ? 'Tornera\' al piano gratuito. ⚠️ Se aveva pagato con Stripe, questo NON disdice niente la\': '
+                          .'l\'addebito continua. Si toglie solo il regalo.'
+                        : 'Abbonamento senza scadenza, gratuito per lui e a carico nostro. '
+                          .'Sblocca le schede oltre tre, le multiday e tutto cio\' che e\' riservato agli abbonati. '
+                          .'Finisce nel registro.')
+                    ->modalSubmitActionLabel(fn (User $r): string => self::haRegalo($r) ? 'Togli' : 'Regala')
+                    ->action(function (User $record): void {
+                        $tenantId = $record->tenant?->getKey();
+
+                        if ($tenantId === null) {
+                            return;
+                        }
+
+                        $regalo = self::regaloDi($record);
+
+                        if ($regalo !== null) {
+                            $regalo->delete();
+                        } else {
+                            $piano = Plan::query()->where('code', Plan::PLUS)->first();
+
+                            if ($piano === null) {
+                                Notification::make()
+                                    ->title('Il piano `plus` non esiste')
+                                    ->body('Il listino non e\' stato seminato: non c\'e\' niente da regalare.')
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            }
+
+                            PlanSubscription::withoutGlobalScopes()->create([
+                                'tenant_id' => $tenantId,
+                                'plan_id' => $piano->getKey(),
+
+                                /*
+                                 * 🚨 **`ends_at` nullo = non scade mai**, ed e'
+                                 * la convenzione gia' in uso per le palestre
+                                 * (vedi `scopeAttivi`). 💡 E' anche il modo in
+                                 * cui l'app capisce di non dover scrivere
+                                 * nessuna data di rinnovo.
+                                 */
+                                'starts_at' => now(),
+                                'ends_at' => null,
+
+                                /*
+                                 * ⛔ Niente id di Stripe: **e' il segno che
+                                 * questo abbonamento non e' stato pagato**. Da
+                                 * quello l'app capisce di non mostrare il
+                                 * pulsante «gestisci», che aprirebbe una pagina
+                                 * vuota.
+                                 */
+                                'stripe_subscription_id' => null,
+                                'stripe_customer_id' => null,
+                                'rinnova' => false,
+                            ]);
+                        }
+
+                        app(AuditLogger::class)->log(
+                            AuditAction::AbbonamentoRegalato,
+                            $record,
+                            [
+                                'email' => $record->email,
+                                'da' => 'elenco utenti',
+                                'ora' => $regalo !== null ? 'tolto' : 'regalato',
+                            ],
+                        );
+
+                        Notification::make()
+                            ->title($regalo !== null ? 'Abbonamento tolto' : 'Abbonamento regalato')
+                            ->success()
+                            ->send();
+                    }),
+
                 Action::make('ai_illimitata')
                     ->label(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'Togli illimitata' : 'AI illimitata')
                     ->icon('heroicon-m-sparkles')
@@ -372,5 +487,35 @@ class UsersTable
 
         return $attore instanceof User
             && app(Impersonator::class)->can($attore, $target);
+    }
+
+    /**
+     * L'abbonamento **regalato** di questa persona, se ce l'ha — 3b-H.10.
+     *
+     * 🚨 **Si riconosce dall'assenza degli id di Stripe.** Un abbonamento
+     * pagato ha `stripe_subscription_id`; questo no, ed e' l'unico modo di
+     * distinguerli. ⛔ Senza questa condizione il pulsante «togli» cancellerebbe
+     * anche gli abbonamenti **pagati**, lasciando l'addebito attivo su Stripe e
+     * il cliente senza il prodotto — cioe' il danno peggiore possibile.
+     */
+    private static function regaloDi(User $utente): ?PlanSubscription
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNull('stripe_subscription_id')
+            ->attivi()
+            ->orderByDesc('starts_at')
+            ->first();
+    }
+
+    private static function haRegalo(User $utente): bool
+    {
+        return self::regaloDi($utente) !== null;
     }
 }
