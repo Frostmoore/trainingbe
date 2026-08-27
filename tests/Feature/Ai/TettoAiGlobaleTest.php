@@ -55,7 +55,7 @@ final class TettoAiGlobaleTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@alfa.test');
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
     }
 
     /**

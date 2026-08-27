@@ -59,7 +59,7 @@ final class StimaInCodaTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@alfa.test');
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
     }
 
     #[Test]
@@ -257,7 +257,7 @@ final class StimaInCodaTest extends TestCase
     public function la_stima_di_un_altro_non_si_legge(): void
     {
         $altro = $this->creaUtente($this->palestra, UserRole::Member, 'bruno@alfa.test');
-        $altro->registraConsenso('ai_consent_at', true);
+        $altro->accendiLAi();
 
         $id = $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'mela'])

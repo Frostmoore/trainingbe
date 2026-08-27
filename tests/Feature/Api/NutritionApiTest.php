@@ -264,7 +264,7 @@ class NutritionApiTest extends TestCase
     #[Test]
     public function the_mass_guard_holds_on_the_ai_path_too(): void
     {
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
 
         $this->comeIscritto()
             ->postJson('/api/v1/ai/food/confirm', [

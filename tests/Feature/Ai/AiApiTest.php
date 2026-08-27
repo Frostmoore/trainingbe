@@ -63,7 +63,7 @@ class AiApiTest extends TestCase
         // `ConsentApiTest`, e **deve** restare provato lì: se il consenso
         // arrivasse di serie da `creaUtente()`, il giorno in cui il cancello si
         // rompesse non se ne accorgerebbe nessuno.
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
     }
 
     private function comeIscritto(?User $u = null): static
@@ -348,7 +348,7 @@ class AiApiTest extends TestCase
         $this->aiFinta();
 
         $altroIscritto = $this->creaUtente($this->beta, UserRole::Member, 'anna@beta.test');
-        $altroIscritto->registraConsenso('ai_consent_at', true);
+        $altroIscritto->accendiLAi();
 
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
         $this->comeIscritto($altroIscritto)->postJson('/api/v1/ai/food/text', ['text' => 'pera']);
@@ -454,7 +454,7 @@ class AiApiTest extends TestCase
         $this->alfa->update(['ai_monthly_calls_per_member' => 2]);
 
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
-        $altro->registraConsenso('ai_consent_at', true);
+        $altro->accendiLAi();
 
         // Il primo esaurisce il proprio tetto. 🆕 `202` dalla FASE 9.
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertStatus(202);

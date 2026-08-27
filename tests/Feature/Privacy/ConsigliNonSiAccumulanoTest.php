@@ -57,7 +57,7 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
     }
 
     /** Un consiglio di un giorno passato, come se fosse rimasto li'. */

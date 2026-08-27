@@ -272,9 +272,45 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      * decisioni diverse: chi accetta che i propri dati stiano **da noi** non ha
      * per questo accettato che vadano **ad Anthropic**, negli Stati Uniti.
      */
+    /**
+     * ⚖️ Accende l'AI **per intero**: permesso e presa d'atto.
+     *
+     * ══ 🚨 PERCHE' UN AIUTO, E NON DUE RIGHE OVUNQUE ══════════════════════
+     *
+     * Da 3b-J.3 `puoUsareAi()` pretende **tutti e due** i consensi. ⛔ Senza
+     * questo metodo, ogni punto che accende l'AI — sedici, solo nei test —
+     * dovrebbe ricordarsene: il primo che se ne dimentica ottiene un `403` che
+     * sembra un difetto del cancello invece che una riga mancante.
+     *
+     * 💡 E il giorno che i consensi diventassero tre, il posto da cambiare
+     * resta uno.
+     */
+    public function accendiLAi(): void
+    {
+        $this->registraConsenso('ai_consent_at', true);
+        $this->registraConsenso('ai_disclaimer_at', true);
+    }
+
     public function puoUsareAi(): bool
     {
-        return $this->ai_consent_at !== null;
+        /*
+         * ══ ⚖️ SERVONO TUTTI E DUE — 3b-J.3, secondo giro (27/08/2026) ═════
+         *
+         * 📌 *«se non è flaggato deve impedire QUALUNQUE CHIAMATA all'ai»*.
+         *
+         * 🚨 **Questo metodo e' il cancello vero**: lo chiama `RequireAiConsent`,
+         * che sta davanti a *tutte* le rotte AI. Mettere la presa d'atto solo
+         * dove si accende il consenso avrebbe protetto l'interruttore e non la
+         * funzione — e chi l'aveva accesa **prima** che la presa d'atto
+         * esistesse avrebbe continuato a usarla senza averla mai vista.
+         *
+         * ⛔ Sono due cose diverse e servono tutt'e due: `ai_consent_at` e' il
+         * **permesso** di mandare i dati, `ai_disclaimer_at` e' la **presa
+         * d'atto** su cosa torna indietro. Senza il primo non si puo'; senza il
+         * secondo non si deve.
+         */
+        return $this->ai_consent_at !== null
+            && $this->ai_disclaimer_at !== null;
     }
 
     /**

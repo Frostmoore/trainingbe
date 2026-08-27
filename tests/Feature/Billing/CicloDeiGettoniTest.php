@@ -66,7 +66,7 @@ final class CicloDeiGettoniTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
-        $this->iscritto->registraConsenso('ai_consent_at', true);
+        $this->iscritto->accendiLAi();
     }
 
     /** Il tenant compra gettoni: e' il gesto che tutta questa classe verifica. */
@@ -123,7 +123,7 @@ final class CicloDeiGettoniTest extends TestCase
         // Il piano di questo tenant non comprende l'AI.
         Plan::query()->update(['ai_enabled' => false]);
         $utente = $this->creaUtente($senzaAi, UserRole::Member, 'compra@beta.test')->fresh();
-        $utente->registraConsenso('ai_consent_at', true);
+        $utente->accendiLAi();
 
         /*
          * 🚨 **La premessa si verifica, non si assume.**
@@ -166,7 +166,7 @@ final class CicloDeiGettoniTest extends TestCase
         Plan::query()->update(['ai_enabled' => false]);
 
         $utente = $this->creaUtente($tenant, UserRole::Member, 'gamma@esempio.test')->fresh();
-        $utente->registraConsenso('ai_consent_at', true);
+        $utente->accendiLAi();
 
         $this->stima();
 
@@ -471,7 +471,7 @@ final class CicloDeiGettoniTest extends TestCase
         $this->quotaFinita();
 
         $altro = $this->creaUtente($this->palestra, UserRole::Member, 'altro@alfa.test');
-        $altro->registraConsenso('ai_consent_at', true);
+        $altro->accendiLAi();
         $altro->forceFill(['ai_monthly_call_cap' => 1])->save();
 
         $this->comeApp($altro->fresh())

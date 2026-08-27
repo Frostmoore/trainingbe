@@ -192,6 +192,28 @@ class ConsentController extends Controller
          * 💡 E' la conseguenza della subordinazione: se il consenso figlio non
          * puo' valere senza il padre, deve cadere con lui.
          */
+        /*
+         * ══ ⚖️ REVOCARE LA PRESA D'ATTO SPEGNE L'AI — 27/08/2026 ═══════════
+         *
+         * 📌 *«se lo dis-flaggo, mi deve bloccare tutto quello che c'e' con
+         * l'ai»*.
+         *
+         * 💡 Lo farebbe gia' `puoUsareAi()`, che li pretende tutti e due: ogni
+         * chiamata risponderebbe 403. ⚠️ Ma lasciare `ai_consent_at` scritto su
+         * qualcuno che ha ritirato la presa d'atto vorrebbe dire tenere in piedi
+         * **una base giuridica per un trattamento che non puo' avvenire** — e
+         * mostrare nella schermata dei consensi un interruttore acceso su una
+         * funzione spenta.
+         *
+         * 🚨 Ed e' la stessa regola gia' scritta per il sonno: se il figlio non
+         * puo' valere senza il padre, deve cadere con lui. Qui i due si tengono
+         * per mano in tutt'e due i versi.
+         */
+        if (array_key_exists('ai_disclaimer', $dati) && ! (bool) $dati['ai_disclaimer']) {
+            $utente->registraConsenso('ai_consent_at', false);
+            $utente->registraConsenso('sleep_ai_consent_at', false);
+        }
+
         if (array_key_exists('ai', $dati) && ! (bool) $dati['ai']) {
             $utente->registraConsenso('sleep_ai_consent_at', false);
 

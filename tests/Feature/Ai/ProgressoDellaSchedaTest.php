@@ -54,7 +54,7 @@ class ProgressoDellaSchedaTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->abbonato = $this->creaUtente($this->palestra, UserRole::Member, 'mario@alfa.test');
-        $this->abbonato->registraConsenso('ai_consent_at', true);
+        $this->abbonato->accendiLAi();
     }
 
     /**
@@ -287,7 +287,7 @@ class ProgressoDellaSchedaTest extends TestCase
         $tenant->forceFill(['ai_credits' => 50])->save();
 
         $utente = $this->creaUtente($tenant, UserRole::Member, 'libero@beta.test');
-        $utente->registraConsenso('ai_consent_at', true);
+        $utente->accendiLAi();
 
         return $utente->fresh();
     }
