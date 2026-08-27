@@ -115,7 +115,17 @@ class ConsensiChiestiTest extends TestCase
     public function segnare_non_concede_niente(): void
     {
         $this->actingAs($this->iscritto)
-            ->patchJson('/api/v1/account/consents', ['ai' => true])
+            ->patchJson('/api/v1/account/consents', [
+                'ai' => true,
+
+                /*
+                 * ⚖️ **Serve da 3b-J.3**, 27/08/2026: il server rifiuta
+                 * `ai: true` senza la presa d'atto su cosa l'AI non è.
+                 * ⚠️ Questo test parlava d'altro e accendeva l'AI di passaggio:
+                 * la riga in più è la regola nuova, non un cambio di significato.
+                 */
+                'ai_disclaimer' => true,
+            ])
             ->assertOk();
 
         $this->actingAs($this->iscritto)

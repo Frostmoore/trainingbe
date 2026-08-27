@@ -139,7 +139,7 @@ class ConsentApiTest extends TestCase
     public function revoking_costs_exactly_as_much_as_granting(): void
     {
         $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/account/consents', ['ai' => true])
+            ->patchJson('/api/v1/account/consents', ['ai' => true, 'ai_disclaimer' => true])
             ->assertOk();
 
         $this->comeApp($this->iscritto)
@@ -209,7 +209,7 @@ class ConsentApiTest extends TestCase
         $this->aiFinta();
 
         $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/account/consents', ['ai' => true])
+            ->patchJson('/api/v1/account/consents', ['ai' => true, 'ai_disclaimer' => true])
             ->assertOk();
 
         $this->comeApp($this->iscritto->refresh())
@@ -225,7 +225,7 @@ class ConsentApiTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->comeApp($this->iscritto)->patchJson('/api/v1/account/consents', ['ai' => true]);
+        $this->comeApp($this->iscritto)->patchJson('/api/v1/account/consents', ['ai' => true, 'ai_disclaimer' => true]);
         $this->comeApp($this->iscritto)->patchJson('/api/v1/account/consents', ['ai' => false]);
 
         $this->comeApp($this->iscritto->refresh())

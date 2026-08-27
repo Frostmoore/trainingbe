@@ -161,6 +161,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'consensi_chiesti_il' => 'datetime',
             'health_consent_at' => 'datetime',
             'ai_consent_at' => 'datetime',
+            'ai_disclaimer_at' => 'datetime',
 
             /*
              * 🆕 16/08/2026 — il sonno nel contesto del consiglio del giorno.

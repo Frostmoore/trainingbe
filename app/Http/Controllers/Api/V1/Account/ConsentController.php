@@ -47,6 +47,21 @@ class ConsentController extends Controller
         'ai' => 'ai_consent_at',
 
         /*
+         * ⚖️ **La presa d'atto su cosa l'AI non e'** — 3b-J.3, 27/08/2026.
+         *
+         * 📌 *«l'importante e' che chi attiva l'ai legga questa cosa e vi
+         * acconsenta»*.
+         *
+         * ⛔ **Non e' un permesso, e' una dichiarazione**: `ai` resta la base
+         * giuridica per mandare dati al fornitore, questa dice «ho capito che
+         * quello che esce non e' un parere medico».
+         *
+         * 🚨 Sta fra i consensi — e non fra le preferenze — perche' va
+         * **dimostrata**: e' una data, non un booleano.
+         */
+        'ai_disclaimer' => 'ai_disclaimer_at',
+
+        /*
          * 🆕 16/08/2026 — il sonno nel contesto del consiglio del giorno.
          *
          * 🚨 **La terza casella, e non poteva essere dentro la seconda.** Chi
@@ -112,6 +127,7 @@ class ConsentController extends Controller
         $dati = $request->validate([
             'health' => ['sometimes', 'boolean'],
             'ai' => ['sometimes', 'boolean'],
+            'ai_disclaimer' => ['sometimes', 'boolean'],
             'sleep_ai' => ['sometimes', 'boolean'],
 
             /*
@@ -132,6 +148,33 @@ class ConsentController extends Controller
 
         $utente = $request->user();
 
+        /*
+         * ══ ⚖️ NIENTE AI SENZA LA PRESA D'ATTO — 3b-J.3 ════════════════════
+         *
+         * 📌 *«un consenso obbligatorio se vuoi attivare l'ai»*.
+         *
+         * 🚨 **Il controllo sta qui e non solo nell'app.** Se vivesse
+         * nell'interfaccia, basterebbe una chiamata all'API per saltarlo — e
+         * sarebbe esattamente il percorso di chi poi si fa male seguendo una
+         * frase generata da un modello.
+         *
+         * ⚠️ **Si guarda la richiesta O il database**: chi l'ha gia' accettata
+         * in passato non deve rifarlo per forza nella stessa chiamata. 💡 Ma
+         * l'app la ripropone comunque ogni volta che si accende l'AI: leggerla
+         * e' il punto, e una data vecchia di sei mesi non e' una lettura.
+         */
+        $accendeLAi = array_key_exists('ai', $dati) && (bool) $dati['ai'];
+
+        $haPresoAtto = ((bool) ($dati['ai_disclaimer'] ?? false))
+            || $utente->ai_disclaimer_at !== null;
+
+        if ($accendeLAi && ! $haPresoAtto) {
+            return response()->json([
+                'message' => __('Per attivare l\'AI devi prima prendere atto di cosa non e\'.'),
+                'code' => 'ai_disclaimer_required',
+            ], 422);
+        }
+
         foreach (self::CONSENSI as $nome => $colonna) {
             if (array_key_exists($nome, $dati)) {
                 $utente->registraConsenso($colonna, (bool) $dati[$nome]);
@@ -151,6 +194,20 @@ class ConsentController extends Controller
          */
         if (array_key_exists('ai', $dati) && ! (bool) $dati['ai']) {
             $utente->registraConsenso('sleep_ai_consent_at', false);
+
+            /*
+             * ⚖️ **E cade anche la presa d'atto** — 3b-J.3.
+             *
+             * 🚨 Non perche' «scada» — quello che si e' capito non si dimentica
+             * — ma perche' chi riaccende l'AI **deve rileggere**: e' la
+             * richiesta, ed e' l'unica cosa che la rende vera nel tempo.
+             *
+             * ⛔ Tenendola, chi spegne e riaccende dopo un anno si ritroverebbe
+             * l'AI attiva senza aver mai piu' visto quel testo. 💡 La data del
+             * primo consenso resta comunque negli audit log, che e' dove si
+             * dimostra cosa e' successo.
+             */
+            $utente->registraConsenso('ai_disclaimer_at', false);
         }
 
         if (array_key_exists('consiglio_automatico', $dati)) {
@@ -177,6 +234,7 @@ class ConsentController extends Controller
         return [
             'health' => $utente->health_consent_at?->toIso8601String(),
             'ai' => $utente->ai_consent_at?->toIso8601String(),
+            'ai_disclaimer' => $utente->ai_disclaimer_at?->toIso8601String(),
             'sleep_ai' => $utente->sleep_ai_consent_at?->toIso8601String(),
 
             // 💡 Preferenza, non consenso: un booleano, non una data.
