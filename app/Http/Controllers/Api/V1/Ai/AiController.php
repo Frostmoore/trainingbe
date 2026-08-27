@@ -697,6 +697,11 @@ class AiController extends Controller
      * database — ne' la domanda ne' la risposta: l'analisi torna indietro e vive
      * sul telefono. E' il motivo per cui non esiste una tabella `plan_progress`.
      *
+     * 🆕 **Dal 27/08 esce anche come e' cambiata la scheda** (`cambi_alla_scheda`):
+     * solo i valori prescritti — serie, ripetizioni, peso, recupero — con il
+     * prima e il dopo. ⛔ Non il nome della scheda, non le note: la stessa lista
+     * chiusa di sempre, allungata di una voce e scritta anche nel registro.
+     *
      * ══ ⚖️ IL GATE E' L'ABBONAMENTO, NON I GETTONI ════════════════════════
      *
      * 📌 *«la versione gratuita NON DEVE guadagnare niente»*. Chi non e' abbonato
@@ -741,6 +746,25 @@ class AiController extends Controller
             'esercizi.*.sedute.*.data' => ['required', 'date'],
             'esercizi.*.sedute.*.carico' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'esercizi.*.sedute.*.ripetizioni' => ['nullable', 'integer', 'min:0', 'max:1000'],
+
+            /*
+             * 📐 **Come e' cambiata la scheda** — 3b-I.E, 27/08/2026.
+             *
+             * 📌 *«deve vedere com'era prima e com'era dopo»*.
+             *
+             * 🚨 **E' la differenza fra una lettura e un'osservazione.** Senza,
+             * il modello vede numeri che salgono o scendono e puo' soltanto
+             * ripeterli. ⛔ E soprattutto non ha modo di sapere che le
+             * ripetizioni sono scese *perche' e' stata aggiunta una serie* —
+             * cioe' scriverebbe un peggioramento che non e' successo.
+             *
+             * ⚠️ **Facoltativo**: le schede mai modificate non ce l'hanno, ed e'
+             * la maggioranza.
+             */
+            'esercizi.*.cambi_alla_scheda' => ['sometimes', 'array', 'max:20'],
+            'esercizi.*.cambi_alla_scheda.*.cosa' => ['required', 'string', 'max:20'],
+            'esercizi.*.cambi_alla_scheda.*.prima' => ['nullable', 'string', 'max:60'],
+            'esercizi.*.cambi_alla_scheda.*.dopo' => ['nullable', 'string', 'max:60'],
         ]);
 
         $conGettoni = $this->assertQuota($utente, AiFeature::PlanProgress);
