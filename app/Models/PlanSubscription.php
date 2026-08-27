@@ -26,7 +26,10 @@ class PlanSubscription extends Model
 {
     use BelongsToTenant;
 
-    protected $fillable = ['tenant_id', 'plan_id', 'starts_at', 'ends_at'];
+    protected $fillable = [
+        'tenant_id', 'plan_id', 'starts_at', 'ends_at',
+        'stripe_subscription_id', 'stripe_customer_id', 'rinnova',
+    ];
 
     protected function casts(): array
     {

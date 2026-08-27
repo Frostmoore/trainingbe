@@ -65,7 +65,79 @@ class BillingController extends Controller
             ),
 
             'gettoni_disponibili' => $this->portafoglio->saldo($utente),
+
+            /*
+             * ══ 🔁 QUANDO SCADE, E SE SI RINNOVA — 3b-H.9 ═════════════════
+             *
+             * 🚨 **Le due cose insieme, o la frase mente.** «Fino al 27
+             * settembre» detto a chi si rinnova suona come una scadenza e fa
+             * disdire per sbaglio; «si rinnova» detto a chi ha gia' disdetto e'
+             * peggio ancora.
+             *
+             * ⚠️ `null` quando l'abbonamento non viene da Stripe — le palestre —
+             * o quando non ce n'e' nessuno. 💡 L'app in quel caso non scrive
+             * niente invece di inventare una data.
+             */
+            'abbonamento_attivo' => $this->abbonamentoAttivo($utente),
         ]]);
+    }
+
+    /**
+     * @return array{fino_al: string|null, rinnova: bool, gestibile: bool}|null
+     */
+    private function abbonamentoAttivo(\App\Models\User $utente): ?array
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        $riga = \App\Models\PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->attivi()
+            ->orderByDesc('starts_at')
+            ->first();
+
+        if ($riga === null) {
+            return null;
+        }
+
+        return [
+            'fino_al' => $riga->ends_at?->toDateString(),
+            'rinnova' => (bool) $riga->rinnova,
+
+            // 💡 Solo chi viene da Stripe ha qualcosa da gestire: alle palestre
+            // il pulsante non deve nemmeno comparire.
+            'gestibile' => $riga->stripe_customer_id !== null,
+        ];
+    }
+
+    /**
+     * Apre il portale di Stripe: disdetta, carta, ricevute.
+     *
+     * ⛔ **Non e' il posto dove si disdice**: e' il posto dove si va a disdire.
+     * La differenza conta, perche' tutto quello che succede la' dentro torna
+     * indietro dai webhook — e non da questa risposta.
+     */
+    public function portale(Request $request): JsonResponse
+    {
+        try {
+            $url = $this->cassa->portale(
+                $request->user(),
+                rtrim((string) config('app.url'), '/').'/pagamento/ok',
+            );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Non sono riuscito ad aprire la gestione. Riprova fra poco.',
+            ], 502);
+        }
+
+        return response()->json(['data' => ['url' => $url]]);
     }
 
     /**

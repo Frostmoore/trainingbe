@@ -120,6 +120,17 @@ class Cassa
 
         $sessione = $tipo === self::ABBONAMENTO
             ? $this->stripe()->checkout->sessions->create($comune + [
+                /*
+                 * ══ 🚨 I METADATA ANCHE SULL'ABBONAMENTO — 3b-H.9 ══════════
+                 *
+                 * ⛔ Quelli della **sessione** valgono solo per il primo
+                 * pagamento: `invoice.paid` del mese prossimo non li vede.
+                 * 💡 Messi qui finiscono sull'oggetto `subscription`, che
+                 * sopravvive alla sessione — e sono la rete di sicurezza se
+                 * un giorno `stripe_subscription_id` non fosse stato salvato.
+                 */
+                'subscription_data' => ['metadata' => $comune['metadata']],
+
                 'line_items' => [[
                     'quantity' => 1,
                     'price_data' => [
@@ -146,6 +157,53 @@ class Cassa
             ]);
 
         return (string) $sessione->url;
+    }
+
+    /**
+     * Apre il **portale di fatturazione** di Stripe — 3b-H.9, 27/08/2026.
+     *
+     * ── 🚨 PERCHE' IL PORTALE E NON UN PULSANTE NOSTRO ────────────────────
+     *
+     * Perche' «disdici» non e' un bottone: e' disdici, cambia carta, scarica le
+     * ricevute, vedi quando scade. ⛔ Rifarlo da noi vorrebbe dire riscrivere
+     * mezza contabilita' di Stripe e sbagliarne un pezzo — e il pezzo che si
+     * sbaglia in questi casi e' sempre quello che il cliente usa quando e' gia'
+     * arrabbiato.
+     *
+     * ⚠️ **Serve `stripe_customer_id`.** Chi ha un abbonamento che non viene da
+     * Stripe (le palestre) non ha niente da gestire qui, ed e' giusto che il
+     * pulsante non compaia invece di aprire una pagina vuota.
+     */
+    public function portale(User $utente, string $tornaA): string
+    {
+        $cliente = $this->clienteDi($utente);
+
+        if ($cliente === null) {
+            throw new InvalidArgumentException('Non c\'e\' nessun abbonamento di Stripe da gestire.');
+        }
+
+        $sessione = $this->stripe()->billingPortal->sessions->create([
+            'customer' => $cliente,
+            'return_url' => $tornaA,
+        ]);
+
+        return (string) $sessione->url;
+    }
+
+    /** Il cliente Stripe di questa persona, se ne ha uno. */
+    public function clienteDi(User $utente): ?string
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('stripe_customer_id')
+            ->orderByDesc('starts_at')
+            ->value('stripe_customer_id');
     }
 
     /**
@@ -179,26 +237,35 @@ class Cassa
     public function applica(array $evento): void
     {
         try {
-            if (($evento['type'] ?? null) !== 'checkout.session.completed') {
-                return;
-            }
+            $oggetto = $evento['data']['object'] ?? [];
 
-            $sessione = $evento['data']['object'] ?? [];
-            $meta = $sessione['metadata'] ?? [];
-
-            $tipo = $meta['tipo'] ?? null;
-            $utente = User::withoutGlobalScopes()->find($meta['user_id'] ?? null);
-
-            if ($utente === null || $utente->tenant === null) {
-                Log::error('Stripe: pagamento senza utente o tenant.', ['metadata' => $meta]);
-
-                return;
-            }
-
-            match ($tipo) {
-                self::GETTONI => $this->accreditaGettoni($utente, (int) ($meta['gettoni'] ?? 0), $sessione),
-                self::ABBONAMENTO => $this->accendiLAbbonamento($utente, $sessione),
-                default => Log::warning('Stripe: pagamento di tipo ignoto.', ['tipo' => $tipo]),
+            /*
+             * ══ 🚨 QUATTRO EVENTI, E TRE SONO IL CICLO DI VITA — 3b-H.9 ═════
+             *
+             * ⛔ Fino al 27/08 si ascoltava **solo il primo pagamento**: chi si
+             * abbonava aveva un mese e poi si spegneva, **pagando**. Il difetto
+             * peggiore possibile qui, perche' si manifesta trenta giorni dopo
+             * e su un cliente che ha l'addebito in regola.
+             *
+             * | Evento | Cosa vuol dire |
+             * |---|---|
+             * | `checkout.session.completed` | il primo pagamento e' andato |
+             * | `invoice.paid` | **il rinnovo**: un mese in piu' |
+             * | `customer.subscription.updated` | ha disdetto, o ha ripreso |
+             * | `customer.subscription.deleted` | e' finito davvero |
+             *
+             * ⚠️ `invoice.payment_failed` **non c'e', ed e' voluto**: la carta
+             * rifiutata non toglie niente: Stripe riprova per giorni, e
+             * l'abbonamento scade da solo se non ci riesce. 💡 Spegnerlo al
+             * primo tentativo fallito vorrebbe dire punire chi ha cambiato
+             * carta di venerdi'.
+             */
+            match ($evento['type'] ?? null) {
+                'checkout.session.completed' => $this->primoPagamento($oggetto),
+                'invoice.paid' => $this->rinnovo($oggetto),
+                'customer.subscription.updated' => $this->abbonamentoCambiato($oggetto),
+                'customer.subscription.deleted' => $this->abbonamentoFinito($oggetto),
+                default => null,
             };
         } catch (\Throwable $e) {
             Log::error('Stripe: incasso fallito.', [
@@ -206,6 +273,166 @@ class Cassa
                 'evento' => $evento['id'] ?? null,
             ]);
         }
+    }
+
+    /**
+     * Il primo pagamento: gettoni o abbonamento.
+     *
+     * @param  array<string, mixed>  $sessione
+     */
+    private function primoPagamento(array $sessione): void
+    {
+        $meta = $sessione['metadata'] ?? [];
+        $utente = User::withoutGlobalScopes()->find($meta['user_id'] ?? null);
+
+        if ($utente === null || $utente->tenant === null) {
+            Log::error('Stripe: pagamento senza utente o tenant.', ['metadata' => $meta]);
+
+            return;
+        }
+
+        match ($meta['tipo'] ?? null) {
+            self::GETTONI => $this->accreditaGettoni($utente, (int) ($meta['gettoni'] ?? 0), $sessione),
+            self::ABBONAMENTO => $this->accendiLAbbonamento($utente, $sessione),
+            default => Log::warning('Stripe: pagamento di tipo ignoto.', ['tipo' => $meta['tipo'] ?? null]),
+        };
+    }
+
+    /**
+     * 🔁 **Il rinnovo**: un mese in piu' a chi ha pagato.
+     *
+     * ⚠️ La prima fattura di un abbonamento arriva **anche** al primo
+     * pagamento, subito dopo `checkout.session.completed`. 💡 Non e' un
+     * problema: prolungare due volte lo stesso periodo e' innocuo, perche' la
+     * scadenza si **calcola** dal periodo della fattura invece di sommarci un
+     * mese. 🚨 Con `addMonth()` invece il primo mese sarebbe diventato due.
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function rinnovo(array $fattura): void
+    {
+        $idAbbonamento = $this->idAbbonamento($fattura);
+
+        if ($idAbbonamento === null) {
+            // 💡 Le fatture che non riguardano un abbonamento (i pacchetti di
+            // gettoni) passano di qui e non devono fare niente.
+            return;
+        }
+
+        $riga = $this->abbonamentoDi($idAbbonamento);
+
+        if ($riga === null) {
+            Log::error('Stripe: rinnovo di un abbonamento che non conosciamo.', [
+                'subscription' => $idAbbonamento,
+            ]);
+
+            return;
+        }
+
+        $fine = $this->fineDelPeriodo($fattura);
+
+        $riga->update([
+            'ends_at' => $fine ?? now()->addMonth()->addDay(),
+        ]);
+
+        Log::info('Stripe: abbonamento rinnovato.', [
+            'subscription' => $idAbbonamento,
+            'fino_al' => (string) $riga->ends_at,
+        ]);
+    }
+
+    /**
+     * ✂️ Ha disdetto (o ci ha ripensato).
+     *
+     * 🚨 **Disdire NON spegne niente subito**: chi ha pagato il mese lo usa
+     * fino in fondo. Cambia solo `rinnova`, che serve all'app per dire «finisce
+     * il …» invece di «si rinnova il …».
+     *
+     * @param  array<string, mixed>  $abbonamento
+     */
+    private function abbonamentoCambiato(array $abbonamento): void
+    {
+        $riga = $this->abbonamentoDi((string) ($abbonamento['id'] ?? ''));
+
+        if ($riga === null) {
+            return;
+        }
+
+        $riga->update([
+            'rinnova' => ! ($abbonamento['cancel_at_period_end'] ?? false),
+            'ends_at' => $this->quando($abbonamento['current_period_end'] ?? null)
+                ?? $riga->ends_at,
+        ]);
+    }
+
+    /**
+     * 🛑 E' finito davvero.
+     *
+     * ⚠️ Stripe manda questo evento **alla fine del periodo pagato**, non
+     * quando si preme «disdici». Quindi qui si chiude adesso, e non si toglie
+     * niente a nessuno.
+     *
+     * @param  array<string, mixed>  $abbonamento
+     */
+    private function abbonamentoFinito(array $abbonamento): void
+    {
+        $riga = $this->abbonamentoDi((string) ($abbonamento['id'] ?? ''));
+
+        $riga?->update(['ends_at' => now(), 'rinnova' => false]);
+    }
+
+    private function abbonamentoDi(string $idStripe): ?PlanSubscription
+    {
+        if ($idStripe === '') {
+            return null;
+        }
+
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('stripe_subscription_id', $idStripe)
+            ->first();
+    }
+
+    /**
+     * L'id dell'abbonamento dentro una fattura.
+     *
+     * ⚠️ Stripe ha cambiato posto a questo campo: nelle versioni recenti sta in
+     * `parent.subscription_details.subscription`, in quelle vecchie era
+     * `subscription` in cima. 💡 Si guardano tutte e due invece di legarsi a
+     * una versione dell'API: costa tre righe e non si rompe a un aggiornamento.
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function idAbbonamento(array $fattura): ?string
+    {
+        $id = $fattura['subscription']
+            ?? $fattura['parent']['subscription_details']['subscription']
+            ?? null;
+
+        return is_string($id) && $id !== '' ? $id : null;
+    }
+
+    /**
+     * La fine del periodo coperto dalla fattura.
+     *
+     * 💡 **Piu' un giorno**, come all'accensione: il rinnovo puo' arrivare
+     * qualche ora dopo la scadenza, e un abbonato che resta senza AI per mezza
+     * giornata **mentre sta pagando** e' il modo piu' rapido per farsi disdire.
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function fineDelPeriodo(array $fattura): ?\Illuminate\Support\Carbon
+    {
+        $righe = $fattura['lines']['data'] ?? [];
+        $fine = $righe[0]['period']['end'] ?? null;
+
+        return $this->quando($fine)?->addDay();
+    }
+
+    private function quando(mixed $istante): ?\Illuminate\Support\Carbon
+    {
+        return is_int($istante) || (is_string($istante) && ctype_digit($istante))
+            ? \Illuminate\Support\Carbon::createFromTimestamp((int) $istante)
+            : null;
     }
 
     /** @param  array<string, mixed>  $sessione */
@@ -252,6 +479,16 @@ class Cassa
         PlanSubscription::updateOrCreate(
             ['tenant_id' => $utente->tenant->getKey(), 'plan_id' => $piano->getKey()],
             [
+                /*
+                 * 🚨 **Senza questi due id i rinnovi non trovano nessuno.**
+                 * `invoice.paid` arriva un mese dopo e parla solo di un
+                 * `subscription` di Stripe: e' l'unico filo che lega quella
+                 * fattura a questo tenant.
+                 */
+                'stripe_subscription_id' => $sessione['subscription'] ?? null,
+                'stripe_customer_id' => $sessione['customer'] ?? null,
+                'rinnova' => true,
+
                 'starts_at' => now(),
                 /*
                  * 💡 Un mese e un giorno, non un mese esatto: il rinnovo di

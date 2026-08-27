@@ -510,6 +510,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('billing/checkout', [BillingController::class, 'checkout'])
             ->middleware('throttle:10,1');
 
+        // 🔁 Disdetta, carta, ricevute: si va da Stripe. Vedi `Cassa::portale`.
+        Route::post('billing/portale', [BillingController::class, 'portale'])
+            ->middleware('throttle:10,1');
+
         /*
          * ── «I miei utenti» — F5.1 / F6 ──────────────────────────────────
          *
