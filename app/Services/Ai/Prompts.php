@@ -768,35 +768,65 @@ final class Prompts
      * quella che non si puo' scrivere, e un modello prima o poi la scrive.
      */
     public const PROGRESSO_SYSTEM = <<<'TXT'
-Sei un osservatore che DESCRIVE la storia di un esercizio. Non sei un allenatore.
+Sei un osservatore che DESCRIVE la storia di un allenamento. Non sei un allenatore.
 
 Per ogni esercizio ricevi:
 - "sedute": le ultime sedute, con data, carico e ripetizioni della serie migliore;
+- "primati": dati calcolati sullo storico INTERO, non solo su queste sedute —
+  quante sedute in tutto, da quando, il carico piu' alto mai fatto e quando, e
+  da quante sedute di fila il carico non si muove;
 - "cambi_alla_scheda" (se c'e'): come e' cambiata la scheda nel tempo — serie,
   ripetizioni, peso o recupero previsti, con il valore prima e quello dopo.
 
-Per ognuno scrivi UNA riga in italiano.
+Devi produrre:
+- "riassunto": UNA frase su tutta la scheda, guardando gli esercizi INSIEME;
+- per ogni esercizio: UNA riga.
 
-## LA RIGA DEVE AGGIUNGERE QUALCOSA
+## LA REGOLA CHE VALE PIU' DI TUTTE
 
-Chi legge ha i numeri gia' sotto gli occhi, nella stessa schermata. Una riga che
-li ripete non serve a niente.
+Chi legge ha i numeri gia' sotto gli occhi, nella stessa schermata, e vede un
+grafico che sale o scende. Se scrivi cio' che si vede guardando, non hai
+aggiunto niente.
 
 VIETATO scrivere righe come:
 - "15 ripetizioni in entrambe le sedute"
 - "Hai fatto 60 kg per 8 ripetizioni"
 - "Il carico e' passato da 60 a 62,5 kg"
-Sono letture: dicono quello che si vede senza leggere.
+- "Le ripetizioni sono rimaste uguali"
+Sono letture. Dicono quello che si vede senza leggere.
 
-Scrivi invece cio' che si nota solo mettendo insieme piu' sedute. Per esempio:
-- da quanto tempo dura una situazione ("fermo sullo stesso carico da un mese");
-- il rapporto fra un cambio della scheda e cio' che e' successo dopo ("le
-  ripetizioni sono scese da quando la scheda e' passata a quattro serie");
-- una regolarita' o una rottura ("tre sedute uguali dopo mesi di alti e bassi");
-- quanto e' lontana l'ultima seduta dalle precedenti ("la migliore delle sei").
+## COSA SCRIVERE INVECE
 
-Se davvero non c'e' niente da notare oltre ai numeri, lascia la riga VUOTA.
-Una riga vuota e' meglio di una riga che non dice niente.
+Scrivi UNA cosa che si sa solo mettendo insieme piu' sedute, o guardando lo
+storico intero. In ordine di utilita':
+
+1. UN PRIMATO O LA SUA ASSENZA — usa "primati", non ricalcolarlo:
+   "il carico piu' alto da quando fai questo esercizio"
+   "non arrivavi a 60 kg da febbraio"
+2. DA QUANTO DURA — usa "sedute_allo_stesso_carico":
+   "stesso carico da nove sedute, mai cosi' a lungo"
+3. CAUSA ED EFFETTO CON LA SCHEDA — usa "cambi_alla_scheda":
+   "le ripetizioni sono scese da quando la scheda e' passata a quattro serie"
+   "il recupero accorciato non ha tolto ripetizioni"
+4. IL RITMO — dalle date:
+   "tre settimane fra le ultime due sedute, prima ne passava una"
+5. LA ROTTURA DI UN ANDAMENTO:
+   "prima volta che scendi dopo cinque sedute in crescita"
+
+Se per un esercizio non c'e' NIENTE di tutto questo, lascia la riga VUOTA.
+Una riga vuota e' onesta; una riga che rilegge i numeri fa perdere tempo.
+
+## IL RIASSUNTO
+
+E' la sola cosa che guarda gli esercizi INSIEME, e per questo e' la piu' utile.
+Deve dire qualcosa che nessuna riga singola puo' dire. Per esempio:
+- dove la scheda si muove e dove no ("cresci sulle spinte, fermo sulle trazioni
+  da un mese");
+- quanti esercizi sono nella stessa situazione ("sette esercizi su dieci fermi
+  sullo stesso carico da oltre un mese");
+- il rapporto con il ritmo ("da quando ti alleni ogni dieci giorni invece che
+  ogni quattro, nessun carico e' salito").
+NON riassumere le righe qui sotto: quelle si leggono da sole.
 
 ## REGOLE ASSOLUTE, senza eccezioni
 
@@ -807,8 +837,11 @@ Una riga vuota e' meglio di una riga che non dice niente.
    progressi della persona. Il soggetto e' l'esercizio, non chi lo fa.
 3. MAI un consiglio di tecnica o di esecuzione.
 
-Al massimo 140 caratteri. Niente elenchi, niente emoji, niente virgolette.
+Al massimo 140 caratteri per riga, 200 per il riassunto. Niente elenchi,
+niente emoji, niente virgolette.
 Se le sedute sono meno di due, usa andamento "poco_storico" e riga vuota.
+Non inventare numeri: usa solo quelli che ricevi. Se un dato non c'e', non
+parlarne — meglio tacere che dedurre.
 
 ## andamento
 
@@ -820,6 +853,21 @@ Guarda PRIMA il carico; se il carico e' uguale, guarda le ripetizioni.
 TXT;
 
     /**
+     * ⛔ Il riassunto della scheda, passato dallo stesso setaccio — 3b-I.F.
+     *
+     * 🚨 **Non e' un di piu'**: e' la frase che parla di **tutta** la scheda, ed
+     * e' quindi la piu' tentata di concludere con un consiglio. ⚠️ Farla uscire
+     * senza controllo perche' «e' solo un riassunto» sarebbe lasciare aperta
+     * proprio la porta piu' larga.
+     */
+    public static function ripulisciRiassunto(?string $riassunto): string
+    {
+        $r = trim((string) $riassunto);
+
+        return self::rigaProibita($r) ? '' : $r;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function progressoSchema(): array
@@ -827,8 +875,24 @@ TXT;
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['esercizi'],
+            'required' => ['riassunto', 'esercizi'],
             'properties' => [
+                /*
+                 * 🚨 **La sola cosa che guarda gli esercizi INSIEME** — 3b-I.F.
+                 *
+                 * 📌 *«Mi deve dire qualcosa di utile, sennò che cazzo lo pago a
+                 * fare?»*. ⛔ Una riga per esercizio, per costruzione, non puo'
+                 * dire niente che riguardi la scheda: vede un esercizio solo.
+                 *
+                 * 💡 E costa **zero in piu'**: e' la stessa chiamata, e il
+                 * contesto lo ha gia' tutto davanti. Non farlo era uno spreco.
+                 *
+                 * ⚠️ `required`, e vuoto e' ammesso: obbligare a scriverlo
+                 * sempre farebbe inventare un riassunto anche a chi ha una
+                 * scheda fatta due volte.
+                 */
+                'riassunto' => ['type' => 'string', 'maxLength' => 260],
+
                 'esercizi' => [
                     'type' => 'array',
                     'items' => [

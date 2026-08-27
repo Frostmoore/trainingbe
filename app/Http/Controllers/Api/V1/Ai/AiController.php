@@ -761,6 +761,22 @@ class AiController extends Controller
              * ⚠️ **Facoltativo**: le schede mai modificate non ce l'hanno, ed e'
              * la maggioranza.
              */
+            /*
+             * 🏆 **I primati li calcola il telefono** — 3b-I.F.
+             *
+             * 🚨 Sono numeri sullo storico **intero**: il massimo di sempre, da
+             * quante sedute il carico non si muove. ⛔ Mandare mesi di sedute
+             * per far fare un `max` al modello costerebbe dieci volte tanto —
+             * e i modelli linguistici i confronti fra numeri li sbagliano, cioe'
+             * direbbero «e' il tuo record» quando non lo e'.
+             */
+            'esercizi.*.primati' => ['sometimes', 'array'],
+            'esercizi.*.primati.sedute_totali' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'esercizi.*.primati.dal' => ['nullable', 'date'],
+            'esercizi.*.primati.carico_massimo' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'esercizi.*.primati.quando_il_massimo' => ['nullable', 'date'],
+            'esercizi.*.primati.sedute_allo_stesso_carico' => ['nullable', 'integer', 'min:0', 'max:10000'],
+
             'esercizi.*.cambi_alla_scheda' => ['sometimes', 'array', 'max:20'],
             'esercizi.*.cambi_alla_scheda.*.cosa' => ['required', 'string', 'max:20'],
             'esercizi.*.cambi_alla_scheda.*.prima' => ['nullable', 'string', 'max:60'],
@@ -769,10 +785,12 @@ class AiController extends Controller
 
         $conGettoni = $this->assertQuota($utente, AiFeature::PlanProgress);
 
-        $righe = $this->ai->for(AiFeature::PlanProgress)->progressoScheda(
+        $risposta = $this->ai->for(AiFeature::PlanProgress)->progressoScheda(
             $dati,
             AiCallContext::for($utente, AiFeature::PlanProgress),
         );
+
+        $righe = $risposta['esercizi'] ?? [];
 
         $this->consumaGettoniSeServe($utente, AiFeature::PlanProgress, $conGettoni);
 
@@ -785,10 +803,13 @@ class AiController extends Controller
         $chiesti = array_column($dati['esercizi'], 'id');
 
         return response()->json([
-            'data' => array_values(array_filter(
-                $righe,
-                fn (array $r): bool => in_array($r['id'], $chiesti, true),
-            )),
+            'data' => [
+                'riassunto' => $risposta['riassunto'] ?? '',
+                'esercizi' => array_values(array_filter(
+                    $righe,
+                    fn (array $r): bool => in_array($r['id'], $chiesti, true),
+                )),
+            ],
         ]);
     }
 

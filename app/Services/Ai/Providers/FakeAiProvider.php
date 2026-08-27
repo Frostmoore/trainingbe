@@ -105,6 +105,8 @@ class FakeAiProvider implements AiProvider
     /** @var list<array{id: int, andamento: string, riga: string}>|null */
     private ?array $nextProgresso = null;
 
+    private ?string $nextRiassunto = null;
+
     public function willReturnAdvice(string $advice): self
     {
         $this->nextAdvice = $advice;
@@ -200,6 +202,13 @@ class FakeAiProvider implements AiProvider
         return $this;
     }
 
+    public function willReturnRiassunto(?string $riassunto): self
+    {
+        $this->nextRiassunto = $riassunto;
+
+        return $this;
+    }
+
     /**
      * 🚨 **Passa dal setaccio come i fornitori veri.** ⛔ Se il Fake tornasse le
      * righe cosi' come gliele hanno date, il test che prova «una riga che
@@ -210,9 +219,14 @@ class FakeAiProvider implements AiProvider
     {
         $this->record('progressoScheda', $context, $ctx);
 
-        return Prompts::ripulisciProgresso($this->nextProgresso ?? [
-            ['id' => 1, 'andamento' => 'in_salita', 'riga' => 'Sei salito di 5 kg nelle ultime tre sedute.'],
-        ]);
+        return [
+            'riassunto' => Prompts::ripulisciRiassunto(
+                $this->nextRiassunto ?? 'Cresci sulle spinte, fermo sulle trazioni da un mese.',
+            ),
+            'esercizi' => Prompts::ripulisciProgresso($this->nextProgresso ?? [
+                ['id' => 1, 'andamento' => 'in_salita', 'riga' => 'Il carico piu\' alto da quando fai questo esercizio.'],
+            ]),
+        ];
     }
 
     public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan

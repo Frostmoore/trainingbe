@@ -68,8 +68,11 @@ interface AiProvider
      * ⚖️ Ogni implementazione deve far passare la risposta da
      * `Prompts::ripulisciProgresso()`: e' li' che vive il divieto di prescrivere.
      *
+     * 💡 Torna **il riassunto e le righe**: il riassunto e' la sola cosa che
+     * guarda gli esercizi insieme, e per questo e' la piu' utile delle due.
+     *
      * @param  array<string, mixed>  $context  gli esercizi con la loro storia
-     * @return list<array{id: int, andamento: string, riga: string}>
+     * @return array{riassunto: string, esercizi: list<array{id: int, andamento: string, riga: string}>}
      */
     public function progressoScheda(array $context, AiCallContext $ctx): array;
 

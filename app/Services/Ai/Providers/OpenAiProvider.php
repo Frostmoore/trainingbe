@@ -121,7 +121,10 @@ class OpenAiProvider implements AiProvider
             2048,
         );
 
-        return Prompts::ripulisciProgresso($dati['esercizi'] ?? []);
+        return [
+            'riassunto' => Prompts::ripulisciRiassunto($dati['riassunto'] ?? null),
+            'esercizi' => Prompts::ripulisciProgresso($dati['esercizi'] ?? []),
+        ];
     }
 
     /**

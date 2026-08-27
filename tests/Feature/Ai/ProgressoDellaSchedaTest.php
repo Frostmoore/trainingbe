@@ -86,10 +86,10 @@ class ProgressoDellaSchedaTest extends TestCase
         $this->comeApp($this->abbonato)
             ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
             ->assertOk()
-            ->assertJsonCount(2, 'data')
-            ->assertJsonPath('data.0.id', 7)
-            ->assertJsonPath('data.0.andamento', 'in_salita')
-            ->assertJsonPath('data.1.andamento', 'poco_storico');
+            ->assertJsonCount(2, 'data.esercizi')
+            ->assertJsonPath('data.esercizi.0.id', 7)
+            ->assertJsonPath('data.esercizi.0.andamento', 'in_salita')
+            ->assertJsonPath('data.esercizi.1.andamento', 'poco_storico');
     }
 
     /**
@@ -112,8 +112,8 @@ class ProgressoDellaSchedaTest extends TestCase
         $this->comeApp($this->abbonato)
             ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
             ->assertOk()
-            ->assertJsonPath('data.0.riga', '')
-            ->assertJsonPath('data.0.andamento', 'in_salita');
+            ->assertJsonPath('data.esercizi.0.riga', '')
+            ->assertJsonPath('data.esercizi.0.andamento', 'in_salita');
     }
 
     /** Il setaccio, riga per riga, senza passare dall'HTTP. */
@@ -136,6 +136,73 @@ class ProgressoDellaSchedaTest extends TestCase
         ] as $lecita) {
             $this->assertFalse(Prompts::rigaProibita($lecita), $lecita);
         }
+    }
+
+    /**
+     * 🗣️ Il riassunto e' la sola cosa che guarda gli esercizi INSIEME.
+     *
+     * 📌 *«Mi deve dire qualcosa di utile, sennò che cazzo lo pago a fare?»* —
+     * una riga sotto un esercizio, per costruzione, non puo' dire dove la scheda
+     * si muove e dove no.
+     */
+    #[Test]
+    public function la_risposta_porta_anche_il_riassunto_della_scheda(): void
+    {
+        $this->aiFinta()->willReturnRiassunto(
+            'Cresci sulle spinte, fermo sulle trazioni da un mese.',
+        );
+
+        $this->comeApp($this->abbonato)
+            ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
+            ->assertOk()
+            ->assertJsonPath(
+                'data.riassunto',
+                'Cresci sulle spinte, fermo sulle trazioni da un mese.',
+            );
+    }
+
+    /**
+     * 🚨 **Il riassunto passa dallo stesso setaccio delle righe.**
+     *
+     * ⚠️ E' la frase che parla di **tutta** la scheda, quindi la piu' tentata di
+     * concludere con un consiglio: lasciarla uscire senza controllo perche' «e'
+     * solo un riassunto» vorrebbe dire lasciare aperta la porta piu' larga.
+     */
+    #[Test]
+    public function un_riassunto_che_prescrive_non_arriva_al_telefono(): void
+    {
+        $this->aiFinta()->willReturnRiassunto(
+            'Sei fermo ovunque: dovresti aumentare i carichi.',
+        );
+
+        $this->comeApp($this->abbonato)
+            ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
+            ->assertOk()
+            ->assertJsonPath('data.riassunto', '');
+    }
+
+    /**
+     * 🏆 I primati li calcola il telefono, e il server li lascia passare.
+     *
+     * ⛔ Il modello non deve ricalcolarli: sbaglia i confronti fra numeri, e un
+     * «e' il tuo record» falso e' una bugia detta con entusiasmo.
+     */
+    #[Test]
+    public function i_primati_calcolati_dal_telefono_sono_accettati(): void
+    {
+        $corpo = $this->scheda();
+
+        $corpo['esercizi'][0]['primati'] = [
+            'sedute_totali' => 24,
+            'dal' => '2026-02-01',
+            'carico_massimo' => 62.5,
+            'quando_il_massimo' => '2026-08-08',
+            'sedute_allo_stesso_carico' => 9,
+        ];
+
+        $this->comeApp($this->abbonato)
+            ->postJson('/api/v1/ai/scheda/progresso', $corpo)
+            ->assertOk();
     }
 
     /**
@@ -177,8 +244,8 @@ class ProgressoDellaSchedaTest extends TestCase
         $this->comeApp($this->abbonato)
             ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.id', 7);
+            ->assertJsonCount(1, 'data.esercizi')
+            ->assertJsonPath('data.esercizi.0.id', 7);
     }
 
     /** 💡 Il tetto sta nella validazione: senza, la fattura la scrive il client. */
