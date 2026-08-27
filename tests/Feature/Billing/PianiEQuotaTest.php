@@ -201,7 +201,7 @@ class PianiEQuotaTest extends TestCase
 
         // ⚠️ Il consenso **c'è**: senza, il 403 arriverebbe da lì e questo test
         // proverebbe il cancello sbagliato.
-        $libero->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $libero->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->actingAs($libero->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova'])
@@ -240,7 +240,7 @@ class PianiEQuotaTest extends TestCase
         $this->abbona($palestra, Plan::GYM);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
-        $iscritto->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $iscritto->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->assertTrue($this->attivo()->haLaAi($iscritto->fresh()));
     }

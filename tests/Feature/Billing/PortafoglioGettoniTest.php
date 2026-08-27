@@ -101,7 +101,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente->tenant->update(['ai_monthly_calls_per_member' => 10]);
         $this->portafoglio()->accredita($utente->tenant, 100);
 
-        $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
@@ -127,7 +127,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
         $this->portafoglio()->accredita($utente->tenant, 100);
 
-        $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
@@ -156,7 +156,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
         $this->portafoglio()->accredita($utente->tenant, 100);
 
-        $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         // La prima chiamata usa la quota inclusa.
         $this->actingAs($utente->fresh(), 'sanctum')
@@ -183,7 +183,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente = $this->iscritto();
         $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
         $this->portafoglio()->accredita($utente->tenant, 1);
-        $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         // Quota (1) + gettoni (1) = due chiamate possibili.
         $this->actingAs($utente->fresh(), 'sanctum')
@@ -210,7 +210,7 @@ final class PortafoglioGettoniTest extends TestCase
     {
         $utente = $this->iscritto();
         $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
-        $utente->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
 
         $this->actingAs($utente->fresh(), 'sanctum')
             ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertStatus(202);

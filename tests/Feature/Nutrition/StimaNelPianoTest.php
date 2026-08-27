@@ -50,7 +50,7 @@ final class StimaNelPianoTest extends TestCase
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
 
         foreach ([$this->trainer, $this->iscritto] as $u) {
-            $u->forceFill(['ai_consent_at' => now(), 'health_consent_at' => now()])->save();
+            $u->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
         }
     }
 
