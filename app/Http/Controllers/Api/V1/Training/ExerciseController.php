@@ -56,11 +56,53 @@ class ExerciseController extends Controller
          * quanti ne ha chiesti, lo scrive nel log invece di far finta di
          * niente.
          */
+        /*
+         * ⛔ **Chi è stato sostituito non compare nell'elenco** — 3b-O.
+         *
+         * 🚨 Comparirebbe come doppione di quello che l'ha sostituito: due
+         * righe con lo stesso significato, e chi guarda non ha modo di sapere
+         * quale delle due usare. 💡 La riga non è cancellata — viaggia qui
+         * sotto, in `riconciliazioni`, che è il posto in cui serve davvero.
+         */
+        $query->whereNull('exercises.sostituito_da_id');
+
         $esercizi = $query->limit(min(1000, (int) $request->integer('limit', 100)))->get();
 
         $mio = $request->user()?->tenant_id;
 
         return response()->json([
+            /*
+             * ══ 🔁 I RINVII — 3b-O, 28/08/2026 ════════════════════════════
+             *
+             * 📌 *«Senza farmi perdere nulla, naturalmente»*.
+             *
+             * 🚨 **Sono il modo in cui il telefono non perde lo storico.** Le
+             * serie gia' registrate stanno in `SerieDelleSedute.esercizioId`
+             * con **l'id vecchio**: senza questo elenco l'app non saprebbe che
+             * quelle serie adesso appartengono a un altro esercizio, e la
+             * progressione ripartirebbe da zero con le vecchie righe orfane.
+             *
+             * ⚠️ Viaggiano **sempre**, non solo la prima volta: un telefono
+             * che si riaccende fra sei mesi deve trovarli lo stesso. 💡 Sono
+             * pochissime righe, e l'app li applica in modo ripetibile.
+             */
+            'riconciliazioni' => Exercise::query()
+                /*
+                 * ⛔ **Con lo scope, non senza.** Al primo giro qui c'era un
+                 * `withoutGlobalScopes()`, e mandava a ogni telefono i rinvii
+                 * di **tutte** le palestre: id che non lo riguardano, e la
+                 * notizia che quelle righe esistono. 🚨 Servono solo i rinvii
+                 * degli esercizi che quella persona puo' gia' vedere — che e'
+                 * esattamente quello che lo scope sa fare (3b-M).
+                 */
+                ->whereNotNull('sostituito_da_id')
+                ->get(['id', 'sostituito_da_id'])
+                ->map(fn (Exercise $e): array => [
+                    'da' => $e->id,
+                    'a' => (int) $e->sostituito_da_id,
+                ])
+                ->all(),
+
             'data' => $esercizi->map(fn (Exercise $e): array => [
                 'id' => $e->id,
                 'name' => $e->name,
