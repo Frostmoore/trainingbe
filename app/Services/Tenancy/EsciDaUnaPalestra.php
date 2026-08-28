@@ -167,6 +167,15 @@ final class EsciDaUnaPalestra
 
             $spostate = $this->portaViaLeSueRighe($utente, $palestra, $personale);
 
+            /*
+             * ⚠️ **Prima di cambiargli il tenant**, non dopo: da qui in avanti
+             * `$utente->tenant_id` e' gia' quello personale, e non ci sarebbe
+             * piu' modo di sapere da quale libreria sta uscendo se non
+             * ripescando `$palestra` — cioe' affidandosi all'ordine delle
+             * righe invece che a un fatto.
+             */
+            $this->ricordaLaLibreria($utente, $palestra);
+
             $utente->forceFill(['tenant_id' => $personale->getKey()])->save();
 
             $this->rifaiIRuoli($utente, $palestra, $personale);
@@ -383,5 +392,34 @@ final class EsciDaUnaPalestra
                 ->where('member_id', $utente->getKey())
                 ->delete();
         });
+    }
+
+    /**
+     * 🆕 ⚖️ **La libreria esercizi resta leggibile** — 3b-M, 28/08/2026.
+     *
+     * 📌 *«gli utenti che sono stati iscritti con questi non devono piu'
+     * perdere quegli esercizi»*.
+     *
+     * ⛔ `exercises` sta in `RESTANO_ALLA_PALESTRA`, ed e' giusto: la libreria
+     * e' della palestra e non se la porta via chi esce. 🚨 Ma «non se la porta
+     * via» non vuol dire «non la sa piu' leggere»: lo storico degli allenamenti
+     * di quella persona parla ancora di quegli esercizi, e senza il permesso di
+     * lettura si ritroverebbe righe mute — non cancellate, peggio.
+     *
+     * ⚠️ **Questo e' l'unico istante sicuro** in cui scriverlo. Non c'e' un
+     * momento di «ingresso» per chi e' stato creato dentro la palestra dal
+     * pannello, e a fine metodo il suo `tenant_id` sara' gia' un altro.
+     *
+     * 💡 Da' **lettura e basta**: la policy sulla scrittura non cambia, e
+     * `Exercise::isGlobal()` continua a dire di no.
+     */
+    private function ricordaLaLibreria(User $utente, Tenant $palestra): void
+    {
+        $viste = $utente->librerie_viste ?? [];
+        $viste[] = $palestra->getKey();
+
+        $utente->forceFill([
+            'librerie_viste' => array_values(array_unique(array_map(intval(...), $viste))),
+        ])->save();
     }
 }

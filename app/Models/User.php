@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\MediaLibrary\HasMedia;
@@ -102,6 +103,17 @@ class User extends Authenticatable implements FilamentUser, HasMedia
              * sola sarebbe un modo per farsi cancellare i propri dati.
              */
             'workouts_migrated_at' => 'datetime',
+
+            /*
+             * 3b-M — le librerie esercizi che questa persona ha visto.
+             *
+             * 🚨 **Fuori da `$fillable`, e non e' un dettaglio**: e' un
+             * permesso di lettura. Una richiesta che se lo scrivesse da sola
+             * si aprirebbe la libreria di qualunque palestra scrivendone il
+             * numero.
+             */
+            'librerie_viste' => 'array',
+
             'password' => 'hashed',
             'is_active' => 'boolean',
             'is_super_admin' => 'boolean',
@@ -541,6 +553,89 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             ->withoutGlobalScopes([TenantScope::class])
             ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il'])
             ->withTimestamps();
+    }
+
+    /** Memoria di `librerieVisibili()`: lo scope la chiede a ogni query. */
+    private ?array $librerieMemo = null;
+
+    /**
+     * I tenant di cui vedo la libreria esercizi — 3b-M, 28/08/2026.
+     *
+     * ══ 📌 LA RICHIESTA ═══════════════════════════════════════════════════
+     *
+     * *«visibili solo a lui se e' un free_user, a lui e a tutti i suoi iscritti
+     * se e' un free_trainer, un trainer o una palestra — e gli utenti che sono
+     * stati iscritti con questi non devono piu' perdere quegli esercizi»*.
+     *
+     * ══ 🚨 IL CASO CHE ERA ROTTO ERA UNO SOLO ═════════════════════════════
+     *
+     * ✅ Dentro una palestra trainer e iscritti stanno nello **stesso** tenant:
+     * funzionava gia'. ✅ Un `free_user` ha un tenant personale tutto suo: i
+     * suoi esercizi non li vedeva gia' nessun altro.
+     *
+     * ⛔ **Il trainer indipendente no**: lui ha il suo tenant personale e ogni
+     * suo iscritto ne ha un altro (F1). I suoi esercizi non arrivavano a
+     * nessuno — e non dava nessun errore, dava una libreria piu' corta.
+     *
+     * ══ ⚖️ PERCHE' NON GUARDA `disattivato_il` ════════════════════════════
+     *
+     * 🚨 **E' qui che sta il «non devono piu' perdere».** La riga di
+     * `trainer_member` non si cancella mai: la decisione D5 dice gia' *«il
+     * legame resta, la storia si conserva, il canale si chiude»*.
+     *
+     * ⛔ Se la libreria sparisse insieme al rapporto, chi cambia trainer si
+     * ritroverebbe lo **storico** pieno di esercizi che non sa piu' leggere.
+     * Non cancellati: muti. ⚠️ Ed e' il tipo di danno che si scopre mesi dopo,
+     * quando qualcuno va a cercare quanto sollevava a marzo.
+     *
+     * ── 💡 In una direzione sola ──────────────────────────────────────────
+     *
+     * Il trainer **non** vede gli esercizi inventati dai suoi iscritti: la
+     * libreria scende, non sale. Chi si e' scritto «Panca della vergogna» nel
+     * suo diario non se lo ritrova nell'elenco del trainer.
+     *
+     * @return list<int> mai vuoto per un utente con un tenant
+     */
+    public function librerieVisibili(): array
+    {
+        if ($this->librerieMemo !== null) {
+            return $this->librerieMemo;
+        }
+
+        /*
+         * ⚠️ `DB::table` e non la relazione: questo metodo lo chiama uno scope
+         * globale, e passare dai modelli vorrebbe dire far girare gli scope
+         * dentro uno scope. 💡 Serve una colonna sola, e questa e' una lettura
+         * per richiesta grazie alla memoria qui sopra.
+         */
+        $ids = DB::table('trainer_member')
+            ->where('member_id', $this->getKey())
+            ->pluck('tenant_id')
+            ->all();
+
+        /*
+         * ⛔ **`trainer_member` da sola non basta, e il caso e' reale.**
+         *
+         * Uscendo da una palestra quella riga viene **cancellata**
+         * (`EsciDaUnaPalestra`), e gli esercizi restano alla palestra: senza
+         * questa colonna, chi esce perde la libreria — che e' esattamente la
+         * cosa che 3b-M esiste per impedire.
+         *
+         * 💡 `librerie_viste` e' il ricordo che non si cancella. Ci finisce il
+         * tenant della palestra **nel momento in cui si esce**, che e' l'unico
+         * istante in cui si e' sicuri che quella libreria le e' appartenuta —
+         * chi e' stato creato dentro una palestra dal pannello non ha mai avuto
+         * un momento di «ingresso».
+         */
+        foreach ($this->librerie_viste ?? [] as $vista) {
+            $ids[] = is_numeric($vista) ? (int) $vista : null;
+        }
+
+        $ids[] = $this->tenant_id;
+
+        return $this->librerieMemo = array_values(array_unique(
+            array_filter($ids, static fn (?int $id): bool => $id !== null)
+        ));
     }
 
     // ───────────────────────── ruoli ─────────────────────────

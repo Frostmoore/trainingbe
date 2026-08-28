@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\MuscleGroup;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
+use App\Models\Contracts\LibreriaCondivisaConGliIscritti;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,7 +25,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * non e' il posto dove far rispettare i permessi di scrittura, perche' un
  * update non passa necessariamente da una select.
  */
-class Exercise extends Model implements HasMedia
+class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritti
 {
     use BelongsToTenantOrGlobal;
     use HasFactory;

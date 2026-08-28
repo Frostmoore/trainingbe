@@ -135,7 +135,20 @@ class ExerciseMatcher
             $canonico = 'esercizio';
         }
 
-        $trovato = $this->cerca($canonico, $tenantId);
+        /*
+         * 🆕 Le librerie che chi scrive puo' vedere — 3b-M, 28/08/2026.
+         *
+         * ⚠️ **Cercare la' dentro, ma creare sempre nel proprio tenant.** Sono
+         * due cose diverse e vanno tenute diverse: se creasse nella libreria
+         * del trainer, un iscritto potrebbe allargargliela a sua insaputa.
+         *
+         * ⛔ `null` quando chi chiama non passa l'utente — import da PDF,
+         * comandi, seeder: li' si torna al comportamento di prima, che e'
+         * giusto, perche' non c'e' nessuno di cui guardare i trainer.
+         */
+        $librerie = $da?->librerieVisibili() ?? [];
+
+        $trovato = $this->cerca($canonico, $tenantId, $librerie);
 
         if ($trovato !== null) {
             return $this->completa($trovato, $tenantId, $primario, $secondari);
@@ -143,7 +156,7 @@ class ExerciseMatcher
 
         // Sinonimo noto: si ritenta con la forma vera.
         if (isset(self::SINONIMI[$canonico])) {
-            $trovato = $this->cerca(self::SINONIMI[$canonico], $tenantId);
+            $trovato = $this->cerca(self::SINONIMI[$canonico], $tenantId, $librerie);
 
             if ($trovato !== null) {
                 return $this->completa($trovato, $tenantId, $primario, $secondari);
@@ -260,8 +273,27 @@ class ExerciseMatcher
         return $esercizio;
     }
 
-    /** Corrispondenza esatta: prima la palestra, poi la piattaforma. */
-    private function cerca(string $canonico, ?int $tenantId): ?Exercise
+    /**
+     * Corrispondenza esatta: prima la propria, poi quelle del trainer, poi la
+     * piattaforma.
+     *
+     * ══ 🚨 PERCHE' GUARDA ANCHE LE LIBRERIE DEL TRAINER — 3b-M ════════════
+     *
+     * ⛔ Senza questo passaggio la funzione sarebbe **mezza fatta**: l'iscritto
+     * di un trainer indipendente **vedrebbe** «Panca della domenica»
+     * nell'elenco, ma scrivendone il nome in una scheda ne farebbe nascere un
+     * doppione nel proprio tenant.
+     *
+     * 🚨 Ed e' la peggiore delle due meta': il doppione e' un esercizio nuovo,
+     * quindi **senza illustrazione, senza muscoli e senza MET** — e con uno
+     * storico che si spezza in due nomi identici.
+     *
+     * 💡 L'ordine e' «dal piu' vicino al piu' lontano», lo stesso di prima con
+     * un gradino in mezzo: il mio, del mio trainer, della piattaforma.
+     *
+     * @param  list<int>  $altreLibrerie  i tenant dei trainer che mi seguono o mi hanno seguito
+     */
+    private function cerca(string $canonico, ?int $tenantId, array $altreLibrerie = []): ?Exercise
     {
         if ($tenantId !== null) {
             $suo = Exercise::withoutGlobalScopes()
@@ -271,6 +303,19 @@ class ExerciseMatcher
 
             if ($suo !== null) {
                 return $suo;
+            }
+        }
+
+        $altre = array_values(array_diff($altreLibrerie, [$tenantId]));
+
+        if ($altre !== []) {
+            $delTrainer = Exercise::withoutGlobalScopes()
+                ->whereIn('tenant_id', $altre)
+                ->where('slug_normalized', $canonico)
+                ->first();
+
+            if ($delTrainer !== null) {
+                return $delTrainer;
             }
         }
 
