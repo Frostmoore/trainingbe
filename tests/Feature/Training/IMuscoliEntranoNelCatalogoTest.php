@@ -24,7 +24,7 @@ use Tests\TestCase;
  * 📌 *«Ovviamente questo va fatto anche dove vengono creati gli esercizi,
  * quindi anche sul server e sul builder delle schede»*.
  *
- * ⛔ I 121 esercizi in libreria sono la parte facile: si riempiono una volta e
+ * ⛔ I 314 esercizi in libreria sono la parte facile: si riempiono una volta e
  * restano. **Gli esercizi veri nascono altrove** — da un nome scritto a mano in
  * una scheda, o letto da un PDF — e passano tutti da `ExerciseMatcher::match()`,
  * che fino a ieri li creava muti.

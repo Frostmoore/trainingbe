@@ -365,9 +365,14 @@ class WorkoutSessionController extends Controller
                      * deve arrivare insieme all'esercizio, o l'app dovrebbe chiedere
                      * il catalogo ogni volta che ricalcola.
                      *
-                     * ⚠️ `null` per i pochi esercizi che non ce l'hanno (1 su 121) e
-                     * per quelli scritti a mano dalle palestre: l'app usa il ripiego
+                     * ⚠️ 🆕 **`null` per 175 esercizi su 314** — era 1 su 121 prima
+                     * di 3b-L. Gli esercizi importati da workout-guide non portano
+                     * con se' un MET, e non se ne inventa uno: l'app usa il ripiego
                      * generico, esattamente come faceva `metOf()` qui.
+                     *
+                     * 💡 L'eccezione sono gli **allungamenti**, che il MET ce
+                     * l'hanno (2.3): li' il ripiego generico da 5.0 non sarebbe
+                     * stato «impreciso», sarebbe stato **il doppio del vero**.
                      */
                     'met' => $r->exercise?->met,
                 ],

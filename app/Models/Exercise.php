@@ -224,4 +224,35 @@ class Exercise extends Model implements HasMedia
     {
         return $this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null;
     }
+
+    /**
+     * Chi ha fatto il disegno — 3b-L, 28/08/2026.
+     *
+     * ══ ⚖️ E' UN OBBLIGO, NON UNA CORTESIA ════════════════════════════════
+     *
+     * Le illustrazioni del catalogo sono **CC BY-SA 4.0**: si possono usare
+     * anche commercialmente, ma l'attribuzione e' una condizione della
+     * licenza. ⛔ Senza, l'uso non e' autorizzato.
+     *
+     * 🚨 **`null` quando la foto l'ha caricata la palestra**, ed e' la cosa
+     * importante: quella foto e' loro, e scriverci sotto «Bryl Lim /
+     * Everkinetic» sarebbe un credito **falso** — attribuire a qualcun altro
+     * un lavoro che non ha fatto e' un danno peggiore del non attribuire.
+     *
+     * 💡 Il valore vive nelle proprieta' del file, non in una colonna: cambia
+     * insieme all'immagine perche' e' una proprieta' **dell'immagine**, non
+     * dell'esercizio.
+     */
+    public function imageCredit(): ?string
+    {
+        $media = $this->getFirstMedia(self::COLLECTION_IMMAGINE);
+
+        if ($media === null) {
+            return null;
+        }
+
+        $credito = $media->getCustomProperty('credito');
+
+        return is_string($credito) && $credito !== '' ? $credito : null;
+    }
 }

@@ -96,7 +96,7 @@ class ExerciseMatcher
      * ⛔ Prima questo metodo creava esercizi **completamente muti**: nessun
      * primario, nessun secondario. E' la falla vera di A.3, perche' e' da qui
      * che nasce ogni esercizio scritto a mano in una scheda o letto da un PDF —
-     * cioe' tutti quelli che non stanno nei 121 del catalogo.
+     * cioe' tutti quelli che non stanno nei 314 del catalogo.
      *
      * 💡 Adesso chi chiama puo' dire quello che sa, e questo metodo lo usa in
      * due momenti diversi: quando **crea** l'esercizio, e quando ne trova uno

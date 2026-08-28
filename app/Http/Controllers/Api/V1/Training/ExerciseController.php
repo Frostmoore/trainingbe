@@ -35,7 +35,28 @@ class ExerciseController extends Controller
             $query->where('muscle_group', $gruppo);
         }
 
-        $esercizi = $query->limit(min(200, (int) $request->integer('limit', 100)))->get();
+        /*
+         * ══ 🚨 IL TETTO DEVE STARE SOPRA IL CATALOGO INTERO — 3b-L ════════
+         *
+         * ⛔ Era **200**, e con 3b-L gli esercizi della piattaforma sono
+         * diventati **314**: l'app ne avrebbe ricevuti 200 e basta, senza
+         * nessun errore. 🚨 Il danno non sarebbe stato «mancano dei
+         * risultati»: `catalogoEserciziProvider` e' la fonte da cui l'app
+         * ricava **illustrazione, muscoli e MET** di ogni esercizio a partire
+         * dal suo id. Centoquattordici esercizi sarebbero rimasti senza
+         * figura e con la stella dei muscoli vuota, e chi guardava avrebbe
+         * concluso che l'importazione non ha funzionato.
+         *
+         * ⚠️ **Un tetto ci vuole lo stesso**: senza, una palestra con un
+         * catalogo enorme si porterebbe giu' tutto a ogni avvio. Ma deve
+         * stare largo sopra il caso vero, non appena sotto.
+         *
+         * ⏳ **Debito dichiarato**: la risposta giusta e' la paginazione. Fino
+         * ad allora l'app si accorge del troncamento — se riceve esattamente
+         * quanti ne ha chiesti, lo scrive nel log invece di far finta di
+         * niente.
+         */
+        $esercizi = $query->limit(min(1000, (int) $request->integer('limit', 100)))->get();
 
         return response()->json([
             'data' => $esercizi->map(fn (Exercise $e): array => [
@@ -54,6 +75,20 @@ class ExerciseController extends Controller
                 'image_url' => $e->imageUrl(),
 
                 /*
+                 * ⚖️ 🆕 Chi ha fatto il disegno — 3b-L, 28/08/2026.
+                 *
+                 * 🚨 **Viaggia con l'immagine e da nessun'altra parte.** Un
+                 * credito che l'app tenesse per conto suo — una costante, una
+                 * riga scritta nel widget — resterebbe li' anche il giorno che
+                 * una palestra sostituisce il disegno con una foto sua, e
+                 * attribuirebbe a Bryl Lim una fotografia che non ha scattato.
+                 *
+                 * 💡 `null` vuol dire «non e' dovuto niente», e l'app allora
+                 * non scrive nessuna riga.
+                 */
+                'image_credit' => $e->imageCredit(),
+
+                /*
                  * 🆕 **Il MET viaggia con l'esercizio** — FASE 11.2, 21/08/2026.
                  *
                  * 🚨 Da quando gli allenamenti stanno sul telefono, il calcolo
@@ -63,9 +98,14 @@ class ExerciseController extends Controller
                  * deve arrivare insieme all'esercizio, o l'app dovrebbe chiedere
                  * il catalogo ogni volta che ricalcola.
                  *
-                 * ⚠️ `null` per i pochi esercizi che non ce l'hanno (1 su 121) e
-                 * per quelli scritti a mano dalle palestre: l'app usa il ripiego
+                 * ⚠️ 🆕 **`null` per 175 esercizi su 314** — era 1 su 121 prima
+                 * di 3b-L. Gli esercizi importati da workout-guide non portano
+                 * con se' un MET, e non se ne inventa uno: l'app usa il ripiego
                  * generico, esattamente come faceva `metOf()` qui.
+                 *
+                 * 💡 L'eccezione sono gli **allungamenti**, che il MET ce
+                 * l'hanno (2.3): li' il ripiego generico da 5.0 non sarebbe
+                 * stato «impreciso», sarebbe stato **il doppio del vero**.
                  */
                 'met' => $e->met,
             ])->all(),

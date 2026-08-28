@@ -172,7 +172,7 @@ class WorkoutCalorieService
      * | | |
      * |---|---|
      * | La formula era gia' qui | girava **su ogni sessione**, prima di chiamare il modello |
-     * | E non era rozza | `metOf()` legge il MET del **singolo esercizio**: 120 esercizi su 121 ce l'hanno, da 3.0 a 11.0 |
+     * | E non era rozza | `metOf()` legge il MET del **singolo esercizio**: 139 su 314 ce l'hanno, da 2.3 a 11.0 |
      * | Il peso c'e' | lo manda l'app nella richiesta (`$kgDaRichiesta`), senza che il server lo conservi |
      * | Costo misurato | **0,00077 USD** a sessione, e mai cacheato: il prompt e' sotto la soglia |
      *
@@ -216,7 +216,7 @@ class WorkoutCalorieService
      * Il MET medio della seduta, letto **esercizio per esercizio**.
      *
      * 🚨 **E' il motivo per cui l'AI qui non serviva.** Non e' un valore fisso:
-     * ogni esercizio del catalogo ha il proprio MET — 120 su 121 ce l'hanno, da
+     * ogni esercizio del catalogo ha il proprio MET — 139 su 314 ce l'hanno, da
      * 3.0 a 11.0 — quindi una seduta di squat e stacchi pesa gia' piu' di una di
      * bicipiti, senza chiedere niente a nessuno.
      *

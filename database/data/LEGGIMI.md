@@ -64,3 +64,81 @@ Per caricarlo nel database:
 ```
 php artisan comuni:importa
 ```
+
+---
+
+## `illustrazioni/` — 305 disegni, e `illustrazioni.jsonl`
+
+Un PNG per esercizio, 512×512, **grigio + alfa**: il colore non c'è perché non
+serve — la forma sta tutta nel canale alfa, e l'app la tinge a schermo.
+
+### 🚨 Perché sono bianchi, e perché è voluto
+
+Il tratto originale è `fill="#fff"` su fondo trasparente. ⛔ Su una card chiara
+sarebbero **invisibili**. Si tengono così e si colorano nell'app
+(`Miniatura.tinta`, `BlendMode.srcIn`): lo stesso file serve tema chiaro e tema
+scuro, e nessuno deve mantenere due parchi immagini.
+
+💡 E c'è una seconda ragione, legale: **tingere a schermo non crea un'opera
+derivata da ridistribuire**. Il file che spediamo resta l'originale, e la
+clausola *ShareAlike* non ha niente da mordere.
+
+### Le colonne di `illustrazioni.jsonl`
+
+| Chiave | Cosa contiene |
+|---|---|
+| `s` | Slug, cioè il nome del file senza `.png` |
+| `n` | Nome inglese, come nella fonte |
+| `m` · `q` | Muscolo primario e attrezzo secondo la fonte |
+| `c` | 🚨 **Il credito da mostrare**, per esteso |
+| `u` | L'indirizzo della fonte |
+
+### Le due fonti
+
+1. **`bryllim/workout-guide`** — 302 esercizi, tre fotogrammi ciascuno.
+   Codice **MIT**, disegni **CC BY-SA 4.0**. Si prende il **fotogramma 2**: è la
+   posizione di lavoro, quella che fa riconoscere il movimento, ed è disegnata
+   più grande delle altre due. ⚠️ Verificato guardando un campione, non dedotto.
+
+2. **`everkinetic/data`** — **CC BY-SA 4.0**, ed è la fonte da cui deriva anche
+   la prima. Se ne prendono **tre soli**, per esercizi che a workout-guide
+   mancano. ⚠️ Disegna nero su fondo bianco: vanno rovesciati per stare accanto
+   agli altri, e i tre file di partenza stanno in `everkinetic/`.
+   ⛔ **Altri due candidati sono stati scartati**: il rasterizzatore sbaglia il
+   loro disegno (una zeppa nera in mezzo alla figura). 🚨 Una figura sbagliata è
+   peggio di un segnaposto — nessuno la legge come un errore.
+
+### ⚖️ L'attribuzione è una condizione della licenza
+
+CC BY-SA 4.0 permette l'uso **anche commerciale**, ma solo dando credito. ⛔
+Senza, l'uso non è autorizzato. Il credito viaggia come proprietà del file
+caricato e arriva all'app in `image_credit`; l'app lo scrive sotto l'esercizio
+nella pagina della scheda.
+
+🚨 **`null` quando la foto l'ha caricata la palestra**: quella è loro, e
+attribuirla a Bryl Lim sarebbe un credito **falso**.
+
+### ⛔ Due disegni non sono attaccati a nessun esercizio
+
+`bent-over-rear-delt-raise` e `chair-dip`: dicono la stessa cosa di «Alzate
+posteriori» e «Dips su panca». 💡 I file restano perché la cartella è uno
+specchio fedele della fonte, ma un quasi-doppione nel catalogo farebbe scegliere
+a caso `ExerciseMatcher`.
+
+### Come si rigenera
+
+Come i comuni: **non a mano**, e non a ogni avvio dell'applicazione.
+
+```
+git clone --depth 1 https://github.com/bryllim/workout-guide.git /tmp/wg
+php database/data/costruisci-illustrazioni.php /tmp/wg
+```
+
+Serve `magick` (ImageMagick) nel PATH. Per caricarli nel database:
+
+```
+php artisan esercizi:illustrazioni
+```
+
+⚠️ Il comando è **idempotente** e non sostituisce le foto caricate a mano dalle
+palestre (`--forza` per farlo lo stesso).

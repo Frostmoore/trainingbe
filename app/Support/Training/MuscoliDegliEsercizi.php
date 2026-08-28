@@ -206,6 +206,240 @@ final class MuscoliDegliEsercizi
         'Alzate laterali ai cavi' => [null, []],
         'Shoulder press a macchina' => [null, ['triceps']],
         'Estensioni ai cavi sopra la testa' => [null, []],
+
+        /*
+         * ══ 🆕 DAL SECONDO DATASET: workout-guide — 3b-L, 28/08/2026 ══════
+         *
+         * ⚠️ **Fonte diversa dalle righe qui sopra**, e va detto: quelle
+         * vengono da `free-exercise-db`, queste da `bryllim/workout-guide`
+         * (metadati sotto licenza MIT). Il nome inglese in coda dice **quale
+         * voce**, come per le altre.
+         *
+         * 💡 Il primario e' sempre `null` — «non lo cambio» — perche' per
+         * questi esercizi il primario lo scrive gia' il seeder: qui servono
+         * solo i secondari, che senza questa mappa sarebbero vuoti e
+         * lascerebbero **grigia** la figura del corpo per meta' catalogo.
+         *
+         * ⛔ `Mobility` e `Cardio` non diventano secondari: come `full_body`,
+         * dicono che tipo di movimento e', non che zona lavora.
+         */
+
+        // ── Petto ──
+        'Allungamento pettorali alla porta' => [null, ['shoulders']], // Doorway Chest Stretch
+        'Panca declinata con manubri' => [null, ['triceps', 'shoulders']], // Decline Dumbbell Press
+        'Panca piana al multipower' => [null, ['triceps', 'shoulders']], // Smith Machine Bench Press
+        'Piegamenti a macchina da scrivere' => [null, ['triceps', 'shoulders', 'abs']], // Typewriter Push-up
+        'Piegamenti a presa larga' => [null, ['shoulders', 'triceps', 'abs']], // Wide Push-up
+        'Piegamenti al muro' => [null, ['triceps', 'shoulders']], // Wall Push-up
+        'Piegamenti arciere' => [null, ['triceps', 'shoulders', 'abs']], // Archer Push-up
+        'Piegamenti con piedi rialzati' => [null, ['shoulders', 'triceps', 'abs']], // Decline Push-up
+        'Piegamenti esplosivi' => [null, ['triceps', 'shoulders', 'abs']], // Explosive Push-up
+        'Piegamenti hindu' => [null, ['shoulders', 'triceps', 'abs']], // Hindu Push-up
+        'Piegamenti sulle ginocchia' => [null, ['triceps', 'shoulders', 'abs']], // Knee Push-up
+        'Piegamenti zavorrati' => [null, ['triceps', 'abs']], // Weighted Push-up
+        'Seal jack' => [null, ['shoulders', 'quads']], // Seal Jack
+
+        // ── Schiena ──
+        'Alzate a T da prono' => [null, ['shoulders']], // Prone T Raise
+        'Alzate a Y da prono' => [null, ['shoulders']], // Prone Y Raise
+        'Angelo inverso' => [null, ['shoulders']], // Reverse Snow Angel
+        'Aperture con elastico' => [null, ['shoulders']], // Band Pull-Apart
+        'Gatto-cammello' => [null, ['abs']], // Cat-Cow Stretch
+        'Lat machine con elastico' => [null, ['biceps', 'abs']], // Banded Lat Pulldown
+        'Lat machine presa larga' => [null, ['biceps']], // Wide-Grip Lat Pulldown
+        'Meadows row' => [null, ['biceps', 'shoulders']], // Meadows Row
+        'Pendlay row' => [null, ['biceps', 'shoulders']], // Pendlay Row
+        'Piegamenti scapolari' => [null, ['chest', 'shoulders', 'abs']], // Scapular Push-up
+        'Posizione del bambino' => [null, ['shoulders', 'glutes']], // Child's Pose
+        'Rack pull' => [null, ['glutes', 'hamstrings']], // Rack Pull
+        'Rematore a macchina' => [null, ['biceps']], // Machine Row
+        'Rematore alla porta' => [null, ['biceps', 'abs']], // Doorway Row
+        'Rematore con appoggio al petto' => [null, ['biceps', 'shoulders']], // Chest Supported Row
+        'Rematore con asciugamano' => [null, ['biceps', 'abs']], // Towel Row
+        'Rematore con due manubri' => [null, ['biceps', 'shoulders']], // Dumbbell Bent Over Row
+        'Rematore con elastico' => [null, ['biceps']], // Banded Row
+        'Sospensione attiva' => [null, ['forearms', 'abs']], // Active Hang
+        'Stacco con trap bar' => [null, ['quads', 'forearms']], // Trap Bar Deadlift
+        'Stacco sumo' => [null, ['glutes', 'quads']], // Sumo Deadlift
+        'Stacco sumo con manubrio' => [null, ['glutes', 'quads']], // Dumbbell Sumo Deadlift
+        'Superman' => [null, ['glutes', 'hamstrings']], // Superman
+        'Superman isometrico' => [null, ['glutes', 'hamstrings']], // Superman Hold
+        'Trazioni a L' => [null, ['biceps', 'abs', 'forearms']], // L-Sit Pull-up
+        'Trazioni commando' => [null, ['biceps', 'abs']], // Commando Pull-up
+        'Trazioni con asciugamano' => [null, ['biceps', 'forearms']], // Towel Pull-up
+        'Trazioni negative' => [null, ['biceps', 'forearms']], // Negative Pull-up
+        'Trazioni orizzontali' => [null, ['biceps', 'abs']], // Inverted Row
+        'Trazioni presa neutra' => [null, ['biceps', 'abs']], // Neutral-Grip Pull-up
+        'Trazioni scapolari' => [null, ['forearms', 'abs']], // Scapular Pull-up
+        'Trazioni zavorrate' => [null, ['biceps']], // Weighted Pull-up
+
+        // ── Spalle ──
+        'Allungamento spalle incrociato' => [null, ['back']], // Cross-Body Shoulder Stretch
+        'Alzate frontali ai cavi' => [null, ['chest']], // Cable Front Raise
+        'Alzate frontali con disco' => [null, ['chest']], // Plate Front Raise
+        'Alzate laterali a macchina' => [null, ['back']], // Machine Lateral Raise
+        'Alzate posteriori ai cavi' => [null, ['back']], // Cable Rear Delt Fly
+        'Circonduzioni delle braccia' => [null, ['chest', 'back']], // Arm Circles
+        'Face pull con elastico' => [null, []], // Banded Face Pull
+        'Landmine press' => [null, ['chest', 'triceps']], // Landmine Press
+        'Pectoral machine inversa' => [null, ['back']], // Reverse Pec Deck
+        'Piegamenti in verticale' => [null, ['triceps', 'abs', 'chest']], // Handstand Push-up
+        'Piegamenti in verticale al muro' => [null, ['triceps', 'abs', 'chest']], // Wall Handstand Push-up
+        'Pike push up' => [null, ['triceps', 'chest', 'abs']], // Pike Push-up
+        'Pike push up con piedi rialzati' => [null, ['triceps', 'chest', 'abs']], // Feet-Elevated Pike Push-up
+        'Push press' => [null, ['triceps', 'quads']], // Push Press
+        'Scrollate con manubri' => [null, ['forearms']], // Dumbbell Shrug
+        'Shoulder press in piedi' => [null, ['triceps', 'abs']], // Standing Dumbbell Press
+        'Wall walk' => [null, ['abs', 'chest', 'triceps']], // Wall Walk
+
+        // ── Bicipiti ──
+        'Chin up assistite' => [null, ['back']], // Assisted Chin-up
+        'Chin up zavorrate' => [null, ['back']], // Weighted Chin-up
+        'Curl a martello con corda' => [null, ['forearms']], // Rope Hammer Curl
+        'Curl su panca inclinata' => [null, ['forearms']], // Incline Dumbbell Curl
+        'Drag curl' => [null, ['forearms']], // Drag Curl
+        'Spider curl' => [null, ['forearms']], // Spider Curl
+
+        // ── Tricipiti ──
+        'Camminata del granchio' => [null, ['glutes', 'abs', 'shoulders']], // Crab Walk
+        'Dips assistite' => [null, ['chest']], // Assisted Dip
+        'Dips su panca' => [null, ['chest', 'shoulders']], // Bench Dip
+        'Dips zavorrate' => [null, ['chest', 'shoulders']], // Weighted Dip
+        'Estensioni tricipiti a un braccio' => [null, ['shoulders']], // Single Arm Dumbbell Tricep Extension
+        'French press con manubri' => [null, ['shoulders']], // Two Dumbbell Skullcrusher
+        'French press con un manubrio' => [null, ['shoulders']], // Single Dumbbell Skullcrusher
+        'Piegamenti a diamante' => [null, ['chest', 'shoulders', 'abs']], // Diamond Push-up
+
+        // ── Addome ──
+        'Bird dog' => [null, ['glutes', 'shoulders']], // Bird Dog
+        'Bruco' => [null, ['shoulders', 'hamstrings', 'chest']], // Inchworm
+        'Camminata dell\'orso' => [null, ['shoulders', 'quads']], // Bear Crawl
+        'Crunch bicicletta' => [null, ['quads']], // Bicycle Crunch
+        'Crunch con disco' => [null, []], // Weighted Crunch
+        'Dead bug' => [null, ['quads']], // Dead Bug
+        'Dead bug con elastico' => [null, ['glutes', 'shoulders']], // Banded Dead Bug
+        'Dragon flag' => [null, ['back', 'quads']], // Dragon Flag
+        'Flessioni laterali con manubrio' => [null, ['forearms']], // Dumbbell Side Bend
+        'Forbici' => [null, ['quads']], // Flutter Kick
+        'Hollow rock' => [null, ['quads']], // Hollow Rock
+        'Knee tuck da seduto' => [null, ['quads']], // Seated Knee Tuck
+        'L-sit' => [null, ['triceps', 'quads', 'shoulders']], // L-Sit Hold
+        'Pallof hold ai cavi' => [null, ['glutes', 'shoulders']], // Cable Pallof Hold
+        'Pallof press' => [null, ['shoulders']], // Pallof Press
+        'Pallof press con elastico' => [null, ['glutes', 'shoulders']], // Banded Pallof Press
+        'Pallof press in ginocchio' => [null, ['glutes', 'shoulders']], // Half-Kneeling Pallof Press
+        'Piegamenti con tocco delle spalle' => [null, ['chest', 'shoulders', 'triceps']], // Push-up Shoulder Tap
+        'Plank con tocco delle spalle' => [null, ['shoulders', 'chest']], // Plank Shoulder Tap
+        'Plank dell\'orso' => [null, ['quads', 'shoulders']], // Bear Plank
+        'Plank di Copenaghen' => [null, ['quads', 'glutes']], // Copenhagen Plank
+        'Plank jack' => [null, ['shoulders']], // Plank Jack
+        'Plank laterale con discesa del bacino' => [null, ['shoulders', 'glutes']], // Side Plank Hip Dip
+        'Russian twist con peso' => [null, ['shoulders']], // Weighted Russian Twist
+        'Sit up su panca declinata' => [null, ['quads']], // Decline Sit-Up
+        'Sollevamento ginocchia alla sbarra' => [null, ['forearms']], // Hanging Knee Raise
+        'Sollevamento ginocchia alle parallele' => [null, ['shoulders']], // Captain's Chair Knee Raise
+        'Spaccalegna ai cavi' => [null, ['shoulders']], // Cable Woodchop
+        'Spaccalegna con elastico' => [null, ['shoulders', 'glutes']], // Banded Woodchop
+        'Toccare le punte' => [null, []], // Toe Touch
+        'Tocco dei talloni' => [null, []], // Heel Tap
+        'Torsioni del busto' => [null, ['back']], // Torso Twists
+        'V-up' => [null, ['quads']], // V-Up
+
+        // ── Glutei ──
+        'Abduzioni da sdraiato' => [null, ['abs']], // Side-Lying Hip Abduction
+        'Abduzioni da seduto con elastico' => [null, ['abs']], // Banded Seated Hip Abduction
+        'Abduzioni in piedi con elastico' => [null, ['abs']], // Banded Standing Hip Abduction
+        'Affondo incrociato' => [null, ['quads', 'hamstrings', 'abs']], // Curtsy Lunge
+        'Affondo incrociato con manubri' => [null, ['quads', 'hamstrings', 'abs']], // Dumbbell Curtsy Lunge
+        'Affondo indietro in deficit' => [null, ['quads', 'hamstrings', 'abs']], // Deficit Reverse Lunge
+        'Allungamento a farfalla' => [null, ['quads']], // Butterfly Stretch
+        'Camminata laterale con elastico' => [null, ['quads', 'abs']], // Banded Lateral Walk
+        'Clamshell' => [null, ['abs']], // Clamshell
+        'Clamshell con elastico' => [null, ['abs']], // Banded Clamshell
+        'Fire hydrant' => [null, ['abs']], // Fire Hydrant
+        'Fire hydrant con elastico' => [null, ['abs']], // Banded Fire Hydrant
+        'Frog pump' => [null, ['hamstrings']], // Frog Pump
+        'Frog pump con elastico' => [null, ['hamstrings']], // Banded Frog Pump
+        'Hip airplane' => [null, ['hamstrings', 'abs']], // Hip Airplane
+        'Hip thrust al multipower' => [null, ['hamstrings', 'abs']], // Smith Machine Hip Thrust
+        'Hip thrust con elastico' => [null, ['hamstrings', 'abs']], // Banded Hip Thrust
+        'Hip thrust con manubrio' => [null, ['hamstrings']], // Dumbbell Hip Thrust
+        'Iperestensioni inverse' => [null, ['hamstrings', 'back']], // Reverse Hyperextension
+        'Iperestensioni per i glutei' => [null, ['hamstrings', 'back']], // Glute-Focused Back Extension
+        'Kickback a macchina' => [null, ['hamstrings']], // Machine Glute Kickback
+        'Kickback con elastico' => [null, ['hamstrings', 'abs']], // Banded Kickback
+        'Monster walk con elastico' => [null, ['quads', 'hamstrings', 'abs']], // Banded Monster Walk
+        'Ponte glutei con bilanciere' => [null, ['hamstrings', 'abs']], // Barbell Glute Bridge
+        'Ponte glutei con elastico' => [null, ['hamstrings', 'abs']], // Banded Glute Bridge
+        'Ponte glutei con manubrio' => [null, ['hamstrings', 'abs']], // Dumbbell Glute Bridge
+        'Ponte glutei con marcia' => [null, ['hamstrings', 'abs']], // Glute Bridge March
+        'Pull through ai cavi' => [null, ['hamstrings', 'back']], // Cable Pull-Through
+        'Slanci indietro' => [null, ['hamstrings', 'abs']], // Donkey Kick
+        'Slanci indietro con elastico' => [null, ['hamstrings', 'abs']], // Banded Donkey Kick
+        'Slanci laterali da sdraiato' => [null, ['abs']], // Side-Lying Leg Raise
+        'Squat sumo con manubrio' => [null, ['quads', 'hamstrings']], // Dumbbell Sumo Squat
+
+        // ── Quadricipiti ──
+        'Adduttori a macchina' => [null, ['abs']], // Hip Adduction Machine
+        'Adduzioni ai cavi' => [null, ['abs', 'glutes']], // Cable Standing Hip Adduction
+        'Affondo indietro' => [null, ['glutes', 'hamstrings']], // Reverse Lunge
+        'Affondo indietro al multipower' => [null, ['glutes', 'hamstrings', 'abs']], // Smith Machine Reverse Lunge
+        'Affondo laterale a corpo libero' => [null, ['glutes', 'hamstrings', 'abs']], // Lateral Lunge
+        'Allungamento flessori dell\'anca' => [null, []], // Kneeling Hip Flexor Stretch
+        'Allungamento quadricipiti in piedi' => [null, ['glutes']], // Standing Quad Stretch
+        'Belt squat' => [null, ['glutes']], // Belt Squat
+        'Cossack squat' => [null, ['glutes', 'hamstrings', 'abs']], // Cossack Squat
+        'Goblet squat con talloni rialzati' => [null, ['glutes', 'abs']], // Heel-Elevated Goblet Squat
+        'Pistol squat' => [null, ['glutes', 'hamstrings', 'abs']], // Pistol Squat
+        'Pistol squat assistito' => [null, ['glutes', 'hamstrings', 'abs']], // Assisted Pistol Squat
+        'Sedia al muro' => [null, ['glutes', 'abs']], // Wall Sit
+        'Shrimp squat' => [null, ['glutes', 'hamstrings', 'abs']], // Shrimp Squat
+        'Skater squat' => [null, ['glutes', 'hamstrings', 'abs']], // Skater Squat
+        'Split squat' => [null, ['glutes', 'abs']], // Split Squat
+        'Split squat al multipower' => [null, ['glutes', 'abs']], // Smith Machine Split Squat
+        'Split squat con avampiede rialzato' => [null, ['glutes', 'abs']], // Front-Foot Elevated Split Squat
+        'Squat a corpo libero' => [null, ['glutes', 'hamstrings', 'abs']], // Bodyweight Squat
+        'Squat a una gamba al box' => [null, ['glutes', 'hamstrings', 'abs']], // Single-Leg Box Squat
+        'Squat al landmine' => [null, ['glutes', 'abs']], // Landmine Squat
+        'Squat al multipower' => [null, ['glutes', 'abs']], // Smith Machine Squat
+        'Squat bulgaro al multipower' => [null, ['glutes', 'abs']], // Smith Machine Bulgarian Split Squat
+        'Squat con elastico' => [null, ['glutes', 'hamstrings', 'abs']], // Banded Squat
+        'Squat con salto' => [null, ['glutes', 'calves']], // Jump Squat
+        'Step down' => [null, ['glutes', 'hamstrings', 'calves']], // Step-Down
+
+        // ── Femorali ──
+        'Allungamento femorali' => [null, ['calves']], // Hamstring Stretch
+        'Allungamento in avanti da seduto' => [null, ['back', 'calves']], // Seated Forward Fold
+        'Leg curl con asciugamano' => [null, ['glutes', 'abs']], // Towel Hamstring Curl
+        'Leg curl con fitball' => [null, ['glutes', 'abs']], // Stability Ball Hamstring Curl
+        'Leg curl da seduto' => [null, ['calves']], // Seated Leg Curl
+        'Slanci delle gambe' => [null, ['glutes', 'quads']], // Leg Swings
+        'Stacco rumeno a una gamba' => [null, ['glutes', 'abs']], // Single-Leg Romanian Deadlift
+        'Stacco rumeno al landmine' => [null, ['glutes', 'back']], // Landmine Romanian Deadlift
+        'Stacco rumeno al multipower' => [null, ['glutes', 'back']], // Smith Machine Romanian Deadlift
+        'Stacco rumeno con kettlebell' => [null, ['glutes', 'back']], // Kettlebell Romanian Deadlift
+        'Stacco rumeno con manubri' => [null, ['glutes', 'back']], // Dumbbell Romanian Deadlift
+        'Walkout per femorali' => [null, ['glutes', 'abs']], // Lying Hamstring Walkout
+
+        // ── Polpacci ──
+        'Allungamento polpacci al muro' => [null, []], // Wall Calf Stretch
+        'Calf a corpo libero' => [null, []], // Calf Raise
+        'Donkey calf' => [null, []], // Donkey Calf Raise
+
+        // ── Corpo intero ──
+        'Mezzo burpee' => [null, ['quads', 'shoulders']], // Half Burpee
+        'Sprawl' => [null, ['abs', 'shoulders']], // Sprawl
+        'Squat thrust' => [null, ['quads', 'shoulders']], // Squat Thrust
+        'World\'s greatest stretch' => [null, ['glutes', 'hamstrings', 'back']], // World's Greatest Stretch
+
+        // ── Cardio ──
+        'Camminata' => [null, []], // Walking
+        'Corsa sul posto a ginocchia alte' => [null, ['abs']], // High Knees
+        'Escursionismo' => [null, ['glutes']], // Hiking
+        'Jumping jack' => [null, ['shoulders', 'calves']], // Jumping Jack
+        'Nuoto' => [null, ['shoulders']], // Swimming
+        'Salti del pattinatore' => [null, ['glutes', 'calves']], // Skater Hop
+        'Spostamenti laterali' => [null, ['glutes', 'calves']], // Lateral Shuffle
     ];
 
     private function __construct() {}

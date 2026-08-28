@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * ── 🚨 Il campo non era vuoto: era povero ────────────────────────────────
  *
- * `muscle_group` c'era gia', valorizzato su **tutti** e 121 gli esercizi. ⚠️ Ma
+ * `muscle_group` c'era gia', valorizzato su **tutti** e 121 gli esercizi di
+ * allora. ⚠️ Ma
  * e' **singolo**: una panca piana dice `chest` e tace su tricipiti e deltoidi
  * anteriori. 💡 Finche' serviva a filtrare un elenco andava bene; su un uomo
  * colorato per zone quella lacuna **si vede**.

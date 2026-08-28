@@ -51,7 +51,7 @@ class MuscoliDegliEserciziTest extends TestCase
          * quella che conferma qualunque cosa le si metta davanti.
          *
          * 💡 Ed è così che si è scoperto il difetto vero: il catalogo lo crea
-         * un **seeder**, non una migrazione. Su un'installazione nuova i 121
+         * un **seeder**, non una migrazione. Su un'installazione nuova i 314
          * esercizi sarebbero rinati senza secondari.
          */
         $this->seed(ExerciseLibrarySeeder::class);

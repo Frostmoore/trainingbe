@@ -192,6 +192,256 @@ class ExerciseLibrarySeeder extends Seeder
         ['Strappo', MuscleGroup::FullBody, 'bilanciere', 6.0],
         ['Battle rope', MuscleGroup::FullBody, 'attrezzo', 8.0],
         ['Slam ball', MuscleGroup::FullBody, 'attrezzo', 8.0],
+
+        /*
+         * ══ 🆕 IL SECONDO BLOCCO — 3b-L, 28/08/2026 ═══════════════════════
+         *
+         * 📌 *«A sto punto importa anche gli esercizi che mancano da noi
+         * proprio no? Cosi' abbiamo anche noi un db piu' ampio»*.
+         *
+         * 💡 Vengono da **workout-guide**, la stessa raccolta da cui arrivano
+         * le illustrazioni: importare i disegni e non gli esercizi avrebbe
+         * lasciato duecento figure senza niente a cui attaccarsi.
+         *
+         * ⚠️ **I nomi sono scritti a mano, uno per uno.** Sono il vocabolario
+         * su cui `ExerciseMatcher` (B7.3) riconcilia i PDF delle palestre: una
+         * traduzione letterale dall'inglese — «Spinta dell'anca» per «Hip
+         * thrust» — non la cerca nessuno, e un nome che nessuno cerca e' una
+         * riga che non verra' mai agganciata.
+         *
+         * ⛔ **Due voci di workout-guide sono state scartate apposta**:
+         * `bent-over-rear-delt-raise` e `chair-dip`, perche' dicono la stessa
+         * cosa di «Alzate posteriori» e «Dips su panca». 🚨 Un quasi-doppione
+         * fa piu' danno di un buco: costringe il matcher a scegliere fra due
+         * righe che vogliono dire la stessa cosa, e sceglie a caso.
+         *
+         * ⚠️ **Il MET resta `null` quasi ovunque, ed e' voluto.** Ce l'hanno
+         * solo gli allungamenti (2.3 — Compendium 02101, «stretching, mild») e
+         * i cardio che hanno una voce loro. 🚨 Per gli allungamenti il numero
+         * **serve**: senza, il ripiego generico e' 5.0, e un'app che conta
+         * 5 MET per due minuti di allungamento dei femorali sta regalando
+         * calorie che nessuno ha speso.
+         *
+         * 🆕 `elastico` e' un attrezzo nuovo: trentatre' esercizi lo usano, e
+         * non c'era.
+         */
+
+        // Petto
+        ['Allungamento pettorali alla porta', MuscleGroup::Chest, 'corpo libero', 2.3],
+        ['Panca declinata con manubri', MuscleGroup::Chest, 'manubri', null],
+        ['Panca piana al multipower', MuscleGroup::Chest, 'macchina', null],
+        ['Piegamenti a macchina da scrivere', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti a presa larga', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti al muro', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti arciere', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti con piedi rialzati', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti esplosivi', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti hindu', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti sulle ginocchia', MuscleGroup::Chest, 'corpo libero', null],
+        ['Piegamenti zavorrati', MuscleGroup::Chest, 'corpo libero', null],
+        ['Seal jack', MuscleGroup::Chest, 'corpo libero', null],
+
+        // Schiena
+        ['Alzate a T da prono', MuscleGroup::Back, 'corpo libero', null],
+        ['Alzate a Y da prono', MuscleGroup::Back, 'corpo libero', null],
+        ['Angelo inverso', MuscleGroup::Back, 'corpo libero', null],
+        ['Aperture con elastico', MuscleGroup::Back, 'elastico', null],
+        ['Gatto-cammello', MuscleGroup::Back, 'corpo libero', 2.3],
+        ['Lat machine con elastico', MuscleGroup::Back, 'elastico', null],
+        ['Lat machine presa larga', MuscleGroup::Back, 'cavi', null],
+        ['Meadows row', MuscleGroup::Back, 'bilanciere', null],
+        ['Pendlay row', MuscleGroup::Back, 'bilanciere', null],
+        ['Piegamenti scapolari', MuscleGroup::Back, 'corpo libero', null],
+        ['Posizione del bambino', MuscleGroup::Back, 'corpo libero', 2.3],
+        ['Rack pull', MuscleGroup::Back, 'bilanciere', null],
+        ['Rematore a macchina', MuscleGroup::Back, 'macchina', null],
+        ['Rematore alla porta', MuscleGroup::Back, 'corpo libero', null],
+        ['Rematore con appoggio al petto', MuscleGroup::Back, 'macchina', null],
+        ['Rematore con asciugamano', MuscleGroup::Back, 'corpo libero', null],
+        ['Rematore con due manubri', MuscleGroup::Back, 'manubri', null],
+        ['Rematore con elastico', MuscleGroup::Back, 'elastico', null],
+        ['Sospensione attiva', MuscleGroup::Back, 'corpo libero', null],
+        ['Stacco con trap bar', MuscleGroup::Back, 'bilanciere', null],
+        ['Stacco sumo', MuscleGroup::Back, 'bilanciere', null],
+        ['Stacco sumo con manubrio', MuscleGroup::Back, 'manubri', null],
+        ['Superman', MuscleGroup::Back, 'corpo libero', null],
+        ['Superman isometrico', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni a L', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni commando', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni con asciugamano', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni negative', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni orizzontali', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni presa neutra', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni scapolari', MuscleGroup::Back, 'corpo libero', null],
+        ['Trazioni zavorrate', MuscleGroup::Back, 'corpo libero', null],
+
+        // Spalle
+        ['Allungamento spalle incrociato', MuscleGroup::Shoulders, 'corpo libero', 2.3],
+        ['Alzate frontali ai cavi', MuscleGroup::Shoulders, 'cavi', null],
+        ['Alzate frontali con disco', MuscleGroup::Shoulders, 'attrezzo', null],
+        ['Alzate laterali a macchina', MuscleGroup::Shoulders, 'macchina', null],
+        ['Alzate posteriori ai cavi', MuscleGroup::Shoulders, 'cavi', null],
+        ['Circonduzioni delle braccia', MuscleGroup::Shoulders, 'corpo libero', 2.3],
+        ['Face pull con elastico', MuscleGroup::Shoulders, 'elastico', null],
+        ['Landmine press', MuscleGroup::Shoulders, 'bilanciere', null],
+        ['Pectoral machine inversa', MuscleGroup::Shoulders, 'macchina', null],
+        ['Piegamenti in verticale', MuscleGroup::Shoulders, 'corpo libero', null],
+        ['Piegamenti in verticale al muro', MuscleGroup::Shoulders, 'corpo libero', null],
+        ['Pike push up', MuscleGroup::Shoulders, 'corpo libero', null],
+        ['Pike push up con piedi rialzati', MuscleGroup::Shoulders, 'corpo libero', null],
+        ['Push press', MuscleGroup::Shoulders, 'bilanciere', null],
+        ['Scrollate con manubri', MuscleGroup::Shoulders, 'manubri', null],
+        ['Shoulder press in piedi', MuscleGroup::Shoulders, 'manubri', null],
+        ['Wall walk', MuscleGroup::Shoulders, 'corpo libero', null],
+
+        // Bicipiti
+        ['Chin up assistite', MuscleGroup::Biceps, 'macchina', null],
+        ['Chin up zavorrate', MuscleGroup::Biceps, 'corpo libero', null],
+        ['Curl a martello con corda', MuscleGroup::Biceps, 'cavi', null],
+        ['Curl su panca inclinata', MuscleGroup::Biceps, 'manubri', null],
+        ['Drag curl', MuscleGroup::Biceps, 'bilanciere', null],
+        ['Spider curl', MuscleGroup::Biceps, 'manubri', null],
+
+        // Tricipiti
+        ['Camminata del granchio', MuscleGroup::Triceps, 'corpo libero', null],
+        ['Dips assistite', MuscleGroup::Triceps, 'macchina', null],
+        ['Dips su panca', MuscleGroup::Triceps, 'corpo libero', null],
+        ['Dips zavorrate', MuscleGroup::Triceps, 'corpo libero', null],
+        ['Estensioni tricipiti a un braccio', MuscleGroup::Triceps, 'manubri', null],
+        ['French press con manubri', MuscleGroup::Triceps, 'manubri', null],
+        ['French press con un manubrio', MuscleGroup::Triceps, 'manubri', null],
+        ['Piegamenti a diamante', MuscleGroup::Triceps, 'corpo libero', null],
+
+        // Addome
+        ['Bird dog', MuscleGroup::Abs, 'corpo libero', null],
+        ['Bruco', MuscleGroup::Abs, 'corpo libero', null],
+        ['Camminata dell\'orso', MuscleGroup::Abs, 'corpo libero', null],
+        ['Crunch bicicletta', MuscleGroup::Abs, 'corpo libero', null],
+        ['Crunch con disco', MuscleGroup::Abs, 'attrezzo', null],
+        ['Dead bug', MuscleGroup::Abs, 'corpo libero', null],
+        ['Dead bug con elastico', MuscleGroup::Abs, 'elastico', null],
+        ['Dragon flag', MuscleGroup::Abs, 'corpo libero', null],
+        ['Flessioni laterali con manubrio', MuscleGroup::Abs, 'manubri', null],
+        ['Forbici', MuscleGroup::Abs, 'corpo libero', null],
+        ['Hollow rock', MuscleGroup::Abs, 'corpo libero', null],
+        ['Knee tuck da seduto', MuscleGroup::Abs, 'corpo libero', null],
+        ['L-sit', MuscleGroup::Abs, 'corpo libero', null],
+        ['Pallof hold ai cavi', MuscleGroup::Abs, 'cavi', null],
+        ['Pallof press', MuscleGroup::Abs, 'cavi', null],
+        ['Pallof press con elastico', MuscleGroup::Abs, 'elastico', null],
+        ['Pallof press in ginocchio', MuscleGroup::Abs, 'cavi', null],
+        ['Piegamenti con tocco delle spalle', MuscleGroup::Abs, 'corpo libero', null],
+        ['Plank con tocco delle spalle', MuscleGroup::Abs, 'corpo libero', null],
+        ['Plank dell\'orso', MuscleGroup::Abs, 'corpo libero', null],
+        ['Plank di Copenaghen', MuscleGroup::Abs, 'corpo libero', null],
+        ['Plank jack', MuscleGroup::Abs, 'corpo libero', null],
+        ['Plank laterale con discesa del bacino', MuscleGroup::Abs, 'corpo libero', null],
+        ['Russian twist con peso', MuscleGroup::Abs, 'manubri', null],
+        ['Sit up su panca declinata', MuscleGroup::Abs, 'corpo libero', null],
+        ['Sollevamento ginocchia alla sbarra', MuscleGroup::Abs, 'corpo libero', null],
+        ['Sollevamento ginocchia alle parallele', MuscleGroup::Abs, 'macchina', null],
+        ['Spaccalegna ai cavi', MuscleGroup::Abs, 'cavi', null],
+        ['Spaccalegna con elastico', MuscleGroup::Abs, 'elastico', null],
+        ['Toccare le punte', MuscleGroup::Abs, 'corpo libero', null],
+        ['Tocco dei talloni', MuscleGroup::Abs, 'corpo libero', null],
+        ['Torsioni del busto', MuscleGroup::Abs, 'corpo libero', 2.3],
+        ['V-up', MuscleGroup::Abs, 'corpo libero', null],
+
+        // Glutei
+        ['Abduzioni da sdraiato', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Abduzioni da seduto con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Abduzioni in piedi con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Affondo incrociato', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Affondo incrociato con manubri', MuscleGroup::Glutes, 'manubri', null],
+        ['Affondo indietro in deficit', MuscleGroup::Glutes, 'manubri', null],
+        ['Allungamento a farfalla', MuscleGroup::Glutes, 'corpo libero', 2.3],
+        ['Camminata laterale con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Clamshell', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Clamshell con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Fire hydrant', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Fire hydrant con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Frog pump', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Frog pump con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Hip airplane', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Hip thrust al multipower', MuscleGroup::Glutes, 'macchina', null],
+        ['Hip thrust con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Hip thrust con manubrio', MuscleGroup::Glutes, 'manubri', null],
+        ['Iperestensioni inverse', MuscleGroup::Glutes, 'macchina', null],
+        ['Iperestensioni per i glutei', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Kickback a macchina', MuscleGroup::Glutes, 'macchina', null],
+        ['Kickback con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Monster walk con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Ponte glutei con bilanciere', MuscleGroup::Glutes, 'bilanciere', null],
+        ['Ponte glutei con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Ponte glutei con manubrio', MuscleGroup::Glutes, 'manubri', null],
+        ['Ponte glutei con marcia', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Pull through ai cavi', MuscleGroup::Glutes, 'cavi', null],
+        ['Slanci indietro', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Slanci indietro con elastico', MuscleGroup::Glutes, 'elastico', null],
+        ['Slanci laterali da sdraiato', MuscleGroup::Glutes, 'corpo libero', null],
+        ['Squat sumo con manubrio', MuscleGroup::Glutes, 'manubri', null],
+
+        // Quadricipiti
+        ['Adduttori a macchina', MuscleGroup::Quads, 'macchina', null],
+        ['Adduzioni ai cavi', MuscleGroup::Quads, 'cavi', null],
+        ['Affondo indietro', MuscleGroup::Quads, 'manubri', null],
+        ['Affondo indietro al multipower', MuscleGroup::Quads, 'macchina', null],
+        ['Affondo laterale a corpo libero', MuscleGroup::Quads, 'corpo libero', null],
+        ['Allungamento flessori dell\'anca', MuscleGroup::Quads, 'corpo libero', 2.3],
+        ['Allungamento quadricipiti in piedi', MuscleGroup::Quads, 'corpo libero', 2.3],
+        ['Belt squat', MuscleGroup::Quads, 'macchina', null],
+        ['Cossack squat', MuscleGroup::Quads, 'corpo libero', null],
+        ['Goblet squat con talloni rialzati', MuscleGroup::Quads, 'manubri', null],
+        ['Pistol squat', MuscleGroup::Quads, 'corpo libero', null],
+        ['Pistol squat assistito', MuscleGroup::Quads, 'corpo libero', null],
+        ['Sedia al muro', MuscleGroup::Quads, 'corpo libero', null],
+        ['Shrimp squat', MuscleGroup::Quads, 'corpo libero', null],
+        ['Skater squat', MuscleGroup::Quads, 'corpo libero', null],
+        ['Split squat', MuscleGroup::Quads, 'manubri', null],
+        ['Split squat al multipower', MuscleGroup::Quads, 'macchina', null],
+        ['Split squat con avampiede rialzato', MuscleGroup::Quads, 'manubri', null],
+        ['Squat a corpo libero', MuscleGroup::Quads, 'corpo libero', null],
+        ['Squat a una gamba al box', MuscleGroup::Quads, 'attrezzo', null],
+        ['Squat al landmine', MuscleGroup::Quads, 'bilanciere', null],
+        ['Squat al multipower', MuscleGroup::Quads, 'macchina', null],
+        ['Squat bulgaro al multipower', MuscleGroup::Quads, 'macchina', null],
+        ['Squat con elastico', MuscleGroup::Quads, 'elastico', null],
+        ['Squat con salto', MuscleGroup::Quads, 'corpo libero', null],
+        ['Step down', MuscleGroup::Quads, 'attrezzo', null],
+
+        // Femorali
+        ['Allungamento femorali', MuscleGroup::Hamstrings, 'corpo libero', 2.3],
+        ['Allungamento in avanti da seduto', MuscleGroup::Hamstrings, 'corpo libero', 2.3],
+        ['Leg curl con asciugamano', MuscleGroup::Hamstrings, 'corpo libero', null],
+        ['Leg curl con fitball', MuscleGroup::Hamstrings, 'attrezzo', null],
+        ['Leg curl da seduto', MuscleGroup::Hamstrings, 'macchina', null],
+        ['Slanci delle gambe', MuscleGroup::Hamstrings, 'corpo libero', 2.3],
+        ['Stacco rumeno a una gamba', MuscleGroup::Hamstrings, 'manubri', null],
+        ['Stacco rumeno al landmine', MuscleGroup::Hamstrings, 'bilanciere', null],
+        ['Stacco rumeno al multipower', MuscleGroup::Hamstrings, 'macchina', null],
+        ['Stacco rumeno con kettlebell', MuscleGroup::Hamstrings, 'kettlebell', null],
+        ['Stacco rumeno con manubri', MuscleGroup::Hamstrings, 'manubri', null],
+        ['Walkout per femorali', MuscleGroup::Hamstrings, 'corpo libero', null],
+
+        // Polpacci
+        ['Allungamento polpacci al muro', MuscleGroup::Calves, 'corpo libero', 2.3],
+        ['Calf a corpo libero', MuscleGroup::Calves, 'corpo libero', null],
+        ['Donkey calf', MuscleGroup::Calves, 'macchina', null],
+
+        // Corpo intero
+        ['Mezzo burpee', MuscleGroup::FullBody, 'corpo libero', null],
+        ['Sprawl', MuscleGroup::FullBody, 'corpo libero', null],
+        ['Squat thrust', MuscleGroup::FullBody, 'corpo libero', null],
+        ['World\'s greatest stretch', MuscleGroup::FullBody, 'corpo libero', 2.3],
+
+        // Cardio
+        ['Camminata', MuscleGroup::Cardio, 'corpo libero', 3.5],
+        ['Corsa sul posto a ginocchia alte', MuscleGroup::Cardio, 'corpo libero', 8.0],
+        ['Escursionismo', MuscleGroup::Cardio, 'corpo libero', 6.0],
+        ['Jumping jack', MuscleGroup::Cardio, 'corpo libero', 8.0],
+        ['Nuoto', MuscleGroup::Cardio, 'corpo libero', 6.0],
+        ['Salti del pattinatore', MuscleGroup::Cardio, 'corpo libero', null],
+        ['Spostamenti laterali', MuscleGroup::Cardio, 'corpo libero', null],
     ];
 
     public function run(): void
