@@ -34,6 +34,34 @@ class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritt
 
     public const COLLECTION_IMMAGINE = 'image';
 
+    /** Quanto conta il muscolo che fa il lavoro: e' il riferimento. */
+    public const PESO_DEL_PRIMARIO = 1.0;
+
+    /**
+     * Quanto conta un muscolo **secondario** — 3b-S, 28/08/2026.
+     *
+     * ══ 📚 NON E' UN NUMERO SCELTO DA NOI ═════════════════════════════════
+     *
+     * E' il *fractional set counting*, la convenzione standard sull'ipertrofia:
+     * una serie in cui il muscolo e' motore principale conta **1**, una in cui
+     * e' secondario conta **0,5**. 🚨 Una meta-analisi su **67 studi** ha
+     * confrontato i tre modi di contare — tutto uguale, solo diretto,
+     * frazionario — e il frazionario e' quello che spiega meglio i risultati.
+     *
+     * ⚠️ **Il limite, dichiarato**: quel 0,5 nasce per contare le *serie* nei
+     * volumi settimanali, non per dire «quanto ho usato questo muscolo». La
+     * contribuzione vera cambia molto da esercizio a esercizio — il capo lungo
+     * del tricipite prende circa il 2% nella panca e il 18% in uno
+     * skullcrusher. ⛔ Il modello giusto sarebbe una tabella per esercizio, e
+     * non ne esiste una pubblica per 314 esercizi: riempirla a mano vorrebbe
+     * dire 314 numeri inventati, che e' peggio di un'approssimazione
+     * dichiarata.
+     *
+     * 💡 **Gemella di `pesoDelSecondario` nell'app** (`catalogo_esercizi.dart`):
+     * se cambia una, cambia l'altra, o la stessa scheda si colora in due modi.
+     */
+    public const PESO_DEL_SECONDARIO = 0.5;
+
     protected $attributes = [
         'is_custom' => false,
     ];
@@ -61,11 +89,15 @@ class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritt
      * ⛔ Un elenco piatto direbbe che in una panca il petto e i tricipiti
      * valgono uguale, e la figura del corpo li colorerebbe allo stesso modo.
      *
-     * 💡 **Primario 1, secondari 0,5.** Non e' fisiologia misurata: e' una
-     * proporzione dichiarata, che serve a ordinare le tinte. ⚠️ Chi un giorno
-     * volesse pesi veri deve cambiare **qui** e in nessun altro posto — ed e'
-     * la ragione per cui questo metodo esiste invece di lasciare il calcolo a
-     * chi disegna.
+     * 💡 **I due pesi stanno in [PESO_DEL_PRIMARIO] e [PESO_DEL_SECONDARIO]**,
+     * con la fonte accanto: non sono scelti da noi, sono il *fractional set
+     * counting*. ⚠️ Chi un giorno volesse pesi veri cambia **quelle due
+     * costanti** e nient'altro — ed e' la ragione per cui questo metodo esiste
+     * invece di lasciare il calcolo a chi disegna.
+     *
+     * ⛔ **Qui il conto e' per esercizio, non per serie.** Chi vuole sapere
+     * *quanto* un muscolo e' stato usato deve moltiplicare per le serie: lo fa
+     * l'app (`pesiDellaScheda`), perche' le serie stanno sul telefono.
      *
      * ⛔ `cardio` e `full_body` **non entrano**: descrivono la natura
      * dell'esercizio, non una zona del corpo. Una corsa colora le gambe perche'
@@ -80,7 +112,7 @@ class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritt
         $primario = $this->muscle_group;
 
         if ($primario !== null && $primario->eUnMuscolo()) {
-            $pesi[$primario->value] = 1.0;
+            $pesi[$primario->value] = self::PESO_DEL_PRIMARIO;
         }
 
         foreach ($this->secondary_muscles ?? [] as $valore) {
@@ -92,7 +124,10 @@ class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritt
 
             // ⚠️ `max` e non `+=`: se un muscolo comparisse in tutti e due i
             // posti conta come primario, non come uno e mezzo.
-            $pesi[$muscolo->value] = max($pesi[$muscolo->value] ?? 0.0, 0.5);
+            $pesi[$muscolo->value] = max(
+                $pesi[$muscolo->value] ?? 0.0,
+                self::PESO_DEL_SECONDARIO,
+            );
         }
 
         return $pesi;
