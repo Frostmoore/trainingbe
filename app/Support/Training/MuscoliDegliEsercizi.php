@@ -60,7 +60,12 @@ final class MuscoliDegliEsercizi
         'Panca inclinata' => ['chest', ['shoulders', 'triceps']], // Barbell Incline Bench Press - Medium Grip
         'Panca piana con manubri' => ['chest', ['shoulders', 'triceps']], // Dumbbell Bench Press
         'Panca piana' => ['chest', ['shoulders', 'triceps']], // Barbell Bench Press - Medium Grip
-        'Croci su panca' => ['chest', []], // Dumbbell Flyes
+        /*
+         * 🔧 **Correzione del 28/08/2026.** ⛔ `free-exercise-db` non dava
+         * secondari, ma nelle croci il deltoide anteriore accompagna tutto
+         * l'arco.
+         */
+        'Croci su panca' => ['chest', ['shoulders']], // Dumbbell Flyes
         'Croci ai cavi' => ['chest', ['shoulders']], // Cable Crossover
         'Curl con bilanciere' => ['biceps', ['forearms']], // Barbell Curl
         'Curl concentrato' => ['biceps', ['forearms']], // Concentration Curls
@@ -129,7 +134,12 @@ final class MuscoliDegliEsercizi
         'Shoulder press' => ['shoulders', ['triceps']], // Dumbbell Shoulder Press
         'Alzate laterali' => ['shoulders', []], // Side Lateral Raise
         'Alzate frontali' => ['shoulders', []], // Front Dumbbell Raise
-        'Alzate posteriori' => ['shoulders', []], // Reverse Flyes
+        /*
+         * 🔧 **Correzione del 28/08/2026.** ⛔ Mancava la schiena: romboidi e
+         * trapezio medio lavorano in ogni alzata posteriore, e senza di loro
+         * la figura lasciava spenta meta' di quello che l'esercizio allena.
+         */
+        'Alzate posteriori' => ['shoulders', ['back']], // Reverse Flyes
         'Face pull' => ['shoulders', ['back']], // Face Pull
         'Tirate al mento' => ['shoulders', ['back']], // Upright Barbell Row
         'Arnold press' => ['shoulders', ['triceps']], // Arnold Dumbbell Press
@@ -305,8 +315,21 @@ final class MuscoliDegliEsercizi
         'Dips assistite' => [null, ['chest']], // Assisted Dip
         'Dips su panca' => [null, ['chest', 'shoulders']], // Bench Dip
         'Dips zavorrate' => [null, ['chest', 'shoulders']], // Weighted Dip
+        /*
+         * ⚠️ Qui la spalla **resta**: e' la variante sopra la testa, e il
+         * deltoide tiene il braccio in flessione per tutta la serie. 💡 Non
+         * e' lo stesso caso dello skullcrusher qui sotto.
+         */
         'Estensioni tricipiti a un braccio' => [null, ['shoulders']], // Single Arm Dumbbell Tricep Extension
-        'French press con manubri' => [null, ['shoulders']], // Two Dumbbell Skullcrusher
+        /*
+         * 🔧 **Correzione del 28/08/2026, dai dati e non a occhio.**
+         *
+         * ⛔ workout-guide dava `Shoulders` come secondario. In uno
+         * skullcrusher la spalla **sta ferma**: regge il braccio, non
+         * lavora. 🚨 Era in tre schede su quattro del committente, e da sola
+         * spingeva le spalle sopra il petto sulla figura del corpo.
+         */
+        'French press con manubri' => [null, []], // Two Dumbbell Skullcrusher
         'French press con un manubrio' => [null, ['shoulders']], // Single Dumbbell Skullcrusher
         'Piegamenti a diamante' => [null, ['chest', 'shoulders', 'abs']], // Diamond Push-up
 
