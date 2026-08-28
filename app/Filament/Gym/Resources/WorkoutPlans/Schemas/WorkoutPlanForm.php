@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\WorkoutPlans\Schemas;
 
+use App\Enums\MuscleGroup;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\Exercise;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Services\Training\ExerciseMatcher;
 use App\Support\Tenancy\TenantContext;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
@@ -245,16 +247,80 @@ class WorkoutPlanForm
                 // bisogna uscire dalla scheda per aggiungerlo,
                 // il trainer scrive il nome nelle note e la
                 // libreria non cresce mai.
+                /*
+                 * ══ 🚨 ANCHE DA QUI SI PASSA DAL MATCHER — 3b-N, 28/08/2026 ══
+                 *
+                 * 📌 *«Ovviamente anche gli esercizi che uno aggiunge alla
+                 * scheda senza passare per la pagina degli esercizi devono
+                 * essere salvati allo stesso modo eh»*.
+                 *
+                 * ⛔ **Qui era l'unica strada che non lo faceva.** C'era un
+                 * `Exercise::create()` grezzo, e produceva due difetti che
+                 * altrove sono vietati per iscritto:
+                 *
+                 * 1. 🚨 **Nessuna riconciliazione.** Un trainer che scriveva
+                 *    «Panca piana» in questo pannello si creava un doppione
+                 *    della panca della piattaforma, dentro la sua palestra. Da
+                 *    quel momento il progresso su quel movimento risultava
+                 *    diviso su due righe — che e' esattamente il danno per cui
+                 *    `ExerciseMatcher` esiste.
+                 * 2. ⛔ **Esercizi muti.** Nessun muscolo, ne' primario ne'
+                 *    secondari: la cosa che 3b-A.3.5 vieta all'API sollevando
+                 *    `MuscoliNonDecisiException`. La guardia c'era, e questa
+                 *    porta le passava accanto.
+                 *
+                 * 💡 Adesso i muscoli si chiedono anche qui, ed e' il motivo
+                 * per cui il modulo e' cresciuto di due campi: senza, il
+                 * matcher si rifiuterebbe di creare — giustamente.
+                 */
                 ->createOptionForm([
                     TextInput::make('name')->label('Nome')->required()->maxLength(160),
+                    Select::make('muscle_group')
+                        ->label('Muscolo principale')
+                        ->options(MuscleGroup::class)
+                        ->required()
+                        ->helperText('Serve alla figura del corpo e al calcolo delle calorie.'),
+                    Select::make('secondary_muscles')
+                        ->label('Muscoli secondari')
+                        ->options(MuscleGroup::class)
+                        ->multiple()
+                        ->maxItems(6)
+                        ->helperText('Lascia vuoto se questo esercizio isola davvero.'),
                     TextInput::make('equipment')->label('Attrezzo')->maxLength(64),
                 ])
-                ->createOptionUsing(fn (array $data): int => Exercise::create([
-                    'name' => $data['name'],
-                    'equipment' => $data['equipment'] ?? null,
-                    'is_custom' => true,
-                    'created_by' => auth()->id(),
-                ])->getKey()),
+                ->createOptionUsing(function (array $data): int {
+                    $utente = auth()->user();
+
+                    $esistenti = Exercise::query()->count();
+
+                    $esercizio = app(ExerciseMatcher::class)->match(
+                        (string) $data['name'],
+                        $utente?->tenant_id,
+                        $utente instanceof User ? $utente : null,
+                        MuscleGroup::from((string) $data['muscle_group']),
+
+                        /*
+                         * ⚠️ `[]` e non `null`: qui una risposta c'e' sempre
+                         * stata. `null` direbbe «non ci ho pensato», e il
+                         * matcher si rifiuterebbe di creare — mentre chi ha
+                         * lasciato il campo vuoto ha **deciso** che questo
+                         * esercizio isola.
+                         */
+                        array_values(array_map(strval(...), $data['secondary_muscles'] ?? [])),
+                    );
+
+                    /*
+                     * 💡 L'attrezzo si scrive **solo su cio' che e' appena
+                     * nato**, come nell'API: cambiarlo su un esercizio della
+                     * piattaforma perche' un trainer ha scritto un valore
+                     * diverso lo cambierebbe per tutti.
+                     */
+                    if (Exercise::query()->count() > $esistenti && ($data['equipment'] ?? null) !== null) {
+                        $esercizio->forceFill(['equipment' => $data['equipment']])->save();
+                    }
+
+                    return $esercizio->getKey();
+                }),
 
             /*
              * ══ 🚨 IL MODO SVELTO, E QUELLO PRECISO — 3b-D.10, 25/08/2026 ══

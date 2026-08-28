@@ -58,6 +58,8 @@ class ExerciseController extends Controller
          */
         $esercizi = $query->limit(min(1000, (int) $request->integer('limit', 100)))->get();
 
+        $mio = $request->user()?->tenant_id;
+
         return response()->json([
             'data' => $esercizi->map(fn (Exercise $e): array => [
                 'id' => $e->id,
@@ -69,6 +71,30 @@ class ExerciseController extends Controller
                 // «aggiunto dalla mia palestra», che e' l'unica differenza
                 // percepibile fra i due.
                 'is_global' => $e->isGlobal(),
+
+                /*
+                 * 🆕 **Da dove viene questo esercizio** — 3b-N, 28/08/2026.
+                 *
+                 * 📌 Serve alla pagina «Esercizi»: *«mettiamo anche una pagina
+                 * Esercizi»*. ⛔ `is_global` non basta — dice «della
+                 * piattaforma o no», e il «no» adesso comprende due cose molto
+                 * diverse: quelli che ho scritto **io** e quelli che vedo
+                 * perche' me li passa un trainer (3b-M).
+                 *
+                 * 🚨 **Lo calcola il server**, che e' l'unico a sapere di che
+                 * tenant e' la riga. ⛔ L'app non ha il `tenant_id` e non deve
+                 * averlo: sarebbe un numero interno esposto per far fare a lei
+                 * un confronto che qui costa niente.
+                 *
+                 * 💡 «condivisa» e non «del trainer»: dopo 3b-M puo' arrivare
+                 * anche da una palestra da cui si e' usciti, e chiamarla «del
+                 * trainer» sarebbe una bugia in un caso su due.
+                 */
+                'origine' => match (true) {
+                    $e->tenant_id === null => 'piattaforma',
+                    $e->tenant_id === $mio => 'mia',
+                    default => 'condivisa',
+                },
                 // C23 — l'illustrazione, se la palestra o la piattaforma l'ha
                 // caricata. `null` quando non c'e': l'app disegna un segnaposto
                 // invece di una miniatura rotta.

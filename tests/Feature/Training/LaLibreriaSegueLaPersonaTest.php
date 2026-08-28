@@ -341,6 +341,45 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    //  `origine`: la pagina «Esercizi» deve poter distinguere i tre casi
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * ⛔ `is_global` non bastava: diceva «della piattaforma o no», e da 3b-M
+     * quel «no» comprende due cose molto diverse — quelli che ho scritto io e
+     * quelli che vedo perche' me li passa qualcuno.
+     */
+    #[Test]
+    public function la_risposta_dice_da_dove_viene_ogni_esercizio(): void
+    {
+        $trainer = $this->trainerIndipendente('coach@esempio.test');
+        $iscritto = $this->iscrittoDi($trainer, 'seguito@esempio.test');
+
+        $this->esercizioDi($trainer, 'Panca del coach');
+        $this->esercizioDi($iscritto, 'Panca mia');
+
+        Exercise::withoutGlobalScopes()->create([
+            'tenant_id' => null,
+            'name' => 'Panca di tutti',
+            'slug_normalized' => Exercise::normalize('Panca di tutti'),
+            'is_custom' => false,
+            'muscle_group' => MuscleGroup::Chest,
+            'secondary_muscles' => [],
+        ]);
+
+        $righe = collect(
+            $this->comeApp($iscritto)
+                ->getJson('/api/v1/exercises?limit=1000')
+                ->assertOk()
+                ->json('data')
+        )->keyBy('name');
+
+        self::assertSame('mia', $righe['Panca mia']['origine']);
+        self::assertSame('condivisa', $righe['Panca del coach']['origine']);
+        self::assertSame('piattaforma', $righe['Panca di tutti']['origine']);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     //  Il catalogo della piattaforma resta di tutti
     // ═══════════════════════════════════════════════════════════════════
 
