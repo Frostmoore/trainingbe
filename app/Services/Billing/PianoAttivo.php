@@ -7,6 +7,7 @@ namespace App\Services\Billing;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\User;
+use App\Services\Ai\Quota\QuotaDelTrainer;
 use App\Support\Tenancy\TenantContext;
 
 /**
@@ -171,7 +172,31 @@ class PianoAttivo
             return false;
         }
 
-        return $this->per($utente)->ai_enabled;
+        if ($this->per($utente)->ai_enabled) {
+            return true;
+        }
+
+        /*
+         * ── 🆕 U.2: gliela paga il trainer ─────────────────────────────────
+         *
+         * 📌 *«all'allievo arriva la stessa quota che gli arriverebbe se si
+         * abbonasse»*.
+         *
+         * 🚨 **Senza questa riga il livello 3 di `MemberAiQuota` non serviva a
+         * niente**, ed e' stato cosi' per settimane senza che nessun test se ne
+         * accorgesse: l'allievo di un trainer indipendente sta in un tenant
+         * personale col piano `free`, quindi `ai_enabled` e' falso e
+         * `hasQuotaLeft()` si fermava qui. Il tetto del trainer veniva
+         * calcolato bene e non veniva mai raggiunto.
+         *
+         * ⚠️ **Dopo il piano e non prima**, perche' e' la strada piu' cara: e'
+         * una query, e chi ha l'AI dal proprio piano non deve pagarla.
+         *
+         * ⛔ **E dopo l'override `false`**, che continua a vincere su tutto: chi
+         * ha spento l'AI a una persona dal pannello non deve vedersela
+         * riaccendere perche' quella persona si e' fatta seguire da un trainer.
+         */
+        return app(QuotaDelTrainer::class)->copre($utente);
     }
 
     /**

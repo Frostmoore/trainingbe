@@ -306,9 +306,30 @@ class PianiEQuotaTest extends TestCase
         );
     }
 
-    /** …ma per chi la palestra non ce l'ha, il tetto del trainer vale. */
+    /**
+     * ⛔ …e il tetto **personale** del trainer non arriva piu' all'allievo — U.2.
+     *
+     * ── 🚨 Cosa diceva prima questo test, e perche' era sbagliato ──────────
+     *
+     * Diceva *«per chi la palestra non ce l'ha, il tetto del trainer vale»*, e
+     * leggeva `ai_monthly_call_cap` **del trainer**. ⛔ Due difetti in una riga:
+     *
+     *   1. un trainer con l'AI illimitata l'avrebbe regalata a cinquanta
+     *      persone, e uno senza eccezioni non avrebbe dato niente;
+     *   2. e soprattutto **quel numero non serviva a nessuno**:
+     *      `hasQuotaLeft()` si ferma prima, su `haLaAi()`, e l'allievo di un
+     *      trainer sta su un piano `free` che l'AI non ce l'ha. Il livello 3
+     *      calcolava bene un tetto che il cancello non raggiungeva mai.
+     *
+     * 📌 La decisione del 28/08: *«all'allievo arriva la stessa quota che gli
+     * arriverebbe se si abbonasse»*. Il tetto del trainer resta **suo**.
+     *
+     * 💡 Qui resta la meta' che si prova da questo lato — il tetto personale non
+     * passa. Tutto il resto (quanta quota arriva, e fino a quando dopo la
+     * scadenza) sta in `LaQuotaDelTrainerTest`.
+     */
     #[Test]
-    public function without_a_gym_the_trainer_cap_applies(): void
+    public function the_trainer_own_cap_does_not_reach_the_member(): void
     {
         $utente = app(CreaTenantPersonale::class)('Mario', 'mario@esempio.test', [
             'password' => self::FAKE_PASSWORD,
@@ -325,7 +346,11 @@ class PianiEQuotaTest extends TestCase
             'tenant_id' => $trainer->tenant_id, 'assigned_at' => now(),
         ]);
 
-        $this->assertSame(4242, app(MemberAiQuota::class)->capFor($utente->fresh()));
+        $this->assertNotSame(
+            4242,
+            app(MemberAiQuota::class)->capFor($utente->fresh()),
+            'Il tetto personale del trainer e\' tornato a filtrare sull\'allievo.',
+        );
     }
 
     /** 4. Poi il piano. */

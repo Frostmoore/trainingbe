@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Tenancy;
 
+use App\Enums\PlanKind;
 use App\Enums\UserRole;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -13,6 +14,7 @@ use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
@@ -44,12 +46,55 @@ class TrainerIndipendenteTest extends TestCase
 
     private function creaTrainer(string $email = 'trainer@esempio.test'): User
     {
-        return app(CreaTenantPersonale::class)(
+        $trainer = app(CreaTenantPersonale::class)(
             'Trainer Indipendente',
             $email,
             ['password' => self::FAKE_PASSWORD, 'username' => str_replace(['@', '.'], '', $email)],
             UserRole::FreeTrainer,
         );
+
+        $this->abbona($trainer);
+
+        return $trainer->fresh();
+    }
+
+    /**
+     * 🚨 **Un trainer creato qui è un trainer che PAGA** — U.3.1.
+     *
+     * Da U.3 le rotte `/trainer/*` chiedono un abbonamento in corso: 📌 *«quando
+     * gli scade l'abbonamento, perde tutte le funzionalità da trainer e può solo
+     * agire come un utente normale»*. ⚠️ Un trainer di prova senza abbonamento
+     * non è «un trainer normale»: è un trainer **moroso**, e provare le sue
+     * funzioni contro di lui vorrebbe dire provarle nell'unico stato in cui è
+     * giusto che non funzionino.
+     *
+     * 💡 È la stessa scelta, con le stesse parole, già scritta su
+     * `CreaAmbiente::creaPalestra()`. E chi vuole provare il caso «scaduto» lo
+     * dichiara, come fa `un_trainer_scaduto_torna_un_utente_normale()`.
+     *
+     * ⚠️ **Il piano si cerca solo se esiste**: questa classe non semina il
+     * listino, e pretenderlo la farebbe fallire tutta per una ragione che non
+     * c'entra niente con quello che prova.
+     */
+    private function abbona(User $trainer, ?Carbon $scadenza = null): void
+    {
+        $piano = Plan::query()->where('code', Plan::TRAINER_10)->first()
+            ?? Plan::create([
+                'code' => Plan::TRAINER_10,
+                'name' => 'Trainer — 10 allievi',
+                'kind' => PlanKind::Trainer,
+                'ai_enabled' => true,
+                'max_members' => 10,
+                'price_cents' => 2999,
+                'is_public' => true,
+            ]);
+
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $trainer->tenant_id,
+            'plan_id' => $piano->id,
+            'starts_at' => now()->subYears(2),
+            'ends_at' => $scadenza,
+        ]);
     }
 
     /** @param array<string, mixed> $extra */
@@ -392,5 +437,114 @@ class TrainerIndipendenteTest extends TestCase
             ->assertStatus(422);
 
         $this->assertSame(0, TrainerInvite::withoutGlobalScopes()->whereNotNull('used_at')->count());
+    }
+
+    // ─────────────────── U.3.1 — quando l'abbonamento scade ───────────────
+
+    /**
+     * ⏰ **Scaduto l'abbonamento, il trainer torna un utente normale.**
+     *
+     * 📌 *«Quando gli scade l'abbonamento, perde tutte le funzionalità da
+     * trainer e può solo agire come un utente normale»*.
+     *
+     * ── 🚨 Perché non bastava il ruolo ─────────────────────────────────────
+     *
+     * ⛔ Fino a U.3 `trainerOrAbort()` guardava **solo** `isTrainer()`, e il
+     * ruolo non scade: un trainer che smetteva di pagare continuava a vedere i
+     * suoi utenti, a invitarne di nuovi e a mandare schede. Per sempre, e senza
+     * nessun errore da nessuna parte — la porta non aveva mai avuto una
+     * serratura, quindi non c'era niente da rompere.
+     *
+     * ⚠️ Le **quattro** rotte si provano tutte: chiuderne tre su quattro è il
+     * modo tipico in cui una regola sembra applicata e non lo è.
+     */
+    #[Test]
+    public function un_trainer_scaduto_torna_un_utente_normale(): void
+    {
+        $trainer = $this->creaTrainer();
+
+        // L'abbonamento è finito il mese scorso.
+        PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $trainer->tenant_id)
+            ->update(['ends_at' => now()->subMonth()]);
+
+        $io = $trainer->fresh();
+
+        $this->actingAs($io, 'sanctum')->getJson('/api/v1/trainer/members')->assertStatus(403);
+        $this->actingAs($io, 'sanctum')->postJson('/api/v1/trainer/invites')->assertStatus(403);
+        $this->actingAs($io, 'sanctum')->deleteJson('/api/v1/trainer/invites/1')->assertStatus(403);
+        $this->actingAs($io, 'sanctum')->postJson('/api/v1/trainer/members/1/toggle')->assertStatus(403);
+    }
+
+    /**
+     * ⛔ **Ma le sue schede restano sue** — U.3.1, seconda metà.
+     *
+     * 🚨 È la metà che si dimentica. Perdere le funzioni da trainer non è
+     * perdere il proprio lavoro: quelle schede le ha scritte lui, e continua a
+     * vederle **da utente** come chiunque altro. La stessa regola vale già per
+     * `AccountEraser` e per `EsciDaUnaPalestra`.
+     *
+     * 💡 E il messaggio glielo dice, invece di lasciargli credere che sia
+     * sparito tutto.
+     */
+    #[Test]
+    public function ma_le_schede_del_trainer_scaduto_restano_sue(): void
+    {
+        $trainer = $this->creaTrainer();
+
+        PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $trainer->tenant_id)
+            ->update(['ends_at' => now()->subMonth()]);
+
+        $io = $trainer->fresh();
+
+        $this->actingAs($io, 'sanctum')
+            ->getJson('/api/v1/trainer/members')
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Il tuo abbonamento da trainer è scaduto. Le tue schede restano tue: puoi continuare a usarle come chiunque altro.');
+
+        // 🚨 E le schede si vedono ancora: la porta chiusa è una sola.
+        $this->actingAs($io, 'sanctum')
+            ->getJson('/api/v1/workout-plans')
+            ->assertStatus(200);
+    }
+
+    /**
+     * 💡 **La fascia trainer gratuita non è «scaduta»**: è gratis.
+     *
+     * ⚠️ `trainer_free` costa zero ma è un tier vero, da tre allievi. Chiuderlo
+     * insieme agli scaduti vorrebbe dire togliere la prova del prodotto proprio
+     * a chi la sta facendo.
+     */
+    #[Test]
+    public function la_fascia_trainer_gratuita_continua_a_funzionare(): void
+    {
+        $trainer = app(CreaTenantPersonale::class)(
+            'Trainer Gratuito',
+            'gratis@esempio.test',
+            ['password' => self::FAKE_PASSWORD, 'username' => 'gratis'],
+            UserRole::FreeTrainer,
+        );
+
+        $gratuita = Plan::query()->where('code', Plan::TRAINER_FREE)->first()
+            ?? Plan::create([
+                'code' => Plan::TRAINER_FREE,
+                'name' => 'Trainer — gratuito',
+                'kind' => PlanKind::Trainer,
+                'ai_enabled' => false,
+                'max_members' => 3,
+                'price_cents' => 0,
+                'is_public' => true,
+            ]);
+
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $trainer->tenant_id,
+            'plan_id' => $gratuita->id,
+            'starts_at' => now()->subYear(),
+        ]);
+
+        $this->actingAs($trainer->fresh(), 'sanctum')
+            ->getJson('/api/v1/trainer/members')
+            ->assertStatus(200);
     }
 }

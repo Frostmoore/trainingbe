@@ -508,7 +508,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->belongsToMany(self::class, 'trainer_member', 'trainer_id', 'member_id')
             ->withoutGlobalScopes([TenantScope::class])
             ->wherePivot('tenant_id', $this->tenant_id)
-            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il'])
+            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il', 'quota_assegnata_il'])
             ->withTimestamps();
     }
 
@@ -551,7 +551,7 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     {
         return $this->belongsToMany(self::class, 'trainer_member', 'member_id', 'trainer_id')
             ->withoutGlobalScopes([TenantScope::class])
-            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il'])
+            ->withPivot(['tenant_id', 'assigned_at', 'assigned_by', 'disattivato_il', 'quota_assegnata_il'])
             ->withTimestamps();
     }
 

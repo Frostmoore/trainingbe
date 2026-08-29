@@ -38,6 +38,21 @@ use App\Services\Billing\PortafoglioGettoni;
  * e nessuno se ne accorge: il servizio funziona, la chiamata riesce, il saldo
  * cala. Si vedrebbe solo dalla fattura di qualcun altro. Per questo la quota si
  * guarda **per prima**, sempre.
+ *
+ * ── ⛔ L'unica eccezione: gli import da PDF (U.6, 28/08/2026) ─────────────
+ *
+ * 📌 *«L'import dei pdf costa SEMPRE 50 gettoni, abbonato o no. E devono essere
+ * proprio GETTONI, non si puo' usare la quota flat»*.
+ *
+ * 🚨 **Il passo 1 si salta**, e non con un secondo cancello: la funzione stessa
+ * dichiara `siPagaSoloConIGettoni()`. Il motivo per cui la proprieta' vive
+ * sull'enum e non qui e' scritto li'.
+ *
+ * ⚠️ **Salta anche il ripiego cortese** in fondo a `apri()` — quello che manda
+ * il messaggio della quota a chi non ha mai comprato gettoni. Per un PDF sarebbe
+ * una **bugia**: direbbe «hai finito la quota del mese» a chi ce l'ha intatta, e
+ * quella persona aspetterebbe il mese nuovo per una cosa che il mese nuovo non
+ * sistema.
  */
 class CancelloDeiGettoni
 {
@@ -77,7 +92,13 @@ class CancelloDeiGettoni
             return false;
         }
 
-        if ($this->quota->hasQuotaLeft($utente, $funzione)) {
+        /*
+         * ⛔ **Gli import da PDF non guardano la quota**: vedi la nota in testa
+         * alla classe e `AiFeature::siPagaSoloConIGettoni()`.
+         */
+        $soloGettoni = $funzione->siPagaSoloConIGettoni();
+
+        if (! $soloGettoni && $this->quota->hasQuotaLeft($utente, $funzione)) {
             return false;
         }
 
@@ -96,7 +117,8 @@ class CancelloDeiGettoni
          * non quello dei gettoni: dirgli «ricarica i gettoni» a chi non sa
          * nemmeno che esistano e' un errore che non spiega niente.
          */
-        if ($this->portafoglio->saldo($utente) === 0
+        if (! $soloGettoni
+            && $this->portafoglio->saldo($utente) === 0
             && ! AiCreditMovement::withoutGlobalScopes()
                 ->where('tenant_id', $utente->tenant_id)
                 ->exists()) {

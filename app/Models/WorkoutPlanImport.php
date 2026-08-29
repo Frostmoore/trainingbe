@@ -39,6 +39,15 @@ class WorkoutPlanImport extends Model implements HasMedia
         'tenant_id', 'uploaded_by', 'member_id', 'media_id',
         'status', 'parsed_payload', 'model_used', 'confidence', 'escalated',
         'error', 'workout_plan_id',
+
+        /*
+         * 🚨 **La decisione del cancello, non un ricalcolo** — U.6.
+         *
+         * Si scrive quando la palestra carica il PDF e si legge nel job, minuti
+         * dopo. Ricalcolarla la' vorrebbe dire due sedi della stessa regola
+         * commerciale; il perche' sta per esteso nella migrazione.
+         */
+        'paga_con_gettoni',
     ];
 
     protected function casts(): array
@@ -48,6 +57,7 @@ class WorkoutPlanImport extends Model implements HasMedia
             'parsed_payload' => 'array',
             'confidence' => 'float',
             'escalated' => 'boolean',
+            'paga_con_gettoni' => 'boolean',
         ];
     }
 

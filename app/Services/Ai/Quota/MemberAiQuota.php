@@ -51,7 +51,7 @@ class MemberAiQuota
      * |---|---|---|
      * | 1 | `users.ai_monthly_call_cap` | l'eccezione per **una persona** |
      * | 2 | `tenants.ai_monthly_calls_per_member` | **la palestra**, se ce n'e' una |
-     * | 3 | il trainer indipendente che l'ha invitata | solo se non c'e' una palestra |
+     * | 3 | il trainer indipendente che l'ha invitata | solo se non c'e' una palestra, e la quota e' quella del `PLUS` |
      * | 4 | `plans.ai_monthly_calls_per_member` | il **piano** in corso |
      * | 5 | `ai.quota.default_monthly_calls_per_user` | il default di sistema |
      *
@@ -131,36 +131,30 @@ class MemberAiQuota
      * resta scritta anche qui, perche' il giorno in cui qualcuno riordinasse i
      * livelli il vincolo non deve dipendere dall'ordine.
      *
-     * ⚠️ Se piu' di un trainer indipendente segue la stessa persona si prende il
-     * tetto **piu' alto**: e' l'unica scelta che non danneggia nessuno dei due —
-     * quello piu' generoso ha gia' deciso di concedere quel tetto, e prendere il
-     * piu' basso vorrebbe dire che farsi seguire da un secondo trainer
-     * *peggiora* il servizio.
+     * ── 🆕 U.2 — non e' piu' il tetto DEL TRAINER, e' la quota del PLUS ────
+     *
+     * 📌 *«all'allievo arriva la stessa quota che gli arriverebbe se si
+     * abbonasse»* — 150 chiamate e 15 con foto, uguali per tutti.
+     *
+     * ⛔ **Prima si leggeva `ai_monthly_call_cap` del trainer**, cioe' il tetto
+     * **suo**: un trainer con l'AI illimitata avrebbe regalato l'illimitato a
+     * cinquanta persone, e un trainer senza eccezioni non avrebbe dato niente.
+     * Nessuno dei due e' quello che e' stato chiesto.
+     *
+     * 💡 Il «piu' alto vince» fra piu' trainer non serve piu' — il valore e' lo
+     * stesso per tutti — ma la ragione per cui c'era resta scritta perche' e'
+     * ancora vera: farsi seguire da un secondo trainer non deve **peggiorare**
+     * il servizio.
+     *
+     * 🚨 **E la domanda «quanta» non basta**: l'allievo di un trainer sta su un
+     * piano `free`, e `hasQuotaLeft()` si ferma prima, su `haLaAi()`. La
+     * risposta «se» sta in `PianoAttivo::haLaAi()`, che chiede allo stesso
+     * servizio. Questo metodo da solo era — ed e' stato per settimane — un
+     * numero che nessuno leggeva.
      */
     private function tettoDalTrainerIndipendente(User $utente, bool $conFoto): ?int
     {
-        $tenant = $utente->tenant;
-
-        if ($tenant === null || ! $tenant->ePersonale()) {
-            return null;
-        }
-
-        $tetti = $utente->assignedTrainers()
-            ->get()
-            ->map(static fn (User $t): ?int => $conFoto ? $t->ai_monthly_photo_call_cap : $t->ai_monthly_call_cap)
-            ->filter(static fn (?int $v): bool => $v !== null);
-
-        if ($tetti->isEmpty()) {
-            return null;
-        }
-
-        // 💡 Uno `0` (illimitato) vince su qualunque numero: e' il tetto piu'
-        // alto che esista, e ordinarlo come «zero» lo farebbe perdere.
-        if ($tetti->contains(0)) {
-            return 0;
-        }
-
-        return (int) $tetti->max();
+        return app(QuotaDelTrainer::class)->tetto($utente, $conFoto);
     }
 
     /**

@@ -47,8 +47,12 @@ enum AiFeature: string
      * L'importazione di un **piano alimentare** da PDF — N20.
      *
      * 🚨 **Voce sua e non `PdfImport`**, che e' quella delle schede di
-     * allenamento. ⚠️ Non e' pignoleria: costano in modo diverso (50 contro 7),
-     * e soprattutto **sbagliare qui non si vede**. Un piano alimentare letto
+     * allenamento. ⚠️ Non e' pignoleria: ⛔ **dal 28/08 costano uguale (50), e
+     * questo e' proprio il motivo per cui la distinzione serve ancora** — se
+     * fossero la stessa voce, «quanto ci costano i piani alimentari» e «quanto
+     * ci costano le schede» sarebbero lo stesso numero per sempre.
+     *
+     * E soprattutto **sbagliare qui non si vede**. Un piano alimentare letto
      * male produce numeri plausibili, non un errore: 200 g letti 20 g e' una
      * dieta sbagliata su un documento che la persona crede fedele
      * all'originale.
@@ -102,7 +106,9 @@ enum AiFeature: string
         return $this === self::FoodPhoto
             || $this === self::PdfImport
             // 🚨 N20: un PDF e' un allegato, quindi la chiamata e'
-            // multimodale. Il costo pero' e' suo (50), non i 10 delle altre.
+            // multimodale — conta per la scelta del modello e per il limite di
+            // dimensione. ⚠️ Il **prezzo** pero' non passa piu' di qui: i due
+            // PDF stanno a 50 per decisione loro, vedi `costoInGettoni()`.
             || $this === self::NutritionPdfImport;
     }
 
@@ -114,7 +120,7 @@ enum AiFeature: string
      * | Chiamata | Gettoni |
      * |---|---|
      * | Foto di un pasto | **10** |
-     * | PDF di una **scheda** di allenamento | **10** |
+     * | PDF di una **scheda** di allenamento | **50** |
      * | PDF di un **piano alimentare** | **50** |
      * | Tutto il resto (testo, consiglio, calorie) | **1** |
      *
@@ -135,36 +141,89 @@ enum AiFeature: string
      * vorrebbe dire venderla sotto costo.
      *
      * ⚠️ **Il listino dice «di cui con foto», il codice conta i multimodali**, e
-     * non e' la stessa cosa: `PdfImport` non e' una foto ma passa da un modello
-     * grande con un documento allegato, quindi costa come una foto.
+     * non e' la stessa cosa: nessuno dei due PDF e' una foto, ma tutti e due
+     * passano da un modello grande con un documento allegato.
      *
      * 💡 La differenza fra nome commerciale e criterio tecnico e' accettabile
      * perche' va nella direzione giusta: chi compra vede un limite **piu'
      * generoso** di quello che il codice applica alle chiamate care, mai il
      * contrario.
+     *
+     * ⛔ **E dal 28/08 i due PDF non toccano piu' quel limite**: si pagano solo
+     * a gettoni (`siPagaSoloConIGettoni()`), quindi non consumano la quota
+     * inclusa ne' il suo sotto-limite multimodale.
      */
     public function costoInGettoni(): int
     {
         return match ($this) {
             /*
-             * 🚨 **50, e non 10 come le altre multimodali** — N20.1, listino
-             * confermato dal committente il 19/08/2026.
+             * 🚨 **I due PDF costano uguale — 50 — dal 28/08/2026.**
              *
-             * Un piano alimentare non e' una pagina: sono giorni, pasti,
-             * alimenti e grammi, spesso su parecchie facciate scansionate.
-             * *«generalmente sono MOLTO piu' grandi»*.
+             * Il piano alimentare ci stava dal 19/08 (N20.1): non e' una
+             * pagina, sono giorni, pasti, alimenti e grammi su parecchie
+             * facciate scansionate — *«generalmente sono MOLTO piu' grandi»*.
              *
-             * ⚠️ E il prezzo va **detto prima**: chi importa deve sapere che
-             * gli costa cinquanta gettoni, non scoprirlo dal saldo.
+             * 📌 *«L'import dei pdf costa SEMPRE 50 gettoni, abbonato o no»*.
              *
-             * 💡 Un `match` e non una terza regola generale: le eccezioni
-             * di prezzo sono per caso, e una regola in piu' («i documenti
-             * costano X») sarebbe sbagliata al primo caso che non ci rientra.
+             * ⚠️ La scheda stava a 10 perche' **ricadeva nel default dei
+             * multimodali**, non perche' qualcuno avesse deciso 10 per lei: era
+             * un prezzo per omissione. E il default sbagliato non si vede, e'
+             * proprio questo il punto — nessun errore, solo un numero piu'
+             * basso di quello giusto.
+             *
+             * 💡 Una scheda impaginata a tabelle non e' piu' economica di un
+             * piano alimentare: e' lo stesso tipo di lettura, su un documento
+             * dello stesso genere. Erano due prezzi diversi per la stessa cosa.
+             *
+             * ⚠️ E il prezzo va **detto prima**: chi importa deve saperlo, non
+             * scoprirlo dal saldo.
+             *
+             * 💡 Un `match` e non una terza regola generale: le eccezioni di
+             * prezzo sono per caso, e una regola in piu' («i documenti costano
+             * X») sarebbe sbagliata al primo caso che non ci rientra.
              */
-            self::NutritionPdfImport => 50,
+            self::NutritionPdfImport, self::PdfImport => 50,
 
             default => $this->isMultimodal() ? 10 : 1,
         };
+    }
+
+    /**
+     * Questa chiamata si paga **solo** a gettoni, saltando la quota inclusa?
+     *
+     * ── 🚨 E' l'eccezione all'ordine di `CancelloDeiGettoni` ────────────────
+     *
+     * Ovunque nel sistema vale *«prima la quota inclusa, poi i gettoni»*, e la
+     * ragione sta scritta li': **un gettone speso mentre la quota e' ancora
+     * piena e' un gettone rubato**.
+     *
+     * ⛔ Per gli import da PDF quella regola non si applica, per decisione del
+     * committente il 28/08/2026: 📌 *«devono essere proprio GETTONI, non si puo'
+     * usare la quota flat»*.
+     *
+     * 💡 **Perche' e' difendibile e non un capriccio**: la quota inclusa e' un
+     * tetto di chiamate **ricorrenti** — il consiglio del giorno, un alimento,
+     * un'analisi — tarate su un costo di circa un centesimo l'una. Un PDF ne
+     * costa cinquanta volte tanto. Farlo passare dalla quota vuol dire che una
+     * sola importazione si mangia un terzo del mese di un abbonato, e quella
+     * persona scopre a meta' mese che l'AI «non funziona piu'» senza aver fatto
+     * niente di strano.
+     *
+     * 🚨 **E' una PROPRIETA' DELLA FUNZIONE, non un secondo cancello.** Metterla
+     * qui vuol dire che chiunque apra il cancello la rispetta senza doverla
+     * sapere; scriverla nei chiamanti vorrebbe dire due sedi della stessa regola
+     * commerciale — l'errore che `CancelloDeiGettoni` esiste apposta per non
+     * fare.
+     *
+     * ⚠️ **Conseguenza da dire a schermo, non da far scoprire dal saldo**: chi
+     * ha la quota intatta ma zero gettoni **non puo' importare**. E' voluto, ed
+     * e' esattamente la regola gia' scritta per il piano alimentare — *«il
+     * prezzo va detto prima»*.
+     */
+    public function siPagaSoloConIGettoni(): bool
+    {
+        return $this === self::PdfImport
+            || $this === self::NutritionPdfImport;
     }
 
     /** @return array<string, string> */

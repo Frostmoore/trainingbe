@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Enums\AiFeature;
+use App\Enums\ImportStatus;
 use App\Models\User;
 use App\Models\WorkoutPlanImport;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
+use App\Services\Ai\CancelloDeiGettoni;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -49,7 +51,7 @@ class ParseWorkoutPdf implements ShouldQueue
         public readonly int $importId,
     ) {}
 
-    public function handle(AiManager $ai, TenantContext $tenants): void
+    public function handle(AiManager $ai, TenantContext $tenants, CancelloDeiGettoni $cancello): void
     {
         $import = WorkoutPlanImport::withoutGlobalScopes()->find($this->importId);
 
@@ -104,6 +106,35 @@ class ParseWorkoutPdf implements ShouldQueue
             // tiene comunque il risultato migliore fra i due.
             $this->escalation($import, $percorso, $ctx, null, $bozza);
         });
+
+        /*
+         * ── 🚨 I gettoni si scalano QUI, e solo se e' uscita una bozza ──────
+         *
+         * ⚠️ **Dopo `runAs` e non dentro**, in un punto solo: `storeDraft()` ha
+         * quattro chiamanti fra `handle()` e `escalation()`, e mettere il
+         * consumo accanto a ciascuno vorrebbe dire quattro occasioni di
+         * dimenticarlo — o, peggio, di farlo due volte quando l'escalation
+         * salva il ripiego dopo aver gia' salvato.
+         *
+         * 💡 Lo **stato finale** e' il criterio giusto perche' e' esattamente la
+         * domanda commerciale: la palestra ha ottenuto qualcosa da rivedere?
+         * Allora ha comprato una lettura. Se e' `failed` non ha niente in mano,
+         * e far pagare un nostro guasto e' la regola che `CancelloDeiGettoni`
+         * vieta esplicitamente.
+         *
+         * ⛔ **E se il job esplode**, non si arriva mai qui: nessun addebito. E'
+         * voluto — `tries = 1`, quindi non c'e' nessun ritentativo che
+         * paghi due volte.
+         */
+        $import->refresh();
+
+        if ($import->status !== ImportStatus::Failed) {
+            $cancello->consuma(
+                $import->uploader,
+                AiFeature::PdfImport,
+                (bool) $import->paga_con_gettoni,
+            );
+        }
     }
 
     /**

@@ -78,18 +78,32 @@ final class PortafoglioGettoniTest extends TestCase
 
         $this->assertSame(10, AiFeature::FoodPhoto->costoInGettoni());
 
-        // ⚠️ E il PDF di una **scheda** costa come una foto: stesso modello,
-        // stesso allegato.
-        $this->assertSame(10, AiFeature::PdfImport->costoInGettoni());
+        /*
+         * 🚨 **I due PDF costano 50, uguali, dal 28/08/2026** — U.6.
+         *
+         * 📌 *«L'import dei pdf costa SEMPRE 50 gettoni, abbonato o no»*.
+         *
+         * ⚠️ **La scheda stava a 10 per omissione**, non per scelta: cadeva nel
+         * default dei multimodali, e questa riga fotografava quel default
+         * scambiandolo per una decisione. Un prezzo per omissione e' proprio
+         * il genere di cosa che un test dovrebbe smascherare, non certificare.
+         *
+         * 💡 Un piano alimentare *«generalmente e' MOLTO piu' grande»* — il
+         * committente — ma una scheda impaginata a tabelle e' la stessa
+         * lettura sullo stesso genere di documento. Erano due prezzi diversi
+         * per la stessa cosa.
+         */
+        $this->assertSame(50, AiFeature::PdfImport->costoInGettoni());
+        $this->assertSame(50, AiFeature::NutritionPdfImport->costoInGettoni());
 
         /*
-         * 🚨 Il PDF di un **piano alimentare** no: 50.
-         *
-         * *«generalmente sono MOLTO piu' grandi»* — il committente. Giorni,
-         * pasti, alimenti e grammi su parecchie facciate: contarlo a 10 vorrebbe
-         * dire venderlo sotto costo.
+         * ⛔ **E nessuno dei due passa piu' dalla quota inclusa**: si pagano
+         * solo a gettoni. Il perche' sta in `AiFeature::siPagaSoloConIGettoni()`,
+         * e le prove in `GliImportPdfSiPaganoAGettoniTest`.
          */
-        $this->assertSame(50, AiFeature::NutritionPdfImport->costoInGettoni());
+        $this->assertTrue(AiFeature::PdfImport->siPagaSoloConIGettoni());
+        $this->assertTrue(AiFeature::NutritionPdfImport->siPagaSoloConIGettoni());
+        $this->assertFalse(AiFeature::FoodPhoto->siPagaSoloConIGettoni());
     }
 
     // ───────────────────── l'ordine di consumo ─────────────────────

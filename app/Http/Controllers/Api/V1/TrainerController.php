@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\TrainerInvite;
 use App\Models\User;
+use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -159,6 +160,34 @@ class TrainerController extends Controller
                 && ($utente->isTrainer() || $utente->isFreeTrainer()),
             403,
             __('Questa sezione è per chi segue altre persone.'),
+        );
+
+        /*
+         * ── ⏰ E l'abbonamento deve essere in piedi — U.3.1 ─────────────────
+         *
+         * 📌 *«Quando gli scade l'abbonamento, perde tutte le funzionalità da
+         * trainer e può solo agire come un utente normale»*.
+         *
+         * 🚨 **Il ruolo non scade, l'abbonamento sì.** Fino a U.3 qui si
+         * guardava solo `isTrainer()`, e un trainer che smetteva di pagare
+         * continuava a vedere i suoi utenti, invitarne di nuovi e mandare
+         * schede — per sempre, senza nessun errore da nessuna parte. La porta
+         * era rimasta aperta perché nessuno le aveva mai messo una serratura.
+         *
+         * 💡 `eAbbonato()` risponde bene a tutti e due i casi senza doverli
+         * distinguere: per un trainer di palestra guarda l'abbonamento **della
+         * palestra**, che è chi paga per lui; per un indipendente guarda il
+         * suo. ⚠️ E la fascia trainer gratuita resta dentro: non è scaduta, è
+         * gratis, ed è un tier vero da tre allievi.
+         *
+         * ⛔ **Quello che NON si tocca sono le sue schede.** Restano sue e
+         * continua a vederle da utente: sono lavoro suo, ed è la stessa regola
+         * già scritta per `AccountEraser` e per `EsciDaUnaPalestra`.
+         */
+        abort_unless(
+            app(PianoAttivo::class)->eAbbonato($utente),
+            403,
+            __('Il tuo abbonamento da trainer è scaduto. Le tue schede restano tue: puoi continuare a usarle come chiunque altro.'),
         );
 
         return $utente;

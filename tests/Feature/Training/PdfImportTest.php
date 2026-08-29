@@ -16,8 +16,10 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlanImport;
 use App\Services\Ai\AiManager;
+use App\Services\Ai\CancelloDeiGettoni;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Exceptions\AiUnavailableException;
+use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Training\ExerciseMatcher;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -163,6 +165,10 @@ class PdfImportTest extends TestCase
         (new ParseWorkoutPdf($import->id))->handle(
             app(AiManager::class),
             app(TenantContext::class),
+            // 🎟️ U.6: il job scala i gettoni quando la lettura riesce. Qui
+            // `paga_con_gettoni` e' `false` (l'import nasce dal test, non dal
+            // pannello), quindi il cancello non tocca niente.
+            app(CancelloDeiGettoni::class),
         );
 
         $import->refresh();
@@ -196,6 +202,10 @@ class PdfImportTest extends TestCase
         (new ParseWorkoutPdf($import->id))->handle(
             app(AiManager::class),
             app(TenantContext::class),
+            // 🎟️ U.6: il job scala i gettoni quando la lettura riesce. Qui
+            // `paga_con_gettoni` e' `false` (l'import nasce dal test, non dal
+            // pannello), quindi il cancello non tocca niente.
+            app(CancelloDeiGettoni::class),
         );
 
         $import->refresh();
@@ -218,6 +228,10 @@ class PdfImportTest extends TestCase
         (new ParseWorkoutPdf($import->id))->handle(
             app(AiManager::class),
             app(TenantContext::class),
+            // 🎟️ U.6: il job scala i gettoni quando la lettura riesce. Qui
+            // `paga_con_gettoni` e' `false` (l'import nasce dal test, non dal
+            // pannello), quindi il cancello non tocca niente.
+            app(CancelloDeiGettoni::class),
         );
 
         $import->refresh();
@@ -311,6 +325,86 @@ class PdfImportTest extends TestCase
      * Il contenuto non conta: il modello e' finto e non lo legge. Conta che il
      * percorso esista, perche' il job controlla proprio quello.
      */
+    // ───────────────────── i gettoni (U.6) ─────────────────────
+
+    /**
+     * 💰 **Una lettura riuscita scala cinquanta gettoni.**
+     *
+     * ── 🚨 Perche' questo test non esisteva, e cosa nascondeva ─────────────
+     *
+     * Perche' fino a U.6 l'import di una scheda **non si pagava affatto**.
+     * `AiFeature::PdfImport` aveva un prezzo nel listino (10) e nessuno lo
+     * riscuoteva: `CancelloDeiGettoni` non veniva mai aperto per quella
+     * funzione — non c'e' una rotta API, il pannello della palestra non lo
+     * chiamava, il job nemmeno.
+     *
+     * ⚠️ **Un prezzo scritto e mai applicato non da' nessun errore.** Si vede
+     * solo mettendo i due numeri uno accanto all'altro: 120 prima, 70 dopo.
+     */
+    #[Test]
+    public function una_lettura_riuscita_scala_cinquanta_gettoni(): void
+    {
+        $this->aiFinta();
+
+        $this->alfa->forceFill(['ai_credits' => 120])->save();
+
+        $import = $this->importConPdf();
+        $import->forceFill(['paga_con_gettoni' => true])->save();
+
+        (new ParseWorkoutPdf($import->id))->handle(
+            app(AiManager::class),
+            app(TenantContext::class),
+            app(CancelloDeiGettoni::class),
+        );
+
+        $this->assertSame(
+            70,
+            app(PortafoglioGettoni::class)->saldo($this->trainer->refresh()),
+            'Una lettura riuscita deve costare 50 gettoni.',
+        );
+    }
+
+    /**
+     * ⛔ **Un import fallito non si paga.**
+     *
+     * 🚨 E' la regola gia' scritta su `CancelloDeiGettoni`: *«far pagare le
+     * chiamate che il fornitore ha rifiutato vuol dire far pagare i nostri
+     * guasti al cliente»*. Qui il PDF non e' leggibile, quindi l'import muore
+     * senza aver prodotto niente da rivedere.
+     *
+     * 💡 E' anche il test che tiene onesto il criterio scelto nel job — «si paga
+     * se lo stato finale non e' `failed`» — invece di «si paga sempre».
+     */
+    #[Test]
+    public function un_import_fallito_non_scala_niente(): void
+    {
+        $this->aiFinta();
+
+        $this->alfa->forceFill(['ai_credits' => 120])->save();
+
+        // ⚠️ Nessun media: `pdfPath()` torna `null` e l'import fallisce prima
+        // ancora di arrivare al modello.
+        $import = $this->ctx()->runAs($this->alfa, fn (): WorkoutPlanImport => WorkoutPlanImport::create([
+            'uploaded_by' => $this->trainer->id,
+            'member_id' => $this->iscritto->id,
+            'paga_con_gettoni' => true,
+        ]));
+
+        (new ParseWorkoutPdf($import->id))->handle(
+            app(AiManager::class),
+            app(TenantContext::class),
+            app(CancelloDeiGettoni::class),
+        );
+
+        $this->assertSame(ImportStatus::Failed, $import->refresh()->status);
+
+        $this->assertSame(
+            120,
+            app(PortafoglioGettoni::class)->saldo($this->trainer->refresh()),
+            'Un import fallito ha scalato gettoni: si sta facendo pagare un guasto.',
+        );
+    }
+
     private function importConPdf(): WorkoutPlanImport
     {
         return $this->ctx()->runAs($this->alfa, function (): WorkoutPlanImport {

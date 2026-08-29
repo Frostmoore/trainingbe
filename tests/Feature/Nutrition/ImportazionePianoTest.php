@@ -54,6 +54,25 @@ class ImportazionePianoTest extends TestCase
 
         $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@olimpo.it');
+
+        /*
+         * ── 🚨 I gettoni servono DAVVERO, da U.6 (28/08/2026) ──────────────
+         *
+         * 📌 *«devono essere proprio GETTONI, non si puo' usare la quota flat»*.
+         *
+         * ⛔ **Prima di oggi questa riga non c'era, e sei test passavano lo
+         * stesso**: l'importazione ricadeva sulla quota inclusa, che nei test
+         * e' sempre intatta. Il commento in testa a questa classe diceva
+         * «cinquanta gettoni si scalano solo se la trascrizione riesce», ma la
+         * strada dei gettoni non veniva percorsa **mai**.
+         *
+         * 💡 E' il difetto tipico di qui: nessun errore, tutto verde, e una
+         * regola commerciale che nella realta' passava da un'altra parte. Il
+         * fatto che togliendo questa riga sei test diventino 402 e' adesso la
+         * prova che la regola nuova e' viva.
+         */
+        $this->palestra->forceFill(['ai_credits' => 500])->save();
+        $this->iscritto->refresh()->load('tenant');
     }
 
     private function unPdf(string $nome = 'piano.pdf'): UploadedFile
