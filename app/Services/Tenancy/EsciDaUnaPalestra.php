@@ -103,6 +103,16 @@ final class EsciDaUnaPalestra
         'plan_subscriptions',
         'profili_pubblici',
         'roles',
+        /*
+         * 🔗 Gli inviti — 3b-V.
+         *
+         * ⚠️ Sono **della palestra**, non di chi li riceve: chi esce non se li
+         * porta dietro, ed e' ovvio. 💡 Ma vanno nominati lo stesso, perche' il
+         * controllo qui sotto pretende una classificazione per ogni tabella con
+         * `tenant_id` — e una tabella non classificata e' un dato che finisce
+         * nel tenant sbagliato senza che nessuno se ne accorga.
+         */
+        'tenant_invites',
         'trainer_invites',
         'trainer_member',
         'users',

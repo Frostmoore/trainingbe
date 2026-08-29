@@ -498,10 +498,19 @@ class TrainerIndipendenteTest extends TestCase
 
         $io = $trainer->fresh();
 
+        /*
+         * 🚨 **Si guarda il CODICE, non la frase.** Un test sul testo si
+         * romperebbe alla prima virgola corretta, e — peggio — nasconderebbe il
+         * fatto che è **il codice** il contratto con l'app.
+         */
         $this->actingAs($io, 'sanctum')
             ->getJson('/api/v1/trainer/members')
             ->assertStatus(403)
-            ->assertJsonPath('message', 'Il tuo abbonamento da trainer è scaduto. Le tue schede restano tue: puoi continuare a usarle come chiunque altro.');
+            ->assertJsonPath('error', 'trainer_subscription_expired')
+            ->assertJsonPath('code', 'trainer_subscription_expired')
+            // 💡 E la frase dice cosa **non** si perde: un trainer che vede
+            // sparire «i miei utenti» pensa di aver perso il lavoro di mesi.
+            ->assertJsonFragment(['message' => 'Il tuo abbonamento da trainer è scaduto. Le tue schede restano tue: puoi continuare a usarle come chiunque altro.']);
 
         // 🚨 E le schede si vedono ancora: la porta chiusa è una sola.
         $this->actingAs($io, 'sanctum')

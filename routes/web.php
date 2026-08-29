@@ -67,6 +67,28 @@ Route::get('/invito/{token}', [SitoController::class, 'invito'])
     ->name('sito.invito');
 
 /*
+| L'atterraggio di un invito di una PALESTRA — 3b-V.3.1.
+|
+| 🚨 **Percorso diverso da quello sopra, e non e' pignoleria.** `/invito` e' gia'
+| degli inviti dei trainer: con lo stesso indirizzo, il link di una palestra
+| avrebbe aperto quella pagina — che non trova il token e scrive «invito non piu'
+| valido». Un invito buono che si presenta come scaduto.
+|
+| ⚠️ **Questa pagina serve a chi NON ha l'app**, ed e' la parte che si
+| sottovaluta: su un telefono con l'app installata Android apre direttamente
+| l'app (App Links), e qui non ci arriva nessuno. Ci arriva chi tocca il link da
+| un computer, o da un telefono senza l'app — cioe' esattamente la persona che
+| l'invito deve convincere.
+|
+| 🚨 **`GET` e non riscatta niente**, per la stessa ragione scritta qui sopra: i
+| servizi di messaggistica aprono i link per farne l'anteprima, e un `GET` che
+| consumasse l'invito lo brucerebbe prima che qualcuno lo legga.
+*/
+Route::get('/invito-palestra/{token}', [SitoController::class, 'invitoInPalestra'])
+    ->where('token', '[A-Za-z0-9]{32}')
+    ->name('sito.invito-palestra');
+
+/*
 | Un solo indirizzo di accesso.
 |
 | Entrambi i pannelli mostrano la stessa pagina di login e la risposta smista
@@ -96,7 +118,6 @@ Route::get('/impersonation/stop', function (Impersonator $impersonator) {
             : '/admin',
     );
 })->middleware('auth')->name('impersonation.stop');
-
 
 /*
 |--------------------------------------------------------------------------

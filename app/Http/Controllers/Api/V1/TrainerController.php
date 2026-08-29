@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\TrainerInvite;
 use App\Models\User;
+use App\Services\Billing\Exceptions\AbbonamentoTrainerScadutoException;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Illuminate\Http\JsonResponse;
@@ -184,11 +185,20 @@ class TrainerController extends Controller
          * continua a vederle da utente: sono lavoro suo, ed è la stessa regola
          * già scritta per `AccountEraser` e per `EsciDaUnaPalestra`.
          */
-        abort_unless(
-            app(PianoAttivo::class)->eAbbonato($utente),
-            403,
-            __('Il tuo abbonamento da trainer è scaduto. Le tue schede restano tue: puoi continuare a usarle come chiunque altro.'),
-        );
+        if (! app(PianoAttivo::class)->eAbbonato($utente)) {
+            /*
+             * 🚨 **Un'eccezione con un CODICE, non un `abort(403, 'frase')`.**
+             *
+             * 📌 *«è una merda se esce solo un errore, si deve capire che è
+             * perché non ha pagato»* — il committente, 29/08.
+             *
+             * ⛔ Con la sola frase, l'app dovrebbe **riconoscere il testo** per
+             * capire cos'è successo, e basterebbe una virgola corretta un
+             * giorno per farla tornare all'errore generico — senza che nessun
+             * test se ne accorga. Il perché per esteso sta sull'eccezione.
+             */
+            throw new AbbonamentoTrainerScadutoException;
+        }
 
         return $utente;
     }

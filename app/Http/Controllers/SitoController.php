@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TrainerInvite;
 use App\Services\Billing\Listino;
+use App\Services\Tenancy\InvitiInPalestra;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 
@@ -147,6 +148,36 @@ class SitoController extends Controller
         return view('sito.invito', [
             'valido' => $invito !== null && $invito->eValido(),
             'trainer' => $invito?->trainer?->name,
+        ]);
+    }
+
+    /**
+     * L'invito di una **palestra**, per chi non ha l'app — 3b-V.3.1.
+     *
+     * 🚨 **Su un telefono con l'app qui non ci arriva nessuno**: Android apre
+     * direttamente l'app (App Links). Ci arriva chi tocca il link da un
+     * computer, o da un telefono senza l'app — cioe' esattamente la persona che
+     * l'invito deve convincere a installarla.
+     *
+     * 💡 Per questo mostra **le stesse cose** della schermata dell'app — nome,
+     * descrizione, cosa ottieni — e non un semplice «scarica l'app»: chi arriva
+     * qui non sa ancora se gli interessa.
+     */
+    public function invitoInPalestra(string $token): View
+    {
+        $dati = app(InvitiInPalestra::class)->anteprima($token);
+
+        return view('sito.invito-palestra', [
+            /*
+             * ⛔ **Un solo esito negativo.** Scaduto, revocato, gia' usato,
+             * rifiutato e mai esistito danno la stessa pagina: distinguerli
+             * permetterebbe di provare token a tappeto e capire quali sono
+             * esistiti, e quando. E' la stessa regola dell'API.
+             */
+            'valido' => $dati !== null,
+            'palestra' => $dati['palestra']['name'] ?? null,
+            'descrizione' => $dati['descrizione'] ?? null,
+            'cosaOttieni' => $dati['cosa_ottieni'] ?? [],
         ]);
     }
 }

@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
-use Illuminate\Database\Eloquent\Builder;
+use App\Models\Concerns\EUnInvito;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
 
 /**
  * L'invito di un trainer indipendente a **una persona** — F6.2.
@@ -20,8 +19,21 @@ class TrainerInvite extends Model
 {
     use BelongsToTenant;
 
-    /** Quanto vive un invito. Una settimana: il tempo di leggere un messaggio. */
-    public const GIORNI_DI_VITA = 7;
+    /*
+     * ── 🚨 Le regole di validita' NON stanno piu' qui — 3b-V.1.1 ──────────
+     *
+     * Da 3b-V esiste un secondo invito (`InvitoInPalestra`, per le palestre), e
+     * le condizioni che rendono valido un invito sono **le stesse**.
+     *
+     * ⛔ Copiarle di la' e lasciarle qui vorrebbe dire due regole che divergono
+     * al primo ritocco — e quella che diverge non da' nessun errore: e' un
+     * invito che continua a funzionare quando non dovrebbe.
+     *
+     * 💡 La prova che serviva davvero e' arrivata subito: 3b-V aggiunge una
+     * **quarta** condizione (`rifiutato_il`), e con il concern arriva a tutti e
+     * due nello stesso istante.
+     */
+    use EUnInvito;
 
     protected $fillable = ['tenant_id', 'trainer_id', 'token', 'email', 'expires_at'];
 
@@ -31,6 +43,7 @@ class TrainerInvite extends Model
             'expires_at' => 'datetime',
             'used_at' => 'datetime',
             'revoked_at' => 'datetime',
+            'rifiutato_il' => 'datetime',
         ];
     }
 
@@ -42,44 +55,5 @@ class TrainerInvite extends Model
     public function accettatoDa(): BelongsTo
     {
         return $this->belongsTo(User::class, 'accepted_by');
-    }
-
-    /**
-     * 🚨 **Le tre condizioni, in un posto solo.**
-     *
-     * Ripeterle nei controller vorrebbe dire che il giorno in cui se ne aggiunge
-     * una quarta bisogna ricordarsi di tutti i punti — e uno dimenticato è un
-     * invito che continua a funzionare quando non dovrebbe.
-     */
-    public function eValido(): bool
-    {
-        return $this->used_at === null
-            && $this->revoked_at === null
-            && $this->expires_at->isFuture();
-    }
-
-    public function scopeValidi(Builder $query): Builder
-    {
-        return $query
-            ->whereNull('used_at')
-            ->whereNull('revoked_at')
-            ->where('expires_at', '>', now());
-    }
-
-    /**
-     * Un segreto lungo, non un codice da dettare al telefono.
-     *
-     * ⚠️ Al contrario di `Tenant::generateJoinCode()`, qui **non** si tolgono i
-     * caratteri ambigui: questo non si legge ad alta voce, viaggia in un link.
-     * Toglierli ridurrebbe l'alfabeto — cioè la difesa — per un problema che
-     * questo codice non ha.
-     */
-    public static function generaToken(): string
-    {
-        do {
-            $token = Str::random(32);
-        } while (static::withoutGlobalScopes()->where('token', $token)->exists());
-
-        return $token;
     }
 }

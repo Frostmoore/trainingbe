@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Api\V1\Billing\BillingController;
 use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\CittaController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
@@ -11,6 +10,7 @@ use App\Http\Controllers\Api\V1\Account\TimezoneController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\Billing\BillingController;
 use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\AllegatoCifratoController;
@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InvitoController;
+use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -79,6 +80,35 @@ Route::prefix('v1')->group(function (): void {
     // per provare codici palestra a tappeto.
     Route::get('branding/lookup', [BrandingController::class, 'lookup'])
         ->middleware('throttle:branding-lookup');
+
+    /*
+     * ── 🔗 L'invito di una palestra — 3b-V.2 ──────────────────────────────
+     *
+     * 📌 *«Il link d'invito deve essere monouso, e a chi ci clicca si deve
+     * aprire l'app in una pagina con la descrizione della palestra, il logo, i
+     * colori […] e due tasti, uno per accettare e uno per rifiutare»*.
+     *
+     * 🚨 **Pubbliche, e non e' una dimenticanza.** Chi tocca il link **non ha
+     * ancora l'app**: se l'anteprima chiedesse l'accesso, la prima cosa che
+     * quella persona vedrebbe sarebbe un modulo di registrazione invece
+     * dell'invito che le e' stato mandato — cioe' esattamente il muro che
+     * questo link esiste per togliere.
+     *
+     * ⚠️ E **anche il rifiuto e' pubblico**: chi non vuole entrare non deve
+     * crearsi un account per dire di no.
+     *
+     * 💡 Il token e' la credenziale: 32 caratteri casuali, monouso, a scadenza.
+     * Chi ce l'ha e' chi l'ha ricevuto, ed e' la stessa forma degli inviti dei
+     * trainer (F6.2).
+     *
+     * 🚨 **Sotto `throttle:branding-lookup`**, che e' il piu' stretto che
+     * abbiamo per le rotte senza credenziali: senza niente da indovinare, e' il
+     * modo piu' comodo per provare token a tappeto.
+     */
+    Route::middleware('throttle:branding-lookup')->group(function (): void {
+        Route::get('inviti-palestra/{token}', [InvitoInPalestraController::class, 'anteprima']);
+        Route::post('inviti-palestra/{token}/rifiuta', [InvitoInPalestraController::class, 'rifiuta']);
+    });
 
     /*
      * ── I comuni italiani — M1.2 ──────────────────────────────────────────
@@ -622,6 +652,21 @@ Route::prefix('v1')->group(function (): void {
          * tappeto non deve essere comodo.
          */
         Route::post('inviti/{token}/riscatta', [InvitoController::class, 'riscatta'])
+            ->middleware('throttle:auth-login');
+
+        /*
+         * 🔗 **Accettare l'invito di una PALESTRA** — 3b-V.2.4.
+         *
+         * ⚠️ Diversa dalla riga qui sopra, che riguarda l'invito di un
+         * **trainer**: quello crea un legame fra due persone, questo sposta
+         * l'iscritto dentro un'altra organizzazione. 🚨 Sembrano la stessa cosa
+         * e non lo sono, e l'unica ragione per cui stanno vicine e' che chi
+         * legge le veda tutte e due.
+         *
+         * 💡 L'anteprima e il rifiuto sono **pubblici** e stanno in cima al
+         * file: qui serve una persona, perche' e' lei che entra.
+         */
+        Route::post('inviti-palestra/{token}/accetta', [InvitoInPalestraController::class, 'accetta'])
             ->middleware('throttle:auth-login');
         Route::get('conversations/contacts', [ConversationController::class, 'contacts']);
         Route::get('conversations/{conversation}/messages', [ConversationController::class, 'messages'])->whereNumber('conversation');
