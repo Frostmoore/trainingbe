@@ -45,7 +45,6 @@ return [
         'anthropic' => [
             'food_text' => env('AI_MODEL_FOOD_TEXT', 'claude-haiku-4-5'),
             'food_photo' => env('AI_MODEL_FOOD_PHOTO', 'claude-sonnet-5'),
-            'workout_kcal' => env('AI_MODEL_WORKOUT_KCAL', 'claude-haiku-4-5'),
             'daily_advice' => env('AI_MODEL_ADVICE', 'claude-haiku-4-5'),
             'pdf_import' => env('AI_MODEL_PDF_IMPORT', 'claude-sonnet-5'),
 
@@ -93,7 +92,6 @@ return [
         'openai' => [
             'food_text' => env('AI_MODEL_OPENAI_FOOD_TEXT', 'gpt-4.1-mini'),
             'food_photo' => env('AI_MODEL_OPENAI_FOOD_PHOTO', 'gpt-4.1'),
-            'workout_kcal' => env('AI_MODEL_OPENAI_WORKOUT_KCAL', 'gpt-4.1-mini'),
             'daily_advice' => env('AI_MODEL_OPENAI_ADVICE', 'gpt-4.1-mini'),
             'plan_food' => env('AI_MODEL_OPENAI_PLAN_FOOD', 'gpt-4.1-mini'),
             'pdf_import' => env('AI_MODEL_OPENAI_PDF_IMPORT', 'gpt-4.1'),

@@ -12,7 +12,6 @@ use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
-use App\Services\Ai\Data\WorkoutAiContext;
 use App\Services\Ai\Exceptions\AiRateLimitedException;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Ai\ImagePreparer;
@@ -79,21 +78,6 @@ class OpenAiProvider implements AiProvider
             'food_estimate',
             2048,
         ));
-    }
-
-    public function workoutCalories(WorkoutAiContext $context, AiCallContext $ctx): int
-    {
-        $dati = $this->json(
-            $ctx,
-            $this->manager->modelFor(AiFeature::WorkoutKcal, 'openai'),
-            Prompts::WORKOUT_KCAL_SYSTEM,
-            [['type' => 'text', 'text' => json_encode($context->toArray(), JSON_UNESCAPED_UNICODE) ?: '{}']],
-            Prompts::workoutKcalSchema(),
-            'workout_kcal',
-            256,
-        );
-
-        return max(0, (int) ($dati['kcal'] ?? 0));
     }
 
     public function dailyAdvice(array $context, AiCallContext $ctx): string

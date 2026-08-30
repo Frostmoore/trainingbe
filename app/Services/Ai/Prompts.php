@@ -415,32 +415,6 @@ final class Prompts
         .'scomponi gli alimenti, stima le porzioni in grammi, compila `state` per '
         .'ciascuno e dimmi nella `note` cosa non riesci a vedere dalla foto.';
 
-    public const WORKOUT_KCAL_SYSTEM = <<<'TXT'
-        Stimi le calorie consumate durante un allenamento in palestra.
-        Rispondi SEMPRE e SOLO con l'oggetto JSON richiesto dallo schema.
-
-        Ti vengono forniti: la durata in minuti, il peso corporeo in chilogrammi e
-        l'elenco degli esercizi con serie, ripetizioni e carichi.
-
-        REGOLE
-
-        1. Parti dal dispendio metabolico dell'attivita' (MET) tipico degli esercizi
-           indicati, moltiplicato per il peso corporeo e per la durata effettiva.
-        2. Un allenamento con i pesi ha molto tempo di recupero: le calorie non
-           crescono linearmente con la durata come nel cardio continuo.
-        3. Carichi alti e serie lunghe alzano la stima; serie brevi con lunghi recuperi
-           la abbassano.
-        4. Resta prudente. Sovrastimare le calorie bruciate porta la persona a mangiare
-           di piu' credendo di essere in deficit, ed e' l'errore che fa fallire un
-           percorso senza che nessuno capisca perche'.
-        5. Restituisci un numero intero di chilocalorie, mai negativo.
-        6. CONFIDENZA. Il campo `confidence` va da 0 a 1: 0.9 o piu' se durata, carichi
-           e ripetizioni sono tutti presenti; sotto 0.6 se la durata manca o gli
-           esercizi non bastano a capire l'intensita'. Non gonfiarla: una stima
-           sbagliata dichiarata sicura viene sommata al fabbisogno del giorno e fa
-           mangiare di piu' a chi crede di essere in deficit.
-        TXT;
-
     public const ADVICE_SYSTEM = <<<'TXT'
         Sei l'assistente di una palestra e scrivi un consiglio breve alla persona che
         segui, sulla base della sua giornata.
@@ -1002,19 +976,6 @@ TXT;
         }
 
         return $fuori;
-    }
-
-    public static function workoutKcalSchema(): array
-    {
-        return [
-            'type' => 'object',
-            'additionalProperties' => false,
-            'required' => ['kcal', 'confidence'],
-            'properties' => [
-                'kcal' => ['type' => 'integer'],
-                'confidence' => ['type' => 'number'],
-            ],
-        ];
     }
 
     /** @return array<string, mixed> */

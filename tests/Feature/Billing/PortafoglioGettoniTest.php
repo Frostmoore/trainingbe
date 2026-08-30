@@ -72,7 +72,6 @@ final class PortafoglioGettoniTest extends TestCase
          * questo test dice dove.
          */
         $this->assertSame(1, AiFeature::FoodText->costoInGettoni());
-        $this->assertSame(1, AiFeature::WorkoutKcal->costoInGettoni());
         $this->assertSame(1, AiFeature::DailyAdvice->costoInGettoni());
         $this->assertSame(1, AiFeature::PlanFood->costoInGettoni());
 

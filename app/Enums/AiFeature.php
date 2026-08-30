@@ -22,6 +22,32 @@ enum AiFeature: string
 {
     case FoodText = 'food_text';
     case FoodPhoto = 'food_photo';
+    /**
+     * ⛔ **RITIRATA — le calorie di un allenamento le calcola il codice.**
+     *
+     * ══ 🚨 IL CASO RESTA, E NON SI PUO' TOGLIERE ═══════════════════════════
+     *
+     * 📌 Il committente, il 30/08/2026: *«workout calories lo so che non
+     * esiste, è un calcolo che facciamo noi a codice, ed è meglio così»*.
+     *
+     * 💡 **Ed è meglio davvero**: un MET moltiplicato per peso e minuti non
+     * sbaglia, non costa un gettone e risponde subito. Chiedere a un modello
+     * linguistico di fare una moltiplicazione è pagare per un rischio.
+     *
+     * ⛔ **Ma il caso non si cancella**: `ai_usage_logs.feature` è castata su
+     * questo enum, e sullo staging ci sono **8 righe** con `workout_kcal` —
+     * scritte quando la chiamata esisteva davvero. Toglierlo farebbe esplodere
+     * **ogni lettura del registro dei consumi**, pannello compreso.
+     *
+     * ⚠️ Il ragionamento *«nessuno la chiama, quindi non ci sono righe»* era
+     * falso, e l'ha smentito `memory/scripts/cerca-feature-nei-log.php`. È lo
+     * stesso trattamento di `Plan::TRAINER_PRO`: **ritirato, non cancellato**,
+     * perché qualcosa ci punta ancora.
+     *
+     * 🚨 Quello che è stato tolto è tutto il resto: il metodo sui fornitori, il
+     * prompt, lo schema e il modello in configurazione. **Non c'è più niente
+     * che possa chiamarla.**
+     */
     case WorkoutKcal = 'workout_kcal';
     case DailyAdvice = 'daily_advice';
     case PdfImport = 'pdf_import';
@@ -81,7 +107,8 @@ enum AiFeature: string
         return match ($this) {
             self::FoodText => 'Cibo da testo',
             self::FoodPhoto => 'Cibo da foto',
-            self::WorkoutKcal => 'Calorie allenamento',
+            // ⛔ Ritirata: resta solo per le righe vecchie del registro.
+            self::WorkoutKcal => 'Calorie allenamento (ritirata)',
             self::DailyAdvice => 'Consiglio del giorno',
             self::PdfImport => 'Import scheda PDF',
             self::NutritionPdfImport => 'Import piano alimentare PDF',

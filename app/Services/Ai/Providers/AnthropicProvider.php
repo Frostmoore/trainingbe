@@ -16,7 +16,6 @@ use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
-use App\Services\Ai\Data\WorkoutAiContext;
 use App\Services\Ai\Exceptions\AiRateLimitedException;
 use App\Services\Ai\Exceptions\AiUnavailableException;
 use App\Services\Ai\ImagePreparer;
@@ -101,22 +100,6 @@ class AnthropicProvider implements AiProvider
         );
 
         return FoodEstimate::fromArray($dati);
-    }
-
-    // ───────────────────────── allenamento ─────────────────────────
-
-    public function workoutCalories(WorkoutAiContext $context, AiCallContext $ctx): int
-    {
-        $dati = $this->call(
-            $ctx,
-            $this->manager->modelFor(AiFeature::WorkoutKcal, 'anthropic'),
-            Prompts::WORKOUT_KCAL_SYSTEM,
-            [['role' => 'user', 'content' => json_encode($context->toArray(), JSON_UNESCAPED_UNICODE) ?: '{}']],
-            Prompts::workoutKcalSchema(),
-            maxTokens: 256,
-        );
-
-        return max(0, (int) ($dati['kcal'] ?? 0));
     }
 
     // ───────────────────────── consiglio ─────────────────────────

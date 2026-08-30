@@ -10,7 +10,6 @@ use App\Services\Ai\Contracts\AiProvider;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
-use App\Services\Ai\Data\WorkoutAiContext;
 use App\Services\Ai\Prompts;
 use Closure;
 use Throwable;
@@ -43,8 +42,6 @@ class FakeAiProvider implements AiProvider
     private ?FoodEstimate $nextFood = null;
 
     private ?ParsedWorkoutPlan $nextPlan = null;
-
-    private ?int $nextKcal = null;
 
     private ?string $nextAdvice = null;
 
@@ -91,13 +88,6 @@ class FakeAiProvider implements AiProvider
     public function willReturnPlan(ParsedWorkoutPlan $plan): self
     {
         $this->nextPlan = $plan;
-
-        return $this;
-    }
-
-    public function willReturnKcal(int $kcal): self
-    {
-        $this->nextKcal = $kcal;
 
         return $this;
     }
@@ -153,13 +143,6 @@ class FakeAiProvider implements AiProvider
             ]],
             'confidence' => 0.72,
         ]);
-    }
-
-    public function workoutCalories(WorkoutAiContext $context, AiCallContext $ctx): int
-    {
-        $this->record('workoutCalories', $context->toArray(), $ctx);
-
-        return $this->nextKcal ?? 420;
     }
 
     /**

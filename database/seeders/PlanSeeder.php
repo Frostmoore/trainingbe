@@ -118,7 +118,25 @@ class PlanSeeder extends Seeder
                 'ai_enabled' => true,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                'price_cents' => 499,
+                /*
+                 * 🚨 **7,99 €, ed è il perno di tutto il listino** — 30/08/2026.
+                 *
+                 * 📌 *«l'abbonato singolo deve pagare 7.99»*. Da questo numero
+                 * discendono le due regole di `config/listino.php`: un posto in
+                 * un pacchetto costa **sempre meno** di 7,99, e più il pacchetto
+                 * è grande meno costa a posto.
+                 *
+                 * ⚠️ **Stava a 499, e `config/listino.php` diceva già 799.** Due
+                 * listini che si contraddicono non fanno sbagliare *se* qualcuno
+                 * sbaglia: fanno sbagliare chi legge per primo quello sbagliato,
+                 * ed è successo. 🚨 Se si tocca uno dei due si toccano
+                 * **entrambi**, finché H1.5 non ne lascia uno solo.
+                 *
+                 * 💡 Nessun codice **incassa** da qui: oggi `price_cents` è un
+                 * numero esposto, non addebitato — il pagamento vero è Parte H.
+                 * Per questo la correzione non tocca nessun abbonamento attivo.
+                 */
+                'price_cents' => 799,
                 'is_public' => true,
             ],
 

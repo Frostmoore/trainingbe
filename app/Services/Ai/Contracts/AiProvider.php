@@ -8,7 +8,6 @@ use App\Services\Ai\AiCallContext;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
-use App\Services\Ai\Data\WorkoutAiContext;
 
 /**
  * Il contratto che ogni fornitore di AI deve rispettare.
@@ -48,8 +47,6 @@ interface AiProvider
      *                         dare nessun errore: si vedrebbe solo in fattura.
      */
     public function foodFromImage(string $absolutePath, string $mimeType, AiCallContext $ctx, string $extra = ''): FoodEstimate;
-
-    public function workoutCalories(WorkoutAiContext $context, AiCallContext $ctx): int;
 
     /**
      * Il consiglio del giorno.
