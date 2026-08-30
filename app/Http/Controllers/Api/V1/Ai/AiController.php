@@ -28,6 +28,7 @@ use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\FasciaDelConsiglio;
+use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\QueryException;
@@ -1246,6 +1247,200 @@ class AiController extends Controller
         ];
     }
 
+    /**
+     * I pasti di oggi con l'ora in cui sono stati scritti, e la settimana.
+     *
+     * ══ 🚨 PERCHE' SERVE L'ORA IN CUI SONO STATI **SCRITTI** ══════════════
+     *
+     * 📌 *«se oggi ho gia' segnato tutto quello che mangero' alle 10 di mattina
+     * il consiglio del giorno mi dice che ho gia' assunto 1800 kcal e sono solo
+     * le 10»*.
+     *
+     * ⛔ **`eaten_at` non serve a niente per questo**, ed e' la scoperta che ha
+     * deciso la forma di questo metodo: l'app manda
+     * `eaten_at = selectedDate.toIso8601String()`, cioe' la **mezzanotte** del
+     * giorno che si sta guardando. Tutte le voci di oggi hanno la stessa ora, e
+     * quell'ora e' 00:00.
+     *
+     * 💡 `created_at` invece e' l'istante vero in cui la riga e' stata
+     * scritta. Una cena con `created_at` alle 10:14 e' cibo **programmato**;
+     * una cena scritta alle 21:30 e' cibo mangiato.
+     *
+     * ⚠️ **Si prende la piu' RECENTE fra le voci del pasto**, non la prima:
+     * chi aggiunge il pane alla cena alle 21:40 sta ancora cenando, e l'ora
+     * che conta e' quella dell'ultimo gesto.
+     *
+     * ══ 📅 E LA SETTIMANA, DALLA STESSA QUERY ════════════════════════════
+     *
+     * 🚨 **Una lettura sola per due risposte.** Due query — una per oggi e una
+     * per la settimana — sarebbero due filtri sullo stesso intervallo, cioe'
+     * due occasioni di divergere sul confine del giorno. E il confine del
+     * giorno in questo progetto e' gia' costato il difetto A3.
+     *
+     * 💡 Il raggruppamento si fa in PHP con `GiornoLocale::etichettaDi()` e non
+     * con un `GROUP BY DATE(eaten_at)`: quel `DATE()` raggrupperebbe in **UTC**,
+     * e una cena delle 00:30 finirebbe nel giorno prima.
+     *
+     * @return array{meals: list<array<string, mixed>>, week_food: list<array<string, mixed>>}
+     */
+    private function laSettimanaDelCibo(User $utente, GiornoLocale $oggi): array
+    {
+        $fuso = $utente->fusoOrario();
+        $primo = $oggi->menoGiorni(self::GIORNI_DI_STORIA);
+
+        $voci = FoodEntry::query()
+            ->forUser($utente)
+            ->whereBetween('eaten_at', $primo->finestraFinoA($oggi))
+            ->orderBy('eaten_at')
+            ->get();
+
+        $perGiorno = [];
+
+        foreach ($voci as $v) {
+            if ($v->eaten_at === null) {
+                continue;
+            }
+
+            $perGiorno[GiornoLocale::etichettaDi($v->eaten_at, $fuso)][] = $v;
+        }
+
+        // ── i pasti di oggi ────────────────────────────────────────────────
+
+        $perPasto = [];
+
+        foreach ($perGiorno[$oggi->etichetta] ?? [] as $v) {
+            $perPasto[$v->meal->value][] = $v;
+        }
+
+        $pasti = [];
+
+        foreach (MealType::ordered() as $tipo) {
+            $righe = $perPasto[$tipo->value] ?? [];
+
+            if ($righe === []) {
+                continue;
+            }
+
+            $totali = FoodEntry::totals($righe);
+
+            /*
+             * 🚨 **Il massimo, non l'ultimo dell'elenco**: le voci sono
+             * ordinate per `eaten_at`, che qui vale mezzanotte per tutte —
+             * quindi l'ordine dell'elenco non dice niente sull'ora di
+             * scrittura.
+             */
+            $scritto = null;
+
+            foreach ($righe as $r) {
+                if ($r->created_at !== null && ($scritto === null || $r->created_at->gt($scritto))) {
+                    $scritto = $r->created_at;
+                }
+            }
+
+            $pasti[] = [
+                'meal' => $tipo->value,
+                'kcal' => (int) round($totali['kcal']),
+                'p' => (int) round($totali['protein']),
+                'c' => (int) round($totali['carbs']),
+                'f' => (int) round($totali['fat']),
+
+                // ⚠️ L'ora **locale**: in UTC il modello leggerebbe le 08:14
+                // per una cena scritta alle 10:14 a Roma, e il ragionamento
+                // sul «e' presto» partirebbe da un'ora sbagliata.
+                'scritto_alle' => $scritto?->copy()->setTimezone($fuso)->format('H:i'),
+            ];
+        }
+
+        // ── la settimana, senza oggi ───────────────────────────────────────
+
+        $settimana = [];
+
+        foreach ($perGiorno as $giorno => $righe) {
+            /*
+             * ⛔ **Oggi non entra nella settimana**: e' gia' in `totals` e in
+             * `meals`, e ripeterlo darebbe al modello due versioni della stessa
+             * giornata — una completa e una da confrontare con le altre.
+             */
+            if ($giorno === $oggi->etichetta) {
+                continue;
+            }
+
+            $t = FoodEntry::totals($righe);
+
+            $settimana[] = [
+                'd' => $giorno,
+                'kcal' => (int) round($t['kcal']),
+                'p' => (int) round($t['protein']),
+                'c' => (int) round($t['carbs']),
+                'f' => (int) round($t['fat']),
+            ];
+        }
+
+        /*
+         * 💡 Dal piu' recente: il modello legge le altre serie della settimana
+         * cosi' (`week_sleep`, `week_workouts`), e due ordini diversi nello
+         * stesso contesto sono un modo gratuito di far sbagliare i confronti.
+         */
+        usort($settimana, static fn (array $a, array $b): int => strcmp($b['d'], $a['d']));
+
+        return ['meals' => $pasti, 'week_food' => $settimana];
+    }
+
+    /**
+     * TDEE, peso e altezza: quello che il server **non ha piu'** — 31/08/2026.
+     *
+     * 📌 Il committente: *«Deve capire il target calorico mio, il mio tdee, il
+     * mio peso e il mio obbiettivo»*.
+     *
+     * ══ 🚨 QUESTO CAMBIA UNA DECISIONE DI S5, E VA SAPUTO ═════════════════
+     *
+     * `targetDallApp()` porta ancora scritto: *«Si manda solo il risultato, non
+     * il peso. Il target e' un numero derivato; il peso da cui nasce resta su
+     * questo telefono, che e' il punto di tutta la fase S5»*.
+     *
+     * ⚠️ **Da oggi il peso parte.** E' una richiesta esplicita del committente,
+     * ed e' scritta qui perche' nessuno la scopra leggendo il commento di
+     * sopra e la creda un difetto.
+     *
+     * 💡 **Il perimetro pero' non cambia**: il server lo **inoltra e non lo
+     * conserva**, esattamente come fa da 16/08 con sonno, HRV e battito a
+     * riposo — che sono dati dell'art. 9, cioe' molto piu' delicati di un peso.
+     * Non c'e' nessuna colonna, nessuna tabella, nessun log che lo trattenga.
+     *
+     * ⛔ **E resta una lista bianca**: quello che l'app manda e non e' qui
+     * dentro non parte. Ogni campo qui ha una riga nel prompt che dice come si
+     * legge; uno che il prompt non nomina sarebbe un dato in piu' mandato per
+     * niente, cioe' l'art. 5(1)(c) violato per distrazione.
+     *
+     * @return array<string, mixed>
+     */
+    private function corpoDallApp(Request $request): array
+    {
+        $dati = $request->validate([
+            'tdee_kcal' => ['nullable', 'numeric', 'min:800', 'max:8000'],
+
+            /*
+             * ⚠️ Gli estremi sono larghi apposta: servono a fermare uno zero di
+             * troppo o un valore in libbre, non a decidere chi puo' pesare
+             * quanto. Un intervallo stretto qui sarebbe un giudizio sul corpo
+             * scritto in una regola di validazione.
+             */
+            'weight_kg' => ['nullable', 'numeric', 'min:25', 'max:400'],
+        ]);
+
+        $fuori = [];
+
+        if (($dati['tdee_kcal'] ?? null) !== null) {
+            $fuori['tdee_kcal'] = (int) round((float) $dati['tdee_kcal']);
+        }
+
+        if (($dati['weight_kg'] ?? null) !== null) {
+            $fuori['weight_kg'] = round((float) $dati['weight_kg'], 1);
+        }
+
+        return $fuori;
+    }
+
     private function targetDallApp(Request $request): ?array
     {
         $dati = $request->validate([
@@ -1398,6 +1593,45 @@ class AiController extends Controller
      */
     private const VOCI_AL_MASSIMO = 30;
 
+    /**
+     * Quanti giorni indietro guarda il consiglio.
+     *
+     * 📌 *«diciamo tutta la settimana»*.
+     *
+     * 💡 Sette e non trenta: serve a dire se **oggi** e' diverso dal solito di
+     * questa persona, e per quello una settimana basta. ⚠️ Un mese di righe nel
+     * contesto costerebbe quattro volte tanto per rispondere alla stessa
+     * domanda — e i modelli, su elenchi lunghi, guardano le estremita'.
+     */
+    private const GIORNI_DI_STORIA = 7;
+
+    /**
+     * Le serie della settimana che **non vengono dal sensore** — 31/08/2026.
+     *
+     * ══ 🚨 PERCHE' UNA COSTANTE A PARTE, E NON DUE RIGHE IN `SETTIMANA` ═══
+     *
+     * Perche' `settimanaDallApp()` e' chiusa dietro `sleep_ai_consent_at`, che
+     * e' il consenso ai dati del **sensore** — sonno, HRV, battito, roba
+     * dell'art. 9.
+     *
+     * ⛔ Mettere le calorie bruciate li' dentro vorrebbe dire che chi non ha
+     * dato quel consenso perde anche il quadro delle calorie della settimana:
+     * **due cose diverse spente dallo stesso interruttore**, e nessuno
+     * capirebbe perche'.
+     *
+     * ⚠️ Restano comunque dietro `ai_consent_at`, che il middleware `ai.consent`
+     * pretende prima di arrivare qui.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const SETTIMANA_DEL_CORPO = [
+        // Le calorie bruciate **del giorno intero**, come le mostra l'app.
+        'week_burned' => ['day' => 'string', 'v' => 'int'],
+
+        // Il peso, quando c'e' una pesata.
+        'week_weight' => ['day' => 'string', 'v' => 'float'],
+    ];
+
     private const RECUPERO = [
         'hours' => 'float',
         'quality' => 'string',
@@ -1516,9 +1750,39 @@ class AiController extends Controller
             return [];
         }
 
+        return $this->serieDallApp($request, self::SETTIMANA);
+    }
+
+    /**
+     * Bruciate e peso della settimana — 31/08/2026.
+     *
+     * 📌 *«anche i giorni passati (diciamo tutta la settimana) di tutti i dati
+     * che passo»*.
+     *
+     * 🚨 **Non passa da `settimanaDallApp()`**, e la ragione sta nella nota di
+     * `SETTIMANA_DEL_CORPO`: quel metodo e' chiuso dietro il consenso al
+     * **sonno**, e le calorie bruciate con il sonno non c'entrano niente.
+     */
+    private function settimanaDelCorpoDallApp(Request $request): array
+    {
+        return $this->serieDallApp($request, self::SETTIMANA_DEL_CORPO);
+    }
+
+    /**
+     * Il setaccio delle serie: **una sede sola**.
+     *
+     * ⚠️ Era dentro `settimanaDallApp()`. Copiarlo per le serie nuove avrebbe
+     * voluto dire due sanificatori per lo stesso genere di dato, e quello che
+     * diverge per primo e' sempre la copia — cioe' quella meno provata.
+     *
+     * @param  array<string, array<string, string>>  $forme
+     * @return array<string, mixed>
+     */
+    private function serieDallApp(Request $request, array $forme): array
+    {
         $fuori = [];
 
-        foreach (self::SETTIMANA as $serie => $forma) {
+        foreach ($forme as $serie => $forma) {
             $grezza = $request->input($serie);
 
             if (! is_array($grezza)) {
@@ -1669,6 +1933,7 @@ class AiController extends Controller
 
         $giornata = $this->diary->forDate($utente, $oggi);
         $riepilogo = $this->dashboard->forToday($utente, $adesso);
+        $cibo = $this->laSettimanaDelCibo($utente, $oggi);
 
         return [
             'date' => $oggi->etichetta,
@@ -1736,6 +2001,51 @@ class AiController extends Controller
             'goal' => $utente->profile?->goalForFormula(),
 
             /*
+             * ══ 🍽️ I PASTI UNO PER UNO, E QUANDO SONO STATI SCRITTI ═══════
+             *
+             * 📌 Il committente, il 31/08/2026: *«Io sono uno che si programma
+             * i pasti e se oggi ho gia' segnato tutto quello che mangero' alle
+             * 10 di mattina il consiglio del giorno mi dice che ho gia' assunto
+             * 1800 kcal e sono solo le 10... e' ovvio che non puo' essere
+             * cosi'»*.
+             *
+             * ⛔ **E il modello non aveva modo di accorgersene.** Riceveva
+             * `totals` (un totale di giornata) e `meals_logged` (un conteggio):
+             * da li' una cena scritta alle 10 del mattino e' identica a una
+             * cena mangiata. 🚨 Il consiglio non era generico — era **falso**,
+             * e detto con sicurezza.
+             *
+             * 💡 Da qui i due campi che rendono la distinzione possibile: **che
+             * pasto e'** e **a che ora e' stato scritto**. Un pranzo scritto
+             * alle 10:14 e' cibo programmato; una cena scritta alle 21:30 e'
+             * cibo mangiato. Il resto lo fa la regola 7-bis del prompt.
+             *
+             * ⚠️ **La distinzione la fa il modello, non il codice**, e non e'
+             * pigrizia: «a che ora si cena» e' un giudizio, non un dato. ⛔
+             * Scrivere in PHP che la cena e' dopo le 19 vorrebbe dire decidere
+             * per chi lavora di notte, e sbagliare in silenzio.
+             */
+            'meals' => $cibo['meals'],
+
+            /*
+             * ══ 📅 LA SETTIMANA DEL CIBO ══════════════════════════════════
+             *
+             * 📌 *«anche i giorni passati (diciamo tutta la settimana) di tutti
+             * i dati che passo (anche in forma compressa, per non aumentare
+             * troppo il costo della chiamata)»*.
+             *
+             * 💡 **Compressa davvero**: un giorno per riga, quattro numeri
+             * interi, chiavi di una lettera. Sette giorni costano una manciata
+             * di token — meno di quanto costava una singola rigenerazione di
+             * troppo delle sei che facevamo al giorno prima di 3b-AB.
+             *
+             * 🚨 **La calcola il server**, che `food_entries` ce l'ha: farla
+             * mandare al telefono sarebbe una seconda sede della stessa
+             * risposta, e la copia e' quella che diverge.
+             */
+            'week_food' => $cibo['week_food'],
+
+            /*
              * ── Il resto della persona ────────────────────────────────────
              *
              * 🚨 **Qui c'erano `sleep` e `vitals`, e sono stati tolti in S1.5.**
@@ -1773,8 +2083,28 @@ class AiController extends Controller
 
             'body' => $riepilogo['body'],
 
+            /*
+             * 🆕 31/08/2026 — TDEE, peso e obiettivo.
+             *
+             * 📌 *«Deve capire il target calorico mio, il mio tdee, il mio peso
+             * e il mio obbiettivo»*.
+             */
+            ...$this->corpoDallApp($request),
+
             // 🆕 20/08 — la settimana: sonno, HRV, battito e allenamenti.
             ...$this->settimanaDallApp($request),
+
+            /*
+             * 🆕 31/08/2026 — bruciate e peso della settimana.
+             *
+             * 🚨 **Fuori da `settimanaDallApp`, e non e' un dettaglio**: quel
+             * metodo e' chiuso dietro `sleep_ai_consent_at`, che e' il consenso
+             * ai dati del **sensore**. ⛔ Mettere li' le calorie bruciate
+             * vorrebbe dire che chi non ha dato il consenso al sonno perde
+             * anche il grafico delle calorie — due cose diverse spente da un
+             * interruttore solo.
+             */
+            ...$this->settimanaDelCorpoDallApp($request),
 
             // 🆕 16/08/2026 — il recupero, se e solo se la persona l'ha concesso.
             ...$this->recuperoDallApp($request),
