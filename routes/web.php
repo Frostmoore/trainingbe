@@ -89,6 +89,35 @@ Route::get('/invito-palestra/{token}', [SitoController::class, 'invitoInPalestra
     ->name('sito.invito-palestra');
 
 /*
+| 🔗 `assetlinks.json` — quello che fa aprire il link DALL'APP — 3b-V.3.2.
+|
+| Android verifica questo file per decidere se un link puo' aprire l'app senza
+| chiedere niente a nessuno.
+|
+| 🚨 **Quando smette di funzionare non succede niente di visibile.** Se la
+| verifica fallisce, il telefono apre il **browser** — e il browser mostra la
+| nostra pagina web, che funziona. Nessuno si lamenta: il prodotto e' solo
+| peggiore, in silenzio, e ogni persona invitata fa due passaggi invece di uno.
+|
+| ⚠️ **Perche' una rotta e non solo il file statico.** Il file c'e' anche in
+| `public/.well-known/`, e in condizioni normali lo serve il web server. ⛔ Ma
+| una cartella che comincia con un punto e' esattamente il genere di cosa che
+| una configurazione «di sicurezza» blocca per abitudine: con la rotta, se il
+| web server lo serve vince lui (stesso contenuto), e se lo blocca risponde
+| Laravel. 💡 E diventa una cosa che si puo' **provare**.
+|
+| ⛔ L'impronta e' quella della chiave di **debug**: il giorno che si firma per
+| la pubblicazione va rifatta, o il link torna ad aprire il browser.
+*/
+Route::get('/.well-known/assetlinks.json', function () {
+    $percorso = public_path('.well-known/assetlinks.json');
+
+    abort_unless(is_readable($percorso), 404);
+
+    return response()->file($percorso, ['Content-Type' => 'application/json']);
+})->name('sito.assetlinks');
+
+/*
 | Un solo indirizzo di accesso.
 |
 | Entrambi i pannelli mostrano la stessa pagina di login e la risposta smista

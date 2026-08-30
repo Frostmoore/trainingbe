@@ -40,10 +40,27 @@ class ListMembers extends ListRecords
                 ->label('Manda un invito')
                 ->icon('heroicon-m-link')
                 ->modalHeading('Un invito per una persona')
-                ->modalDescription(
-                    'Vale per una persona sola, una volta sola, e scade dopo sette giorni. '
-                    .'Se finisce in una chat di gruppo, non fa entrare tutti.'
-                )
+                /*
+                 * 💡 **I posti si dicono qui**, non dopo il tentativo: un
+                 * limite scoperto premendo un tasto sembra un guasto, un limite
+                 * scritto prima e' una condizione del piano.
+                 */
+                ->modalDescription(function (): string {
+                    $palestra = auth()->user()?->tenant;
+
+                    $base = 'Vale per una persona sola, una volta sola, e scade dopo sette giorni. '
+                        .'Se finisce in una chat di gruppo, non fa entrare tutti.';
+
+                    if ($palestra === null) {
+                        return $base;
+                    }
+
+                    $rimasti = app(InvitiInPalestra::class)->postiRimasti($palestra);
+
+                    return $rimasti === null
+                        ? $base
+                        : $base." Posti liberi sul vostro piano: {$rimasti}.";
+                })
                 ->schema([
                     TextInput::make('email')
                         ->label('A chi lo mandi (facoltativo)')

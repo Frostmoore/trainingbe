@@ -37,10 +37,33 @@
             </ul>
         @endif
 
+        {{--
+            🚨 **Due tasti, e coprono due persone diverse.**
+
+            · Chi l'app CE L'HA GIÀ: tocca «Apri nell'app» e ci arriva subito.
+              ⚠️ Su un telefono con l'app installata gli App Links di solito
+              aprono l'app da soli e qui non ci arriva nessuno — ma «di solito»
+              non è «sempre»: la verifica può non essere ancora passata, o il
+              link può essere stato aperto da dentro un'altra app che se lo
+              tiene. Senza questo tasto quella persona resta bloccata su una
+              pagina che le dice di installare una cosa che ha già.
+
+            · Chi NON ce l'ha: va allo store, e il token viaggia con lui.
+        --}}
+        <p>
+            <a class="bottone" href="{{ url('/invito-palestra/'.request()->route('token')) }}">
+                Apri nell'app
+            </a>
+        </p>
+
+        <p>
+            <a class="bottone" href="{{ $store }}">Installa l'app</a>
+        </p>
+
         <p class="sottotitolo">
-            Installa <strong>Training Companion</strong> e riapri questo link dal
-            telefono: l'app ti porterà direttamente qui. L'invito vale
-            <strong>una volta sola</strong> e scade fra pochi giorni.
+            L'invito vale <strong>una volta sola</strong> e scade fra pochi
+            giorni. Dopo l'installazione l'app si apre già qui: se non succede,
+            torna su questa pagina e tocca «Apri nell'app».
         </p>
     @else
         <h1>Questo invito non è più valido</h1>

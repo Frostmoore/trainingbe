@@ -445,4 +445,132 @@ final class InvitoInPalestraTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    // ───────────────────── V.1.5 — i posti ─────────────────────
+
+    /**
+     * 🚨 **I posti si contano PRIMA di creare l'invito** — V.1.5.
+     *
+     * ⛔ Un invito creato oltre il limite fallisce **davanti alla persona
+     * invitata**: ha già deciso di entrare, ha già installato l'app, e si becca
+     * un errore che non la riguarda. 💡 Chi invita, invece, il problema può
+     * risolverlo.
+     */
+    #[Test]
+    public function finiti_i_posti_non_si_creano_altri_inviti(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => 2])->save();
+
+        // Il gestore occupa già un posto.
+        $this->inviti()->invita($this->palestra, $this->gestore, 'uno@esempio.test');
+
+        $this->assertSame(0, $this->inviti()->postiRimasti($this->palestra));
+
+        $this->expectException(ValidationException::class);
+
+        $this->inviti()->invita($this->palestra, $this->gestore, 'due@esempio.test');
+    }
+
+    /**
+     * 🚨 **Gli inviti in sospeso occupano un posto**, e questo è il test che lo
+     * inchioda.
+     *
+     * ⛔ Contando solo gli iscritti si potrebbero creare venti inviti su un
+     * piano da dieci: i primi dieci che rispondono riempiono la palestra, e gli
+     * altri dieci — che un invito valido ce l'hanno in mano — trovano la porta
+     * chiusa. ⚠️ Il difetto non si vedrebbe il giorno in cui si crea: si
+     * vedrebbe settimane dopo, addosso a qualcun altro.
+     */
+    #[Test]
+    public function un_invito_in_sospeso_occupa_un_posto(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => 5])->save();
+
+        $prima = $this->inviti()->postiRimasti($this->palestra);
+
+        $invito = $this->unInvito();
+
+        $this->assertSame(
+            $prima - 1,
+            $this->inviti()->postiRimasti($this->palestra),
+            'Un invito in sospeso non occupa niente: si possono creare più '
+            .'inviti dei posti che esistono.',
+        );
+
+        // 💡 E revocandolo il posto torna libero.
+        $this->inviti()->revoca($invito);
+
+        $this->assertSame($prima, $this->inviti()->postiRimasti($this->palestra));
+    }
+
+    /** ⚠️ Un piano senza limite non ne ha: `null`, non zero. */
+    #[Test]
+    public function un_piano_senza_limite_non_conta_i_posti(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => null])->save();
+
+        $this->assertNull($this->inviti()->postiRimasti($this->palestra));
+    }
+
+    // ───────────────────── V.3.3 — dopo l'installazione ─────────────────────
+
+    /**
+     * 🚨 **Il link allo store porta il token** — V.3.3.
+     *
+     * È la metà che fa funzionare il «referrer»: senza questo parametro il Play
+     * Store non ha niente da conservare, e il codice nell'app legge sempre
+     * vuoto. ⛔ Funzionerebbe benissimo e non servirebbe a niente — nessun
+     * errore, nessun segno.
+     */
+    #[Test]
+    public function la_pagina_web_manda_allo_store_col_token(): void
+    {
+        $invito = $this->unInvito();
+
+        $risposta = $this->get('/invito-palestra/'.$invito->token);
+
+        $risposta->assertStatus(200);
+
+        /*
+         * ⚠️ **Codificato**: è un parametro dentro un parametro, e il Play
+         * Store lo decodifica una volta lui prima di passarlo all'app.
+         */
+        $risposta->assertSee('referrer='.rawurlencode('invito='.$invito->token), false);
+
+        // 💡 E parte da quello configurato, non da un URL costruito a mano.
+        $risposta->assertSee(config('app_versione.store.android'), false);
+    }
+
+    /**
+     * ⚠️ **E il tasto per chi l'app ce l'ha già.**
+     *
+     * Di solito su un telefono con l'app installata gli App Links la aprono da
+     * soli e qui non ci arriva nessuno. ⛔ Ma «di solito» non è «sempre»: la
+     * verifica può non essere passata, o il link può essere stato aperto da
+     * dentro un'altra app. Senza questo tasto quella persona resta su una
+     * pagina che le dice di installare una cosa che ha già.
+     */
+    #[Test]
+    public function la_pagina_web_da_una_via_a_chi_l_app_ce_l_ha(): void
+    {
+        $this->get('/invito-palestra/'.$this->unInvito()->token)
+            ->assertStatus(200)
+            ->assertSee('Apri nell\'app', false);
+    }
+
+    /** ⛔ E un invito morto non manda da nessuna parte. */
+    #[Test]
+    public function la_pagina_web_di_un_invito_morto_non_offre_niente(): void
+    {
+        $invito = $this->unInvito();
+        $invito->forceFill(['expires_at' => now()->subDay()])->save();
+
+        $this->get('/invito-palestra/'.$invito->token)
+            ->assertStatus(200)
+            ->assertSee('non è più valido', false)
+            ->assertDontSee('referrer=', false);
+    }
 }

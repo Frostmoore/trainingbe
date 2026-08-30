@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Tenancy;
 
 use App\Models\InvitoInPalestra;
+use App\Models\Plan;
+use App\Models\PlanSubscription;
 use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
@@ -45,6 +47,50 @@ class InvitiInPalestra
     ) {}
 
     /**
+     * Quanti posti restano in questa palestra. `null` = senza limite.
+     *
+     * ── 🚨 Occupati = iscritti **+ inviti ancora validi** ──────────────────
+     *
+     * ⛔ Contare solo gli iscritti lascerebbe creare venti inviti su un piano da
+     * dieci. I primi dieci che rispondono riempiono la palestra, e gli altri
+     * dieci — che un invito ce l'hanno, in mano, valido — trovano la porta
+     * chiusa. ⚠️ Il difetto non si vedrebbe **il giorno in cui si crea**: si
+     * vedrebbe settimane dopo, addosso a qualcun altro.
+     *
+     * 💡 E' la stessa forma di `InvitiDelTrainer::postiRimasti()`, e non e' una
+     * coincidenza: e' la stessa domanda.
+     */
+    public function postiRimasti(Tenant $palestra): ?int
+    {
+        $piano = $this->context->runWithoutTenant(
+            fn (): ?Plan => PlanSubscription::query()
+                ->where('tenant_id', $palestra->id)
+                ->attivi()
+                ->with('plan')
+                ->orderByDesc('starts_at')
+                ->first()?->plan,
+        );
+
+        $massimo = $piano?->max_members;
+
+        if ($massimo === null) {
+            return null;
+        }
+
+        $occupati = $this->context->runWithoutTenant(
+            fn (): int => User::withoutGlobalScopes()
+                ->where('tenant_id', $palestra->id)
+                ->count()
+                + InvitoInPalestra::withoutGlobalScopes()
+                    ->where('tenant_id', $palestra->id)
+                    ->validi()
+                    ->count(),
+        );
+
+        return max(0, $massimo - $occupati);
+    }
+
+    /**
      * Crea un invito per una persona.
      *
      * @throws ValidationException
@@ -59,6 +105,22 @@ class InvitiInPalestra
              */
             throw ValidationException::withMessages([
                 'palestra' => __('Solo una palestra può invitare.'),
+            ]);
+        }
+
+        /*
+         * ⚠️ **I posti PRIMA, non al riscatto** — V.1.5.
+         *
+         * ⛔ Un invito creato oltre il limite fallisce **davanti alla persona
+         * invitata**: ha gia' deciso di entrare, ha gia' installato l'app, e si
+         * becca un errore che non la riguarda. 💡 Chi invita, invece, il
+         * problema puo' risolverlo — comprando un posto o togliendo un invito.
+         */
+        $rimasti = $this->postiRimasti($palestra);
+
+        if ($rimasti !== null && $rimasti <= 0) {
+            throw ValidationException::withMessages([
+                'posti' => __('Non ci sono piu\' posti sul vostro piano. Liberatene uno o passate a un piano piu\' grande.'),
             ]);
         }
 

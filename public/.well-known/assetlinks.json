@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.smp.mytrainingcompanion",
+      "sha256_cert_fingerprints": [
+        "F2:C9:18:57:97:38:76:D4:E9:CD:90:4A:45:73:96:C8:52:A1:86:B1:DF:D9:5F:A8:2A:80:9A:29:AC:16:30:55"
+      ]
+    }
+  }
+]

@@ -178,6 +178,57 @@ class SitoController extends Controller
             'palestra' => $dati['palestra']['name'] ?? null,
             'descrizione' => $dati['descrizione'] ?? null,
             'cosaOttieni' => $dati['cosa_ottieni'] ?? [],
+
+            /*
+             * 🔗 **Lo store CON il token attaccato** — V.3.3.
+             *
+             * 🚨 E' la meta' che fa funzionare il «referrer»: senza questo
+             * parametro il Play Store non ha niente da conservare, e il codice
+             * nell'app legge sempre vuoto. ⛔ Funzionerebbe benissimo e non
+             * servirebbe a niente — nessun errore, nessun segno.
+             *
+             * ⚠️ Il valore va codificato **due volte**: una perche' e' dentro
+             * `referrer=`, e il Play Store lo decodifica una volta lui.
+             */
+            'store' => $this->storeConIlToken($token),
         ]);
+    }
+
+    /**
+     * Il link allo store, con il token attaccato — 3b-V.3.3.
+     *
+     * ── 🚨 Si parte da `app_versione.store.android`, non da una stringa ────
+     *
+     * ⛔ La prima versione costruiva l'URL a mano da un identificativo di
+     * pacchetto. Avrebbe funzionato — il valore di riserva e' quello giusto — e
+     * si sarebbe rotta **solo** il giorno in cui qualcuno cambia
+     * `APP_STORE_ANDROID`, mandando la gente sulla scheda sbagliata.
+     *
+     * ⚠️ E' esattamente l'avvertimento scritto sopra quella config: *«le copie
+     * gia' installate manderebbero la gente sulla scheda sbagliata, e sarebbero
+     * proprio quelle che non si possono aggiornare»*.
+     *
+     * ── ⚠️ Il separatore si sceglie, non si indovina ───────────────────────
+     *
+     * L'URL configurato **puo' gia' avere** una query (`?id=…`) o non averla, se
+     * un giorno punta altrove. 💡 Un `&` attaccato a un URL senza `?` produce un
+     * link che lo store non capisce — e nessuno se ne accorge finche' qualcuno
+     * non lo tocca.
+     */
+    private function storeConIlToken(string $token): string
+    {
+        $store = (string) config('app_versione.store.android');
+
+        if ($store === '') {
+            return '';
+        }
+
+        $separatore = str_contains($store, '?') ? '&' : '?';
+
+        /*
+         * ⚠️ Il valore va codificato: e' un parametro dentro un parametro, e il
+         * Play Store lo decodifica una volta lui prima di passarlo all'app.
+         */
+        return $store.$separatore.'referrer='.rawurlencode('invito='.$token);
     }
 }
