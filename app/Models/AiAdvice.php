@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
-use App\Support\Tempo\GiornoLocale;
+use App\Support\Tempo\FasciaDelConsiglio;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,7 +29,7 @@ class AiAdvice extends Model
     protected $table = 'ai_advices';
 
     protected $fillable = [
-        'tenant_id', 'user_id', 'date', 'kind', 'context_hash', 'body', 'model',
+        'tenant_id', 'user_id', 'date', 'fascia', 'kind', 'context_hash', 'body', 'model',
     ];
 
     protected function casts(): array
@@ -87,29 +87,81 @@ class AiAdvice extends Model
      * peggio resta una riga in piu' per un giorno, invece di perdere il
      * consiglio appena generato.
      */
-    public static function pota(int $userId, GiornoLocale $oggi): int
+    public static function pota(int $userId, FasciaDelConsiglio $fascia): int
     {
+        /*
+         * 🚨 **Il giorno della FASCIA, non quello dell'orologio** — 3b-AB.
+         *
+         * ⚠️ Prima delle 09:00 si e' ancora nella fascia delle 22 di **ieri**,
+         * e la riga che si sta scrivendo porta la data di ieri. ⛔ Potare su
+         * `oggi` cancellerebbe la riga appena scritta: il consiglio si
+         * rigenererebbe a ogni apertura, cioe' esattamente la spesa che le
+         * fasce esistono per togliere.
+         */
         return static::withoutGlobalScopes()
             ->where('user_id', $userId)
-            ->whereDate('date', '<', $oggi->etichetta)
+            ->whereDate('date', '<', $fascia->giorno->etichetta)
             ->delete();
     }
 
     /**
-     * 🚨 **Il giorno fa parte della chiave di cache**, ed e' per questo che il
-     * consiglio si rigenera a mezzanotte senza nessun cron. ⚠️ Deve pero'
-     * essere la **mezzanotte di chi legge**: con il confine in UTC, a Roma il
-     * consiglio cambiava alle 02:00 d'estate.
+     * Il consiglio gia' scritto **in questa fascia**, se c'e' — 3b-AB.
      *
-     * @param  array<string, mixed>  $context
+     * ══ ⛔ IL CONTESTO NON ENTRA PIU' NELLA CHIAVE ═════════════════════════
+     *
+     * ⚠️ Prima si cercava per `context_hash`, e la migration originale lo
+     * chiamava un pregio: *«a ogni pasto o allenamento nuovo l'hash cambia,
+     * quindi il consiglio si aggiorna quando ha senso aggiornarlo»*.
+     *
+     * ⛔ **«Quando ha senso» voleva dire a ogni pasto.** Colazione, spuntino,
+     * pranzo, merenda, cena e allenamento sono sei contesti diversi: sei
+     * chiamate al modello in un giorno, tutte automatiche, nessuna chiesta da
+     * nessuno.
+     *
+     * 📌 *«il consiglio del giorno si rigeneri in automatico solo 3 volte al
+     * giorno (9:00, 14:00 e 22:00)»*. 💡 Dentro una fascia il consiglio e' uno,
+     * qualunque cosa si registri.
+     *
+     * 🚨 **La fascia contiene gia' il giorno**, quindi non si filtra anche per
+     * `date`: due filtri per la stessa cosa sono due occasioni di divergere, e
+     * prima delle 09:00 divergerebbero davvero — la fascia e' di ieri.
      */
-    public static function cached(User $user, GiornoLocale $giorno, string $kind, array $context): ?self
+    public static function nellaFascia(User $user, FasciaDelConsiglio $fascia, string $kind): ?self
     {
         return static::query()
             ->where('user_id', $user->getKey())
-            ->whereDate('date', $giorno->etichetta)
+            ->where('fascia', $fascia->etichetta())
             ->where('kind', $kind)
-            ->where('context_hash', self::hashOf($context))
+            ->first();
+    }
+
+    /**
+     * L'ultimo consiglio scritto, di qualunque fascia — 3b-AB.
+     *
+     * ── 🎯 A cosa serve: al **secondo** cancello, quello che risparmia di piu'
+     *
+     * La fascia da sola mette un tetto di tre al giorno. ⚠️ Ma tre chiamate
+     * fatte per niente restano tre chiamate: chi apre l'app alle 09:10 senza
+     * aver registrato niente da ieri sera non ha **nessuna** notizia nuova da
+     * raccontare, e un consiglio identico al precedente e' un gettone buttato.
+     *
+     * 📌 *«questo puo' succedere solo dopo che apri l'app e solo dopo che si e'
+     * registrato un pasto, un allenamento o il sonno»*.
+     *
+     * 💡 Quindi `created_at` di questa riga e' il confronto: e' successo
+     * qualcosa **dopo** che abbiamo scritto l'ultimo consiglio? Vedi
+     * `AiController::qualcosaDiNuovo()`.
+     *
+     * ⚠️ Ordinato per `created_at` e non per `fascia`: le etichette delle fasce
+     * si ordinano bene come stringhe, ma la riga scritta piu' di recente e'
+     * quella che conta per il confronto, ed e' un'altra domanda.
+     */
+    public static function ultimo(User $user, string $kind): ?self
+    {
+        return static::query()
+            ->where('user_id', $user->getKey())
+            ->where('kind', $kind)
+            ->latest('created_at')
             ->first();
     }
 }

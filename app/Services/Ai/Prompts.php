@@ -752,6 +752,17 @@ Per ogni esercizio ricevi:
 - "cambi_alla_scheda" (se c'e'): come e' cambiata la scheda nel tempo — serie,
   ripetizioni, peso o recupero previsti, con il valore prima e quello dopo.
 
+Fuori dagli esercizi puoi ricevere "allenamenti": le calorie di ogni seduta
+fatta con questa scheda, con data e "fonte".
+- "fonte": "manuale" = dichiarata da chi si e' allenato, e' un numero suo;
+  "stima" = calcolata dal telefono con una formula, sbaglia di qualche decina.
+- Con una "stima" non scrivere mai cifre esatte ne' differenze al kcal: al
+  massimo "una seduta piu' lunga del solito". Con "manuale" puoi citarla.
+- Serve a distinguere due sedute che sui numeri sembrano uguali. NON e' un
+  giudizio su chi si allena, e NON si collega mai a cosa mangiare o a quanto
+  pesa: vale la regola 2 qui sotto.
+- Se "allenamenti" non c'e', non nominare le calorie in nessun modo.
+
 Devi produrre:
 - "riassunto": UNA frase su tutta la scheda, guardando gli esercizi INSIEME;
 - per ogni esercizio: UNA riga.

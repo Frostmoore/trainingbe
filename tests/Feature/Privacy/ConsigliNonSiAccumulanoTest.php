@@ -60,13 +60,22 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
         $this->iscritto->accendiLAi();
     }
 
-    /** Un consiglio di un giorno passato, come se fosse rimasto li'. */
+    /**
+     * Un consiglio di un giorno passato, come se fosse rimasto li'.
+     *
+     * ⚠️ **Con la sua fascia** — 3b-AB. Dal 30/08/2026 la chiave della cache e'
+     * `(utente, fascia, tipo)`: una riga senza fascia non e' «una riga vecchia
+     * qualunque», e' una riga che non potrebbe esistere.
+     */
     private function vecchio(int $giorniFa): AiAdvice
     {
+        $giorno = now()->subDays($giorniFa)->toDateString();
+
         return AiAdvice::withoutGlobalScopes()->create([
             'tenant_id' => $this->palestra->getKey(),
             'user_id' => $this->iscritto->getKey(),
-            'date' => now()->subDays($giorniFa)->toDateString(),
+            'date' => $giorno,
+            'fascia' => $giorno.'T22',
             'kind' => 'daily',
             'context_hash' => 'vecchio'.$giorniFa,
             'body' => 'Ti mancano 30 g di proteine.',
@@ -123,6 +132,7 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
             'tenant_id' => $this->palestra->getKey(),
             'user_id' => $altro->getKey(),
             'date' => now()->subDay()->toDateString(),
+            'fascia' => now()->subDay()->toDateString().'T22',
             'kind' => 'daily',
             'context_hash' => 'di-un-altro',
             'body' => 'Il consiglio di ieri di un\'altra persona.',

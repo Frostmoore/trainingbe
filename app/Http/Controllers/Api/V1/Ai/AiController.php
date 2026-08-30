@@ -27,7 +27,7 @@ use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
-use App\Support\Tempo\GiornoLocale;
+use App\Support\Tempo\FasciaDelConsiglio;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\QueryException;
@@ -365,14 +365,6 @@ class AiController extends Controller
 
         $utente = $request->user();
 
-        /*
-         * 🚨 **Mezzanotte di chi legge, non di Greenwich** — A3. Con
-         * `Carbon::today()` il consiglio si rigenerava alle 02:00 di Roma
-         * d'estate: chi apriva l'app all'una di notte trovava ancora quello del
-         * giorno prima, che parlava di una giornata gia' chiusa.
-         */
-        $oggi = $utente->giornoDiOggi();
-
         $contesto = $this->contestoConsiglio($request);
 
         /*
@@ -399,11 +391,27 @@ class AiController extends Controller
          * **non sbaglia mai in modo visibile**: genera semplicemente sempre.
          */
         $chiaveCache = self::chiaveDiCache($contesto);
-        $hash = AiAdvice::hashOf($chiaveCache);
+
+        /*
+         * ══ 🕘 LA FASCIA, CHE E' IL PRIMO DEI DUE CANCELLI — 3b-AB ═════════
+         *
+         * 📌 *«il consiglio del giorno si rigeneri in automatico solo 3 volte
+         * al giorno (9:00, 14:00 e 22:00)»*.
+         *
+         * ⛔ **Prima si cercava per `context_hash`**, e nell'hash ci sono
+         * `totals`, `burned` e `targets`: ogni pasto registrato era una cache
+         * mancata, cioe' una chiamata al modello. Sei pasti facevano sei
+         * chiamate, tutte automatiche.
+         *
+         * 💡 Dentro una fascia il consiglio e' **uno**, qualunque cosa si
+         * registri: chi segna il pranzo alle 13:00 rilegge quello delle 9,
+         * e alle 14:01 ne trova uno nuovo.
+         */
+        $fascia = FasciaDelConsiglio::adesso($utente);
 
         $cache = $manuale
             ? null
-            : AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache);
+            : AiAdvice::nellaFascia($utente, $fascia, 'daily');
 
         if ($cache !== null) {
             return $this->rispostaConsiglio($cache, cached: true);
@@ -423,6 +431,33 @@ class AiController extends Controller
          */
         if ($utente->consiglio_automatico === false && ! $manuale) {
             return response()->json(['data' => null]);
+        }
+
+        /*
+         * ══ 🎯 IL SECONDO CANCELLO: SENZA NOTIZIE NON SI PAGA — 3b-AB ══════
+         *
+         * 📌 *«questo puo' succedere solo dopo che apri l'app e solo dopo che
+         * si e' registrato un pasto, un allenamento o il sonno»*.
+         *
+         * 🚨 **La fascia da sola non basta.** Mette il tetto a tre al giorno,
+         * ma tre chiamate fatte per niente restano tre chiamate: chi apre
+         * l'app alle 09:10 senza aver toccato niente da ieri sera non ha
+         * nessuna notizia da raccontare, e riceverebbe un consiglio identico a
+         * quello di ieri sera — pagato.
+         *
+         * 💡 E allora si restituisce **quello che c'e'**, invece di `null`:
+         * l'app lo mostra con la sua data, e chi legge vede che e' di prima.
+         * ⛔ Rispondere `null` la manderebbe sul suo ricordo locale, cioe'
+         * sullo stesso testo, ma senza sapere di quando e'.
+         */
+        if (! $manuale) {
+            $ultimo = AiAdvice::ultimo($utente, 'daily');
+
+            if (! $this->qualcosaDiNuovo($request, $utente, $ultimo)) {
+                return $ultimo !== null
+                    ? $this->rispostaConsiglio($ultimo, cached: true)
+                    : response()->json(['data' => null]);
+            }
         }
 
         /*
@@ -455,7 +490,7 @@ class AiController extends Controller
          */
         $lucchetto = $manuale
             ? null
-            : Cache::lock('ai:advice:'.$utente->getKey().':'.$oggi->etichetta.':'.$hash, self::LUCCHETTO_SECONDI);
+            : Cache::lock('ai:advice:'.$utente->getKey().':'.$fascia->etichetta(), self::LUCCHETTO_SECONDI);
 
         if ($lucchetto !== null) {
             try {
@@ -475,7 +510,7 @@ class AiController extends Controller
              * senso del lucchetto: chi ha aspettato trova la risposta gia'
              * scritta da chi e' arrivato primo, e non chiama il modello.
              */
-            $giaFatto = AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache);
+            $giaFatto = AiAdvice::nellaFascia($utente, $fascia, 'daily');
 
             if ($giaFatto !== null) {
                 $lucchetto?->release();
@@ -485,7 +520,7 @@ class AiController extends Controller
         }
 
         try {
-            return $this->generaEScrivi($request, $utente, $oggi, $contesto, $chiaveCache, $manuale);
+            return $this->generaEScrivi($request, $utente, $fascia, $contesto, $chiaveCache, $manuale);
         } finally {
             // ⚠️ `finally`: un'eccezione dentro la generazione non deve lasciare
             // la chiave occupata per un minuto a tutti gli altri.
@@ -506,7 +541,7 @@ class AiController extends Controller
     private function generaEScrivi(
         Request $request,
         User $utente,
-        GiornoLocale $oggi,
+        FasciaDelConsiglio $fascia,
         array $contesto,
         array $chiaveCache,
         bool $manuale,
@@ -529,9 +564,15 @@ class AiController extends Controller
          * di farla crescere.
          */
         if ($manuale) {
+            /*
+             * ⚠️ **Si cancella la riga della FASCIA, non quelle del giorno** —
+             * 3b-AB. Prima delle 09:00 la fascia e' quella delle 22 di ieri:
+             * cancellare «le righe di oggi» non toccherebbe quella che stiamo
+             * per sostituire, e l'indice unico rifiuterebbe la scrittura.
+             */
             AiAdvice::withoutGlobalScopes()
                 ->where('user_id', $utente->getKey())
-                ->whereDate('date', $oggi->etichetta)
+                ->where('fascia', $fascia->etichetta())
                 ->delete();
         }
 
@@ -539,7 +580,14 @@ class AiController extends Controller
             $riga = AiAdvice::create([
                 'tenant_id' => $utente->tenant_id,
                 'user_id' => $utente->getKey(),
-                'date' => $oggi->etichetta,
+                /*
+                 * 🚨 **Il giorno della FASCIA, non quello dell'orologio.** Un
+                 * consiglio generato alle 07:00 appartiene alla fascia delle 22
+                 * di *ieri*, e porta la data di ieri: e' quello che tiene il
+                 * tetto a tre in ventiquattr'ore invece che a quattro.
+                 */
+                'date' => $fascia->giorno->etichetta,
+                'fascia' => $fascia->etichetta(),
                 'kind' => 'daily',
                 'context_hash' => AiAdvice::hashOf($chiaveCache),
                 'body' => $testo,
@@ -565,7 +613,7 @@ class AiController extends Controller
              * d'altro.
              */
             $vinta = $errore->getCode() === '23000'
-                ? AiAdvice::cached($utente, $oggi, 'daily', $chiaveCache)
+                ? AiAdvice::nellaFascia($utente, $fascia, 'daily')
                 : null;
 
             if ($vinta === null) {
@@ -587,9 +635,87 @@ class AiController extends Controller
          * comando schedulato: un cron e' una cosa che un giorno non gira, e
          * nessuno se ne accorge finche' la tabella non e' gonfia.
          */
-        AiAdvice::pota((int) $utente->getKey(), $oggi);
+        AiAdvice::pota((int) $utente->getKey(), $fascia);
 
         return $this->rispostaConsiglio($riga, cached: false);
+    }
+
+    /**
+     * E' successo qualcosa da quando abbiamo scritto l'ultimo consiglio? — 3b-AB.
+     *
+     * ══ 📌 LA REGOLA ══════════════════════════════════════════════════════
+     *
+     * 📌 *«solo dopo che si e' registrato un pasto, un allenamento o il
+     * sonno»*.
+     *
+     * ══ 🚨 PERCHE' LE FONTI SONO DUE, E NON E' UN DOPPIONE ════════════════
+     *
+     * | Cosa | Chi lo sa | Perche' |
+     * |---|---|---|
+     * | i **pasti** | il server | `food_entries` e' nostra: `created_at` dice quando e' stata *registrata*, non quando si e' mangiato |
+     * | **allenamenti** e **sonno** | 🚨 solo il telefono | dopo D9 e FASE 11.6 il server non ha piu' ne' `workout_sessions` ne' i dati del sensore. **Quello che non ha non puo' accorgersi che e' cambiato** |
+     *
+     * ⛔ **Fidarsi dei soli pasti sarebbe un difetto silenzioso**: chi si
+     * allena e non segna niente da mangiare non vedrebbe mai un consiglio
+     * nuovo, e il consiglio parlerebbe di una giornata in cui *«non ti sei
+     * mosso»* proprio a chi si e' appena allenato.
+     *
+     * 💡 `created_at` e non `eaten_at`: un pasto di ieri sera segnato stamattina
+     * e' una notizia di **stamattina**. La domanda qui e' *«e' successo
+     * qualcosa dopo l'ultimo consiglio»*, non *«quando si e' mangiato»*.
+     *
+     * ══ ⚠️ E IL CLIENT CHE NON MANDA NIENTE ═══════════════════════════════
+     *
+     * | `last_event_at` | Cosa vuol dire | Cosa si fa |
+     * |---|---|---|
+     * | **assente** | app vecchia, che questo parametro non lo conosce | 🚨 **si genera**: si comporta come prima, e la fascia mette comunque il tetto a tre |
+     * | **vuoto** | app nuova che dice «non ho mai registrato niente» | ⛔ non si genera |
+     * | una data | app nuova | si confronta |
+     *
+     * 🚨 **La distinzione fra «assente» e «vuoto» e' tutto il punto.** Trattare
+     * i due casi allo stesso modo vorrebbe dire scegliere fra due difetti: o
+     * un'app vecchia che non riceve mai un consiglio nuovo, o un'app nuova che
+     * ne genera uno a vuoto ogni fascia.
+     */
+    private function qualcosaDiNuovo(Request $request, User $utente, ?AiAdvice $ultimo): bool
+    {
+        if (! $request->has('last_event_at')) {
+            return true;
+        }
+
+        $grezzo = trim((string) $request->query('last_event_at', ''));
+
+        $dalTelefono = $grezzo === ''
+            ? null
+            : Carbon::parse($grezzo);
+
+        $ultimoPasto = FoodEntry::query()
+            ->where('user_id', $utente->getKey())
+            ->max('created_at');
+
+        $dalServer = $ultimoPasto !== null ? Carbon::parse($ultimoPasto) : null;
+
+        /*
+         * 💡 La piu' recente delle due, e non «una qualsiasi delle due»: la
+         * domanda e' *quando e' successa l'ultima cosa*, e la risposta e' una
+         * sola anche quando le fonti sono due.
+         */
+        $evento = match (true) {
+            $dalTelefono === null => $dalServer,
+            $dalServer === null => $dalTelefono,
+            default => $dalTelefono->gt($dalServer) ? $dalTelefono : $dalServer,
+        };
+
+        if ($evento === null) {
+            return false;
+        }
+
+        /*
+         * ⚠️ **Nessun consiglio ancora scritto**: se qualcosa e' stato
+         * registrato, si genera. E' il primo consiglio di questa persona, e non
+         * c'e' niente con cui confrontarlo.
+         */
+        return $ultimo?->created_at === null || $evento->gt($ultimo->created_at);
     }
 
     /**
@@ -781,6 +907,30 @@ class AiController extends Controller
             'esercizi.*.cambi_alla_scheda.*.cosa' => ['required', 'string', 'max:20'],
             'esercizi.*.cambi_alla_scheda.*.prima' => ['nullable', 'string', 'max:60'],
             'esercizi.*.cambi_alla_scheda.*.dopo' => ['nullable', 'string', 'max:60'],
+
+            /*
+             * 🔥 **Le calorie delle sedute** — 3b-AB, 30/08/2026.
+             *
+             * 📌 *«mettiamoci dentro anche le calorie consumate da
+             * quell'allenamento se ci sono»*.
+             *
+             * ⚠️ **Le calcola il telefono** (`CalorieAllenamento`), e arrivano
+             * gia' fatte: dopo la FASE 11.6 il server non ha piu' le sedute, e
+             * quello che non ha non puo' calcolare.
+             *
+             * 🚨 **`fonte` non e' un ornamento.** `manuale` e' un numero
+             * dichiarato da chi si e' allenato; `stima` e' `MET x kg x ore`, e
+             * su un peso non recente sbaglia di qualche decina di kcal. ⛔ Senza
+             * questo campo il modello tratterebbe la stima come una misura, e
+             * scriverebbe una frase precisa su un numero che non lo e'.
+             *
+             * 💡 Il `max:12` regge la stessa ragione del tetto sugli esercizi:
+             * e' l'unica cosa che tiene sotto controllo la fattura.
+             */
+            'allenamenti' => ['sometimes', 'array', 'max:12'],
+            'allenamenti.*.data' => ['required', 'date'],
+            'allenamenti.*.kcal' => ['required', 'integer', 'min:1', 'max:10000'],
+            'allenamenti.*.fonte' => ['required', 'string', 'in:manuale,stima'],
         ]);
 
         $conGettoni = $this->assertQuota($utente, AiFeature::PlanProgress);
@@ -1180,7 +1330,6 @@ class AiController extends Controller
      * — che ora il `catch` sul duplicato copre.
      */
     private const LUCCHETTO_ATTESA = 12;
-
 
     /**
      * Il contesto ridotto a **ciò che deve invalidare la cache**.

@@ -543,10 +543,12 @@ class AiApiTest extends TestCase
     // ───────────────────────── consiglio ─────────────────────────
 
     /**
-     * 🚨 La cache e' su un hash del contesto, e **la data ne fa parte**.
+     * 🚨 **La cache e' sulla FASCIA** — 3b-AB, 30/08/2026.
      *
-     * Da qui discendono due cose senza nessun cron: il consiglio si rigenera a
-     * mezzanotte, e si rigenera quando l'utente mangia o si allena.
+     * ⚠️ Era sull'hash del contesto, e quel commento chiamava pregio quello che
+     * era il costo: *«si rigenera quando l'utente mangia o si allena»* voleva
+     * dire **a ogni pasto**. 💡 Adesso dentro una fascia il consiglio e' uno; le
+     * fasce sono in `ConsiglioAFasceTest`.
      */
     #[Test]
     public function the_advice_is_generated_once_for_the_same_context(): void
@@ -570,9 +572,24 @@ class AiApiTest extends TestCase
         $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());
     }
 
-    /** Se la giornata cambia, il consiglio si rifa'. */
+    /**
+     * ⛔ **Un pasto NON rende vecchio il consiglio** — 3b-AB, 30/08/2026.
+     *
+     * ══ 🚨 QUESTO TEST DICEVA IL CONTRARIO, E CERTIFICAVA LA SPESA ════════
+     *
+     * Si chiamava `a_new_meal_makes_the_advice_stale` e pretendeva **due**
+     * righe e una chiamata in piu'. ⚠️ Era coerente con il codice di allora, ed
+     * e' proprio questo il punto: un test verde puo' fotografare un costo
+     * scambiandolo per un requisito.
+     *
+     * 📌 Il committente: *«se ad esempio sono le 9:35 e io registro gli
+     * alimenti alle 9:41, si usa lo slot delle 9 fino alle 14:01»*.
+     *
+     * 💡 Sei pasti al giorno erano **sei chiamate al modello**, tutte
+     * automatiche e nessuna chiesta da nessuno.
+     */
     #[Test]
-    public function a_new_meal_makes_the_advice_stale(): void
+    public function a_new_meal_does_not_regenerate_within_the_same_slot(): void
     {
         $finta = $this->aiFinta();
 
@@ -586,10 +603,10 @@ class AiApiTest extends TestCase
         $this->comeIscritto()
             ->getJson('/api/v1/ai/advice')
             ->assertOk()
-            ->assertJsonPath('data.cached', false);
+            ->assertJsonPath('data.cached', true);
 
-        $this->assertGreaterThan($primeChiamate, count($finta->calls));
-        $this->assertSame(2, AiAdvice::withoutGlobalScopes()->count());
+        $this->assertSame($primeChiamate, count($finta->calls), 'Il pasto ha fatto ripartire il modello dentro la stessa fascia.');
+        $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());
     }
 
     /**
@@ -622,11 +639,21 @@ class AiApiTest extends TestCase
 
         $chiamate = count($finta->calls);
 
-        // Sei ore dopo, senza aver mangiato né allenato niente.
+        /*
+         * Sei ore dopo, senza aver mangiato né allenato niente.
+         *
+         * 🚨 **E adesso questo attraversa anche una fascia** (a Roma sono le
+         * 11:00 e poi le 17:00): il test non prova più solo che l'orologio non
+         * conta, ma che **una fascia nuova senza notizie non costa niente** —
+         * 3b-AB.
+         *
+         * ⚠️ `last_event_at` è quello di prima, ed è il punto: l'app dice «da
+         * allora non è successo nulla».
+         */
         Carbon::setTestNow(Carbon::parse('2026-08-12 15:00:00', 'UTC'));
 
         $this->comeIscritto()
-            ->getJson('/api/v1/ai/advice')
+            ->getJson('/api/v1/ai/advice?last_event_at='.urlencode('2026-08-12T08:00:00+00:00'))
             ->assertOk()
             ->assertJsonPath('data.cached', true)
             ->assertJsonPath('data.body', 'Bevi piu\' acqua.');

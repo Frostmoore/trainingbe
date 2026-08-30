@@ -9,6 +9,7 @@ use App\Models\AiAdvice;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Providers\FakeAiProvider;
+use App\Support\Tempo\FasciaDelConsiglio;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -81,10 +82,24 @@ final class CorsaSulConsiglioTest extends TestCase
     {
         $volatili = ['time', 'day_progress_pct', 'now'];
 
+        /*
+         * 🚨 **La stessa fascia in cui sta arrivando l'altra richiesta** —
+         * 3b-AB. E' quello che rende questa riga «la vincente»: dal 30/08/2026
+         * la collisione non e' piu' sull'hash del contesto ma su
+         * `(utente, fascia, tipo)`.
+         *
+         * ⚠️ Si calcola con `FasciaDelConsiglio` e non a mano: una fascia
+         * scritta a mano che non coincide con quella dell'orologio farebbe
+         * scrivere **due** righe invece di una, e il test proverebbe una corsa
+         * che non avviene.
+         */
+        $fascia = FasciaDelConsiglio::adesso($this->iscritto);
+
         return AiAdvice::withoutGlobalScopes()->create([
             'tenant_id' => $tenantId ?? $this->palestra->getKey(),
             'user_id' => $this->iscritto->getKey(),
-            'date' => $this->iscritto->giornoDiOggi()->etichetta,
+            'date' => $fascia->giorno->etichetta,
+            'fascia' => $fascia->etichetta(),
             'kind' => 'daily',
             'context_hash' => AiAdvice::hashOf(array_diff_key($contesto, array_flip($volatili))),
             'body' => $testo,

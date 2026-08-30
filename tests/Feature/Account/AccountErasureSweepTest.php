@@ -320,6 +320,7 @@ class AccountErasureSweepTest extends TestCase
 
             AiAdvice::create([
                 'user_id' => $id, 'date' => Carbon::today(),
+                'fascia' => Carbon::today()->toDateString().'T09',
                 'context_hash' => 'abc', 'body' => 'Bevi acqua.',
             ]);
 
