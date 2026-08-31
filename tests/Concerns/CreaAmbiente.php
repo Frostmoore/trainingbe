@@ -6,10 +6,12 @@ namespace Tests\Concerns;
 
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Models\AiCreditMovement;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\PortafoglioGettoni;
 use App\Support\Tenancy\TenantContext;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -136,6 +138,36 @@ trait CreaAmbiente
     }
 
     /** Il super admin: fuori da ogni palestra, con la colonna e non con un ruolo. */
+    /**
+     * Mette gettoni nel portafoglio della palestra — 3b-AE, 31/08/2026.
+     *
+     * ══ 🚨 PERCHE' SERVE, DA OGGI ═════════════════════════════════════════
+     *
+     * 📌 *«tutte le richieste all'ai non automatiche devono costare GETTONI»*.
+     *
+     * ⛔ Prima le funzioni a richiesta pescavano dalla quota inclusa, quindi un
+     * utente di prova con il portafoglio vuoto stimava alimenti tutto il
+     * giorno. Da 3b-AE quello stesso utente prende **402**.
+     *
+     * 💡 Chi scrive un test sull'AI **a richiesta** deve chiamarlo, e chi
+     * scrive un test sul cancello commerciale deve NON chiamarlo: e' proprio
+     * quella la differenza che si sta provando.
+     *
+     * ⚠️ Passa da `PortafoglioGettoni` e non da un `update` sul tenant: il
+     * saldo ha un registro (`ai_credit_movements`), e una riga scritta a mano
+     * lascerebbe un saldo senza movimento — cioe' un portafoglio che nel test
+     * si comporta diversamente da come si comporta in produzione.
+     */
+    protected function dagliGettoni(Tenant $tenant, int $quanti = 500): void
+    {
+        app(PortafoglioGettoni::class)->accredita(
+            $tenant,
+            $quanti,
+            nota: 'test',
+            causale: AiCreditMovement::RETTIFICA,
+        );
+    }
+
     protected function creaSuperAdmin(string $email = 'god@piattaforma.test'): User
     {
         $u = $this->ctx()->runWithoutTenant(fn (): User => User::create([

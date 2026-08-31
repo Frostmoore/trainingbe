@@ -55,6 +55,18 @@ class ProgressoDellaSchedaTest extends TestCase
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->abbonato = $this->creaUtente($this->palestra, UserRole::Member, 'mario@alfa.test');
         $this->abbonato->accendiLAi();
+
+        /*
+         * 🎟️ **I gettoni** — 3b-AE, 31/08/2026.
+         *
+         * ⛔ Questi test toccano il pulsante, cioe' chiedono l'analisi **a
+         * mano**: da oggi si paga a gettoni. Senza credito fallirebbero con un
+         * 402 che non c'entra niente con quello che verificano.
+         *
+         * 💡 Che l'automatica invece passi dalla quota lo prova
+         * [l_analisi_automatica_non_costa_gettoni], qui sotto.
+         */
+        $this->dagliGettoni($this->palestra);
     }
 
     /**
@@ -213,6 +225,59 @@ class ProgressoDellaSchedaTest extends TestCase
      * a rispondere `200`, vorrebbe dire che il gate dell'abbonamento e' saltato
      * senza che nessuna riga di codice lo dichiarasse.
      */
+    // ───────────────────── chi paga l'analisi ─────────────────────
+
+    /**
+     * 🎟️ **A mano si paga a gettoni** — 3b-AE, 31/08/2026.
+     *
+     * 📌 *«tutte le richieste all'ai non automatiche devono costare GETTONI»*.
+     *
+     * 💡 E l'app lo dice prima di essere toccata: il pulsante porta scritto
+     * «1 gettone» da 3b-I. Fino a oggi era una promessa che il server non
+     * manteneva — la chiamata passava dalla quota inclusa.
+     */
+    #[Test]
+    public function l_analisi_chiesta_a_mano_costa_un_gettone(): void
+    {
+        $this->aiFinta()->willReturnProgresso([
+            ['id' => 7, 'andamento' => 'fermo', 'riga' => ''],
+        ]);
+
+        $prima = app(PortafoglioGettoni::class)->saldo($this->abbonato->fresh());
+
+        $this->comeApp($this->abbonato)
+            ->postJson('/api/v1/ai/scheda/progresso', $this->scheda())
+            ->assertOk();
+
+        $this->assertSame($prima - 1, app(PortafoglioGettoni::class)->saldo($this->abbonato->fresh()));
+    }
+
+    /**
+     * ⛔ **Quella automatica no**: e' compresa nell'abbonamento.
+     *
+     * 🚨 E' la meta' che rende sostenibile l'altra: 📌 *«l'abbonato deve avere
+     * tutte le funzionalita' automatiche che funzionano automaticamente»*.
+     *
+     * ⚠️ **Il valore di serie e' «a richiesta»**: un client che non manda il
+     * campo paga. Il ripiego opposto regalerebbe la funzione a chiunque ometta
+     * un parametro.
+     */
+    #[Test]
+    public function l_analisi_automatica_non_costa_gettoni(): void
+    {
+        $this->aiFinta()->willReturnProgresso([
+            ['id' => 7, 'andamento' => 'fermo', 'riga' => ''],
+        ]);
+
+        $prima = app(PortafoglioGettoni::class)->saldo($this->abbonato->fresh());
+
+        $this->comeApp($this->abbonato)
+            ->postJson('/api/v1/ai/scheda/progresso', [...$this->scheda(), 'automatica' => true])
+            ->assertOk();
+
+        $this->assertSame($prima, app(PortafoglioGettoni::class)->saldo($this->abbonato->fresh()));
+    }
+
     // ───────────────────── le calorie delle sedute ─────────────────────
 
     /**

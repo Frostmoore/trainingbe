@@ -7,6 +7,7 @@ namespace Tests\Feature\Ai;
 use App\Enums\AiFeature;
 use App\Enums\UserRole;
 use App\Models\AiAdvice;
+use App\Models\AiCreditMovement;
 use App\Models\AiUsageLog;
 use App\Models\FoodEntry;
 use App\Models\Plan;
@@ -54,6 +55,26 @@ class AiApiTest extends TestCase
 
         $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+
+        /*
+         * 🎟️ **I gettoni per le richieste fatte a mano** — 3b-AE, 31/08/2026.
+         *
+         * ⛔ Da oggi una stima da testo o da foto non guarda piu' la quota
+         * inclusa: si paga a gettoni. Questi test parlano d'altro, e senza
+         * credito fallirebbero con un 402 che non c'entra niente.
+         *
+         * 💡 Che il cancello commerciale funzioni e' provato dove deve esserlo,
+         * in `PortafoglioGettoniTest` e `CicloDeiGettoniTest`.
+         */
+        $this->dagliGettoni($this->alfa);
+
+        /*
+         * ⚠️ **E anche Beta.** `usage_is_isolated_between_gyms` fa chiamare
+         * l'iscritto dell'altra palestra: senza credito la sua chiamata prende
+         * 402, non consuma niente, e il test misura l'isolamento fra un
+         * contatore e **il nulla**.
+         */
+        $this->dagliGettoni($this->beta);
 
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
 
@@ -341,6 +362,59 @@ class AiApiTest extends TestCase
         $this->assertSame(1, app(MemberAiQuota::class)->usedThisMonth($this->iscritto));
     }
 
+    /**
+     * Una chiamata **automatica**, che e' l'unica che passa ancora dalla quota.
+     *
+     * ══ 🚨 PERCHE' SERVE, DA 3b-AE ═══════════════════════════════════════
+     *
+     * 📌 *«tutte le richieste all'ai non automatiche devono costare GETTONI»*.
+     *
+     * ⛔ `POST /ai/food/text` e' una richiesta fatta a mano: da oggi **non
+     * guarda la quota**, quindi non puo' piu' dimostrare che la quota si
+     * esaurisce. ⚠️ Non era la quota a essere sbagliata: era la funzione scelta
+     * per dimostrarla.
+     */
+    private function chiamataAutomatica(?User $chi = null): TestResponse
+    {
+        return $this->comeIscritto($chi)
+            ->postJson('/api/v1/ai/scheda/progresso', [
+                'automatica' => true,
+                'esercizi' => [[
+                    'id' => 7,
+                    'nome' => 'Panca piana',
+                    'sedute' => [
+                        ['data' => '2026-08-01', 'carico' => 60.0, 'ripetizioni' => 8],
+                        ['data' => '2026-08-08', 'carico' => 62.5, 'ripetizioni' => 8],
+                    ],
+                ]],
+            ]);
+    }
+
+    /**
+     * Rimette la palestra nello stato di chi i gettoni non li ha mai avuti.
+     *
+     * ══ 🚨 SERVONO TUTTE E DUE LE RIGHE ══════════════════════════════════
+     *
+     * ⛔ **Il saldo a zero non basta.** Il ripiego cortese di
+     * `CancelloDeiGettoni` guarda anche il **registro**: chi ha un movimento in
+     * `ai_credit_movements` riceve il 402 dei gettoni, non il 429 della quota.
+     *
+     * 💡 Ed e' giusto cosi': dire «hai finito il mese» a chi i gettoni li ha
+     * avuti e li ha finiti lo manderebbe ad aspettare trenta giorni per una
+     * cosa che si risolve ricaricando.
+     *
+     * ⚠️ Il `setUp` accredita — da 3b-AE serve a quasi tutti gli altri test —
+     * quindi il registro non e' piu' vuoto, e la premessa va ricreata.
+     */
+    private function comeSeIGettoniNonFosseroMaiEsistiti(): void
+    {
+        $this->alfa->forceFill(['ai_credits' => 0])->save();
+
+        AiCreditMovement::withoutGlobalScopes()
+            ->where('tenant_id', $this->alfa->getKey())
+            ->delete();
+    }
+
     /** Il contatore di una palestra non vede quello di un'altra. */
     #[Test]
     public function usage_is_isolated_between_gyms(): void
@@ -373,16 +447,17 @@ class AiApiTest extends TestCase
 
         $this->alfa->update(['ai_monthly_calls_per_member' => 2]);
 
-        // Prima chiamata: una su due. 🆕 `202` dalla FASE 9: si accoda.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertStatus(202);
+        $this->comeSeIGettoniNonFosseroMaiEsistiti();
+
+        // Prima chiamata: una su due. ⚠️ **Automatica** — 3b-AE.
+        $this->chiamataAutomatica()->assertOk();
 
         // Seconda: il tetto e' raggiunto.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertStatus(202);
+        $this->chiamataAutomatica()->assertOk();
 
         $chiamateFinora = count($finta->calls);
 
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/text', ['text' => 'banana'])
+        $this->chiamataAutomatica()
             ->assertStatus(429)
             ->assertJsonPath('error', 'ai_quota_exceeded')
             ->assertJsonStructure(['error', 'message', 'resets_at']);
@@ -456,15 +531,16 @@ class AiApiTest extends TestCase
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
         $altro->accendiLAi();
 
-        // Il primo esaurisce il proprio tetto. 🆕 `202` dalla FASE 9.
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela'])->assertStatus(202);
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'pera'])->assertStatus(202);
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'banana'])->assertStatus(429);
+        $this->comeSeIGettoniNonFosseroMaiEsistiti();
+
+        // Il primo esaurisce il proprio tetto.
+        // ⚠️ **Automatiche** — 3b-AE: sono le sole che consumano la quota.
+        $this->chiamataAutomatica()->assertOk();
+        $this->chiamataAutomatica()->assertOk();
+        $this->chiamataAutomatica()->assertStatus(429);
 
         // Il secondo non se ne accorge nemmeno.
-        $this->comeIscritto($altro)
-            ->postJson('/api/v1/ai/food/text', ['text' => 'mela'])
-            ->assertStatus(202);
+        $this->chiamataAutomatica($altro)->assertOk();
     }
 
     #[Test]
@@ -474,7 +550,20 @@ class AiApiTest extends TestCase
 
         $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
 
-        $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
+        /*
+         * 🚨 **Il saldo lo fissa questo test.** Dal `setUp` arrivano dei gettoni
+         * — servono a quasi tutti gli altri, che da 3b-AE pagano ogni stima —
+         * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
+         * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
+         */
+        $this->alfa->forceFill(['ai_credits' => 0])->save();
+
+        /*
+         * ⚠️ **Automatica** — 3b-AE: con il portafoglio a zero, una stima da
+         * testo prenderebbe 402 e il contatore resterebbe fermo. Qui serve una
+         * chiamata che la quota la consumi davvero.
+         */
+        $this->chiamataAutomatica()->assertOk();
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/usage')
@@ -512,6 +601,14 @@ class AiApiTest extends TestCase
     {
         $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
 
+        /*
+         * 🚨 **Il saldo lo fissa questo test.** Dal `setUp` arrivano dei gettoni
+         * — servono a quasi tutti gli altri, che da 3b-AE pagano ogni stima —
+         * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
+         * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
+         */
+        $this->alfa->forceFill(['ai_credits' => 0])->save();
+
         $this->comeIscritto()
             ->getJson('/api/v1/ai/usage')
             ->assertOk()
@@ -531,6 +628,14 @@ class AiApiTest extends TestCase
     public function someone_who_bought_credits_still_sees_them(): void
     {
         $this->alfa->update(['ai_monthly_calls_per_member' => 10]);
+
+        /*
+         * 🚨 **Il saldo lo fissa questo test.** Dal `setUp` arrivano dei gettoni
+         * — servono a quasi tutti gli altri, che da 3b-AE pagano ogni stima —
+         * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
+         * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
+         */
+        $this->alfa->forceFill(['ai_credits' => 0])->save();
 
         app(PortafoglioGettoni::class)->accredita($this->alfa, 42);
 

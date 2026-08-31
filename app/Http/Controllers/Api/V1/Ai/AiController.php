@@ -124,7 +124,11 @@ class AiController extends Controller
          * accettare la richiesta, far vedere «sto pensando», e poi dire di no —
          * cioe' far aspettare qualcuno per un rifiuto che si sapeva gia'.
          */
-        $conGettoni = $this->assertQuota($utente, AiFeature::FoodText);
+        /*
+         * 🎟️ **Sempre a richiesta** — 31/08/2026. Nessuno stima un alimento se
+         * una persona non ha scritto cosa ha mangiato e toccato il pulsante.
+         */
+        $conGettoni = $this->assertQuota($utente, AiFeature::FoodText, aRichiesta: true);
 
         $stima = StimaCibo::daTesto($utente, [
             'text' => $dati['text'],
@@ -169,7 +173,8 @@ class AiController extends Controller
         $utente = $request->user();
         $file = $request->file('photo');
 
-        $conGettoni = $this->assertQuota($utente, AiFeature::FoodPhoto);
+        // 🎟️ Sempre a richiesta: la foto la scatta una persona.
+        $conGettoni = $this->assertQuota($utente, AiFeature::FoodPhoto, aRichiesta: true);
 
         $stima = StimaCibo::daFoto(
             $utente,
@@ -547,7 +552,16 @@ class AiController extends Controller
         array $chiaveCache,
         bool $manuale,
     ): JsonResponse {
-        $conGettoni = $this->assertQuota($request->user(), AiFeature::DailyAdvice);
+        /*
+         * 🎟️ **A richiesta solo se e' «Rigenera»** — 31/08/2026.
+         *
+         * 💡 `$manuale` e' gia' la variabile che distingue i due percorsi da
+         * 16/08: il pulsante salta la cache e paga, l'automatico passa dalla
+         * fascia. ⚠️ Riusarla qui invece di inventare un secondo segnale tiene
+         * le due decisioni — *cosa si salta* e *chi paga* — attaccate allo
+         * stesso fatto.
+         */
+        $conGettoni = $this->assertQuota($request->user(), AiFeature::DailyAdvice, aRichiesta: $manuale);
 
         $testo = $this->ai->for(AiFeature::DailyAdvice)->dailyAdvice(
             $contesto,
@@ -773,7 +787,8 @@ class AiController extends Controller
             ], 403);
         }
 
-        $conGettoni = $this->assertQuota($utente, AiFeature::PlanFood);
+        // 🎟️ Sempre a richiesta: la chiede il trainer mentre compone un piano.
+        $conGettoni = $this->assertQuota($utente, AiFeature::PlanFood, aRichiesta: true);
 
         [$stima, $avvisi] = $this->stimaValidata(
             fn (string $appendice): FoodEstimate => $this->ai->for(AiFeature::PlanFood)->foodFromText(
@@ -934,7 +949,31 @@ class AiController extends Controller
             'allenamenti.*.fonte' => ['required', 'string', 'in:manuale,stima'],
         ]);
 
-        $conGettoni = $this->assertQuota($utente, AiFeature::PlanProgress);
+        /*
+         * ══ 🎟️ CHI HA CHIESTO QUESTA ANALISI? — 31/08/2026 ═════════════════
+         *
+         * 📌 *«tutte le richieste all'ai non automatiche devono costare
+         * GETTONI»*.
+         *
+         * 🚨 **Solo il telefono lo sa.** L'analisi parte da sola dopo un
+         * allenamento con quella scheda (3b-AB), e quella decisione la prende
+         * `analisiDaSola()` sul telefono, perche' lo stato dell'analisi vive
+         * li' (D9). Il server non ha modo di ricostruirla.
+         *
+         * ⚠️ **Il valore di serie e' «a richiesta»**, e non e' un dettaglio: un
+         * client che non manda il campo — o una versione vecchia dell'app —
+         * paga il gettone invece di consumare la quota. ⛔ Il ripiego opposto
+         * regalerebbe la funzione a chiunque ometta un parametro.
+         *
+         * 💡 Un client modificato puo' comunque mentire: otterrebbe la quota
+         * inclusa del mese e nulla di piu'. E' scritto in testa a
+         * `CancelloDeiGettoni`.
+         */
+        $conGettoni = $this->assertQuota(
+            $utente,
+            AiFeature::PlanProgress,
+            aRichiesta: ! $request->boolean('automatica'),
+        );
 
         $risposta = $this->ai->for(AiFeature::PlanProgress)->progressoScheda(
             $dati,
@@ -1067,9 +1106,9 @@ class AiController extends Controller
      * @throws AiQuotaExceededException
      * @throws GettoniEsauritiException
      */
-    private function assertQuota(?User $utente, AiFeature $funzione): bool
+    private function assertQuota(?User $utente, AiFeature $funzione, bool $aRichiesta = false): bool
     {
-        return $this->cancello->apri($utente, $funzione);
+        return $this->cancello->apri($utente, $funzione, $aRichiesta);
     }
 
     /** Scala i gettoni **dopo** che la chiamata e' riuscita. Vedi `CancelloDeiGettoni`. */

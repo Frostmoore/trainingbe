@@ -9,6 +9,7 @@ use App\Models\AiAdvice;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Providers\FakeAiProvider;
+use App\Services\Billing\PortafoglioGettoni;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
@@ -377,6 +378,19 @@ final class ConsiglioAFasceTest extends TestCase
     #[Test]
     public function rigenera_a_mano_ignora_la_fascia_e_la_notizia(): void
     {
+        /*
+         * 🎟️ **E costa un gettone** — 3b-AE, 31/08/2026.
+         *
+         * 📌 *«tutte le richieste all'ai non automatiche devono costare
+         * GETTONI»*, e «Rigenera» e' la definizione stessa di richiesta fatta a
+         * mano.
+         *
+         * 💡 L'app lo dice da 16/08: il pulsante porta scritto «1 gettone».
+         * ⛔ Fino a ieri era una promessa che il server non manteneva — la
+         * chiamata passava dalla quota inclusa.
+         */
+        $this->dagliGettoni($this->palestra, 10);
+
         $this->alle('2026-08-30 09:41');
         $this->chiediIlConsiglio('2026-08-30 09:30')->assertOk();
 
@@ -391,5 +405,16 @@ final class ConsiglioAFasceTest extends TestCase
 
         $this->assertSame(2, $this->quanteChiamate());
         $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count(), 'La rigenerazione ha affiancato invece di sostituire.');
+
+        /*
+         * 🚨 **Uno solo.** Il primo consiglio era automatico e l'ha pagato la
+         * quota; il secondo l'ha chiesto una persona e l'ha pagato il
+         * portafoglio. ⛔ Due gettoni vorrebbero dire che anche l'automatico
+         * paga, cioe' l'abbonamento che non copre piu' niente.
+         */
+        $this->assertSame(
+            9,
+            app(PortafoglioGettoni::class)->saldo($this->iscritto->fresh()),
+        );
     }
 }

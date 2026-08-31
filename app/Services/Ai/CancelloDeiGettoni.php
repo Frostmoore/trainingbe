@@ -39,20 +39,60 @@ use App\Services\Billing\PortafoglioGettoni;
  * cala. Si vedrebbe solo dalla fattura di qualcun altro. Per questo la quota si
  * guarda **per prima**, sempre.
  *
- * ── ⛔ L'unica eccezione: gli import da PDF (U.6, 28/08/2026) ─────────────
+ * ══ 🎟️ LA REGOLA DEL 31/08/2026: A RICHIESTA SI PAGA A GETTONI ═══════════
  *
- * 📌 *«L'import dei pdf costa SEMPRE 50 gettoni, abbonato o no. E devono essere
- * proprio GETTONI, non si puo' usare la quota flat»*.
+ * 📌 Il committente: *«tutte le richieste all'ai non automatiche devono costare
+ * GETTONI. Se finisci i gettoni non le puoi fare»*.
  *
- * 🚨 **Il passo 1 si salta**, e non con un secondo cancello: la funzione stessa
- * dichiara `siPagaSoloConIGettoni()`. Il motivo per cui la proprieta' vive
- * sull'enum e non qui e' scritto li'.
+ * 🎯 **E il perche' e' commerciale, non tecnico.** Sempre lui, il 30/08:
+ * *«l'abbonato deve avere tutte le funzionalita' automatiche che funzionano
+ * automaticamente consumando meno richieste ai possibile per me … ho idea di
+ * fare in modo che tutte le richieste "a richiesta" debbano per forza usare
+ * gettoni, per massimizzare i profitti»*.
  *
- * ⚠️ **Salta anche il ripiego cortese** in fondo a `apri()` — quello che manda
- * il messaggio della quota a chi non ha mai comprato gettoni. Per un PDF sarebbe
- * una **bugia**: direbbe «hai finito la quota del mese» a chi ce l'ha intatta, e
- * quella persona aspetterebbe il mese nuovo per una cosa che il mese nuovo non
- * sistema.
+ * 💡 Da cui la divisione, che e' l'intero modello commerciale in due righe:
+ *
+ * | | Chi paga |
+ * |---|---|
+ * | quello che parte **da solo** | la quota inclusa dell'abbonamento |
+ * | quello che **chiedi tu** | i gettoni, sempre |
+ *
+ * ⚠️ **E i conti tornano**: tre consigli al giorno fanno 90 chiamate al mese, le
+ * analisi delle schede una ventina. `PlanSeeder::CHIAMATE` vale 150 — cioe' la
+ * quota inclusa e' tarata **sull'automatico e basta**, ed e' il motivo per cui
+ * 3b-AB (le fasce) e' venuta prima di questa.
+ *
+ * ══ 🚨 «A RICHIESTA» NON E' UNA PROPRIETA' DELLA FUNZIONE ════════════════
+ *
+ * ⛔ E qui sta la trappola. `DailyAdvice` e `PlanProgress` sono **tutte e due le
+ * cose**: il consiglio parte da solo tre volte al giorno *e* si rigenera col
+ * pulsante; l'analisi della scheda parte dopo l'allenamento *e* si rifa' a mano.
+ *
+ * 🚨 Quindi la decisione **non puo' stare sull'enum**: dipende da come si e'
+ * arrivati qui, non da cosa si sta chiedendo. Da qui il parametro `$aRichiesta`,
+ * che ogni chiamante passa dicendo la verita' su se stesso.
+ *
+ * 💡 `AiFeature::siPagaSoloConIGettoni()` resta per i due PDF, che sono
+ * **sempre** a richiesta e lo sono per definizione (U.6): un import da PDF
+ * automatico non esiste.
+ *
+ * ── ⚠️ Cosa NON garantisce questo cancello ───────────────────────────────
+ *
+ * 🚨 **Un client modificato puo' dichiararsi automatico e non pagare.** Non c'e'
+ * modo di impedirlo dal server: se l'analisi della scheda sia partita da sola lo
+ * sa **il telefono**, perche' lo stato dell'analisi vive li' (D9).
+ *
+ * 💡 Ma non e' un buco nuovo: quel client otterrebbe esattamente cio' che oggi
+ * ottiene chiunque — la quota inclusa del mese, e nulla di piu'. Il tetto vero
+ * resta `MemberAiQuota`. E' scritto qui perche' non venga scoperto come se fosse
+ * una dimenticanza.
+ *
+ * ── ⚠️ Il ripiego cortese salta ─────────────────────────────────────────
+ *
+ * In fondo a `apri()` c'e' il messaggio che manda alla quota chi non ha mai
+ * comprato gettoni. Per una chiamata a richiesta sarebbe una **bugia**: direbbe
+ * «hai finito la quota del mese» a chi ce l'ha intatta, e quella persona
+ * aspetterebbe il mese nuovo per una cosa che il mese nuovo non sistema.
  */
 class CancelloDeiGettoni
 {
@@ -81,22 +121,32 @@ class CancelloDeiGettoni
      * consumo. Nell'import dei piani (N20) viaggia perfino su una colonna di
      * database, perche' fra il cancello e il consumo c'e' una coda.
      *
+     * @param  bool  $aRichiesta  se questa chiamata l'ha chiesta una persona
+     *                            toccando qualcosa, invece di partire da sola.
+     *                            🚨 Decide chi paga: vedi la nota in testa.
      * @return bool se questa chiamata andra' pagata con i gettoni
      *
      * @throws AiQuotaExceededException
      * @throws GettoniEsauritiException
      */
-    public function apri(?User $utente, AiFeature $funzione): bool
+    public function apri(?User $utente, AiFeature $funzione, bool $aRichiesta = false): bool
     {
         if ($utente === null) {
             return false;
         }
 
         /*
-         * ⛔ **Gli import da PDF non guardano la quota**: vedi la nota in testa
-         * alla classe e `AiFeature::siPagaSoloConIGettoni()`.
+         * ⛔ **Chi chiede paga a gettoni, e la quota non si guarda nemmeno.**
+         *
+         * 📌 *«tutte le richieste all'ai non automatiche devono costare
+         * GETTONI»* — 31/08/2026.
+         *
+         * ⚠️ I due PDF ci finiscono dentro comunque (`siPagaSoloConIGettoni()`),
+         * e non e' un doppione: quelli lo sono **per definizione** — un import
+         * da PDF automatico non esiste — mentre il consiglio e l'analisi della
+         * scheda lo sono **solo a volte**.
          */
-        $soloGettoni = $funzione->siPagaSoloConIGettoni();
+        $soloGettoni = $aRichiesta || $funzione->siPagaSoloConIGettoni();
 
         if (! $soloGettoni && $this->quota->hasQuotaLeft($utente, $funzione)) {
             return false;

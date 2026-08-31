@@ -52,6 +52,19 @@ final class StimaNelPianoTest extends TestCase
         foreach ([$this->trainer, $this->iscritto] as $u) {
             $u->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
         }
+
+        /*
+         * 🎟️ **I gettoni** — 3b-AE, 31/08/2026.
+         *
+         * ⛔ La stima di un alimento mentre si compone un piano e' una richiesta
+         * fatta a mano — la chiede il trainer, toccando qualcosa — quindi da
+         * oggi si paga a gettoni e non guarda piu' la quota inclusa.
+         *
+         * 💡 Questi test parlano di **chi** viene addebitato (il trainer, mai
+         * l'allievo) e della forma della risposta: senza credito fallirebbero
+         * con un 402 che non c'entra niente.
+         */
+        $this->dagliGettoni($this->palestra);
     }
 
     #[Test]
@@ -142,6 +155,19 @@ final class StimaNelPianoTest extends TestCase
         // La palestra smette di pagare.
         PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $this->palestra->id)->delete();
+
+        /*
+         * 🚨 **E il portafoglio si svuota, o il cancello si apre lo stesso.**
+         *
+         * Avere gettoni **abilita l'AI anche senza un piano che la comprenda**
+         * — e' la promessa di `buying_credits_enables_the_ai_for_a_plan_without_it`,
+         * ed e' giusta. ⛔ Ma allora il 403 non arriva, e questo test proverebbe
+         * il contrario di quello che dice.
+         *
+         * ⚠️ Il `setUp` accredita da 3b-AE, perche' la stima nel piano si paga
+         * a gettoni: la premessa va ricreata qui.
+         */
+        $this->palestra->forceFill(['ai_credits' => 0])->save();
 
         $this->actingAs($this->trainer->fresh(), 'sanctum')
             ->postJson('/api/v1/nutrition-plans/stima-alimento', ['text' => 'due uova'])

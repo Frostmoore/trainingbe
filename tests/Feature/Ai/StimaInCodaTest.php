@@ -60,6 +60,18 @@ final class StimaInCodaTest extends TestCase
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@alfa.test');
         $this->iscritto->accendiLAi();
+
+        /*
+         * 🎟️ **I gettoni per le richieste fatte a mano** — 3b-AE, 31/08/2026.
+         *
+         * ⛔ Da oggi una stima da testo o da foto non guarda piu' la quota
+         * inclusa: si paga a gettoni. Questi test parlano d'altro, e senza
+         * credito fallirebbero con un 402 che non c'entra niente.
+         *
+         * 💡 Che il cancello commerciale funzioni e' provato dove deve esserlo,
+         * in `PortafoglioGettoniTest` e `CicloDeiGettoniTest`.
+         */
+        $this->dagliGettoni($this->palestra);
     }
 
     #[Test]

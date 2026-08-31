@@ -16,6 +16,7 @@ use App\Services\Billing\PortafoglioGettoni;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -76,17 +77,51 @@ final class CicloDeiGettoniTest extends TestCase
         $this->iscritto = $this->iscritto->fresh();
     }
 
-    /** Azzera la quota inclusa: da qui in poi paga il portafoglio. */
+    /**
+     * Azzera la quota inclusa: da qui in poi paga il portafoglio.
+     *
+     * ══ 🚨 LA CHIAMATA CHE CONSUMA LA QUOTA DEV'ESSERE AUTOMATICA — 3b-AE ══
+     *
+     * ⛔ **Qui c'era una stima da testo**, e da 3b-AE non funziona piu': una
+     * richiesta fatta a mano non guarda la quota, **scala un gettone**. Il
+     * risultato era che ogni test di questo file partiva con un gettone in meno
+     * del previsto, e tutti i conti si spostavano di uno.
+     *
+     * 💡 L'analisi della scheda con `automatica: true` e' il percorso
+     * automatico piu' comodo: non ha cache, a differenza del consiglio del
+     * giorno che ne ha una per fascia (3b-AB).
+     */
     private function quotaFinita(): void
     {
         // ⚠️ `1` e non `0`: `0` vuol dire **illimitato**, che e' l'opposto.
         $this->iscritto->forceFill(['ai_monthly_call_cap' => 1])->save();
 
-        $this->comeApp($this->iscritto->fresh())
-            ->postJson('/api/v1/ai/food/text', ['text' => 'la chiamata inclusa', 'save' => false])
-            ->assertStatus(202);
+        $this->chiamataAutomatica()->assertOk();
 
         $this->iscritto = $this->iscritto->fresh();
+    }
+
+    /**
+     * Una chiamata **automatica**: l'analisi di una scheda dopo un allenamento.
+     *
+     * 🎟️ E' l'unico genere di chiamata che dal 31/08/2026 passa ancora dalla
+     * quota inclusa. Tutto cio' che una persona chiede toccando qualcosa si
+     * paga a gettoni — vedi `CancelloDeiGettoni`.
+     */
+    private function chiamataAutomatica(): TestResponse
+    {
+        return $this->comeApp($this->iscritto->fresh())
+            ->postJson('/api/v1/ai/scheda/progresso', [
+                'automatica' => true,
+                'esercizi' => [[
+                    'id' => 7,
+                    'nome' => 'Panca piana',
+                    'sedute' => [
+                        ['data' => '2026-08-01', 'carico' => 60.0, 'ripetizioni' => 8],
+                        ['data' => '2026-08-08', 'carico' => 62.5, 'ripetizioni' => 8],
+                    ],
+                ]],
+            ]);
     }
 
     private function saldo(): int
@@ -243,9 +278,12 @@ final class CicloDeiGettoniTest extends TestCase
         $this->compra(100);
         $this->stima();
 
-        $this->comeApp($this->iscritto)
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
-            ->assertStatus(202);
+        /*
+         * ⚠️ **Automatica** — 3b-AE: e' l'unico genere di chiamata che passa
+         * ancora dalla quota. Con una stima da testo questo test proverebbe
+         * l'esatto contrario di quello che dice.
+         */
+        $this->chiamataAutomatica()->assertOk();
 
         /*
          * 🚨 **Un gettone speso a quota piena e' un gettone rubato**, e non se
@@ -268,6 +306,27 @@ final class CicloDeiGettoniTest extends TestCase
         $this->quotaFinita();
 
         $this->assertSame(100, $this->saldo());
+    }
+
+    /**
+     * 🎟️ **E quello che chiedi tu si paga subito** — 3b-AE, 31/08/2026.
+     *
+     * 📌 *«tutte le richieste all'ai non automatiche devono costare GETTONI»*.
+     *
+     * ⚠️ Sta accanto ai due test qui sopra apposta: sono la stessa domanda con
+     * due risposte opposte, e la differenza e' **chi ha chiesto la chiamata**.
+     */
+    #[Test]
+    public function una_richiesta_fatta_a_mano_paga_anche_con_la_quota_piena(): void
+    {
+        $this->compra(100);
+        $this->stima();
+
+        $this->comeApp($this->iscritto->fresh())
+            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])
+            ->assertStatus(202);
+
+        $this->assertSame(99, $this->saldo(), 'la quota piena ha coperto una richiesta fatta a mano');
     }
 
     // ═══════════════ 3. Ogni chiamata scala il suo costo ═══════════════
@@ -474,23 +533,34 @@ final class CicloDeiGettoniTest extends TestCase
         $altro->accendiLAi();
         $altro->forceFill(['ai_monthly_call_cap' => 1])->save();
 
-        $this->comeApp($altro->fresh())
-            ->postJson('/api/v1/ai/food/text', ['text' => 'inclusa', 'save' => false])
-            ->assertStatus(202);
-
-        $this->comeApp($altro->fresh())
-            ->postJson('/api/v1/ai/food/text', ['text' => 'a gettoni', 'save' => false])
-            ->assertStatus(202);
+        foreach (['la prima', 'la seconda'] as $cosa) {
+            $this->comeApp($altro->fresh())
+                ->postJson('/api/v1/ai/food/text', ['text' => $cosa, 'save' => false])
+                ->assertStatus(202);
+        }
 
         /*
-         * 💡 **I gettoni sono un monte condiviso, ed e' voluto** (D16): la quota
-         * inclusa resta un tetto per persona, quindi il servizio di base non si
-         * puo' prosciugare. I gettoni sono un extra che il trainer ha comprato e
-         * di cui decide lui.
+         * 💡 **I gettoni sono un monte condiviso, ed e' voluto** (D16): li ha
+         * comprati il trainer, e ne decide lui. Qui li ha spesi **un altro
+         * iscritto**, ed e' il punto del test.
          *
          * ⚠️ Ma la conseguenza va **mostrata**: senza il consumo per allievo
          * (G11.3) il trainer sa solo che sono finiti.
+         *
+         * ══ 🎟️ DA 3b-AE SE NE VANNO DUE, NON UNO ═══════════════════════════
+         *
+         * ⛔ **Prima la prima chiamata era coperta dalla quota** di questa
+         * persona, e solo la seconda pagava. Da 31/08/2026 una stima da testo e'
+         * una richiesta fatta a mano: la quota non la guarda nemmeno, e pagano
+         * tutte e due.
+         *
+         * 🚨 **E la conseguenza commerciale e' piu' grossa di un numero**: la
+         * quota inclusa non fa piu' da pavimento al portafoglio condiviso. Un
+         * iscritto che stima venti alimenti al giorno svuota i gettoni della
+         * palestra, e prima non poteva. E' voluto — *«per massimizzare i
+         * profitti»* — ma va saputo, ed e' scritto qui perche' si scopra
+         * leggendo un test e non una fattura.
          */
-        $this->assertSame(2, $this->saldo());
+        $this->assertSame(1, $this->saldo());
     }
 }

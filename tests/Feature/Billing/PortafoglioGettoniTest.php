@@ -12,6 +12,7 @@ use App\Services\Billing\Exceptions\GettoniEsauritiException;
 use App\Services\Billing\PortafoglioGettoni;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\Concerns\UsaAiFinta;
@@ -54,6 +55,70 @@ final class PortafoglioGettoniTest extends TestCase
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
 
         return $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test')->fresh();
+    }
+
+    /**
+     * Una persona pronta a usare l'AI, con la quota che le si dice.
+     *
+     * 💡 I tre consensi in una riga sola: erano copiati in ogni test, e tre
+     * righe copiate sei volte sono sei posti in cui dimenticarne uno.
+     */
+    private function prontoAUsarla(int $quotaMensile, int $gettoni = 0): User
+    {
+        $utente = $this->iscritto();
+        $utente->tenant->update(['ai_monthly_calls_per_member' => $quotaMensile]);
+
+        if ($gettoni > 0) {
+            $this->portafoglio()->accredita($utente->tenant, $gettoni);
+        }
+
+        $utente->forceFill([
+            'ai_consent_at' => now(),
+            'ai_disclaimer_at' => now(),
+            'health_consent_at' => now(),
+        ])->save();
+
+        return $utente->fresh();
+    }
+
+    /**
+     * Una chiamata **automatica**: l'analisi di una scheda dopo un allenamento.
+     *
+     * ══ 🚨 PERCHE' NON PIU' `/ai/food/text` — 3b-AE, 31/08/2026 ═══════════
+     *
+     * 📌 *«tutte le richieste all'ai non automatiche devono costare GETTONI»*.
+     *
+     * ⛔ La stima da testo e' una richiesta fatta a mano: da oggi **non guarda
+     * la quota**, quindi non puo' piu' dimostrare l'ordine quota→gettoni.
+     * ⚠️ Non era l'ordine a essere sbagliato: era la funzione scelta per
+     * dimostrarlo.
+     *
+     * 💡 Si usa l'analisi della scheda e non il consiglio del giorno perche'
+     * quello ha una cache per fascia (3b-AB): due chiamate di fila non
+     * arriverebbero al modello, e il test proverebbe la cache invece della
+     * quota.
+     */
+    private function chiamataAutomatica(User $utente): TestResponse
+    {
+        return $this->actingAs($utente->fresh(), 'sanctum')
+            ->postJson('/api/v1/ai/scheda/progresso', [
+                'automatica' => true,
+                'esercizi' => [[
+                    'id' => 7,
+                    'nome' => 'Panca piana',
+                    'sedute' => [
+                        ['data' => '2026-08-01', 'carico' => 60.0, 'ripetizioni' => 8],
+                        ['data' => '2026-08-08', 'carico' => 62.5, 'ripetizioni' => 8],
+                    ],
+                ]],
+            ]);
+    }
+
+    /** Una chiamata **a richiesta**: la stima di un alimento scritto a mano. */
+    private function chiamataARichiesta(User $utente, string $cosa = 'due uova'): TestResponse
+    {
+        return $this->actingAs($utente->fresh(), 'sanctum')
+            ->postJson('/api/v1/ai/food/text', ['text' => $cosa, 'save' => false]);
     }
 
     // ───────────────────── il costo ─────────────────────
@@ -107,18 +172,16 @@ final class PortafoglioGettoniTest extends TestCase
 
     // ───────────────────── l'ordine di consumo ─────────────────────
 
+    /**
+     * ⚠️ **Vale per l'AUTOMATICO** — 3b-AE. Per quello che chiedi tu, i gettoni
+     * si toccano subito: vedi [chi_chiede_paga_sempre_a_gettoni].
+     */
     #[Test]
     public function the_wallet_is_never_touched_while_the_included_quota_lasts(): void
     {
-        $utente = $this->iscritto();
-        $utente->tenant->update(['ai_monthly_calls_per_member' => 10]);
-        $this->portafoglio()->accredita($utente->tenant, 100);
+        $utente = $this->prontoAUsarla(quotaMensile: 10, gettoni: 100);
 
-        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
-
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
 
         /*
          * 🚨 **Il saldo non si e' mosso.** La quota inclusa bastava, e i gettoni
@@ -135,16 +198,10 @@ final class PortafoglioGettoniTest extends TestCase
     #[Test]
     public function the_call_that_exhausts_the_quota_is_still_covered_by_it(): void
     {
-        $utente = $this->iscritto();
         // ⚠️ Tetto a 1: **questa** chiamata e' l'ultima coperta dalla quota.
-        $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
-        $this->portafoglio()->accredita($utente->tenant, 100);
+        $utente = $this->prontoAUsarla(quotaMensile: 1, gettoni: 100);
 
-        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
-
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
 
         /*
          * 🚨 **Il difetto che questo test esiste per impedire.**
@@ -163,23 +220,15 @@ final class PortafoglioGettoniTest extends TestCase
     #[Test]
     public function once_the_quota_is_gone_the_wallet_pays(): void
     {
-        $utente = $this->iscritto();
         // ⚠️ Un tetto «a zero chiamate» non si puo' esprimere: `0` vuol dire
         // **illimitato**. Si mette a 1 e la si consuma.
-        $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
-        $this->portafoglio()->accredita($utente->tenant, 100);
-
-        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
+        $utente = $this->prontoAUsarla(quotaMensile: 1, gettoni: 100);
 
         // La prima chiamata usa la quota inclusa.
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due uova', 'save' => false])
-            ->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
 
         // La seconda no: la quota e' finita.
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'tre uova', 'save' => false])
-            ->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
 
         $this->assertSame(99, $this->portafoglio()->saldo($utente->fresh()));
 
@@ -193,16 +242,11 @@ final class PortafoglioGettoniTest extends TestCase
     #[Test]
     public function with_an_empty_wallet_and_no_quota_the_error_is_the_credit_one(): void
     {
-        $utente = $this->iscritto();
-        $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
-        $this->portafoglio()->accredita($utente->tenant, 1);
-        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
+        $utente = $this->prontoAUsarla(quotaMensile: 1, gettoni: 1);
 
         // Quota (1) + gettoni (1) = due chiamate possibili.
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertStatus(202);
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due mele', 'save' => false])->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
+        $this->chiamataAutomatica($utente)->assertOk();
 
         /*
          * 🚨 **402 con un codice suo**, non il 429 della quota. Dire «hai
@@ -210,8 +254,7 @@ final class PortafoglioGettoniTest extends TestCase
          * finiti e' il modo piu' veloce per perderlo: ha pagato per non ricevere
          * quel messaggio, e riceverlo lo stesso sembra un imbroglio.
          */
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'tre mele', 'save' => false])
+        $this->chiamataAutomatica($utente)
             ->assertStatus(402)
             ->assertJsonPath('error', 'ai_credits_exhausted')
             ->assertJsonPath('saldo', 0)
@@ -221,22 +264,76 @@ final class PortafoglioGettoniTest extends TestCase
     #[Test]
     public function someone_who_never_bought_credits_gets_the_quota_error(): void
     {
-        $utente = $this->iscritto();
-        $utente->tenant->update(['ai_monthly_calls_per_member' => 1]);
-        $utente->forceFill(['ai_consent_at' => now(), 'ai_disclaimer_at' => now(), 'health_consent_at' => now()])->save();
+        $utente = $this->prontoAUsarla(quotaMensile: 1);
 
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'una mela', 'save' => false])->assertStatus(202);
+        $this->chiamataAutomatica($utente)->assertOk();
 
         /*
          * ⚠️ **Chi non ha mai comprato gettoni non deve sentirsi dire di
          * ricaricarli**: e' un errore che parla di una cosa che quella persona
          * non sa nemmeno che esista, e non spiega niente.
          */
-        $this->actingAs($utente->fresh(), 'sanctum')
-            ->postJson('/api/v1/ai/food/text', ['text' => 'due mele', 'save' => false])
+        $this->chiamataAutomatica($utente)
             ->assertStatus(429)
             ->assertJsonPath('error', 'ai_quota_exceeded');
+    }
+
+    // ─────────────── e quello che chiedi tu — 3b-AE ───────────────
+
+    /**
+     * 🎟️ **Chi chiede paga a gettoni, anche con la quota intatta.**
+     *
+     * 📌 Il committente, 31/08/2026: *«tutte le richieste all'ai non
+     * automatiche devono costare GETTONI. Se finisci i gettoni non le puoi
+     * fare»*.
+     *
+     * 🚨 E' l'esatto contrario di [the_wallet_is_never_touched_while_the_included_quota_lasts],
+     * ed e' voluto: quel test parla dell'automatico, questo di cio' che una
+     * persona chiede toccando qualcosa.
+     */
+    #[Test]
+    public function chi_chiede_paga_sempre_a_gettoni(): void
+    {
+        $utente = $this->prontoAUsarla(quotaMensile: 100, gettoni: 10);
+
+        $this->chiamataARichiesta($utente)->assertStatus(202);
+
+        // ⛔ Il gettone e' andato, con la quota ancora piena.
+        $this->assertSame(9, $this->portafoglio()->saldo($utente->fresh()));
+
+        $movimento = AiCreditMovement::withoutGlobalScopes()
+            ->where('causale', AiCreditMovement::CONSUMO)->firstOrFail();
+
+        $this->assertSame(-1, $movimento->delta);
+    }
+
+    /**
+     * ⛔ **Senza gettoni non si puo' fare, e la quota non salva.**
+     *
+     * 📌 *«Se finisci i gettoni non le puoi fare»*.
+     *
+     * ⚠️ E l'errore e' il **402 dei gettoni**, non il 429 della quota: dire
+     * «hai finito il mese» a chi ha il mese intatto manderebbe quella persona
+     * ad aspettare trenta giorni per una cosa che si risolve ricaricando.
+     */
+    #[Test]
+    public function senza_gettoni_una_richiesta_a_mano_non_si_fa_nemmeno_con_la_quota_piena(): void
+    {
+        $utente = $this->prontoAUsarla(quotaMensile: 100);
+
+        $this->chiamataARichiesta($utente)
+            ->assertStatus(402)
+            ->assertJsonPath('error', 'ai_credits_exhausted');
+
+        /*
+         * 🚨 **E la quota non e' stata toccata.** Un rifiuto che consuma quota
+         * sarebbe il peggio dei due mondi: non ottieni la risposta e paghi lo
+         * stesso.
+         */
+        $this->assertSame(
+            0,
+            AiCreditMovement::withoutGlobalScopes()->where('causale', AiCreditMovement::CONSUMO)->count(),
+        );
     }
 
     // ───────────────────── il registro ─────────────────────

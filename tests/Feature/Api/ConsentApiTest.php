@@ -208,6 +208,17 @@ class ConsentApiTest extends TestCase
     {
         $this->aiFinta();
 
+        /*
+         * 🎟️ **I gettoni** — 3b-AE, 31/08/2026. Da oggi una stima da testo si
+         * paga a gettoni: senza credito la risposta sarebbe 402, e questo test
+         * direbbe che il consenso non apre l'AI mentre invece l'ha aperta.
+         *
+         * ⚠️ Il consenso e il credito sono due cancelli diversi, e questo test
+         * parla del primo. Che il secondo funzioni e' provato in
+         * `PortafoglioGettoniTest`.
+         */
+        $this->dagliGettoni($this->alfa);
+
         $this->comeApp($this->iscritto)
             ->patchJson('/api/v1/account/consents', ['ai' => true, 'ai_disclaimer' => true])
             ->assertOk();
