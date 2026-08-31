@@ -200,7 +200,7 @@ return [
          *
          * | Dove | Diceva | Chi lo leggeva |
          * |---|---|---|
-         * | `listino.gettoni_mensili` | 300 | il sito e l'app |
+         * | `listino.chiamate_mensili` | 300 | il sito e l'app |
          * | `PlanSeeder::CHIAMATE` | 450 | solo chi lancia il seeder |
          * | la migration dei piani | **niente** | il database vero |
          * | questo default | **400** | 🚨 **la guardia, cioe' la realta'** |

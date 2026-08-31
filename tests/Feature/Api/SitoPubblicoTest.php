@@ -222,7 +222,15 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function the_included_monthly_allowance_is_published(): void
     {
-        config()->set('listino.gettoni_mensili', 7777);
+        /*
+         * ⛔ **`chiamate_mensili`, non `gettoni_mensili`** — 31/08/2026.
+         *
+         * 🚨 Il nome vecchio diceva «gettoni», e non lo sono: sono le richieste
+         * incluse nell'abbonamento. Da quel nome e' nato un accredito di
+         * gettoni all'accensione dell'abbonamento, scritto e tolto lo stesso
+         * giorno. La nota lunga sta in `config/listino.php`.
+         */
+        config()->set('listino.chiamate_mensili', 7777);
 
         $this->get('/prezzi')->assertOk()->assertSee('7.777', escape: false);
     }

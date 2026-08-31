@@ -32,10 +32,17 @@ class Listino
         return (int) config('listino.singolo_cent');
     }
 
-    /** I gettoni che l'abbonamento accredita ogni mese. */
-    public function gettoniMensili(): int
+    /**
+     * Le **richieste incluse** nell'abbonamento, ogni mese.
+     *
+     * ⛔ **Non sono gettoni.** Si chiamava `gettoniMensili()`, e quel nome ha
+     * prodotto un accredito di gettoni all'accensione dell'abbonamento —
+     * scritto e tolto lo stesso giorno. La nota lunga sta in
+     * `config/listino.php`.
+     */
+    public function chiamateMensili(): int
     {
-        return (int) config('listino.gettoni_mensili');
+        return (int) config('listino.chiamate_mensili');
     }
 
     /**

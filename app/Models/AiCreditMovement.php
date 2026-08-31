@@ -27,17 +27,6 @@ class AiCreditMovement extends Model
 
     public const ACQUISTO = 'acquisto';
 
-    /**
-     * 🎟️ I gettoni che l'abbonamento accredita ogni mese — 3b-AE, 31/08/2026.
-     *
-     * ⚠️ **Separata da `ACQUISTO`**, e non per gusto: uno e' denaro incassato,
-     * l'altro e' una concessione compresa nel canone. 🚨 Confonderli renderebbe
-     * il registro inutile proprio per la domanda che gli si fara' — *«quanto
-     * abbiamo venduto in gettoni?»* — e la risposta sarebbe gonfiata da tutto
-     * cio' che abbiamo regalato.
-     */
-    public const ABBONAMENTO = 'abbonamento';
-
     public const CONSUMO = 'consumo';
 
     public const RETTIFICA = 'rettifica';

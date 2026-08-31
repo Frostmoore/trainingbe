@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Billing;
 
 use App\Http\Controllers\Controller;
+use App\Models\PlanSubscription;
+use App\Models\User;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
@@ -52,7 +54,7 @@ class BillingController extends Controller
 
             'abbonamento' => [
                 'prezzo_cent' => $this->listino->singolo(),
-                'chiamate_mensili' => $this->listino->gettoniMensili(),
+                'chiamate_mensili' => $this->listino->chiamateMensili(),
             ],
 
             'pacchetti' => array_map(
@@ -85,7 +87,7 @@ class BillingController extends Controller
     /**
      * @return array{fino_al: string|null, rinnova: bool, gestibile: bool}|null
      */
-    private function abbonamentoAttivo(\App\Models\User $utente): ?array
+    private function abbonamentoAttivo(User $utente): ?array
     {
         $tenantId = $utente->tenant?->getKey();
 
@@ -93,7 +95,7 @@ class BillingController extends Controller
             return null;
         }
 
-        $riga = \App\Models\PlanSubscription::withoutGlobalScopes()
+        $riga = PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->attivi()
             ->orderByDesc('starts_at')

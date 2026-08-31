@@ -60,7 +60,7 @@ class SitoController extends Controller
             'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
             'listino' => $listino,
             'prezzoSingolo' => $listino->singolo(),
-            'gettoniMensili' => $listino->gettoniMensili(),
+            'chiamateMensili' => $listino->chiamateMensili(),
             'pacchetti' => $listino->pacchettiGettoni(),
             'esempio' => $listino->esempio(),
 

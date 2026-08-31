@@ -57,7 +57,34 @@ return [
     'singolo_cent' => 799,
 
     /**
-     * I gettoni che l'abbonamento accredita ogni mese. Si azzerano al rinnovo.
+     * Le **richieste incluse** nell'abbonamento, ogni mese.
+     *
+     * ══ ⛔ NON SONO GETTONI, E IL NOME VECCHIO DICEVA IL CONTRARIO ═════════
+     *
+     * 📌 Il committente, il 31/08/2026: *«Le chiamate dell'abbonamento non sono
+     * gettoni, sono proprio chiamate che si possono usare. Un abbonato ha
+     * comunque 0 gettoni se non li compra»*.
+     *
+     * 🚨 **Questa chiave si chiamava `gettoni_mensili`, e il commento diceva
+     * «i gettoni che l'abbonamento accredita».** Da li' e' nato un accredito di
+     * 150 gettoni all'accensione dell'abbonamento, scritto e poi tolto lo stesso
+     * giorno: ⛔ un nome sbagliato non fa sbagliare *se* qualcuno sbaglia, fa
+     * sbagliare **chi lo legge per primo**.
+     *
+     * 💡 Il sito e Stripe le hanno sempre chiamate **richieste** — *«150
+     * richieste al mese, rinnovate ogni mese»* — quindi la parola giusta era
+     * gia' quella usata con i clienti. Era il codice a chiamarle come non erano.
+     *
+     * ══ 🎯 I DUE CONTATORI, E SONO DIVERSI ════════════════════════════════
+     *
+     * | | Cos'e' | Da dove viene |
+     * |---|---|---|
+     * | **richieste incluse** | il tetto mensile dell'abbonamento | si rinnova col canone, non si compra |
+     * | **gettoni** | credito comprato | si comprano, o si vincono in premio |
+     *
+     * ⛔ Un abbonato ha **zero gettoni** finche' non li compra, ed e' voluto: da
+     * 3b-AE le richieste incluse coprono l'automatico, i gettoni tutto cio' che
+     * si chiede a mano.
      *
      * ── 🚨 500 → 300 (16/08) → 150 (26/08/2026) ───────────────────────────
      *
@@ -86,7 +113,7 @@ return [
      * per non invitare al confronto con i pacchetti; poi il committente:
      * *«a sto punto diciamolo, tanto sta scritto nelle condizioni d'uso»*.
      */
-    'gettoni_mensili' => 150,
+    'chiamate_mensili' => 150,
 
     /*
      * I pacchetti di gettoni, per chi finisce quelli del mese o non si abbona.

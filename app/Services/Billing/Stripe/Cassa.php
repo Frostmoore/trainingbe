@@ -140,7 +140,7 @@ class Cassa
                         'recurring' => ['interval' => 'month'],
                         'product_data' => [
                             'name' => 'Assistente AI',
-                            'description' => $this->listino->gettoniMensili()
+                            'description' => $this->listino->chiamateMensili()
                                 .' richieste al mese, rinnovate ogni mese.',
                         ],
                     ],
@@ -477,18 +477,6 @@ class Cassa
             return;
         }
 
-        /*
-         * 🚨 **Si guarda PRIMA se esisteva**, perche' `updateOrCreate` non lo
-         * dice dopo: `wasRecentlyCreated` risponde solo alla creazione, e un
-         * riabbonamento dopo una disdetta passa dal ramo «update». ⛔ Senza
-         * questa riga, chi si riabbona non riceverebbe i suoi gettoni.
-         */
-        $primoGiro = ! PlanSubscription::withoutGlobalScopes()
-            ->where('tenant_id', $utente->tenant->getKey())
-            ->where('plan_id', $piano->getKey())
-            ->where('ends_at', '>', now())
-            ->exists();
-
         PlanSubscription::updateOrCreate(
             ['tenant_id' => $utente->tenant->getKey(), 'plan_id' => $piano->getKey()],
             [
@@ -512,42 +500,6 @@ class Cassa
                 'ends_at' => now()->addMonth()->addDay(),
             ],
         );
-
-        /*
-         * ══ 🎟️ E I GETTONI DEL MESE — 3b-AE, 31/08/2026 ═══════════════════
-         *
-         * 🚨 **L'abbonamento ne prometteva 150 e non ne accreditava nessuno.**
-         * `Listino::gettoniMensili()` finiva solo nella descrizione del prodotto
-         * Stripe, sul sito e in `BillingController`: tre posti che lo
-         * *raccontano*, zero che lo fanno.
-         *
-         * ⛔ **Fino a ieri non si vedeva**, perche' le funzioni a richiesta
-         * passavano dalla quota inclusa e un portafoglio vuoto non fermava
-         * niente. Da 3b-AE si pagano **solo** a gettoni: senza questo accredito
-         * un abbonato appena pagato non potrebbe stimare un solo alimento.
-         *
-         * ⚠️ **Solo al primo giro.** Riaccendere un abbonamento gia' attivo —
-         * `checkout.session.completed` arriva anche per un cambio di carta —
-         * non deve regalare un secondo mese di gettoni.
-         *
-         * ⏳ **E il RINNOVO mensile non passa di qui**: i mesi successivi Stripe
-         * li annuncia con `invoice.paid`, che oggi non e' gestito ed e' scritto
-         * in 3b-H come debito aperto. 🚨 Vuol dire che oggi i 150 gettoni
-         * arrivano **una volta sola**, all'accensione. Chi chiude 3b-H deve
-         * chiamare qui.
-         */
-        if ($primoGiro) {
-            $gettoni = $this->listino->gettoniMensili();
-
-            if ($gettoni > 0) {
-                $this->portafoglio->accredita(
-                    $utente->tenant,
-                    $gettoni,
-                    nota: 'Abbonamento '.($sessione['id'] ?? '?'),
-                    causale: AiCreditMovement::ABBONAMENTO,
-                );
-            }
-        }
 
         Log::info('Stripe: abbonamento acceso.', [
             'utente' => $utente->getKey(),

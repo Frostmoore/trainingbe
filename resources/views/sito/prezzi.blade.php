@@ -94,7 +94,7 @@
                             <span class="etichetta">Consigliato</span>
                             <h3 style="margin-top: var(--sp-1);">Abbonamento mensile</h3>
                             <p class="nota" style="margin-top: 4px;">
-                                {{ number_format($gettoniMensili, 0, ',', '.') }} richieste al mese, che
+                                {{ number_format($chiamateMensili, 0, ',', '.') }} richieste al mese, che
                                 si rinnovano. Niente credito da controllare, niente ricariche da
                                 ricordarsi.
                             </p>
@@ -271,9 +271,9 @@
             <details>
                 <summary>Quante richieste ho con l'abbonamento?</summary>
                 <p>
-                    <strong>{{ number_format($gettoniMensili, 0, ',', '.') }} al mese</strong>, che si
+                    <strong>{{ number_format($chiamateMensili, 0, ',', '.') }} al mese</strong>, che si
                     rinnovano e non si accumulano: sono circa
-                    <strong>{{ (int) round($gettoniMensili / 30) }} al giorno</strong>, con dentro
+                    <strong>{{ (int) round($chiamateMensili / 30) }} al giorno</strong>, con dentro
                     qualche foto. Scrivere un pasto ne costa 1, riconoscerlo da una foto ne costa
                     10; registrarlo dal tuo piano, dai preferiti o a mano non ne costa nessuno.
                 </p>
