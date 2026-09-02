@@ -300,14 +300,52 @@ final class ConsiglioAFasceTest extends TestCase
     }
 
     /**
-     * 🚨 **I pasti li conta il server, e contano come notizia.**
+     * 🍽️ **Un pasto e' una notizia, e la porta il telefono** — I5.1.
      *
-     * ⚠️ L'app manda solo cio' che **solo lei sa** — allenamenti e sonno: dopo
-     * D9 e la FASE 11.6 il server non li ha piu'. ⛔ Ma i pasti sono suoi, e
-     * fidarsi del solo telefono vorrebbe dire non accorgersi di una cena.
+     * ══ ⛔ QUI C'ERA IL CONTRARIO, ED ERA GIUSTO FINO A I2.5 ═══════════════
+     *
+     * Il test si chiamava `un_pasto_registrato_conta_come_notizia_anche_se_l_app
+     * _non_lo_dice`: scriveva una voce con `POST /food-entries` e provava che il
+     * consiglio si rigenerasse **con l'app che taceva**, perche' `food_entries`
+     * era del server.
+     *
+     * 🚨 Da I2.5 quella tabella non riceve piu' niente. ⚠️ Se il test fosse
+     * rimasto com'era sarebbe diventato **verde per il motivo sbagliato** — la
+     * riga la scriveva lui stesso con una rotta che l'app non chiama piu'.
+     *
+     * 💡 Adesso e' l'app a dire quand'e' successo l'ultimo gesto, pasti
+     * compresi: `ultimaNotiziaProvider` guarda `scrittaIl` del diario locale
+     * insieme a sedute e risvegli.
      */
     #[Test]
-    public function un_pasto_registrato_conta_come_notizia_anche_se_l_app_non_lo_dice(): void
+    public function un_pasto_e_una_notizia_e_la_porta_il_telefono(): void
+    {
+        $this->alle('2026-08-30 09:41');
+        $this->chiediIlConsiglio('2026-08-30 09:30')->assertOk();
+
+        $this->alle('2026-08-30 14:30');
+
+        $this->finta->willReturnAdvice('Il consiglio del pomeriggio.');
+
+        // 🍽️ Il pranzo scritto alle 14:10, come lo racconta l'app.
+        $this->chiediIlConsiglio('2026-08-30 14:10')
+            ->assertOk()
+            ->assertJsonPath('data.cached', false)
+            ->assertJsonPath('data.body', 'Il consiglio del pomeriggio.');
+
+        $this->assertSame(2, $this->quanteChiamate());
+    }
+
+    /**
+     * ⛔ **E senza notizie non si paga, nemmeno con il diario pieno.**
+     *
+     * 🚨 E' l'altra meta' dello stesso cambio: il server **non guarda piu'
+     * nessuna tabella** per decidere se qualcosa e' successo. ⚠️ Una riga in
+     * `food_entries` — che oggi puo' esistere solo come residuo di prima del
+     * trasloco — non deve far scattare niente.
+     */
+    #[Test]
+    public function una_voce_vecchia_sul_server_non_e_una_notizia(): void
     {
         $this->alle('2026-08-30 09:41');
         $this->chiediIlConsiglio('2026-08-30 09:30')->assertOk();
@@ -318,15 +356,10 @@ final class ConsiglioAFasceTest extends TestCase
             'description' => 'Pollo', 'meal' => 'lunch', 'kcal' => 400, 'grams' => 250,
         ])->assertCreated();
 
-        $this->finta->willReturnAdvice('Il consiglio del pomeriggio.');
+        // ⚠️ L'app dice «io non ho notizie»: e adesso non ne ha nessun altro.
+        $this->chiediIlConsiglio(null)->assertOk()->assertJsonPath('data.cached', true);
 
-        // ⚠️ L'app dice «io non ho notizie»: le ha il server.
-        $this->chiediIlConsiglio(null)
-            ->assertOk()
-            ->assertJsonPath('data.cached', false)
-            ->assertJsonPath('data.body', 'Il consiglio del pomeriggio.');
-
-        $this->assertSame(2, $this->quanteChiamate());
+        $this->assertSame(1, $this->quanteChiamate());
     }
 
     /**

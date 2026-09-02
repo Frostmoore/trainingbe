@@ -9,7 +9,6 @@ use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Jobs\StimaIlCibo;
 use App\Models\AiAdvice;
-use App\Models\FoodEntry;
 use App\Models\StimaCibo;
 use App\Models\User;
 use App\Services\Ai\AiCallContext;
@@ -27,7 +26,6 @@ use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\FasciaDelConsiglio;
-use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Database\QueryException;
@@ -716,40 +714,25 @@ class AiController extends Controller
 
         $grezzo = trim((string) $request->query('last_event_at', ''));
 
-        $dalTelefono = $grezzo === ''
-            ? null
-            : Carbon::parse($grezzo);
-
         /*
-         * ⛔ **Da I2.5 questa lettura trova sempre lo stesso valore** — quello
-         * dell'ultima voce scritta prima del 03/09/2026.
+         * ══ ⛔ LE FONTI ERANO DUE, E DA I5.1 E' UNA SOLA ═════════════════════
          *
-         * 🚨 Il diario alimentare vive sul telefono: in `food_entries` non entra
-         * piu' niente. Resta perche' le voci vecchie ci sono ancora e la
-         * risposta e' ancora corretta *per loro*, ma **non si accorge piu' di un
-         * pasto nuovo**.
+         * Qui si prendeva anche `FoodEntry::max('created_at')`, e si teneva la
+         * piu' recente delle due: allenamenti e sonno li sapeva il telefono, i
+         * pasti il server.
          *
-         * 💡 Si chiude con I5, insieme a `laSettimanaDelCibo()`: l'app manda
-         * l'ultimo pasto dentro `last_event_at`, come gia' fa per allenamenti e
-         * sonno. ⚠️ Aggiustare solo questa meta' sarebbe peggio — il consiglio
-         * si rigenererebbe a ogni pasto per dire che non si e' mangiato niente.
+         * 🚨 Dopo I2.5 quella query trovava **sempre lo stesso istante** —
+         * l'ultima voce scritta prima del trasloco — quindi registrare un pasto
+         * non faceva piu' scattare niente. ⛔ E non lo diceva a nessuno: il
+         * consiglio restava quello di prima, che e' un esito indistinguibile da
+         * «non e' successo niente».
+         *
+         * 💡 Adesso i pasti li conta [ultimaNotiziaProvider] sull'app, insieme
+         * agli allenamenti e al sonno: **una fonte sola per una domanda sola**.
+         * ⚠️ E' anche piu' semplice di prima — il caso «la piu' recente delle
+         * due» non esiste piu', e con lui l'occasione di sbagliare il confronto.
          */
-        $ultimoPasto = FoodEntry::query()
-            ->where('user_id', $utente->getKey())
-            ->max('created_at');
-
-        $dalServer = $ultimoPasto !== null ? Carbon::parse($ultimoPasto) : null;
-
-        /*
-         * 💡 La piu' recente delle due, e non «una qualsiasi delle due»: la
-         * domanda e' *quando e' successa l'ultima cosa*, e la risposta e' una
-         * sola anche quando le fonti sono due.
-         */
-        $evento = match (true) {
-            $dalTelefono === null => $dalServer,
-            $dalServer === null => $dalTelefono,
-            default => $dalTelefono->gt($dalServer) ? $dalTelefono : $dalServer,
-        };
+        $evento = $grezzo === '' ? null : Carbon::parse($grezzo);
 
         if ($evento === null) {
             return false;
@@ -1269,160 +1252,27 @@ class AiController extends Controller
         ];
     }
 
-    /**
-     * I pasti di oggi con l'ora in cui sono stati scritti, e la settimana.
-     *
-     * ══ 🚨 PERCHE' SERVE L'ORA IN CUI SONO STATI **SCRITTI** ══════════════
-     *
-     * 📌 *«se oggi ho gia' segnato tutto quello che mangero' alle 10 di mattina
-     * il consiglio del giorno mi dice che ho gia' assunto 1800 kcal e sono solo
-     * le 10»*.
-     *
-     * ⛔ **`eaten_at` non serve a niente per questo**, ed e' la scoperta che ha
-     * deciso la forma di questo metodo: l'app manda
-     * `eaten_at = selectedDate.toIso8601String()`, cioe' la **mezzanotte** del
-     * giorno che si sta guardando. Tutte le voci di oggi hanno la stessa ora, e
-     * quell'ora e' 00:00.
-     *
-     * 💡 `created_at` invece e' l'istante vero in cui la riga e' stata
-     * scritta. Una cena con `created_at` alle 10:14 e' cibo **programmato**;
-     * una cena scritta alle 21:30 e' cibo mangiato.
-     *
-     * ⚠️ **Si prende la piu' RECENTE fra le voci del pasto**, non la prima:
-     * chi aggiunge il pane alla cena alle 21:40 sta ancora cenando, e l'ora
-     * che conta e' quella dell'ultimo gesto.
-     *
-     * ══ 📅 E LA SETTIMANA, DALLA STESSA QUERY ════════════════════════════
-     *
-     * 🚨 **Una lettura sola per due risposte.** Due query — una per oggi e una
-     * per la settimana — sarebbero due filtri sullo stesso intervallo, cioe'
-     * due occasioni di divergere sul confine del giorno. E il confine del
-     * giorno in questo progetto e' gia' costato il difetto A3.
-     *
-     * 💡 Il raggruppamento si fa in PHP con `GiornoLocale::etichettaDi()` e non
-     * con un `GROUP BY DATE(eaten_at)`: quel `DATE()` raggrupperebbe in **UTC**,
-     * e una cena delle 00:30 finirebbe nel giorno prima.
-     *
-     * @return array{meals: list<array<string, mixed>>, week_food: list<array<string, mixed>>}
-     */
-    private function laSettimanaDelCibo(User $utente, GiornoLocale $oggi): array
-    {
-        $fuso = $utente->fusoOrario();
-        $primo = $oggi->menoGiorni(self::GIORNI_DI_STORIA);
-
-        /*
-         * ⛔ **Da I2.5 questa query e' cieca sui pasti nuovi** — 03/09/2026.
-         *
-         * 🚨 `meals` e `week_food` sono il pezzo di contesto che 3b-AC ha
-         * aggiunto perche' il consiglio capisse *«se oggi ho gia' segnato tutto
-         * quello che mangero' alle 10 di mattina»*. Adesso il diario sta sul
-         * telefono, e da qui si vedono solo le voci scritte **prima** del
-         * trasloco.
-         *
-         * ⚠️ Non e' un errore che si vede: il consiglio arriva, e' scritto bene,
-         * e dice che oggi non si e' mangiato niente.
-         *
-         * 💡 **E' I5**, ed e' il passo obbligato subito dopo I2.5: il contesto
-         * del cibo lo costruisce l'app dall'archivio locale, e questo metodo
-         * diventa la validazione di cio' che arriva (lista chiusa, regola R3).
-         */
-        $voci = FoodEntry::query()
-            ->forUser($utente)
-            ->whereBetween('eaten_at', $primo->finestraFinoA($oggi))
-            ->orderBy('eaten_at')
-            ->get();
-
-        $perGiorno = [];
-
-        foreach ($voci as $v) {
-            if ($v->eaten_at === null) {
-                continue;
-            }
-
-            $perGiorno[GiornoLocale::etichettaDi($v->eaten_at, $fuso)][] = $v;
-        }
-
-        // ── i pasti di oggi ────────────────────────────────────────────────
-
-        $perPasto = [];
-
-        foreach ($perGiorno[$oggi->etichetta] ?? [] as $v) {
-            $perPasto[$v->meal->value][] = $v;
-        }
-
-        $pasti = [];
-
-        foreach (MealType::ordered() as $tipo) {
-            $righe = $perPasto[$tipo->value] ?? [];
-
-            if ($righe === []) {
-                continue;
-            }
-
-            $totali = FoodEntry::totals($righe);
-
-            /*
-             * 🚨 **Il massimo, non l'ultimo dell'elenco**: le voci sono
-             * ordinate per `eaten_at`, che qui vale mezzanotte per tutte —
-             * quindi l'ordine dell'elenco non dice niente sull'ora di
-             * scrittura.
-             */
-            $scritto = null;
-
-            foreach ($righe as $r) {
-                if ($r->created_at !== null && ($scritto === null || $r->created_at->gt($scritto))) {
-                    $scritto = $r->created_at;
-                }
-            }
-
-            $pasti[] = [
-                'meal' => $tipo->value,
-                'kcal' => (int) round($totali['kcal']),
-                'p' => (int) round($totali['protein']),
-                'c' => (int) round($totali['carbs']),
-                'f' => (int) round($totali['fat']),
-
-                // ⚠️ L'ora **locale**: in UTC il modello leggerebbe le 08:14
-                // per una cena scritta alle 10:14 a Roma, e il ragionamento
-                // sul «e' presto» partirebbe da un'ora sbagliata.
-                'scritto_alle' => $scritto?->copy()->setTimezone($fuso)->format('H:i'),
-            ];
-        }
-
-        // ── la settimana, senza oggi ───────────────────────────────────────
-
-        $settimana = [];
-
-        foreach ($perGiorno as $giorno => $righe) {
-            /*
-             * ⛔ **Oggi non entra nella settimana**: e' gia' in `totals` e in
-             * `meals`, e ripeterlo darebbe al modello due versioni della stessa
-             * giornata — una completa e una da confrontare con le altre.
-             */
-            if ($giorno === $oggi->etichetta) {
-                continue;
-            }
-
-            $t = FoodEntry::totals($righe);
-
-            $settimana[] = [
-                'd' => $giorno,
-                'kcal' => (int) round($t['kcal']),
-                'p' => (int) round($t['protein']),
-                'c' => (int) round($t['carbs']),
-                'f' => (int) round($t['fat']),
-            ];
-        }
-
-        /*
-         * 💡 Dal piu' recente: il modello legge le altre serie della settimana
-         * cosi' (`week_sleep`, `week_workouts`), e due ordini diversi nello
-         * stesso contesto sono un modo gratuito di far sbagliare i confronti.
-         */
-        usort($settimana, static fn (array $a, array $b): int => strcmp($b['d'], $a['d']));
-
-        return ['meals' => $pasti, 'week_food' => $settimana];
-    }
+    /*
+    | ══ ⛔ `laSettimanaDelCibo()` NON ESISTE PIU' — I5.1, 03/09/2026 ══════════
+    |
+    | Costruiva `meals` e `week_food` leggendo `food_entries`, e con una query
+    | sola per non far divergere due filtri sul confine del giorno.
+    |
+    | 🚨 Dopo I2.5 quella tabella non riceve piu' niente: il metodo rispondeva
+    | **zero senza un errore**, e il consiglio diceva che oggi non si era
+    | mangiato — scritto bene, e falso.
+    |
+    | 💡 Le stesse due liste arrivano adesso dal telefono e passano da
+    | [ilCiboDallApp], che le valida con una lista chiusa. ⚠️ Le regole che
+    | contavano non si sono perse, si sono spostate in `cibo_per_il_consiglio.dart`:
+    |
+    | - `scritto_alle` e' **il piu' recente** delle voci del pasto, non il primo:
+    |   chi aggiunge il pane alla cena alle 21:40 sta ancora cenando;
+    | - **oggi non entra in `week_food`**: e' gia' in `totals` e in `meals`, e
+    |   ripeterlo darebbe al modello due versioni della stessa giornata;
+    | - la settimana va **dal piu' recente**, come `week_sleep` e `week_workouts`:
+    |   due ordini diversi nello stesso contesto fanno sbagliare i confronti.
+    */
 
     /**
      * TDEE, peso e altezza: quello che il server **non ha piu'** — 31/08/2026.
@@ -1662,6 +1512,73 @@ class AiController extends Controller
      *
      * @var array<string, array<string, string>>
      */
+    /**
+     * I pasti di **oggi**, uno per riga — I5.1, 03/09/2026.
+     *
+     * ══ 🚨 PERCHE' LI MANDA L'APP ═════════════════════════════════════════
+     *
+     * ⛔ Li costruiva `laSettimanaDelCibo()` da `food_entries`. Dopo I2.5 il
+     * diario alimentare vive sul telefono, e quella query vedeva **solo le voci
+     * scritte prima del trasloco**: il consiglio diceva che oggi non si era
+     * mangiato niente, e lo diceva bene.
+     *
+     * ══ 🕘 `scritto_alle` E' IL CAMPO CHE VALE ════════════════════════════
+     *
+     * 📌 Il committente, il 31/08/2026: *«Io sono uno che si programma i pasti e
+     * se oggi ho gia' segnato tutto quello che mangero' alle 10 di mattina il
+     * consiglio del giorno mi dice che ho gia' assunto 1800 kcal e sono solo le
+     * 10... e' ovvio che non puo' essere cosi'»*.
+     *
+     * 💡 Un pranzo scritto alle 10:14 e' cibo **programmato**; una cena scritta
+     * alle 21:30 e' cibo **mangiato**. ⚠️ La distinzione la fa il modello
+     * (regola 7-bis del prompt), non il codice: «a che ora si cena» e' un
+     * giudizio, e scriverlo in PHP vorrebbe dire decidere per chi lavora di
+     * notte, sbagliando in silenzio.
+     *
+     * ⚠️ **L'ora arriva gia' locale dal telefono**, che il fuso ce l'ha addosso.
+     * Il setaccio la tronca a 32 caratteri come ogni altra etichetta.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const PASTI_DI_OGGI = [
+        'meals' => [
+            'meal' => 'string',
+            'kcal' => 'int',
+            'p' => 'int',
+            'c' => 'int',
+            'f' => 'int',
+            'scritto_alle' => 'string',
+        ],
+    ];
+
+    /**
+     * La settimana del cibo, compressa — I5.1.
+     *
+     * 📌 *«anche i giorni passati (diciamo tutta la settimana) di tutti i dati
+     * che passo (anche in forma compressa, per non aumentare troppo il costo
+     * della chiamata)»*.
+     *
+     * 💡 Un giorno per riga, quattro interi, chiavi di una lettera. ⚠️ **`d` e
+     * non `day`**, e non e' un capriccio: e' la forma che il prompt conosce da
+     * 3b-AC (regola 13). Cambiarla vorrebbe dire cambiare anche il prompt, cioe'
+     * rimettere in discussione una cosa che funziona per allinearla a un'altra.
+     *
+     * ⛔ **Oggi non entra**: e' gia' in `totals` e in `meals`, e ripeterlo darebbe
+     * al modello due versioni della stessa giornata — una completa e una da
+     * confrontare con le altre.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private const SETTIMANA_DEL_CIBO = [
+        'week_food' => [
+            'd' => 'string',
+            'kcal' => 'int',
+            'p' => 'int',
+            'c' => 'int',
+            'f' => 'int',
+        ],
+    ];
+
     private const SETTIMANA_DEL_CORPO = [
         // Le calorie bruciate **del giorno intero**, come le mostra l'app.
         'week_burned' => ['day' => 'string', 'v' => 'int'],
@@ -1807,16 +1724,83 @@ class AiController extends Controller
     }
 
     /**
+     * Il cibo che il consiglio deve vedere, **dal telefono** — I5.1.
+     *
+     * 🚨 Due chiamate al setaccio e non una, perche' le due serie si mettono in
+     * fila per due chiavi diverse: `meals` per pasto, `week_food` per giorno.
+     *
+     * @return array{meals: list<array<string, mixed>>, week_food: list<array<string, mixed>>}
+     */
+    private function ilCiboDallApp(Request $request): array
+    {
+        $pasti = $this->serieDallApp($request, self::PASTI_DI_OGGI, chiave: 'meal');
+        $settimana = $this->serieDallApp($request, self::SETTIMANA_DEL_CIBO, chiave: 'd');
+
+        return [
+            'meals' => $pasti['meals'] ?? [],
+            'week_food' => $settimana['week_food'] ?? [],
+        ];
+    }
+
+    /**
+     * Le calorie e i macro **assunti oggi** — I5.1.
+     *
+     * ══ 🚨 SONO IL NUMERO PIU' IMPORTANTE DEL CONTESTO ════════════════════
+     *
+     * `totals` e' cio' con cui il modello confronta il target, ed e' anche
+     * **dentro l'hash della cache**: e' il campo che fa rigenerare il consiglio
+     * quando si registra qualcosa (`VOLATILI` spiega perche' `time` invece no).
+     *
+     * ⛔ Prima nasceva da `DiaryService::forDate()`, cioe' da `food_entries`.
+     * Dopo I2.5 quella lettura risponde **zero**: non un errore, uno zero — e uno
+     * zero credibile e' il difetto peggiore che ci sia, perche' non si distingue
+     * da una giornata a digiuno.
+     *
+     * 💡 **La forma non cambia** (`kcal`, `protein`, `carbs`, `fat`): il prompt
+     * la conosce, e cambiarla mentre si cambia da dove viene il numero vorrebbe
+     * dire non sapere quale delle due cose ha rotto cosa.
+     *
+     * ⚠️ **Zero quando l'app non manda niente**, non `null`: e' quello che
+     * rispondeva il server per chi non aveva registrato nulla, ed e' la
+     * risposta giusta — «non hai segnato niente» e «hai mangiato zero» il
+     * modello le distingue da `meals`, che in un caso e' vuoto.
+     *
+     * @return array<string, float>
+     */
+    private function totaliDallApp(Request $request): array
+    {
+        $dati = $request->validate([
+            'eaten_kcal' => ['nullable', 'numeric', 'min:0', 'max:30000'],
+            'eaten_protein_g' => ['nullable', 'numeric', 'min:0', 'max:2000'],
+            'eaten_carbs_g' => ['nullable', 'numeric', 'min:0', 'max:3000'],
+            'eaten_fat_g' => ['nullable', 'numeric', 'min:0', 'max:1500'],
+        ]);
+
+        return [
+            'kcal' => round((float) ($dati['eaten_kcal'] ?? 0), 2),
+            'protein' => round((float) ($dati['eaten_protein_g'] ?? 0), 2),
+            'carbs' => round((float) ($dati['eaten_carbs_g'] ?? 0), 2),
+            'fat' => round((float) ($dati['eaten_fat_g'] ?? 0), 2),
+        ];
+    }
+
+    /**
      * Il setaccio delle serie: **una sede sola**.
      *
      * ⚠️ Era dentro `settimanaDallApp()`. Copiarlo per le serie nuove avrebbe
      * voluto dire due sanificatori per lo stesso genere di dato, e quello che
      * diverge per primo e' sempre la copia — cioe' quella meno provata.
      *
+     * ⚠️ **[chiave] esiste perche' non tutte le serie si mettono in fila per
+     * giorno** — I5.1. `meals` e' l'elenco dei pasti di **oggi**, e la sua
+     * chiave e' `meal`. 🚨 Un secondo setaccio per quel caso sarebbe stato due
+     * sanificatori per lo stesso genere di dato, e quello che diverge per primo
+     * e' sempre la copia.
+     *
      * @param  array<string, array<string, string>>  $forme
      * @return array<string, mixed>
      */
-    private function serieDallApp(Request $request, array $forme): array
+    private function serieDallApp(Request $request, array $forme, string $chiave = 'day'): array
     {
         $fuori = [];
 
@@ -1861,11 +1845,12 @@ class AiController extends Controller
                 }
 
                 /*
-                 * 💡 Una voce senza `day` non serve a niente: il modello legge
-                 * queste serie **come una sequenza nel tempo**, e un valore
-                 * senza giorno non si puo' mettere in fila.
+                 * 💡 Una voce senza la sua chiave non serve a niente: il modello
+                 * legge queste serie **come un elenco ordinato**, e un valore
+                 * senza etichetta non si puo' mettere in fila ne' attribuire a
+                 * un pasto.
                  */
-                if (isset($pulita['day']) && count($pulita) > 1) {
+                if (isset($pulita[$chiave]) && count($pulita) > 1) {
                     $voci[] = $pulita;
                 }
             }
@@ -1969,9 +1954,20 @@ class AiController extends Controller
         $adesso = Carbon::now();
         $oggi = $utente->giornoDiOggi($adesso);
 
-        $giornata = $this->diary->forDate($utente, $oggi);
+        /*
+         * ⛔ **Qui c'era `$this->diary->forDate($utente, $oggi)`** — I5.1.
+         *
+         * Serviva a tre cose: `totals`, `targets` e il conteggio dei pasti. 🚨
+         * Dopo I2.5 legge `food_entries`, che non riceve piu' niente: rispondeva
+         * **zero senza un errore**, ed e' il difetto peggiore che ci sia perche'
+         * uno zero credibile non si distingue da una giornata a digiuno.
+         *
+         * 💡 Resta `targetsFor()`, che il diario non lo guarda: legge il piano
+         * alimentare del trainer, che sul server c'e' ancora.
+         */
+        $target = $this->diary->targetsFor($utente, $oggi);
         $riepilogo = $this->dashboard->forToday($utente, $adesso);
-        $cibo = $this->laSettimanaDelCibo($utente, $oggi);
+        $cibo = $this->ilCiboDallApp($request);
 
         return [
             'date' => $oggi->etichetta,
@@ -2006,7 +2002,7 @@ class AiController extends Controller
             'time' => $adesso->copy()->setTimezone($utente->fusoOrario())->format('H:i'),
             'day_progress_pct' => $riepilogo['day_progress_pct'],
 
-            'totals' => $giornata['totals'],
+            'totals' => $this->totaliDallApp($request),
 
             /*
              * 🚨 **Il target puo' arrivare DALL'APP, e di solito e' l'unico
@@ -2030,12 +2026,17 @@ class AiController extends Controller
              * invertirla qui darebbe un consiglio costruito su un numero
              * diverso da quello che la persona ha davanti agli occhi.
              */
-            'targets' => $giornata['targets'] ?? $this->targetDallApp($request),
+            'targets' => $target ?? $this->targetDallApp($request),
             'burned' => $this->bruciateDallApp($request),
-            'meals_logged' => count(array_filter(
-                $giornata['meals'],
-                static fn (array $m): bool => $m['entries'] !== [],
-            )),
+
+            /*
+             * 💡 **Si conta cio' che e' arrivato**, invece di chiederlo a parte:
+             * `meals` contiene un elemento per pasto **non vuoto** (i pasti senza
+             * voci l'app non li manda). ⚠️ Un campo `meals_logged` mandato dal
+             * telefono sarebbe una seconda sede della stessa risposta, e la
+             * copia e' quella che diverge.
+             */
+            'meals_logged' => count($cibo['meals']),
             'goal' => $utente->profile?->goalForFormula(),
 
             /*
@@ -2077,9 +2078,9 @@ class AiController extends Controller
              * di token — meno di quanto costava una singola rigenerazione di
              * troppo delle sei che facevamo al giorno prima di 3b-AB.
              *
-             * 🚨 **La calcola il server**, che `food_entries` ce l'ha: farla
-             * mandare al telefono sarebbe una seconda sede della stessa
-             * risposta, e la copia e' quella che diverge.
+             * 🚨 **La calcolava il server**, che `food_entries` ce l'aveva. ⛔ Da
+             * I2.5 non ce l'ha piu': la manda il telefono, e qui si valida con
+             * la lista chiusa [SETTIMANA_DEL_CIBO].
              */
             'week_food' => $cibo['week_food'],
 

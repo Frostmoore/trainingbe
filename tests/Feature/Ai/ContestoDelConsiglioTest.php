@@ -6,7 +6,6 @@ namespace Tests\Feature\Ai;
 
 use App\Enums\UserRole;
 use App\Models\AiAdvice;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Providers\FakeAiProvider;
@@ -43,6 +42,18 @@ use Tests\TestCase;
  * 💡 Questi test guardano il **contesto che arriva al modello**, non il testo
  * che ne esce: il testo lo decide un modello, il contesto lo decidiamo noi — ed
  * e' l'unica delle due cose che si puo' provare.
+ *
+ * ══ 🚨 DA I5 IL CIBO ARRIVA DALL'APP, E QUI SI PROVA IL SETACCIO ═════════
+ *
+ * ⛔ Fino al 03/09/2026 questi test scrivevano righe in `food_entries` e
+ * lasciavano che il server costruisse `meals` e `week_food`. Dopo I2.5 quella
+ * tabella non riceve piu' niente: il diario vive sul telefono.
+ *
+ * 💡 Quindi qui si manda il payload **come lo manda l'app**, e si prova cio' che
+ * il server fa ancora: farlo passare, tagliarlo, e **scartare in silenzio** cio'
+ * che non riconosce. ⚠️ Che l'app lo costruisca bene — l'ora dell'ultimo gesto,
+ * oggi fuori dalla settimana, la finestra di sette giorni — lo prova
+ * `cibo_per_il_consiglio_test.dart`, con gli stessi numeri.
  */
 final class ContestoDelConsiglioTest extends TestCase
 {
@@ -85,32 +96,46 @@ final class ContestoDelConsiglioTest extends TestCase
     }
 
     /**
-     * Scrive una voce nel diario.
+     * Un pasto di oggi, **come lo manda l'app**.
      *
-     * ⚠️ `eaten_at` alla **mezzanotte** del giorno, come fa l'app davvero:
-     * scrivere qui un'ora plausibile renderebbe il test piu' facile del
-     * mondo reale, ed e' proprio l'ora che non c'e'.
+     * ⚠️ `scritto_alle` e' un'ora **gia' locale**: il telefono il fuso ce l'ha
+     * addosso, e il server non lo riconverte. Vedi `cibo_per_il_consiglio.dart`.
+     *
+     * @return array<string, mixed>
      */
-    private function segna(string $giorno, string $pasto, int $kcal, int $proteine = 0): void
+    private function pasto(string $pasto, int $kcal, int $proteine = 0, string $scrittoAlle = '13:00'): array
     {
-        FoodEntry::create([
-            'tenant_id' => $this->palestra->getKey(),
-            'user_id' => $this->iscritto->getKey(),
-            'eaten_at' => Carbon::parse($giorno, 'Europe/Rome')->startOfDay(),
+        return [
             'meal' => $pasto,
-            'description' => 'Qualcosa',
             'kcal' => $kcal,
-            'protein' => $proteine,
-            'carbs' => 0,
-            'fat' => 0,
-        ]);
+            'p' => $proteine,
+            'c' => 0,
+            'f' => 0,
+            'scritto_alle' => $scrittoAlle,
+        ];
     }
 
-    /** @return array<string, mixed> */
-    private function contestoRicevuto(): array
+    /**
+     * Un giorno della settimana passata, come lo manda l'app.
+     *
+     * @return array<string, mixed>
+     */
+    private function giornoPassato(string $giorno, int $kcal, int $proteine = 0): array
+    {
+        return ['d' => $giorno, 'kcal' => $kcal, 'p' => $proteine, 'c' => 0, 'f' => 0];
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private function contestoRicevuto(array $extra = []): array
     {
         $this->comeApp($this->iscritto->fresh())
-            ->getJson('/api/v1/ai/advice?last_event_at='.urlencode(Carbon::now()->toIso8601String()))
+            ->getJson('/api/v1/ai/advice?'.http_build_query([
+                'last_event_at' => Carbon::now()->toIso8601String(),
+                ...$extra,
+            ]))
             ->assertOk();
 
         $chiamata = collect($this->finta->calls)->firstWhere('method', 'dailyAdvice');
@@ -128,19 +153,22 @@ final class ContestoDelConsiglioTest extends TestCase
      * 🚨 Il modello deve poter vedere che quella cena e' stata **scritta** alle
      * 10:05, non mangiata: e' l'unica differenza fra un consiglio giusto e uno
      * che dice *«hai gia' assunto 1.800 kcal e sono le 10»*.
+     *
+     * ⚠️ Da I5 l'ora la calcola l'app (`scrittaIl` dell'ultima voce del pasto):
+     * qui si prova che **arriva intatta al modello**, che e' l'altra meta'.
      */
     #[Test]
     public function il_modello_vede_a_che_ora_e_stato_scritto_ogni_pasto(): void
     {
-        $this->alle('2026-08-31 10:05');
-
-        $this->segna('2026-08-31', 'breakfast', 400, 20);
-        $this->segna('2026-08-31', 'lunch', 700, 45);
-        $this->segna('2026-08-31', 'dinner', 700, 50);
-
         $this->alle('2026-08-31 10:20');
 
-        $contesto = $this->contestoRicevuto();
+        $contesto = $this->contestoRicevuto([
+            'meals' => [
+                $this->pasto('breakfast', 400, 20, '10:05'),
+                $this->pasto('lunch', 700, 45, '10:05'),
+                $this->pasto('dinner', 700, 50, '10:05'),
+            ],
+        ]);
 
         $pasti = collect($contesto['meals'])->keyBy('meal');
 
@@ -155,89 +183,138 @@ final class ContestoDelConsiglioTest extends TestCase
         $this->assertSame('10:05', $pasti['dinner']['scritto_alle']);
         $this->assertSame('10:05', $pasti['breakfast']['scritto_alle']);
 
-        // 💡 E l'ora di adesso, per il confronto.
+        // 💡 E l'ora di adesso, che invece la sa il server.
         $this->assertSame('10:20', $contesto['time']);
     }
 
     /**
-     * ⚠️ **L'ora e' quella dell'ultimo gesto, non del primo.**
+     * ⛔ **Una voce senza `meal` non passa**, e non lo dice a nessuno.
      *
-     * 💡 Chi aggiunge il pane alla cena alle 21:40 sta ancora cenando: prendere
-     * la prima voce direbbe che quella cena e' vecchia di un'ora.
+     * 🚨 E' la regola del setaccio: il modello legge `meals` come un elenco
+     * attribuito ai pasti, e una riga senza etichetta non si puo' attribuire.
+     * ⚠️ Scartare in silenzio e' voluto — un client modificato non deve poter
+     * far fallire la richiesta di chi non c'entra niente.
      */
     #[Test]
-    public function di_un_pasto_scritto_a_pezzi_vale_l_ora_dell_ultimo(): void
-    {
-        $this->alle('2026-08-31 20:30');
-        $this->segna('2026-08-31', 'dinner', 600);
-
-        $this->alle('2026-08-31 21:40');
-        $this->segna('2026-08-31', 'dinner', 150);
-
-        $this->alle('2026-08-31 22:00');
-
-        $pasti = collect($this->contestoRicevuto()['meals'])->keyBy('meal');
-
-        $this->assertSame(750, $pasti['dinner']['kcal']);
-        $this->assertSame('21:40', $pasti['dinner']['scritto_alle']);
-    }
-
-    /** ⛔ I pasti vuoti non entrano: una riga a zero non e' un'informazione. */
-    #[Test]
-    public function i_pasti_senza_niente_dentro_non_arrivano(): void
+    public function una_voce_senza_pasto_non_arriva_al_modello(): void
     {
         $this->alle('2026-08-31 13:00');
-        $this->segna('2026-08-31', 'lunch', 700);
 
-        $pasti = collect($this->contestoRicevuto()['meals']);
+        $contesto = $this->contestoRicevuto([
+            'meals' => [
+                ['kcal' => 900, 'p' => 40, 'scritto_alle' => '13:00'],
+                $this->pasto('lunch', 700, 45),
+            ],
+        ]);
+
+        $pasti = collect($contesto['meals']);
 
         $this->assertCount(1, $pasti);
         $this->assertSame('lunch', $pasti->first()['meal']);
+
+        // 💡 E il conteggio segue cio' che e' passato, non cio' che e' arrivato.
+        $this->assertSame(1, $contesto['meals_logged']);
+    }
+
+    /**
+     * 🚨 **I totali arrivano dall'app**, e sono il numero con cui il modello
+     * confronta il target.
+     *
+     * ⛔ Nascevano da `DiaryService::forDate()`, cioe' da `food_entries`: dopo
+     * I2.5 quella lettura risponde **zero senza un errore**, e uno zero
+     * credibile non si distingue da una giornata a digiuno.
+     */
+    #[Test]
+    public function i_totali_di_oggi_arrivano_dall_app(): void
+    {
+        $this->alle('2026-08-31 13:00');
+
+        $contesto = $this->contestoRicevuto([
+            'eaten_kcal' => 700,
+            'eaten_protein_g' => 45,
+            'eaten_carbs_g' => 80,
+            'eaten_fat_g' => 22,
+        ]);
+
+        $this->assertSame(700.0, (float) $contesto['totals']['kcal']);
+        $this->assertSame(45.0, (float) $contesto['totals']['protein']);
+    }
+
+    /**
+     * ⚠️ **Senza niente si manda zero, non `null`.**
+     *
+     * 💡 E' quello che rispondeva il server per chi non aveva registrato nulla,
+     * ed e' la risposta giusta: il modello distingue «non ho segnato niente» da
+     * «ho mangiato zero» guardando `meals`, che nel primo caso e' vuoto.
+     */
+    #[Test]
+    public function senza_cibo_i_totali_sono_zero_e_i_pasti_vuoti(): void
+    {
+        $this->alle('2026-08-31 13:00');
+
+        $contesto = $this->contestoRicevuto();
+
+        $this->assertSame(0.0, (float) $contesto['totals']['kcal']);
+        $this->assertSame([], $contesto['meals']);
+        $this->assertSame(0, $contesto['meals_logged']);
     }
 
     // ───────────────────────── la settimana ─────────────────────────
 
     /**
-     * 📅 La settimana del cibo, compressa e **senza oggi**.
+     * 📅 La settimana del cibo, compressa, arriva **come l'app l'ha composta**.
      *
-     * ⛔ Oggi sta gia' in `totals` e in `meals`: ripeterlo darebbe al modello
-     * due versioni della stessa giornata, una completa e una da mettere in fila
-     * con le altre.
+     * ⛔ Che oggi non ci sia e che l'ordine parta dal piu' recente lo decide
+     * l'app (`cibo_per_il_consiglio.dart`), e lo prova il test Dart con gli
+     * stessi numeri. 🚨 Qui si prova che il setaccio **non li rimescola**: un
+     * riordino qui dentro sarebbe una seconda regola sulla stessa cosa.
      */
     #[Test]
-    public function la_settimana_del_cibo_non_comprende_oggi(): void
+    public function la_settimana_del_cibo_arriva_intatta(): void
     {
         $this->alle('2026-08-31 13:00');
 
-        $this->segna('2026-08-29', 'lunch', 1800, 90);
-        $this->segna('2026-08-30', 'lunch', 2200, 110);
-        $this->segna('2026-08-31', 'lunch', 700, 45);
-
-        $contesto = $this->contestoRicevuto();
+        $contesto = $this->contestoRicevuto([
+            'week_food' => [
+                $this->giornoPassato('2026-08-30', 2200, 110),
+                $this->giornoPassato('2026-08-29', 1800, 90),
+            ],
+            'eaten_kcal' => 700,
+        ]);
 
         $giorni = collect($contesto['week_food'])->pluck('kcal', 'd');
 
         $this->assertSame([
             '2026-08-30' => 2200,
             '2026-08-29' => 1800,
-        ], $giorni->all(), 'La settimana deve escludere oggi ed essere dal piu\' recente.');
+        ], $giorni->all(), 'Il setaccio ha cambiato l\'ordine o i numeri.');
 
-        // 💡 E oggi resta dov\'era.
+        // 💡 E oggi resta dov'era: in `totals`, non nella settimana.
         $this->assertSame(700.0, round((float) $contesto['totals']['kcal'], 1));
     }
 
-    /** ⛔ Piu' indietro della finestra non si guarda. */
+    /**
+     * ⛔ **Il tetto del setaccio**: oltre 30 voci si taglia.
+     *
+     * 💡 Sette giorni di dati sono al massimo una decina di righe. Il tetto non
+     * serve all'uso normale: serve perche' senza, un client modificato potrebbe
+     * allegare mille voci a una richiesta che finisce in un prompt pagato a
+     * token.
+     */
     #[Test]
-    public function oltre_la_settimana_non_si_guarda(): void
+    public function la_settimana_ha_un_tetto(): void
     {
         $this->alle('2026-08-31 13:00');
 
-        $this->segna('2026-08-10', 'lunch', 3000);
-        $this->segna('2026-08-30', 'lunch', 2200);
+        $troppi = [];
 
-        $giorni = collect($this->contestoRicevuto()['week_food'])->pluck('d');
+        for ($i = 1; $i <= 50; $i++) {
+            $troppi[] = $this->giornoPassato(sprintf('2026-07-%02d', $i % 28 + 1), 2000);
+        }
 
-        $this->assertSame(['2026-08-30'], $giorni->all());
+        $contesto = $this->contestoRicevuto(['week_food' => $troppi]);
+
+        $this->assertCount(30, $contesto['week_food']);
     }
 
     // ───────────────────────── il corpo ─────────────────────────
