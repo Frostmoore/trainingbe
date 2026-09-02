@@ -10,7 +10,6 @@ use App\Models\AiAdvice;
 use App\Models\AiCreditMovement;
 use App\Models\AiUsageLog;
 use App\Models\FoodEntry;
-use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\AiUsageRecorder;
@@ -121,24 +120,33 @@ class AiApiTest extends TestCase
     }
 
     /**
-     * Conferma una stima, che dalla FASE 9 e' **l'unico** modo di far entrare
-     * una voce in diario da una stima AI.
+     * Fa passare una stima dal **setaccio** — I2.5.
+     *
+     * ⛔ Si chiamava `conferma()` e la rotta scriveva in diario. Dal 03/09/2026
+     * il diario sta sul telefono: qui si valida e si restituisce, e a scrivere
+     * e' l'app.
      *
      * @param  array<string, mixed>  $stima
      */
-    private function conferma(array $stima, string $fonte = 'ai_text', ?User $chi = null): TestResponse
+    private function setaccia(array $stima, ?User $chi = null): TestResponse
     {
-        return $this->comeIscritto($chi)->postJson('/api/v1/ai/food/confirm', [
+        return $this->comeIscritto($chi)->postJson('/api/v1/ai/food/valida', [
             'items' => $stima['estimate']['items'],
-            'source' => $fonte,
-            'meal' => 'lunch',
         ]);
     }
 
     // ───────────────────────── cibo ─────────────────────────
 
+    /**
+     * Una frase diventa una stima **setacciata**, che l'app puo' scrivere.
+     *
+     * ⚠️ Si chiamava `it_turns_a_sentence_into_diary_entries`, e il nome adesso
+     * mentirebbe: di voci di diario, qui, non ne nasce nessuna. 🚨 Che poi
+     * finiscano davvero in diario lo prova `diario_calcolato_qui_test.dart`
+     * sull'app, con gli stessi numeri.
+     */
     #[Test]
-    public function it_turns_a_sentence_into_diary_entries(): void
+    public function it_turns_a_sentence_into_a_sifted_estimate(): void
     {
         $this->aiFinta()->willReturnFood(FoodEstimate::fromArray([
             'items' => [
@@ -150,22 +158,26 @@ class AiApiTest extends TestCase
 
         /*
          * 🆕 **Due passi invece di uno, dalla FASE 9**: prima la stima (che ora
-         * nasce in coda), poi la conferma. ⚠️ Il `save: true` che faceva tutto
+         * nasce in coda), poi il setaccio. ⚠️ Il `save: true` che faceva tutto
          * in una volta non esiste piu' — vedi `StimaInCodaTest`.
          */
         $stima = $this->stimaDaTesto(['text' => 'pasta al pomodoro', 'meal' => 'lunch']);
 
         $this->assertSame(0.85, $stima['estimate']['confidence']);
         $this->assertFalse($stima['saved']);
+
+        $this->setaccia($stima)
+            ->assertOk()
+            ->assertJsonPath('data.saved', false)
+            ->assertJsonCount(2, 'data.estimate.items')
+            ->assertJsonPath('data.estimate.items.0.name', 'Pasta');
+
+        /*
+         * 🚨 **E il server non ha scritto niente**, ne' prima ne' dopo il
+         * setaccio: e' l'invariante della Parte I, ed e' l'unica cosa che questo
+         * test puo' ancora provare da qui.
+         */
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
-
-        $this->conferma($stima)
-            ->assertCreated()
-            ->assertJsonCount(2, 'data.entries')
-            ->assertJsonPath('data.entries.0.description', 'Pasta');
-
-        $this->assertSame(2, FoodEntry::withoutGlobalScopes()->count());
-        $this->assertSame('ai_text', FoodEntry::withoutGlobalScopes()->first()->source->value);
     }
 
     /**
@@ -203,9 +215,9 @@ class AiApiTest extends TestCase
 
         $stima = $this->stimaDaTesto(['text' => 'un cucchiaio d\'olio']);
 
-        $this->conferma($stima)
-            ->assertCreated()
-            ->assertJsonPath('data.entries.0.grams', 14.0);
+        $this->setaccia($stima)
+            ->assertOk()
+            ->assertJsonPath('data.estimate.items.0.grams', 14.0);
     }
 
     // ───────────────────────── metering ─────────────────────────
@@ -925,11 +937,11 @@ class AiApiTest extends TestCase
         $this->assertSame('per_100g', $stima['estimate']['items'][0]['basis']);
     }
 
-    // ───────────────────── conferma della stima (A4.8) ─────────────────────
+    // ───────────────────── il setaccio (A4.8, poi I2.5) ─────────────────────
 
     /**
      * 🚨 **Il flusso vero dell'app**, in due tempi: prima la stima senza
-     * scrivere, poi la conferma di chi ha guardato i numeri.
+     * scrivere, poi il setaccio su cio' che la persona ha guardato.
      *
      * ── Perche' esiste ──────────────────────────────────────────────────────
      *
@@ -941,9 +953,13 @@ class AiApiTest extends TestCase
      * ⚠️ `FoodEstimate` lo diceva dal primo giorno: *«sotto una soglia l'app
      * deve chiedere conferma invece di scrivere nel diario»*. Era una regola in
      * un docblock, e nessuna riga di codice la eseguiva.
+     *
+     * 🆕 **Da I2.5 il terzo tempo — la scrittura — e' del telefono.** Qui resta
+     * cio' che il server ancora fa: la nota che sopravvive al viaggio, e il
+     * setaccio che restituisce la stima pulita senza toccare nessun diario.
      */
     #[Test]
-    public function a_confirmed_estimate_becomes_diary_entries(): void
+    public function a_sifted_estimate_comes_back_clean_and_writes_nothing(): void
     {
         $this->aiFinta()->willReturnFood(FoodEstimate::fromArray([
             'items' => [
@@ -964,151 +980,90 @@ class AiApiTest extends TestCase
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
 
-        // 2. La conferma: adesso si scrive.
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
-                'meal' => 'lunch',
-                'items' => $stima,
-            ])
-            ->assertCreated()
-            ->assertJsonPath('data.saved', true)
-            ->assertJsonCount(1, 'data.entries')
-            ->assertJsonPath('data.entries.0.description', 'Cotoletta di pollo impanata');
+        // 2. Il setaccio: torna pulita, e in diario non entra niente.
+        $pulita = $this->comeIscritto()
+            ->postJson('/api/v1/ai/food/valida', ['items' => $stima])
+            ->assertOk()
+            ->assertJsonPath('data.saved', false)
+            ->assertJsonCount(1, 'data.estimate.items')
+            ->assertJsonPath('data.estimate.items.0.name', 'Cotoletta di pollo impanata')
+            ->json('data.estimate.items.0');
 
-        $voce = FoodEntry::withoutGlobalScopes()->firstOrFail();
+        $this->assertSame(12.0, (float) $pulita['carbs']);
 
-        // 🚨 L'origine sopravvive alla conferma: senza, ogni voce nascerebbe
-        // `manual` e il giorno che un modello peggiora non si saprebbe piu'
-        // quali voci rifare — che e' esattamente cio' per cui `FoodSource`
-        // esiste.
-        $this->assertSame('ai_text', $voce->source->value);
-        $this->assertSame('Cotoletta di pollo impanata', $voce->ai_raw['name'] ?? null);
-        $this->assertSame(12.0, (float) $voce->carbs);
+        /*
+         * 🚨 **Zero voci, prima e dopo.** L'origine (`ai_text`) e la risposta
+         * grezza le scrive l'app: senza di quelle una voce nascerebbe `manual` e
+         * il giorno che un modello peggiora non si saprebbe piu' quali rifare —
+         * che e' cio' per cui `FoodSource` esiste. 💡 Che l'app le scriva davvero
+         * lo prova `diario_calcolato_qui_test.dart`.
+         */
+        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
     /**
-     * 🚨 **La conferma non chiama il modello e non consuma quota.**
+     * 🚨 **Il setaccio non chiama il modello e non consuma quota.**
      *
-     * La chiamata e' gia' stata pagata dalla stima: far pagare anche la
-     * conferma vorrebbe dire far pagare due volte lo stesso pasto, e con la
-     * quota al limite si arriverebbe all'assurdo di aver speso i token per una
-     * stima che poi non si puo' salvare.
+     * La chiamata e' gia' stata pagata dalla stima: far pagare anche il setaccio
+     * vorrebbe dire far pagare due volte lo stesso pasto, e con la quota al
+     * limite si arriverebbe all'assurdo di aver speso i token per una stima che
+     * poi non si puo' salvare.
      */
     #[Test]
-    public function confirming_costs_nothing(): void
+    public function sifting_costs_nothing(): void
     {
         $this->aiFinta();
 
         $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
+            ->postJson('/api/v1/ai/food/valida', [
                 'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
             ])
-            ->assertCreated();
+            ->assertOk();
 
         $this->assertSame(
             0,
             AiUsageLog::withoutGlobalScopes()->count(),
-            'La conferma ha contato come una chiamata AI: sarebbe far pagare due volte lo stesso pasto.',
+            'Il setaccio ha contato come una chiamata AI: sarebbe far pagare due volte lo stesso pasto.',
         );
     }
 
     /**
-     * ⚠️ La conferma sta dietro `ai.consent` come tutto il resto del flusso.
+     * ⚠️ Il setaccio sta dietro `ai.consent` come tutto il resto del flusso.
      *
-     * Non perche' mandi qualcosa a Anthropic — non manda niente — ma perche'
-     * una voce che entra in diario dopo la revoca farebbe sembrare che la
-     * revoca non abbia funzionato. E' il difetto #3 del 12/08, che riguardava
-     * l'interfaccia e non il server: qui si chiude anche dal lato server.
+     * Non perche' mandi qualcosa a Anthropic — non manda niente — ma perche' chi
+     * ha revocato il consenso non deve poter far passare di li' una risposta del
+     * modello. E' il difetto #3 del 12/08.
+     *
+     * 🚨 **E vale anche adesso che la rotta non scrive niente**: la revoca deve
+     * fermare **tutto il flusso**, non solo il pezzo che parla con Anthropic.
      */
     #[Test]
-    public function without_consent_nothing_can_be_confirmed(): void
+    public function without_consent_nothing_can_be_sifted(): void
     {
         $senzaConsenso = $this->creaUtente($this->alfa, UserRole::Member, 'senza@alfa.test');
 
         $this->comeApp($senzaConsenso)
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
+            ->postJson('/api/v1/ai/food/valida', [
                 'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
             ])
             ->assertForbidden();
-
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
-    /**
-     * 🚨 Solo le due fonti AI.
-     *
-     * Accettare `plan` da qui lascerebbe marchiare «dal piano alimentare» una
-     * voce che nel piano non c'e', e l'aderenza al piano — che per una palestra
-     * e' *la* domanda — diventerebbe un numero falso.
-     */
-    #[Test]
-    public function a_confirmation_cannot_forge_its_own_origin(): void
-    {
-        foreach (['manual', 'plan', 'favorite'] as $fonte) {
-            $this->comeIscritto()
-                ->postJson('/api/v1/ai/food/confirm', [
-                    'source' => $fonte,
-                    'items' => [['name' => 'Mela', 'grams' => 150, 'kcal' => 78]],
-                ])
-                ->assertUnprocessable()
-                ->assertJsonValidationErrors(['source']);
-        }
-
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
-    }
-
-    /**
-     * ⚠️ **I numeri corretti a mano vincono.**
-     *
-     * E' il senso stesso del foglio di conferma: se si potessero solo accettare
-     * o rifiutare i numeri del modello, il pulsante «precisa» non servirebbe a
-     * niente.
-     */
-    #[Test]
-    public function the_numbers_edited_by_hand_are_the_ones_that_get_saved(): void
-    {
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
-                'meal' => 'dinner',
-                'items' => [
-                    ['name' => 'Cotoletta di pollo', 'qty' => 250, 'unit' => 'g', 'grams' => 250, 'kcal' => 475, 'protein' => 40, 'carbs' => 15, 'fat' => 20],
-                ],
-            ])
-            ->assertCreated();
-
-        $voce = FoodEntry::withoutGlobalScopes()->firstOrFail();
-
-        $this->assertSame(250.0, (float) $voce->grams);
-        $this->assertSame(475.0, (float) $voce->kcal);
-
-        // 🚨 E i valori per 100 g si derivano lo stesso: senza, correggere la
-        // quantita' dopo aver confermato non ricalcolerebbe niente (difetto #9).
-        $this->assertSame(190.0, (float) $voce->kcal_100);
-    }
-
-    /**
-     * 🚨 **Un pasto e' una cosa sola.** Se una voce non passa, non ne entra
-     * nessuna: mezza cena in diario e' un totale sbagliato che non dichiara di
-     * esserlo.
-     */
-    #[Test]
-    public function a_meal_is_written_whole_or_not_at_all(): void
-    {
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
-                'items' => [
-                    ['name' => 'Pasta', 'grams' => 80, 'kcal' => 280],
-                    ['name' => 'Sugo', 'grams' => 100, 'kcal' => -5],
-                ],
-            ])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['items.1.kcal']);
-
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
-    }
+    /*
+    | ══ ⛔ TRE TEST SONO PASSATI IN DART — I2.5, 03/09/2026 ═══════════════════
+    |
+    | Provavano cose che questa rotta **non fa piu'**, e la regola R2 della Parte
+    | I dice dove sono andati: *«i test del server che coprivano quei calcoli
+    | diventano test Dart, con gli stessi numeri»*.
+    |
+    | | Test | Cosa provava | Dov'e' adesso |
+    | |---|---|---|
+    | | `a_confirmation_cannot_forge_its_own_origin` | che nessuno si spacciasse per «dal piano» | ⛔ **Nessuna parte**: `source` non si manda piu', perche' non c'e' nessuna scrittura da marchiare. L'origine la scrive l'app, che la sa |
+    | | `the_numbers_edited_by_hand_are_the_ones_that_get_saved` | i valori per 100 g derivati (difetto #9) | `guardie_della_voce_test.dart`, stessi numeri: 250 g / 475 kcal → 190 per 100 g |
+    | | `a_meal_is_written_whole_or_not_at_all` | il pasto scritto tutto o niente | `diario_calcolato_qui_test.dart`, sulla transazione di `scriviLaStima()` |
+    |
+    | ⚠️ Il primo **non e' stato sostituito**, ed e' giusto cosi': era una guardia
+    | su un campo che non esiste piu'. 🚨 Un test che continua a girare su una
+    | preoccupazione superata e' il modo piu' rapido per credersi coperti.
+    */
 }

@@ -262,7 +262,7 @@ final class StimaInCodaTest extends TestCase
         $this->comeApp($this->iscritto->fresh())
             ->postJson('/api/v1/ai/food/text', ['text' => 'mela', 'save' => true])
             ->assertStatus(422)
-            ->assertJsonPath('errors.save.0', 'Le stime si confermano da /ai/food/confirm.');
+            ->assertJsonPath('errors.save.0', 'Le stime le scrive l\'app, dopo /ai/food/valida.');
     }
 
     #[Test]

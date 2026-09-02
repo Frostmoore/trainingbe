@@ -8,7 +8,9 @@ use App\Enums\UserRole;
 use App\Models\AiAdvice;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\Tempo\FasciaDelConsiglio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -49,9 +51,33 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
 
     private User $iscritto;
 
+    /**
+     * 🚨 **L'orologio si congela, e non e' pignoleria** — 03/09/2026.
+     *
+     * ⛔ Questo file e' stato rosso fra mezzanotte e le 09:00 **senza che niente
+     * fosse rotto**, ed e' la terza volta che inciampa sullo stesso scoglio:
+     *
+     * | Quando | Cosa succedeva |
+     * |---|---|
+     * | 19/08 | Asseriva `now()->toDateString()`, cioe' la data **UTC**: falliva due ore al giorno |
+     * | 03/09 | Asseriva la data di **oggi**, ma da 3b-AB la chiave e' la **fascia**, e quella delle 22 scavalca la mezzanotte: fra le 00:00 e le 09:00 il consiglio di adesso porta legittimamente la data di **ieri** |
+     *
+     * ⚠️ E c'era un secondo guaio: [vecchio(1)] fabbrica una riga con fascia
+     * `ieriT22`, che in quella finestra **e' la fascia corrente** — il fixture
+     * collideva con cio' che il test stava per generare.
+     *
+     * 💡 Le 15:00 sono un'ora qualunque **dentro** una fascia (quella delle 14),
+     * lontana da tutti e tre i confini: cosi' «ieri» e' davvero ieri e la fascia
+     * di adesso non somiglia a nessun fixture.
+     *
+     * 🚨 Un test che dipende da che ora e' quando lo lanci e' un test che, il
+     * giorno che diventa rosso davvero, nessuno crede.
+     */
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->travelTo(Carbon::parse('2026-09-03 13:00:00', 'UTC'));
 
         $this->aiFinta();
 
@@ -105,22 +131,23 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
         $this->assertCount(1, $rimaste);
 
         /*
-         * #! **Il giorno dell'UTENTE, non quello di UTC** - 19/08/2026.
+         * 🚨 **La data della FASCIA, non quella di oggi** — 3b-AB.
          *
-         * Qui c'era `now()->toDateString()`, cioe' la data in UTC. /!\ Il
-         * consiglio invece nasce con `giornoDiOggi()`, che usa il fuso della
-         * persona: fra le 22:00 UTC e la mezzanotte, a Roma e' gia' domani, e
-         * questo test falliva con "atteso 2026-08-18, ricevuto 2026-08-19".
+         * ⚠️ Qui c'era `giornoDiOggi()->etichetta`, che era la correzione del
+         * 19/08 al difetto A3 (prima c'era `now()->toDateString()`, cioe' UTC).
+         * 💡 Giusta allora, e non piu' adesso: da 3b-AB la chiave della cache e'
+         * `(utente, fascia, tipo)`, e **la fascia delle 22 scavalca la
+         * mezzanotte**. Fra le 00:00 e le 09:00 il consiglio di adesso porta la
+         * data di ieri, ed e' esattamente cio' che deve fare.
          *
-         * * Non era un difetto del codice - il codice aveva ragione, ed e'
-         * esattamente il difetto A3 che `giornoDiOggi()` esiste per chiudere.
-         * Era il test a guardare l'orologio sbagliato, e falliva solo due ore
-         * al giorno.
+         * 🚨 Si asserisce quindi la stessa cosa che il codice usa per scriverla:
+         * la fascia. ⛔ Riscrivere la regola qui in un'altra forma vorrebbe dire
+         * un test che dice «giusto» a due cose diverse.
          */
-        $this->assertSame(
-            $this->iscritto->fresh()->giornoDiOggi()->etichetta,
-            $rimaste->first()->date->toDateString(),
-        );
+        $fascia = FasciaDelConsiglio::adesso($this->iscritto->fresh());
+
+        $this->assertSame($fascia->etichetta(), $rimaste->first()->fascia);
+        $this->assertSame($fascia->giorno->etichetta, $rimaste->first()->date->toDateString());
     }
 
     #[Test]

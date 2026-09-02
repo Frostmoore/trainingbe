@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Ai;
 
 use App\Enums\AiFeature;
-use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
 use App\Jobs\StimaIlCibo;
@@ -37,7 +36,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -90,9 +88,9 @@ class AiController extends Controller
      *
      * ── 🚨 `save` non esiste piu' su questa strada, ed e' una decisione ────
      *
-     * L'app manda **sempre** `save: false` e poi conferma da
-     * `POST ai/food/confirm`: quella e' la strada vera, e passa di li' perche'
-     * `source` e `ai_raw` devono sopravvivere alla conferma.
+     * L'app manda **sempre** `save: false`, poi fa passare la stima dal setaccio
+     * (`POST ai/food/valida`) e la **scrive sul telefono**: dal 03/09/2026 il
+     * diario alimentare non sta piu' qui (Parte I, regola R3).
      *
      * ⚠️ Ma soprattutto `save: true` **vorrebbe dire un'altra cosa adesso**: la
      * stima finisce minuti dopo, magari con l'app chiusa, e scrivere in diario
@@ -114,7 +112,7 @@ class AiController extends Controller
              */
             'save' => ['sometimes', 'declined'],
         ], [
-            'save.declined' => __('Le stime si confermano da /ai/food/confirm.'),
+            'save.declined' => __('Le stime le scrive l\'app, dopo /ai/food/valida.'),
         ]);
 
         $utente = $request->user();
@@ -167,7 +165,7 @@ class AiController extends Controller
              */
             'save' => ['sometimes', 'declined'],
         ], [
-            'save.declined' => __('Le stime si confermano da /ai/food/confirm.'),
+            'save.declined' => __('Le stime le scrive l\'app, dopo /ai/food/valida.'),
         ]);
 
         $utente = $request->user();
@@ -269,41 +267,52 @@ class AiController extends Controller
     }
 
     /**
-     * Scrive nel diario una stima che la persona ha **confermato** — A4.8.
+     * Passa una stima dal **setaccio** e la restituisce pulita — I2.5.
      *
-     * ── 🚨 Perche' esiste un endpoint invece di riusare `/food-entries` ──────
+     * ══ 🚨 SCRIVEVA IN DIARIO, E DAL 03/09/2026 NON PIU' ═══════════════════
      *
-     * Perche' `source` e `ai_raw` devono sopravvivere alla conferma. `FoodSource`
-     * lo dice da sempre: *«quando un modello AI comincia a sbagliare le stime,
-     * bisogna poter ritrovare TUTTE le voci che ha prodotto»*. Facendo scrivere
-     * l'app con `POST /food-entries` ogni voce nascerebbe `manual`, e quella
-     * ricerca non sarebbe piu' possibile — cioe' il giorno che un modello
-     * peggiora non si saprebbe piu' quali voci rifare.
+     * Si chiamava `confirm` e faceva **due cose**: validava le voci con
+     * `MealValidator` e le scriveva in `food_entries`. ⛔ La seconda non e' piu'
+     * sua: il diario alimentare vive sul telefono (Parte I, regola R3).
      *
-     * E perche' un pasto e' **una cosa sola**: cinque `POST` separati possono
-     * fallire al terzo e lasciare in diario mezza cena, che nei totali e' un
-     * numero sbagliato senza nessun segno che lo sia. Qui si scrive in
-     * transazione: o tutto o niente.
+     * 💡 **Anche il nome e' cambiato**, e non e' cosmesi: «confirm» prometteva
+     * una scrittura che non avviene piu'. 📌 *«Un nome sbagliato non fa sbagliare
+     * se qualcuno sbaglia: fa sbagliare chi lo legge per primo»*.
      *
-     * 🚨 **Non chiama il modello e NON consuma quota.** La chiamata e' gia'
-     * stata pagata da `foodFromText`/`foodFromPhoto` con `save: false`:
-     * rifiutare di salvare cio' che si e' gia' speso sarebbe far pagare due
-     * volte lo stesso pasto. Per la stessa ragione qui non c'e' `assertQuota()`.
+     * ══ ⛔ PERCHE' IL SETACCIO RESTA QUI ══════════════════════════════════
      *
-     * ⚠️ Sta comunque dietro `ai.consent`: la revoca del consenso deve fermare
-     * **tutto il flusso**, non solo il pezzo che parla con Anthropic. Una voce
-     * che entra in diario dopo la revoca farebbe sembrare che la revoca non
-     * abbia funzionato — ed e' esattamente il difetto #3 del 12/08.
+     * La Parte I ha trasportato in Dart le unita', i totali e le serie: formule
+     * che, sbagliate, producono **un numero storto**. 🚨 Questa no: e' il filtro
+     * che impedisce a una risposta del modello di entrare in diario cosi' com'e',
+     * e un filtro che vive sul telefono e' un filtro che si puo' aggirare e che
+     * non si corregge senza pubblicare una versione dell'app.
+     *
+     * ⚠️ **Si ricostruisce un `FoodEstimate`** invece di validare i dati grezzi:
+     * cosi' passa dalle stesse normalizzazioni di sempre — compresi i totali, che
+     * `normalizeTotals()` ricalcola quando mancano.
+     *
+     * 🚨 **Non chiama il modello e NON consuma quota.** La chiamata e' gia' stata
+     * pagata da `foodFromText`/`foodFromPhoto` con `save: false`: far pagare
+     * anche il setaccio vorrebbe dire far pagare due volte lo stesso pasto.
+     *
+     * ⚠️ Sta comunque dietro `ai.consent`, e ci resta anche adesso che non scrive
+     * niente: chi ha revocato il consenso non deve poter far passare di qui una
+     * risposta del modello. E' il difetto #3 del 12/08, dal lato server.
      */
-    public function confirm(Request $request): JsonResponse
+    public function valida(Request $request): JsonResponse
     {
         $dati = $request->validate([
-            // 🚨 Solo le due fonti AI: questo endpoint esiste per conservare
-            // l'origine, e accettare `manual` o `plan` vorrebbe dire lasciar
-            // marchiare come «dal piano» una voce che il piano non contiene.
-            'source' => ['required', Rule::in([FoodSource::AiText->value, FoodSource::AiPhoto->value])],
-            'meal' => ['nullable', Rule::enum(MealType::class)],
-            'eaten_at' => ['nullable', 'date'],
+            /*
+             * ⛔ **`source`, `meal` e `eaten_at` non si chiedono piu'** — I2.5.
+             *
+             * Servivano a scrivere la voce: l'origine da conservare, il pasto e
+             * il giorno. 🚨 Adesso a scrivere e' il telefono, che quelle tre
+             * cose le sa gia' — le ha in mano da prima di chiedere la stima.
+             *
+             * 💡 `source` in particolare era controllato perche' nessuno si
+             * spacciasse per «dal piano alimentare»: adesso non c'e' niente da
+             * spacciare, perche' non c'e' nessuna scrittura.
+             */
             'items' => ['required', 'array', 'min:1', 'max:30'],
             'items.*.name' => ['required', 'string', 'max:255'],
             'items.*.qty' => ['nullable', 'numeric', 'min:0', 'max:10000'],
@@ -328,28 +337,35 @@ class AiController extends Controller
             'items.*.confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
         ]);
 
-        /*
-         * ⚠️ Si ricostruisce un `FoodEstimate` invece di scrivere dai dati
-         * grezzi: cosi' la conferma passa dalle stesse normalizzazioni della
-         * scrittura diretta — compresi i totali, che `normalizeTotals()`
-         * ricalcola quando mancano. Due strade che scrivono lo stesso pasto in
-         * due modi diversi e' come nascono i totali che non tornano.
-         */
         $esito = $this->validatore->valida(FoodEstimate::fromArray(['items' => $dati['items']]));
-        $stima = $esito['stima'];
-
-        $voci = $this->scriviVoci(
-            $request->user(),
-            $stima,
-            FoodSource::from($dati['source']),
-            $dati,
-        );
 
         return response()->json(['data' => [
-            'estimate' => $stima->toArray(),
-            'entries' => array_map(fn (FoodEntry $v): array => $this->diary->voce($v), $voci),
-            'saved' => true,
-        ]], 201);
+            'estimate' => $esito['stima']->toArray(),
+
+            /*
+             * 🚨 **Gli errori gravi non bloccano**, ed e' la stessa scelta che
+             * `stimaValidata()` fa da sempre: si restituisce comunque la stima,
+             * con gli errori accanto. ⛔ Rifiutare tutto vorrebbe dire buttare
+             * una chiamata gia' pagata e lasciare chi ha scritto senza niente.
+             *
+             * 💡 E' l'app che decide: il foglio di conferma li mostra, e la
+             * persona corregge o annulla.
+             *
+             * ⚠️ **`warnings` e non «avvisi»**: e' la chiave che
+             * `StimaCibo::perLApp()` usa da sempre, e che `StimaAi.fromJson`
+             * cerca. 🚨 Due nomi per la stessa cosa nella stessa API sono due
+             * occasioni di leggerne uno e trovarci `null` — cioe' zero avvisi su
+             * una stima che ne aveva.
+             */
+            'errors' => $esito['gravi'],
+            'warnings' => $esito['avvisi'],
+
+            /*
+             * ⚠️ **`saved` resta, e vale `false`.** Costa una riga e chiude la
+             * domanda: no, di qui non si scrive piu' niente.
+             */
+            'saved' => false,
+        ]]);
     }
 
     // ───────────────────────── consiglio ─────────────────────────
@@ -704,6 +720,20 @@ class AiController extends Controller
             ? null
             : Carbon::parse($grezzo);
 
+        /*
+         * ⛔ **Da I2.5 questa lettura trova sempre lo stesso valore** — quello
+         * dell'ultima voce scritta prima del 03/09/2026.
+         *
+         * 🚨 Il diario alimentare vive sul telefono: in `food_entries` non entra
+         * piu' niente. Resta perche' le voci vecchie ci sono ancora e la
+         * risposta e' ancora corretta *per loro*, ma **non si accorge piu' di un
+         * pasto nuovo**.
+         *
+         * 💡 Si chiude con I5, insieme a `laSettimanaDelCibo()`: l'app manda
+         * l'ultimo pasto dentro `last_event_at`, come gia' fa per allenamenti e
+         * sonno. ⚠️ Aggiustare solo questa meta' sarebbe peggio — il consiglio
+         * si rigenererebbe a ogni pasto per dire che non si e' mangiato niente.
+         */
         $ultimoPasto = FoodEntry::query()
             ->where('user_id', $utente->getKey())
             ->max('created_at');
@@ -1117,67 +1147,20 @@ class AiController extends Controller
         $this->cancello->consuma($utente, $funzione, $conGettoni);
     }
 
-    /**
-     * Scrive le voci di una stima. **L'unico punto che le crea**, usato sia da
-     * `save: true` sia dalla conferma.
-     *
-     * 🚨 Sta in un metodo solo perche' le due strade devono produrre voci
-     * **identiche**. Duplicare il `create()` significa che un campo aggiunto di
-     * la' non arriva di qua, e la differenza si vede settimane dopo come «certe
-     * voci AI non si ricalcolano» — che e' letteralmente il difetto #9 del
-     * 12/08, nato cosi'.
-     *
-     * ⚠️ **In transazione**: un pasto e' una cosa sola. Se la terza voce di
-     * cinque fallisce, mezza cena in diario e' un totale sbagliato che non
-     * dichiara di esserlo.
-     *
-     * @param  array<string, mixed>  $dati
-     * @return list<FoodEntry>
-     */
-    private function scriviVoci(
-        ?User $utente,
-        FoodEstimate $stima,
-        FoodSource $fonte,
-        array $dati,
-    ): array {
-        if ($utente === null) {
-            return [];
-        }
-
-        $quando = isset($dati['eaten_at']) ? Carbon::parse($dati['eaten_at']) : now();
-
-        // Gli orari dei pasti sono quelli di questa persona, non soglie fisse:
-        // vedi la nota su `MealType::fromProfile()`.
-        $pasto = (isset($dati['meal']) ? MealType::tryFrom((string) $dati['meal']) : null)
-            ?? MealType::fromProfile($quando, $utente->profile?->meal_hours);
-
-        return DB::transaction(static function () use ($utente, $stima, $fonte, $quando, $pasto): array {
-            $voci = [];
-
-            foreach ($stima->items as $item) {
-                $voci[] = FoodEntry::create([
-                    'tenant_id' => $utente->tenant_id,
-                    'user_id' => $utente->getKey(),
-                    'eaten_at' => $quando,
-                    'meal' => $pasto,
-                    'description' => $item->name,
-                    // 🚨 I grammi arrivano dal modello e vincono sulla tabella di
-                    // FoodUnit: il modello sa che alimento e', la tabella no.
-                    'grams' => $item->grams,
-                    'qty' => $item->qty,
-                    'unit' => $item->unit,
-                    'kcal' => $item->kcal,
-                    'protein' => $item->protein,
-                    'carbs' => $item->carbs,
-                    'fat' => $item->fat,
-                    'source' => $fonte,
-                    'ai_raw' => $item->toArray(),
-                ]);
-            }
-
-            return $voci;
-        });
-    }
+    /*
+    | ⛔ **`scriviVoci()` non esiste piu'** — I2.5, 03/09/2026.
+    |
+    | Era l'unico punto che creava voci di diario da una stima, e ci teneva la
+    | transazione: 🚨 *«un pasto e' una cosa sola: se la terza voce di cinque
+    | fallisce, mezza cena in diario e' un totale sbagliato che non dichiara di
+    | esserlo»*.
+    |
+    | 💡 Quella regola **non si e' persa**: e' in `DiarioLocale.scriviLaStima()`,
+    | che scrive le voci dentro `ArchivioSalute.tuttoOniente()`. ⚠️ E con lei se
+    | ne sono andate le derivazioni di `FoodEntry::saving()`, che adesso stanno in
+    | `guardie_della_voce.dart` — erano la parte piu' facile da perdere, perche'
+    | non le chiamava nessuno esplicitamente.
+    */
 
     /**
      * Il contesto del consiglio.
@@ -1327,6 +1310,22 @@ class AiController extends Controller
         $fuso = $utente->fusoOrario();
         $primo = $oggi->menoGiorni(self::GIORNI_DI_STORIA);
 
+        /*
+         * ⛔ **Da I2.5 questa query e' cieca sui pasti nuovi** — 03/09/2026.
+         *
+         * 🚨 `meals` e `week_food` sono il pezzo di contesto che 3b-AC ha
+         * aggiunto perche' il consiglio capisse *«se oggi ho gia' segnato tutto
+         * quello che mangero' alle 10 di mattina»*. Adesso il diario sta sul
+         * telefono, e da qui si vedono solo le voci scritte **prima** del
+         * trasloco.
+         *
+         * ⚠️ Non e' un errore che si vede: il consiglio arriva, e' scritto bene,
+         * e dice che oggi non si e' mangiato niente.
+         *
+         * 💡 **E' I5**, ed e' il passo obbligato subito dopo I2.5: il contesto
+         * del cibo lo costruisce l'app dall'archivio locale, e questo metodo
+         * diventa la validazione di cio' che arriva (lista chiusa, regola R3).
+         */
         $voci = FoodEntry::query()
             ->forUser($utente)
             ->whereBetween('eaten_at', $primo->finestraFinoA($oggi))

@@ -256,28 +256,21 @@ class NutritionApiTest extends TestCase
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
-    /**
-     * 🚨 **Vale su OGNI strada**, perche' la guardia sta nel `saving()` del
-     * modello e non in una regola di validazione. Una `Rule` andrebbe ripetuta in
-     * cinque controller e dimenticata nel sesto.
-     */
-    #[Test]
-    public function the_mass_guard_holds_on_the_ai_path_too(): void
-    {
-        $this->iscritto->accendiLAi();
-
-        $this->comeIscritto()
-            ->postJson('/api/v1/ai/food/confirm', [
-                'source' => 'ai_text',
-                'items' => [
-                    ['name' => 'Coppiette', 'grams' => 100, 'kcal' => 588, 'protein' => 56, 'carbs' => 4, 'fat' => 40],
-                ],
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('error', 'macros_exceed_mass');
-
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
-    }
+    /*
+    | ══ ⛔ `the_mass_guard_holds_on_the_ai_path_too` E' PASSATO IN DART — I2.5 ═
+    |
+    | Provava che la guardia sulla massa valesse anche sulla strada dell'AI,
+    | perche' stava nel `saving()` del modello e non in una `Rule`.
+    |
+    | 🚨 Quella strada **non passa piu' di qui**: `ai/food/valida` setaccia e
+    | restituisce, e a scrivere e' il telefono. La guardia e' in
+    | `guardie_della_voce.dart`, con gli stessi numeri — le coppiette da 588 kcal
+    | con 100 g di macro in 100 g di prodotto — e il test in
+    | `guardie_della_voce_test.dart`.
+    |
+    | ⚠️ **Gli altri test della massa restano**, e devono: `/food-entries` esiste
+    | ancora e la guardia nel modello pure. Spariranno insieme, con I4.
+    */
 
     /**
      * ⚠️ **Anche la modifica**: correggere una voce sana in una impossibile deve

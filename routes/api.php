@@ -503,18 +503,22 @@ Route::prefix('v1')->group(function (): void {
             Route::post('ai/scheda/progresso', [AiController::class, 'progressoScheda']);
 
             /*
-             * 🚨 **La conferma sta dentro `ai.consent` ma NON consuma quota.**
-             * Non chiama nessun modello: scrive una stima gia' pagata dalla
-             * chiamata con `save: false`. Fuori dal gruppo, pero', una voce
-             * potrebbe entrare in diario dopo che il consenso e' stato
-             * revocato — e chi ha appena revocato penserebbe che la revoca non
-             * abbia funzionato (difetto #3 del 12/08).
+             * 🥣 **Il setaccio sulla stima** — I2.5, 03/09/2026.
              *
-             * ⚠️ Resta sotto `throttle:ai` anche se non costa token: e' una
-             * scrittura in blocco, e il tetto la protegge dall'app che ripete
-             * la stessa conferma perche' la risposta e' andata persa.
+             * ⛔ Si chiamava `ai/food/confirm` e **scriveva in diario**. Adesso
+             * il diario sta sul telefono: questa rotta valida le voci con
+             * `MealValidator` e le restituisce, e a scrivere e' l'app.
+             *
+             * 🚨 **Dentro `ai.consent` anche se non chiama nessun modello e non
+             * consuma quota**: chi ha revocato il consenso non deve poter far
+             * passare di qui una risposta del modello. Era il difetto #3 del
+             * 12/08, ed e' la stessa ragione di prima.
+             *
+             * ⚠️ Sotto `throttle:ai` anche se non costa token: e' un giro di
+             * validazione su trenta voci, e il tetto lo protegge dall'app che
+             * ripete la stessa richiesta perche' la risposta e' andata persa.
              */
-            Route::post('ai/food/confirm', [AiController::class, 'confirm']);
+            Route::post('ai/food/valida', [AiController::class, 'valida']);
         });
 
         /*
