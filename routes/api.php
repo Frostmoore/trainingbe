@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\Nutrition\ImportazionePianoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
+use App\Http\Controllers\Api\V1\Nutrition\TraslocoDelDiarioController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\TrainerController;
@@ -445,6 +446,16 @@ Route::prefix('v1')->group(function (): void {
         Route::post('food-favorites/meal', [FoodFavoriteController::class, 'storeMeal']);
         Route::post('food-favorites/{favorite}/add', [FoodFavoriteController::class, 'add'])->whereNumber('favorite');
         Route::delete('food-favorites/{favorite}', [FoodFavoriteController::class, 'destroy'])->whereNumber('favorite');
+
+        /*
+         * 📦 **Il diario trasloca sul telefono** — Parte I, I3.
+         *
+         * 🚨 Sola lettura: consegna e non cancella. Il server si svuota in I4,
+         * con una migration, **dopo** che il trasloco e' stato verificato sul
+         * telefono vero. ⛔ Un endpoint che consegna e cancella nella stessa
+         * richiesta perde tutto il giorno che la risposta non arriva.
+         */
+        Route::get('trasloco/diario', [TraslocoDelDiarioController::class, 'pacchetto']);
 
         /*
         | ⛔ `daily-burn` e' andato con gli altri — FASE 11.6. La dichiarazione
