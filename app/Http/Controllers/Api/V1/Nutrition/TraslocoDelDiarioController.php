@@ -136,6 +136,23 @@ class TraslocoDelDiarioController extends Controller
                 'carbs_100' => $p->carbs_100,
                 'fat_100' => $p->fat_100,
                 'created_at' => $p->created_at?->toIso8601String(),
+
+                /*
+                 * 🚨 **Il contatore d'uso, ed e' meta' dell'ordinamento.**
+                 *
+                 * ⛔ Non e' un aggregato ricalcolabile: e' un numero che il
+                 * server incrementa a ogni uso. Contare le voci del diario con
+                 * la stessa descrizione darebbe un altro numero — chi ha
+                 * scritto «Pollo» a mano dieci volte non ha usato dieci volte
+                 * il preferito «Pollo».
+                 *
+                 * ⚠️ Senza, il telefono avrebbe tutti i preferiti **nell'ordine
+                 * sbagliato**, e nessuno guarda un elenco per accorgersi che
+                 * manca un criterio. 📌 *«Chi ha venticinque preferiti vuole i
+                 * tre che usa ogni giorno in cima»*.
+                 */
+                'times_used' => $p->times_used,
+                'last_used_at' => $p->last_used_at?->toIso8601String(),
             ])->all(),
         ]]);
     }
