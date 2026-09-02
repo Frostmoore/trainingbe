@@ -76,6 +76,19 @@ use App\Services\Billing\PortafoglioGettoni;
  * **sempre** a richiesta e lo sono per definizione (U.6): un import da PDF
  * automatico non esiste.
  *
+ * ── ✨ L'eccezione che viene prima di tutte: «AI illimitata» ────────────
+ *
+ * 📌 *«gli utenti che hanno ai illimitata devono avere anche GETTONI
+ * illimitati, non 0 gettoni»* — 02/09/2026.
+ *
+ * 🚨 Si guarda **per prima**, prima ancora dei PDF: chi ha quella concessione
+ * la ha per provare l'app, e una funzione che non puo' provare e' una funzione
+ * che non e' stata provata.
+ *
+ * ⚠️ E' il **tetto della persona**, non quello ereditato da palestra o piano:
+ * vedi `MemberAiQuota::senzaTetto()`, dove c'e' scritto perche' la differenza
+ * costa denaro.
+ *
  * ── ⚠️ Cosa NON garantisce questo cancello ───────────────────────────────
  *
  * 🚨 **Un client modificato puo' dichiararsi automatico e non pagare.** Non c'e'
@@ -132,6 +145,31 @@ class CancelloDeiGettoni
     public function apri(?User $utente, AiFeature $funzione, bool $aRichiesta = false): bool
     {
         if ($utente === null) {
+            return false;
+        }
+
+        /*
+         * ══ ✨ «AI ILLIMITATA»: NON SI PAGA NIENTE — 02/09/2026 ════════════
+         *
+         * 📌 Il committente: *«gli utenti che hanno ai illimitata devono avere
+         * anche GETTONI illimitati, non 0 gettoni»*.
+         *
+         * 🚨 **Prima di tutto il resto, PDF compresi.** La regola U.6 — *«i pdf
+         * si pagano SEMPRE a gettoni, abbonato o no»* — parla di **abbonati**,
+         * non di questa concessione: chi ha l'illimitato lo ha per provare
+         * l'app, e una funzione che non puo' provare e' una funzione che non e'
+         * stata provata.
+         *
+         * ⛔ **Era rotta da 3b-AE, e in silenzio**: finche' tutto passava dalla
+         * quota, «AI illimitata» bastava a se stessa. Da quando le richieste
+         * fatte a mano si pagano solo a gettoni, quella concessione consegnava
+         * un 402 al primo alimento scritto — mentre il pannello prometteva
+         * *«Nessun tetto mensile, foto comprese»*.
+         *
+         * 💡 `false` vuol dire **«questa chiamata non si paga con i gettoni»**:
+         * `consuma()` non scala niente, e il saldo resta dov'e'.
+         */
+        if ($this->quota->senzaTetto($utente, $funzione)) {
             return false;
         }
 

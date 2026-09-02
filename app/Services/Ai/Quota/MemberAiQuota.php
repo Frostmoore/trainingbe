@@ -193,6 +193,47 @@ class MemberAiQuota
      * sotto-limite e quello generale. Controllare solo il primo lascerebbe
      * sforare il totale a chi ha ancora foto disponibili.
      */
+    /**
+     * Questa persona ha la concessione **«AI illimitata»**? — 02/09/2026.
+     *
+     * ══ 📌 A COSA SERVE ═══════════════════════════════════════════════════
+     *
+     * 📌 Il committente: *«gli utenti che hanno ai illimitata devono avere anche
+     * GETTONI illimitati, non 0 gettoni»*.
+     *
+     * 🚨 **E' un difetto nato con 3b-AE.** Finche' tutto passava dalla quota,
+     * «AI illimitata» funzionava da se': nessun tetto, nessuna spesa. Da quando
+     * le richieste fatte a mano si pagano **solo** a gettoni, quella concessione
+     * prometteva l'illimitato e consegnava un **402 al primo alimento scritto**.
+     *
+     * ⛔ Il pulsante del pannello promette *«Nessun tetto mensile, foto
+     * comprese. Il costo lo paghiamo noi»*. Era diventato falso.
+     *
+     * ══ 🚨 SI GUARDA IL TETTO **DELLA PERSONA**, NON QUELLO EREDITATO ═════
+     *
+     * ⛔ E non e' pignoleria: `capFor()` torna `null` — cioe' «senza tetto» —
+     * anche quando lo zero arriva dalla **palestra** o dal piano. Usare quello
+     * vorrebbe dire che una palestra che toglie il tetto ai propri iscritti
+     * regala a tutti i gettoni **a spese nostre**, e se ne accorgerebbe solo
+     * chi legge la fattura del fornitore.
+     *
+     * 💡 Qui interessa la **concessione personale**: quella che l'azione «AI
+     * illimitata» del pannello scrive su questa riga, e che il registro
+     * (`AuditLogger`) sa dire chi ha dato e quando.
+     *
+     * ⚠️ **Per le funzioni con foto servono tutti e due i tetti a zero**, ed e'
+     * il verso prudente: una foto consuma tutte e due le dimensioni, e mezza
+     * concessione non e' una concessione.
+     */
+    public function senzaTetto(User $utente, AiFeature $funzione): bool
+    {
+        if ($utente->ai_monthly_call_cap !== 0) {
+            return false;
+        }
+
+        return ! $funzione->isMultimodal() || $utente->ai_monthly_photo_call_cap === 0;
+    }
+
     public function hasQuotaLeft(User $utente, AiFeature $funzione): bool
     {
         /*
