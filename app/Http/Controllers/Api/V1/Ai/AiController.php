@@ -619,7 +619,16 @@ class AiController extends Controller
                 'fascia' => $fascia->etichetta(),
                 'kind' => 'daily',
                 'context_hash' => AiAdvice::hashOf($chiaveCache),
-                'body' => $testo,
+
+                /*
+                 * ⛔ **Qui c'era `'body' => $testo`** — I5.3, 03/09/2026.
+                 *
+                 * 🚨 Il testo non si conserva piu': 📌 *«perche' dovremmo salvare
+                 * il consiglio del giorno? L'utente lo vede quel giorno e via»*.
+                 * 💡 Parte nella risposta, l'app se lo tiene, e questa riga resta
+                 * a dire **che la fascia e' stata usata** — che e' l'unica cosa
+                 * per cui serve.
+                 */
                 'model' => $this->ai->modelFor(AiFeature::DailyAdvice),
             ]);
         } catch (QueryException $errore) {
@@ -649,7 +658,21 @@ class AiController extends Controller
                 throw $errore;
             }
 
-            return $this->rispostaConsiglio($vinta, cached: true);
+            /*
+             * 💡 **Si consegna il NOSTRO testo, non quello del vincitore** —
+             * I5.3.
+             *
+             * ⛔ Prima si leggeva `$vinta->body`, e la nostra generazione si
+             * buttava. Adesso il testo il server non lo conserva: quello del
+             * vincitore non ce l'ha nessuno qui, e il nostro invece e' in mano.
+             *
+             * ⚠️ I due client finiscono con due testi diversi sotto la stessa
+             * fascia, e va bene: sono due consigli buoni per lo stesso contesto,
+             * e ognuno vede quello per cui ha aspettato. 🚨 L'alternativa era
+             * consegnare `null` a chi ha solo avuto la sfortuna di arrivare
+             * secondo.
+             */
+            return $this->rispostaConsiglio($vinta, cached: true, testo: $testo);
         }
 
         /*
@@ -666,7 +689,7 @@ class AiController extends Controller
          */
         AiAdvice::pota((int) $utente->getKey(), $fascia);
 
-        return $this->rispostaConsiglio($riga, cached: false);
+        return $this->rispostaConsiglio($riga, cached: false, testo: $testo);
     }
 
     /**
@@ -753,12 +776,24 @@ class AiController extends Controller
      * 💡 Quattro `response()->json` copiati sarebbero quattro posti in cui
      * dimenticare `generated_at` — che e' il campo da cui l'app decide se
      * scrivere «di ieri».
+     *
+     * ══ 🚨 `body` C'E' UNA VOLTA SOLA: QUANDO IL CONSIGLIO E' APPENA NATO ══
+     *
+     * ⛔ Da I5.3 il testo non si conserva. Esce **nella risposta della
+     * generazione**, l'app lo scrive nel proprio archivio, e da li' in poi il
+     * server non lo ha piu': su una cache mancata [testo] e' `null`.
+     *
+     * 💡 Per questo la risposta porta anche `fascia`: e' la chiave con cui l'app
+     * ritrova la sua copia. ⚠️ Senza, dovrebbe indovinare quale consiglio le sta
+     * dicendo di mostrare — e la fascia delle 22 scavalca la mezzanotte, quindi
+     * indovinare sarebbe sbagliare per nove ore al giorno.
      */
-    private function rispostaConsiglio(AiAdvice $riga, bool $cached): JsonResponse
+    private function rispostaConsiglio(AiAdvice $riga, bool $cached, ?string $testo = null): JsonResponse
     {
         return response()->json(['data' => [
-            'body' => $riga->body,
+            'body' => $testo,
             'cached' => $cached,
+            'fascia' => $riga->fascia,
             'generated_at' => $riga->created_at?->toIso8601String(),
         ]]);
     }

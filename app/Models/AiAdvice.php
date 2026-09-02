@@ -28,8 +28,19 @@ class AiAdvice extends Model
      */
     protected $table = 'ai_advices';
 
+    /**
+     * ⛔ **`body` non c'e' piu'** — I5.3, 03/09/2026.
+     *
+     * 🚨 Il testo del consiglio e' il piu' intimo che il server contenesse: *«hai
+     * mangiato 1.400 kcal, ti mancano proteine, ieri non ti sei allenato»*. Dopo
+     * D9 e la Parte I era **l'unico posto in cui peso, sonno, allenamenti e
+     * diario tornavano insieme** — riassunti in italiano.
+     *
+     * 💡 Adesso vive sul telefono di chi lo legge. Qui resta il **registro delle
+     * fasce**: quando e' successo e con che modello, non cosa e' stato detto.
+     */
     protected $fillable = [
-        'tenant_id', 'user_id', 'date', 'fascia', 'kind', 'context_hash', 'body', 'model',
+        'tenant_id', 'user_id', 'date', 'fascia', 'kind', 'context_hash', 'model',
     ];
 
     protected function casts(): array

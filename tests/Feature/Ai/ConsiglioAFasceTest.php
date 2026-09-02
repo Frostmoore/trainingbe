@@ -164,8 +164,18 @@ final class ConsiglioAFasceTest extends TestCase
         $this->chiediIlConsiglio('2026-08-30 13:00')
             ->assertOk()
             ->assertJsonPath('data.cached', true)
-            // 🚨 **Ancora il primo**: dentro la fascia il consiglio e' uno.
-            ->assertJsonPath('data.body', 'Il primo consiglio.');
+            /*
+             * 🚨 **Ancora il primo**: dentro la fascia il consiglio e' uno, e la
+             * fascia lo dice.
+             *
+             * ⛔ Qui c'era `assertJsonPath('data.body', 'Il primo consiglio.')`.
+             * Da I5.3 il server il testo non lo conserva: su una cache manda
+             * `body: null` e la **fascia**, che e' la chiave con cui l'app
+             * ritrova la propria copia. 💡 E' un controllo piu' forte, non piu'
+             * debole: una fascia sbagliata e' un consiglio che non si trova.
+             */
+            ->assertJsonPath('data.body', null)
+            ->assertJsonPath('data.fascia', '2026-08-30T09');
 
         $this->assertSame(1, $this->quanteChiamate(), 'Il pasto ha fatto ripartire il modello dentro la stessa fascia.');
         $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());
@@ -211,7 +221,15 @@ final class ConsiglioAFasceTest extends TestCase
         $this->chiediIlConsiglio('2026-08-31 06:55')
             ->assertOk()
             ->assertJsonPath('data.cached', true)
-            ->assertJsonPath('data.body', 'Il primo consiglio.');
+            ->assertJsonPath('data.body', null)
+            /*
+             * 🌙 **La fascia e' quella di IERI sera**, ed e' tutto il senso del
+             * test: alle 07:00 del 31 il consiglio in corso e' quello delle 22
+             * del 30. 🚨 Da I5.3 e' anche la chiave con cui l'app lo ritrova —
+             * se qui comparisse `2026-08-31T22`, il telefono cercherebbe un
+             * consiglio che non ha e mostrerebbe il ripiego.
+             */
+            ->assertJsonPath('data.fascia', '2026-08-30T22');
 
         $this->assertSame(1, $this->quanteChiamate());
 
@@ -279,7 +297,14 @@ final class ConsiglioAFasceTest extends TestCase
         $this->chiediIlConsiglio('2026-08-30 09:30')
             ->assertOk()
             ->assertJsonPath('data.cached', true)
-            ->assertJsonPath('data.body', 'Il primo consiglio.');
+            ->assertJsonPath('data.body', null)
+            /*
+             * 💡 **La fascia e' quella di PRIMA**, non quella di adesso: sono le
+             * 14:30, ma senza notizie non si genera e si restituisce cio' che
+             * c'e' — 📌 *«l'app lo mostra con la sua data, e chi legge vede che
+             * e' di prima»*.
+             */
+            ->assertJsonPath('data.fascia', '2026-08-30T09');
 
         $this->assertSame(1, $this->quanteChiamate());
         $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());

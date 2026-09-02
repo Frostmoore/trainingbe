@@ -102,7 +102,12 @@ final class CorsaSulConsiglioTest extends TestCase
             'fascia' => $fascia->etichetta(),
             'kind' => 'daily',
             'context_hash' => AiAdvice::hashOf(array_diff_key($contesto, array_flip($volatili))),
-            'body' => $testo,
+            /*
+             * ⚠️ **`$testo` non finisce piu' in tabella** — I5.3: la colonna non
+             * esiste. 💡 Resta un parametro perche' i test lo usano per dire
+             * *quale* delle due richieste ha vinto, e la riga che ne esce e' la
+             * prova che qualcuno ha vinto.
+             */
             'model' => 'fake',
         ]);
     }
@@ -110,27 +115,52 @@ final class CorsaSulConsiglioTest extends TestCase
     #[Test]
     public function chi_perde_la_corsa_riceve_il_consiglio_e_non_un_errore(): void
     {
-        $this->finta->duranteIlConsiglio(
-            fn (array $contesto) => $this->scriviLaVincente($contesto, 'Il testo di chi è arrivato primo.'),
-        );
+        $this->finta
+            ->willReturnAdvice('Il testo di chi è arrivato secondo.')
+            ->duranteIlConsiglio(
+                fn (array $contesto) => $this->scriviLaVincente($contesto, 'Il testo di chi è arrivato primo.'),
+            );
 
         $risposta = $this->comeApp($this->iscritto->fresh())
             ->getJson('/api/v1/ai/advice')
             ->assertOk();
 
         /*
-         * 🚨 **Riceve il testo del vincitore, non un errore e non il proprio.**
-         * Per chi usa l'app le due richieste erano la stessa domanda: devono
-         * avere la stessa risposta, o due telefoni della stessa persona
-         * vedrebbero due consigli diversi per lo stesso giorno.
+         * ══ 🚨 RICEVE UN CONSIGLIO, E DA I5.3 E' IL PROPRIO ═══════════════
+         *
+         * ⛔ Qui c'era scritto *«riceve il testo del vincitore, non il proprio:
+         * o due telefoni della stessa persona vedrebbero due consigli diversi
+         * per lo stesso giorno»*. Era giusto finche' il testo stava sul server.
+         *
+         * 🚨 Da I5.3 il server il testo del vincitore **non ce l'ha**: non lo
+         * conserva piu'. 💡 Le due strade erano consegnare il proprio — che e'
+         * gia' stato generato e **pagato** — oppure `null`, cioe' far aspettare
+         * qualcuno per poi non dargli niente. ⚠️ Il prezzo e' quello che il
+         * vecchio commento temeva: due consigli diversi per la stessa fascia su
+         * due telefoni. Sono tutti e due buoni per lo stesso contesto, e la
+         * corsa e' rara — il lucchetto esiste apposta.
          */
-        $risposta->assertJsonPath('data.body', 'Il testo di chi è arrivato primo.');
+        $risposta->assertJsonPath('data.body', 'Il testo di chi è arrivato secondo.');
         $risposta->assertJsonPath('data.cached', true);
 
         // ⚠️ E in tabella resta **una riga sola**: il duplicato non è entrato.
         $this->assertSame(1, AiAdvice::withoutGlobalScopes()->count());
     }
 
+    /**
+     * ⚠️ **La riga del vincitore resta una, e resta la sua.**
+     *
+     * ⛔ Qui si leggeva `->body` per provare che il perdente non avesse
+     * sovrascritto. Da I5.3 quella colonna non esiste: il testo non sta piu' sul
+     * server, quindi *«sovrascrivere il testo»* non e' piu' una cosa che possa
+     * succedere.
+     *
+     * 💡 Quello che resta da provare e' che la riga non si duplichi e non si
+     * riscriva: e' **lei** il registro della fascia, cioe' l'unica cosa che
+     * impedisce di pagare due volte. 🚨 Un `updateOrCreate` qui rimetterebbe in
+     * piedi la scrittura del perdente, e con lei il `created_at` che sposta
+     * l'ora del consiglio in avanti senza che nessuno l'abbia rigenerato.
+     */
     #[Test]
     public function la_riga_del_vincitore_non_viene_sovrascritta(): void
     {
@@ -140,18 +170,17 @@ final class CorsaSulConsiglioTest extends TestCase
                 fn (array $contesto) => $this->scriviLaVincente($contesto, 'Il testo di chi è arrivato primo.'),
             );
 
+        $vincitore = null;
+
         $this->comeApp($this->iscritto->fresh())->getJson('/api/v1/ai/advice')->assertOk();
 
-        /*
-         * 💡 Il perdente **butta** il proprio testo invece di sovrascrivere.
-         * ⚠️ L'alternativa — un `updateOrCreate` — sembrerebbe più gentile e
-         * sarebbe peggio: chi ha già letto il consiglio del vincitore se lo
-         * vedrebbe cambiare sotto gli occhi senza aver fatto niente.
-         */
-        $this->assertSame(
-            'Il testo di chi è arrivato primo.',
-            AiAdvice::withoutGlobalScopes()->firstOrFail()->body,
-        );
+        $righe = AiAdvice::withoutGlobalScopes()->get();
+
+        $this->assertCount(1, $righe, 'Il perdente ha scritto una seconda riga.');
+
+        $vincitore = $righe->first();
+
+        $this->assertSame('fake', $vincitore->model, 'La riga e\' stata riscritta dal perdente.');
     }
 
     #[Test]

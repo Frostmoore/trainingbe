@@ -363,8 +363,18 @@ final class ContestoDelConsiglioTest extends TestCase
             ]))
             ->assertOk();
 
-        $this->assertDatabaseMissing('ai_advices', ['body' => '95.85']);
-
+        /*
+         * 🎉 **E da I5.3 la prova e' piu' forte di prima.**
+         *
+         * ⛔ Qui c'era anche `assertDatabaseMissing('ai_advices', ['body' => …])`:
+         * cercava il peso dentro il **testo del consiglio**. Quella colonna non
+         * esiste piu' — il testo sta sul telefono — quindi la domanda «il peso e'
+         * finito nel consiglio salvato?» non si puo' nemmeno porre.
+         *
+         * 💡 Resta il controllo che conta: **niente** della riga contiene quel
+         * numero, in nessuna colonna, comprese quelle che qualcuno aggiungera'
+         * domani.
+         */
         $riga = AiAdvice::withoutGlobalScopes()->firstOrFail();
 
         $this->assertStringNotContainsString('95.85', json_encode($riga->toArray()) ?: '');

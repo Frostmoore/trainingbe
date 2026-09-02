@@ -773,7 +773,14 @@ class AiApiTest extends TestCase
             ->getJson('/api/v1/ai/advice?last_event_at='.urlencode('2026-08-12T08:00:00+00:00'))
             ->assertOk()
             ->assertJsonPath('data.cached', true)
-            ->assertJsonPath('data.body', 'Bevi piu\' acqua.');
+            /*
+             * ⛔ Qui c'era `assertJsonPath('data.body', …)`. Da I5.3 il testo non
+             * si conserva: su una cache il server manda la **fascia**, e il
+             * consiglio lo ritrova il telefono. 💡 Il senso del test non cambia
+             * — non si e' rigenerato niente, e a dirlo e' il conteggio delle
+             * chiamate qui sotto.
+             */
+            ->assertJsonPath('data.body', null);
 
         $this->assertSame(
             $chiamate,
