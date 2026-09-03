@@ -381,6 +381,32 @@ class AnthropicProvider implements AiProvider
                 );
             }
 
+            /*
+             * ══ 🚨 E ANCHE LA RISPOSTA TRONCATA ARRIVA CON HTTP 200 — K7 ═══
+             *
+             * ⛔ Fino al 03/09/2026 questo caso non era guardato. Un piano
+             * alimentare lungo esauriva `max_tokens` e la risposta arrivava
+             * **tagliata a meta'**: un JSON incompleto, che `json_decode`
+             * rifiuta, e chi guardava leggeva *«la risposta del modello non e'
+             * nel formato atteso»*.
+             *
+             * 🚨 **Con cinquanta gettoni gia' scalati e nessun modo di capire
+             * perche'.** E la diagnosi conta: «troncata» si risolve alzando il
+             * tetto o dividendo il documento, «formato atteso» non si risolve
+             * affatto, perche' non dice niente.
+             *
+             * ⚠️ **E' stato trovato solo con un documento vero** (K7, un piano
+             * settimanale su cinque pagine): la suite passa da `FakeAiProvider`,
+             * che un tetto di token non ce l'ha.
+             */
+            if ($message->stopReason === 'max_tokens') {
+                throw new AiUnavailableException(
+                    'ai_response_truncated',
+                    'Il documento e\' troppo lungo: la risposta si e\' interrotta a meta\'. '
+                    .'Prova a caricarne una parte per volta.',
+                );
+            }
+
             return $this->extractText($message->content);
         } catch (RateLimitException $e) {
             $this->recordFailure($ctx, $model, $inizio, 'rate_limited');

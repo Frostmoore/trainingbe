@@ -109,16 +109,51 @@ final class Prompts
         TXT;
 
     /**
+     * Lo schema di uscita per un piano alimentare trascritto.
+     *
+     * ══ 🚨 QUESTO SCHEMA NON E' MAI STATO ACCETTATO DA ANTHROPIC ═══════════
+     *
+     * ⛔ Dal 19/08/2026 al 03/09/2026 **ogni** importazione di un piano
+     * alimentare finiva in un 400, tradotto in `ai_unavailable`: a chi guardava
+     * arrivava *«l'AI non e' disponibile»*, cioe' sembrava un guasto del
+     * fornitore mentre era una richiesta malformata da parte nostra.
+     *
+     * 🚨 **Due difetti, non uno**, e nessuno dei due si vedeva nei test: la
+     * suite passa da `FakeAiProvider`, che uno schema non lo valida — restituisce
+     * quello che gli si dice di restituire. Il primo controllo vero e' arrivato
+     * con **K7**, la prova su un documento reale.
+     *
+     *   1. `'confidenza' => [..., 'minimum' => 0, 'maximum' => 1]` — la regola
+     *      contro `minimum`/`maximum` era **gia' scritta in testa a questa
+     *      classe**, e questo schema la violava lo stesso.
+     *   2. Ogni `object` senza `additionalProperties: false`:
+     *      *«For 'object' type, 'additionalProperties' must be explicitly set
+     *      to false»*.
+     *
+     * ⚠️ **E ogni proprieta' deve stare in `required`.** E' la stessa
+     * convenzione di `foodSchema()` e `workoutPlanSchema()`, che infatti
+     * funzionano: uno schema che lascia un campo facoltativo produce un campo
+     * che il modello omette quasi sempre. 💡 Il modo di dire «puo' mancare» e'
+     * il tipo `null`, non l'assenza da `required`.
+     *
      * @return array<string, mixed>
      */
     public static function pianoAlimentareSchema(): array
     {
         return [
             'type' => 'object',
-            'required' => ['nome', 'giorni', 'confidenza'],
+            'additionalProperties' => false,
+            'required' => ['nome', 'confidenza', 'dubbi', 'giorni'],
             'properties' => [
                 'nome' => ['type' => 'string'],
-                'confidenza' => ['type' => 'number', 'minimum' => 0, 'maximum' => 1],
+
+                /*
+                 * ⛔ **Niente `minimum`/`maximum`**: Anthropic li rifiuta con un
+                 * 400 su OGNI chiamata. L'intervallo «da 0 a 1» sta nel prompt,
+                 * dove il modello se lo aspetta.
+                 */
+                'confidenza' => ['type' => 'number'],
+
                 'dubbi' => [
                     'type' => 'array',
                     'items' => ['type' => 'string'],
@@ -127,26 +162,42 @@ final class Prompts
                     'type' => 'array',
                     'items' => [
                         'type' => 'object',
-                        'required' => ['pasti'],
+                        'additionalProperties' => false,
+                        'required' => ['nome', 'pasti'],
                         'properties' => [
-                            'nome' => ['type' => 'string'],
+                            // ⚠️ `null` e non assente: un piano a un giorno solo
+                            // non deve mostrare un'intestazione inventata.
+                            'nome' => ['type' => ['string', 'null']],
                             'pasti' => [
                                 'type' => 'array',
                                 'items' => [
                                     'type' => 'object',
-                                    'required' => ['alimenti'],
+                                    'additionalProperties' => false,
+                                    'required' => ['tipo', 'orario', 'alimenti'],
                                     'properties' => [
                                         'tipo' => ['type' => 'string'],
-                                        'orario' => ['type' => 'string'],
+                                        'orario' => ['type' => ['string', 'null']],
                                         'alimenti' => [
                                             'type' => 'array',
                                             'items' => [
                                                 'type' => 'object',
-                                                'required' => ['descrizione'],
+                                                'additionalProperties' => false,
+                                                'required' => ['descrizione', 'grammi', 'quantita'],
                                                 'properties' => [
                                                     'descrizione' => ['type' => 'string'],
-                                                    'grammi' => ['type' => 'number'],
-                                                    'quantita' => ['type' => 'string'],
+
+                                                    /*
+                                                     * 🚨 **`null` e' un valore
+                                                     * legittimo, e va potuto
+                                                     * dire.** Se sul foglio c'e'
+                                                     * «un cucchiaio di miele» il
+                                                     * peso non c'e': inventarlo
+                                                     * sarebbe esattamente
+                                                     * l'errore che la revisione
+                                                     * esiste per intercettare.
+                                                     */
+                                                    'grammi' => ['type' => ['number', 'null']],
+                                                    'quantita' => ['type' => ['string', 'null']],
                                                 ],
                                             ],
                                         ],
@@ -1166,7 +1217,14 @@ TXT;
                              * intestazioni. 💡 Raggrupparle e' un lavoro di
                              * lettura, non di struttura.
                              */
-                            'day' => ['type' => ['integer', 'null'], 'minimum' => 1],
+                            /*
+                             * ⛔ **Niente `minimum`**, per quanto tentante: vedi
+                             * la regola in testa a questa classe. Il vincolo
+                             * «contando da 1» sta nel **prompt** (regola 6), e
+                             * `max(1, ...)` in `ParsedWorkoutExercise::fromArray()`
+                             * lo fa rispettare comunque a valle.
+                             */
+                            'day' => ['type' => ['integer', 'null']],
                             'muscle_group' => ['type' => ['string', 'null']],
                             'secondary_muscles' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'sets' => ['type' => ['integer', 'null']],
