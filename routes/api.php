@@ -651,8 +651,13 @@ Route::prefix('v1')->group(function (): void {
             ->middleware(['ai.consent', 'throttle:importazioni']);
         Route::get('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'show'])
             ->whereNumber('importazione');
-        Route::get('importazioni/{importazione}/pdf', [ImportazioneDaDocumentoController::class, 'pdf'])
-            ->whereNumber('importazione');
+        /*
+         * ⛔ **`importazioni/{id}/pdf` non esiste piu'** — K1-bis, 03/09/2026.
+         *
+         * Riconsegnava all'app il documento che aveva appena caricato. 💡 Adesso
+         * il telefono se ne fa una copia quando lo sceglie, e sul server quel
+         * documento se ne va appena il job ha finito.
+         */
         Route::delete('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'destroy'])
             ->whereNumber('importazione');
 

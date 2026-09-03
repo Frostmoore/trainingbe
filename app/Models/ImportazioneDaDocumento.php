@@ -125,7 +125,8 @@ class ImportazioneDaDocumento extends Model
 
     protected $fillable = [
         'user_id', 'tenant_id', 'genere', 'documenti', 'tipo', 'nome_file', 'byte_totali',
-        'stato', 'bozza', 'modello_usato', 'errore', 'dichiarato_il', 'scade_il',
+        'stato', 'bozza', 'modello_usato', 'errore', 'dichiarato_il',
+        'consenso_documento_il', 'scade_il',
         'paga_con_gettoni',
     ];
 
@@ -137,6 +138,7 @@ class ImportazioneDaDocumento extends Model
             'byte_totali' => 'integer',
             'paga_con_gettoni' => 'boolean',
             'dichiarato_il' => 'datetime',
+            'consenso_documento_il' => 'datetime',
             'scade_il' => 'datetime',
         ];
     }
@@ -245,6 +247,20 @@ class ImportazioneDaDocumento extends Model
             // 🚨 Con la data: chi importa dichiara che il piano l'ha redatto un
             // professionista abilitato, e quando l'ha dichiarato.
             'dichiarato_il' => now(),
+
+            /*
+             * 🔴 **E quando ha acconsentito a mandare QUESTO documento** —
+             * K1-ter.
+             *
+             * ⚠️ Si scrive qui e non nel controller perche' qui c'e' il momento
+             * esatto in cui il file entra nei nostri sistemi: una data presa
+             * altrove sarebbe un istante diverso da quello che autorizza.
+             *
+             * ⛔ Si registra **quando**, non **cosa**: il documento e il suo
+             * contenuto non si conservano «per provare il consenso», che sarebbe
+             * tenere proprio cio' che K1-bis toglie con la scusa migliore.
+             */
+            'consenso_documento_il' => now(),
             'scade_il' => now()->addDays(self::DURATA_GIORNI),
         ]);
     }
@@ -331,7 +347,37 @@ class ImportazioneDaDocumento extends Model
         ]);
     }
 
-    /** Butta i documenti e la riga. */
+    /**
+     * Butta **i documenti**, e tiene la riga — K1-bis, 03/09/2026.
+     *
+     * ══ 🚨 SI CHIAMA APPENA IL JOB HA FINITO, RIUSCITO O FALLITO ══════════
+     *
+     * 📌 Il committente: *«Naturalmente niente deve stare più sul server, come
+     * avevamo detto»*.
+     *
+     * ⛔ Prima i file restavano **sette giorni**, perche' la revisione doveva
+     * poter riaprire l'originale. 💡 E quei sette giorni non servivano a niente:
+     * **il documento ce l'ha gia' il telefono**, che e' chi l'ha scelto e
+     * caricato. Farselo riscaricare era un giro inutile che costava una copia di
+     * un documento sanitario sul nostro disco per una settimana.
+     *
+     * ⚠️ **Anche quando fallisce**, ed e' il caso che si dimentica: un job morto
+     * lascerebbe sul disco proprio il documento che non siamo nemmeno riusciti a
+     * leggere. E' la stessa regola di `StimaCibo::fallisce()`.
+     */
+    public function buttaIDocumenti(): void
+    {
+        Storage::disk('local')->delete($this->percorsi());
+
+        /*
+         * 💡 **La lista si svuota**, e non e' cosmesi: `percorsi()` continuerebbe
+         * a nominare file che non ci sono, e `documentiMancanti()` — che serve a
+         * fermare una trascrizione monca — direbbe che ne mancano tutti.
+         */
+        $this->update(['documenti' => []]);
+    }
+
+    /** Butta quello che resta: i documenti, se ci sono ancora, e la riga. */
     public function butta(): void
     {
         Storage::disk('local')->delete($this->percorsi());

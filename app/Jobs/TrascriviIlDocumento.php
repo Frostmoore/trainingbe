@@ -136,10 +136,28 @@ class TrascriviIlDocumento implements ShouldQueue
                  */
                 $importazione->fallisce($e->getMessage());
 
+                // 🚨 **Anche qui**: un documento che non siamo riusciti a
+                // leggere non ha nessuna ragione di restare sul nostro disco.
+                $importazione->buttaIDocumenti();
+
                 return;
             }
 
             $importazione->salvaBozza($bozza, $modello);
+
+            /*
+             * ══ 🚨 E IL DOCUMENTO SE NE VA — K1-bis ═══════════════════════
+             *
+             * ⛔ Prima restava sette giorni, perche' la revisione doveva poter
+             * riaprire l'originale. 💡 Ma il telefono ce l'ha gia': se l'e'
+             * copiato quando l'ha scelto, e da li' lo rilegge senza chiedere
+             * niente a nessuno.
+             *
+             * ⚠️ **Prima dello scalo dei gettoni**, e non e' indifferente: se
+             * `consuma()` lanciasse, il file resterebbe li' — e nessuno
+             * tornerebbe a prenderlo.
+             */
+            $importazione->buttaIDocumenti();
 
             /*
              * ⚠️ **La decisione arriva dalla colonna, non si ricalcola.** Il

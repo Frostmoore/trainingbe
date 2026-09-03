@@ -105,6 +105,7 @@ class ImportazioneDaDocumentoTest extends TestCase
         $risposta = $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ]);
 
         $risposta->assertStatus(202)
@@ -163,6 +164,7 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->image('pagina.jpg')],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertStatus(202)
             ->assertJsonPath('data.tipo', ImportazioneDaDocumento::TIPO_IMMAGINI);
@@ -185,6 +187,7 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('pagina.heic', 40, 'image/heic')],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file.0');
@@ -214,6 +217,7 @@ class ImportazioneDaDocumentoTest extends TestCase
                     UploadedFile::fake()->image('tre.jpg'),
                 ],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertStatus(202)
             ->assertJsonPath('data.quanti_documenti', 3);
@@ -251,6 +255,7 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => $troppe,
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file');
@@ -274,6 +279,7 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->image('pagina.jpg'), $this->unPdf()],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertStatus(202)
             ->assertJsonPath('data.tipo', ImportazioneDaDocumento::TIPO_PDF);
@@ -294,6 +300,7 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ])->assertStatus(202);
 
         $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
@@ -305,11 +312,11 @@ class ImportazioneDaDocumentoTest extends TestCase
         ];
 
         foreach ($estranei as $chi => $utente) {
-            foreach (['', '/pdf'] as $coda) {
-                $this->actingAs($utente)
-                    ->getJson('/api/v1/importazioni/'.$riga->id.$coda)
-                    ->assertStatus(404, "«{$chi}» non deve nemmeno sapere che esiste.");
-            }
+            // ⚠️ La coda `/pdf` non c'e' piu' da provare: quella rotta e'
+            // sparita con K1-bis.
+            $this->actingAs($utente)
+                ->getJson('/api/v1/importazioni/'.$riga->id)
+                ->assertStatus(404, "«{$chi}» non deve nemmeno sapere che esiste.");
 
             $this->actingAs($utente)
                 ->deleteJson('/api/v1/importazioni/'.$riga->id)
@@ -320,14 +327,26 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->assertNotNull(ImportazioneDaDocumento::withoutGlobalScopes()->find($riga->id));
     }
 
+    /**
+     * ⚠️ **Si chiamava `il_job_trascrive_e_l_originale_resta_consultabile`.**
+     *
+     * ⛔ Da K1-bis l'originale **non resta**: se ne va appena il job ha finito, e
+     * la rotta che lo riconsegnava non esiste piu'. 🚨 Quella ragione — *«senza
+     * l'originale accanto la revisione non e' una revisione»* — resta vera, ma
+     * l'originale ce l'ha il telefono, che se l'e' copiato quando l'ha scelto.
+     *
+     * 💡 Quello che questo test prova adesso e' la meta' che il server fa ancora:
+     * **la bozza esiste**.
+     */
     #[Test]
-    public function il_job_trascrive_e_l_originale_resta_consultabile(): void
+    public function il_job_trascrive_e_la_bozza_arriva(): void
     {
         $this->aiFinta();
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ])->assertStatus(202);
 
         $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
@@ -350,11 +369,18 @@ class ImportazioneDaDocumentoTest extends TestCase
         $risposta->assertJsonPath('data.stato', ImportazioneDaDocumento::PRONTA);
         $risposta->assertJsonPath('data.righe', 2);
 
-        // ⚠️ N20.4: l'originale si deve poter guardare accanto alla bozza.
-        $this->actingAs($this->iscritto)
-            ->get('/api/v1/importazioni/'.$riga->id.'/pdf')
-            ->assertOk()
-            ->assertHeader('content-type', 'application/pdf');
+        /*
+         * ⛔ **E l'originale, sul server, non c'e' piu'** — K1-bis.
+         *
+         * 🚨 Qui si chiedeva `/pdf` e si pretendeva un 200: N20.4 diceva che
+         * l'originale doveva restare consultabile accanto alla bozza. 💡 Quella
+         * ragione resta vera, ma l'originale ce l'ha **il telefono**, che se
+         * l'e' copiato quando l'ha scelto.
+         *
+         * ⚠️ Il documento se ne va appena il job ha finito: e' cio' che prova
+         * `finita_la_trascrizione_il_documento_non_c_e_piu`.
+         */
+        $this->assertSame([], $riga->refresh()->percorsi());
     }
 
     /**
@@ -372,6 +398,7 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ])->assertStatus(202);
 
         $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
@@ -393,6 +420,7 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ])->assertStatus(202);
 
         $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
@@ -422,6 +450,7 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
+            'consenso_documento' => true,
         ])->assertStatus(202);
 
         $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
@@ -486,6 +515,7 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertForbidden()
             ->assertJsonPath('code', 'ai_consent_required');
@@ -515,9 +545,203 @@ class ImportazioneDaDocumentoTest extends TestCase
             ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
+                'consenso_documento' => true,
             ])
             ->assertForbidden();
 
         $this->assertSame(0, ImportazioneDaDocumento::query()->count());
+    }
+
+    // ───────────── K1-bis: sul server non resta niente ─────────────
+
+    /**
+     * 🚨 **Finita la trascrizione, il documento se ne va.**
+     *
+     * 📌 Il committente: *«niente deve stare più sul server»*.
+     *
+     * ⛔ Prima restava **sette giorni**, perche' la revisione doveva poter
+     * riaprire l'originale. 💡 E quei sette giorni non servivano a niente: il
+     * documento ce l'ha gia' il telefono, che e' chi l'ha scelto e caricato.
+     */
+    #[Test]
+    public function finita_la_trascrizione_il_documento_non_c_e_piu(): void
+    {
+        /*
+         * ⚠️ **Niente `Queue::fake()` qui**: nei test la coda e' `sync`, quindi
+         * la trascrizione gira dentro la POST — che e' esattamente lo scenario
+         * da provare. 🚨 E fingerla renderebbe inerte anche `dispatchSync`.
+         */
+        $this->aiFinta();
+
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
+            'file' => [$this->unPdf()],
+            'dichiarazione' => true,
+            'consenso_documento' => true,
+        ])->assertStatus(202);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        // 🎉 La bozza c'e'…
+        $this->assertSame(ImportazioneDaDocumento::PRONTA, $riga->stato);
+
+        /*
+         * ⛔ …e sul disco non e' rimasto **niente**.
+         *
+         * 💡 Si guarda il disco e non l'elenco dei percorsi: «del documento non
+         * resta niente» non si prova elencando nomi, si prova **non trovando
+         * file**. Un elenco svuotato con i file ancora li' passerebbe il primo
+         * controllo e fallirebbe questo.
+         */
+        $this->assertEmpty(Storage::disk('local')->allFiles());
+        $this->assertSame([], $riga->percorsi());
+    }
+
+    /**
+     * ⚠️ **Anche quando fallisce**, ed e' il caso che si dimentica.
+     *
+     * 🚨 Un job morto lascerebbe sul disco proprio il documento che non siamo
+     * nemmeno riusciti a leggere. E' la stessa regola di `StimaCibo::fallisce()`.
+     */
+    #[Test]
+    public function anche_se_fallisce_il_documento_non_resta(): void
+    {
+        $finta = $this->aiFinta();
+        $finta->prossimoErrore = new \RuntimeException('Il fornitore non risponde.');
+
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
+            'file' => [$this->unPdf()],
+            'dichiarazione' => true,
+            'consenso_documento' => true,
+        ])->assertStatus(202);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertSame(ImportazioneDaDocumento::FALLITA, $riga->stato);
+        $this->assertEmpty(Storage::disk('local')->allFiles());
+    }
+
+    // ───────────── K1-ter: il consenso a questo documento ─────────────
+
+    /**
+     * 🔴 **Senza il consenso a mandare QUESTO documento non si carica.**
+     *
+     * 📌 Il committente: *«si deve richiedere il consenso specifico a mandare
+     * quei dati all'AI»*.
+     *
+     * ⚠️ E' **diverso** da `ai_consent_at`, che questa persona ha: quello dice
+     * «puoi usare l'AI», questo dice «puoi mandare **questo file**». 🚨 Si chiede
+     * ogni volta, perche' il file e' diverso ogni volta.
+     */
+    #[Test]
+    public function senza_il_consenso_al_documento_non_si_carica(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni', [
+                'file' => [$this->unPdf()],
+                'dichiarazione' => true,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('consenso_documento');
+
+        $this->assertSame(0, ImportazioneDaDocumento::query()->count());
+        $this->assertEmpty(Storage::disk('local')->allFiles());
+    }
+
+    /**
+     * ⛔ **`false` non e' un consenso**, ed e' il caso che un `boolean`
+     * lascerebbe passare.
+     */
+    #[Test]
+    public function un_consenso_negato_non_vale_come_dato(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni', [
+                'file' => [$this->unPdf()],
+                'dichiarazione' => true,
+                'consenso_documento' => false,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('consenso_documento');
+    }
+
+    /**
+     * 💡 **E quando c'e', si registra QUANDO** — non cosa.
+     *
+     * ⛔ Il documento e il suo contenuto non si conservano «per provare il
+     * consenso»: sarebbe tenere proprio cio' che K1-bis toglie, con la scusa
+     * migliore che ci sia.
+     */
+    #[Test]
+    public function il_consenso_si_registra_con_la_sua_ora(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
+            'file' => [$this->unPdf()],
+            'dichiarazione' => true,
+            'consenso_documento' => true,
+        ])->assertStatus(202);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertNotNull($riga->consenso_documento_il);
+    }
+
+    // ───────────── K2: si importa anche una scheda ─────────────
+
+    /**
+     * 🆕 **Anche una scheda**, dalla stessa rotta — K2, 03/09/2026.
+     *
+     * ⛔ Una classe gemella sarebbe stata due implementazioni della stessa cosa.
+     * 💡 Cambia il `genere`, e con lui la funzione AI che paga e il prompt che
+     * legge.
+     */
+    #[Test]
+    public function si_importa_anche_una_scheda(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni', [
+                'file' => [$this->unPdf('scheda.pdf')],
+                'dichiarazione' => true,
+                'consenso_documento' => true,
+                'genere' => ImportazioneDaDocumento::GENERE_SCHEDA,
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.genere', ImportazioneDaDocumento::GENERE_SCHEDA);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertTrue($riga->eUnaScheda());
+        $this->assertSame(AiFeature::PdfImport, $riga->funzione());
+    }
+
+    /**
+     * ⚠️ **Senza `genere` si importa un piano**, che e' cio' che questa rotta ha
+     * sempre fatto.
+     *
+     * 💡 Un `required` avrebbe rotto l'app installata per un campo che ha un
+     * valore ovvio.
+     */
+    #[Test]
+    public function senza_genere_e_un_piano(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
+            'file' => [$this->unPdf()],
+            'dichiarazione' => true,
+            'consenso_documento' => true,
+        ])->assertStatus(202);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        $this->assertFalse($riga->eUnaScheda());
+        $this->assertSame(AiFeature::NutritionPdfImport, $riga->funzione());
     }
 }

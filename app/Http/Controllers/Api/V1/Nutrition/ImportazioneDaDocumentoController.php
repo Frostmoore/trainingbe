@@ -11,10 +11,7 @@ use App\Models\ImportazioneDaDocumento;
 use App\Services\Ai\CancelloDeiGettoni;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * L'importazione di un piano alimentare da PDF — N20.
@@ -92,6 +89,24 @@ class ImportazioneDaDocumentoController extends Controller
              * che questo campo esiste per impedire.
              */
             'dichiarazione' => ['required', 'accepted'],
+
+            /*
+             * ══ 🔴 IL CONSENSO A MANDARE QUESTO DOCUMENTO — K1-ter ══════════
+             *
+             * 📌 Il committente: *«si deve richiedere il consenso specifico a
+             * mandare quei dati all'AI»*.
+             *
+             * ⚠️ **E' diverso da `ai_consent_at`**, che il middleware `ai.consent`
+             * ha gia' preteso prima di arrivare qui: quello dice *«puoi usare
+             * l'AI»*, questo dice *«puoi mandare **questo file**»*. 🚨 Si chiede
+             * ogni volta, perche' il file e' diverso ogni volta.
+             *
+             * ⛔ **`accepted` e non `boolean`**, come `dichiarazione`: deve
+             * arrivare **vera**, non presente. Un `boolean` accetterebbe `false`
+             * e lascerebbe passare un caricamento senza consenso — cioe'
+             * esattamente il caso che questo campo esiste per impedire.
+             */
+            'consenso_documento' => ['required', 'accepted'],
 
             /*
              * 🆕 **Cosa si sta importando** — K2, 03/09/2026.
@@ -176,47 +191,22 @@ class ImportazioneDaDocumentoController extends Controller
         return response()->json(['data' => $this->perLApp($riga)]);
     }
 
-    /**
-     * Il PDF originale — N20.4.
-     *
-     * ── 🚨 Perche' deve restare consultabile ───────────────────────────────
-     *
-     * Perche' senza, la revisione riga per riga non e' una revisione: e' la
-     * lettura di trenta numeri plausibili senza niente con cui confrontarli.
-     * ⚠️ Il rischio di questo import non e' che l'AI fallisca — un fallimento si
-     * vede e si rifa'. E' che riesca **a meta'**: «200 g» letti «20 g» non danno
-     * nessun errore, danno un piano credibile e sbagliato. L'unica cosa che lo
-     * scopre e' l'originale accanto.
-     */
-    public function pdf(Request $request, int $importazione): StreamedResponse|Response
-    {
-        $riga = $this->mia($request, $importazione);
-
-        if ($riga === null || $riga->percorsiAssoluti() === []) {
-            return response(['message' => __('Importazione non trovata.')], 404);
-        }
-
-        /*
-         * ⚠️ **Si consegna il PRIMO documento** — K1, 03/09/2026.
-         *
-         * 🚨 Questa rotta e' nata quando i documenti erano uno: adesso possono
-         * essere cinque, e una risposta HTTP ne porta uno. ⛔ Consegnare il
-         * primo e tacere sugli altri sarebbe il difetto silenzioso di sempre —
-         * chi confronta crede di avere tutto.
-         *
-         * 💡 Non si aggiusta qui: **questa rotta sparisce con K1-bis**. Il
-         * telefono si tiene la propria copia dei documenti dal momento in cui li
-         * sceglie, e non ha piu' niente da riscaricare. Fino ad allora resta
-         * com'e', e serve solo alle importazioni da un file solo.
-         */
-        $primo = $riga->documenti[0];
-
-        return Storage::disk('local')->response(
-            $riga->percorsi()[0],
-            $primo['nome'],
-            ['Content-Type' => $primo['mime']],
-        );
-    }
+    /*
+    | ══ ⛔ LA ROTTA DEL DOCUMENTO NON ESISTE PIU' — K1-bis, 03/09/2026 ═══════
+    |
+    | Serviva a riconsegnare all'app il PDF che aveva appena caricato, perche' la
+    | revisione riga per riga senza l'originale accanto **non e' una revisione**:
+    | e' la lettura di trenta numeri plausibili senza niente con cui confrontarli.
+    |
+    | 🚨 Quella ragione **resta vera**, e infatti l'originale c'e' ancora — ma
+    | non qui. 💡 Il telefono se ne fa una copia **quando sceglie il file**, e da
+    | li' lo riapre: farselo riconsegnare dal server era un giro inutile che
+    | costava una copia di un documento sanitario sul nostro disco per sette
+    | giorni.
+    |
+    | ⚠️ E dal 03/09 quel documento sul server **non c'e' comunque piu'**: se ne
+    | va appena il job ha finito, riuscito o fallito (`buttaIDocumenti()`).
+    */
 
     /**
      * Chiude l'importazione: il PDF e la bozza se ne vanno.
