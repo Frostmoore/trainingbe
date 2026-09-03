@@ -40,6 +40,20 @@ final readonly class ParsedWorkoutExercise
         public array $secondaryMuscles,
 
         public float $confidence,
+
+        /**
+         * 🆕 **A quale giorno appartiene**, contando da 1 — K2, 03/09/2026.
+         *
+         * 🚨 Sta sull'esercizio e non in una struttura a parte perche' e' cosi'
+         * che una scheda e' scritta su carta: un elenco di righe sotto delle
+         * intestazioni.
+         *
+         * ⚠️ **Uno, e non zero né `null`.** Una scheda a giorno singolo e' una
+         * scheda con tutti gli esercizi sul giorno 1: un valore mancante
+         * costringerebbe ogni lettore a decidere da solo cosa farne, e prima o
+         * poi uno deciderebbe diversamente dagli altri.
+         */
+        public int $day = 1,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -64,6 +78,13 @@ final readonly class ParsedWorkoutExercise
             ))),
 
             confidence: (float) ($data['confidence'] ?? 0.0),
+
+            /*
+             * ⚠️ **`max(1, …)`**: un modello che rispondesse `0` o un numero
+             * negativo darebbe un giorno che non esiste, e la divisione di
+             * K2-bis produrrebbe una scheda vuota senza dire perche'.
+             */
+            day: max(1, (int) ($data['day'] ?? 1)),
         );
     }
 
@@ -80,6 +101,7 @@ final readonly class ParsedWorkoutExercise
             'muscle_group' => $this->muscleGroup?->value,
             'secondary_muscles' => $this->secondaryMuscles,
             'confidence' => $this->confidence,
+            'day' => $this->day,
         ];
     }
 }

@@ -9,7 +9,7 @@ use Anthropic\Core\Exceptions\APIConnectionException;
 use Anthropic\Core\Exceptions\APIStatusException;
 use Anthropic\Core\Exceptions\RateLimitException;
 use App\Enums\AiFeature;
-use App\Models\ImportazionePiano;
+use App\Models\ImportazioneDaDocumento;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\AiUsageRecorder;
@@ -218,7 +218,7 @@ class AnthropicProvider implements AiProvider
     {
         $mime = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($percorso);
 
-        if (! in_array($mime, ImportazionePiano::MIME_AMMESSI, true)) {
+        if (! in_array($mime, ImportazioneDaDocumento::MIME_AMMESSI, true)) {
             throw new AiUnavailableException(
                 'ai_pdf_unsupported',
                 'Questo tipo di documento non si puo\' leggere.',

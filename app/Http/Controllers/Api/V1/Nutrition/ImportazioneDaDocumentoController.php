@@ -6,13 +6,14 @@ namespace App\Http\Controllers\Api\V1\Nutrition;
 
 use App\Enums\AiFeature;
 use App\Http\Controllers\Controller;
-use App\Jobs\TrascriviPianoAlimentare;
-use App\Models\ImportazionePiano;
+use App\Jobs\TrascriviIlDocumento;
+use App\Models\ImportazioneDaDocumento;
 use App\Services\Ai\CancelloDeiGettoni;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -43,7 +44,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * con una risposta lunga. Il cancello si apre **qui**, prima di mettere in coda;
  * i gettoni si scalano **nel job**, e solo se la trascrizione riesce.
  */
-class ImportazionePianoController extends Controller
+class ImportazioneDaDocumentoController extends Controller
 {
     public function __construct(private readonly CancelloDeiGettoni $cancello) {}
 
@@ -71,7 +72,7 @@ class ImportazionePianoController extends Controller
              * percorsa e' quella che si rompe in silenzio. 💡 L'app si aggiorna
              * insieme al server: e' l'unico client che esiste.
              */
-            'file' => ['required', 'array', 'min:1', 'max:'.ImportazionePiano::AL_MASSIMO],
+            'file' => ['required', 'array', 'min:1', 'max:'.ImportazioneDaDocumento::AL_MASSIMO],
 
             /*
              * ⛔ **`heic` non c'e'**, e non e' una dimenticanza: Anthropic non lo
@@ -81,7 +82,7 @@ class ImportazionePianoController extends Controller
              */
             'file.*' => [
                 'required', 'file', 'mimes:pdf,jpg,jpeg,png,webp',
-                'max:'.(int) (ImportazionePiano::BYTE_MASSIMI / 1024),
+                'max:'.(int) (ImportazioneDaDocumento::BYTE_MASSIMI / 1024),
             ],
 
             /*
@@ -91,6 +92,26 @@ class ImportazionePianoController extends Controller
              * che questo campo esiste per impedire.
              */
             'dichiarazione' => ['required', 'accepted'],
+
+            /*
+             * 🆕 **Cosa si sta importando** — K2, 03/09/2026.
+             *
+             * ⚠️ `sometimes` e non `required`: quando manca vale `piano`, che e'
+             * cio' che questa rotta ha sempre fatto. 💡 Un `required` avrebbe
+             * rotto l'app installata per un campo che ha un valore ovvio.
+             *
+             * 🚨 Decide **tre cose**: quale funzione AI paga, quale prompt
+             * legge il documento, e con quale schema esce la bozza. Sbagliarlo
+             * non da' un errore: da' una bozza vuota, letta con lo schema di
+             * un'altra cosa.
+             */
+            'genere' => [
+                'sometimes',
+                Rule::in([
+                    ImportazioneDaDocumento::GENERE_PIANO,
+                    ImportazioneDaDocumento::GENERE_SCHEDA,
+                ]),
+            ],
         ]);
 
         $utente = $request->user();
@@ -100,7 +121,18 @@ class ImportazionePianoController extends Controller
          * poi scoprire che i gettoni non bastano vorrebbe dire un PDF con dentro
          * la dieta di qualcuno depositato sul nostro disco per niente.
          */
-        $conGettoni = $this->cancello->apri($utente, AiFeature::NutritionPdfImport);
+        $genere = (string) $request->input('genere', ImportazioneDaDocumento::GENERE_PIANO);
+
+        /*
+         * 💡 **Costano uguale**, e non e' un caso: un prezzo diverso spingerebbe
+         * verso l'oggetto sbagliato per il motivo sbagliato. ⚠️ Ma sono due voci
+         * distinte in contabilita', e vanno tenute tali.
+         */
+        $funzione = $genere === ImportazioneDaDocumento::GENERE_SCHEDA
+            ? AiFeature::PdfImport
+            : AiFeature::NutritionPdfImport;
+
+        $conGettoni = $this->cancello->apri($utente, $funzione);
 
         /*
          * ⚠️ **L'ordine e' quello in cui arrivano**, e va conservato: per delle
@@ -125,9 +157,9 @@ class ImportazionePianoController extends Controller
             ];
         }
 
-        $importazione = ImportazionePiano::apri($utente, $files, $conGettoni);
+        $importazione = ImportazioneDaDocumento::apri($utente, $files, $conGettoni, $genere);
 
-        TrascriviPianoAlimentare::dispatch((int) $importazione->id);
+        TrascriviIlDocumento::dispatch((int) $importazione->id);
 
         return response()->json(['data' => $this->perLApp($importazione)], 202);
     }
@@ -217,9 +249,9 @@ class ImportazionePianoController extends Controller
      * aggiunge `user_id`. Sono due controlli e servono entrambi — il primo tiene
      * fuori le altre palestre, il secondo tiene fuori i compagni di palestra.
      */
-    private function mia(Request $request, int $id): ?ImportazionePiano
+    private function mia(Request $request, int $id): ?ImportazioneDaDocumento
     {
-        $riga = ImportazionePiano::query()
+        $riga = ImportazioneDaDocumento::query()
             ->where('id', $id)
             ->where('user_id', (int) $request->user()->id)
             ->first();
@@ -238,7 +270,7 @@ class ImportazionePianoController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function perLApp(ImportazionePiano $riga): array
+    private function perLApp(ImportazioneDaDocumento $riga): array
     {
         return [
             'id' => (int) $riga->id,
@@ -255,6 +287,7 @@ class ImportazionePianoController extends Controller
              * qualunque cosa, e il tipo qui e' stato deciso guardando i byte.
              */
             'tipo' => $riga->tipo,
+            'genere' => $riga->genere,
             'quanti_documenti' => count($riga->documenti ?? []),
             'bozza' => $riga->bozza,
             'errore' => $riga->errore,
@@ -270,7 +303,7 @@ class ImportazionePianoController extends Controller
         ];
     }
 
-    private function quanteRighe(ImportazionePiano $riga): int
+    private function quanteRighe(ImportazioneDaDocumento $riga): int
     {
         $totale = 0;
 

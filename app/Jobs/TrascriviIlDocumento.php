@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Enums\AiFeature;
-use App\Models\ImportazionePiano;
+use App\Models\ImportazioneDaDocumento;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\CancelloDeiGettoni;
@@ -15,7 +14,13 @@ use Illuminate\Foundation\Queue\Queueable;
 use Throwable;
 
 /**
- * Ricopia un PDF di piano alimentare in una bozza — N20.2.
+ * Ricopia un documento — piano o scheda — in una bozza — N20.2, poi K2.
+ *
+ * ⚠️ **Si chiamava `TrascriviPianoAlimentare`.** Da K2 trascrive anche le
+ * schede: il meccanismo e' lo stesso — carica, chiama, salva la bozza, scala i
+ * gettoni — e cambia solo **cosa si legge**. 🚨 Un gemello sarebbe stato due
+ * implementazioni della stessa cosa, e quella che diverge per prima e' sempre
+ * la copia meno provata.
  *
  * ── 🚨 Gira in coda, quindi FUORI da qualunque contesto di palestra ────────
  *
@@ -44,7 +49,7 @@ use Throwable;
  * 💡 Il posto dove si recupera un import mediocre non e' qui: e' la revisione
  * riga per riga con l'originale accanto (N20.3), che e' obbligatoria comunque.
  */
-class TrascriviPianoAlimentare implements ShouldQueue
+class TrascriviIlDocumento implements ShouldQueue
 {
     use Queueable;
 
@@ -66,7 +71,7 @@ class TrascriviPianoAlimentare implements ShouldQueue
 
     public function handle(AiManager $ai, TenantContext $palestre, CancelloDeiGettoni $cancello): void
     {
-        $importazione = ImportazionePiano::withoutGlobalScopes()->find($this->importazioneId);
+        $importazione = ImportazioneDaDocumento::withoutGlobalScopes()->find($this->importazioneId);
 
         if ($importazione === null) {
             return;
@@ -106,13 +111,22 @@ class TrascriviPianoAlimentare implements ShouldQueue
 
             $importazione->inLavorazione();
 
-            $modello = $ai->modelFor(AiFeature::NutritionPdfImport);
+            /*
+             * 🚨 **La funzione la dice la riga, e in un posto solo.**
+             *
+             * ⛔ I punti che devono saperlo sono tre — il cancello dei gettoni
+             * quando si carica, il contesto della chiamata, e lo scalo dopo la
+             * trascrizione. 💡 In tre posti diversi, uno prima o poi guarda
+             * l'altra: `ImportazioneDaDocumento::funzione()` e' l'unico.
+             */
+            $funzione = $importazione->funzione();
+            $modello = $ai->modelFor($funzione);
+            $ctx = AiCallContext::for($utente, $funzione);
 
             try {
-                $piano = $ai->for(AiFeature::NutritionPdfImport)->trascriviPianoAlimentare(
-                    $percorsi,
-                    AiCallContext::for($utente, AiFeature::NutritionPdfImport),
-                );
+                $bozza = $importazione->eUnaScheda()
+                    ? $ai->for($funzione)->parseWorkoutPdf($percorsi, $ctx)
+                    : $ai->for($funzione)->trascriviPianoAlimentare($percorsi, $ctx);
             } catch (Throwable $e) {
                 /*
                  * 🚨 **Fallita = non pagata.** I gettoni si scalano solo sotto,
@@ -125,7 +139,7 @@ class TrascriviPianoAlimentare implements ShouldQueue
                 return;
             }
 
-            $importazione->salvaBozza($piano, $modello);
+            $importazione->salvaBozza($bozza, $modello);
 
             /*
              * ⚠️ **La decisione arriva dalla colonna, non si ricalcola.** Il
@@ -134,7 +148,7 @@ class TrascriviPianoAlimentare implements ShouldQueue
              * altre chiamate. Ricontrollarla qui farebbe pagare 50 gettoni una
              * chiamata che era coperta — vedi `CancelloDeiGettoni::apri()`.
              */
-            $cancello->consuma($utente, AiFeature::NutritionPdfImport, $importazione->paga_con_gettoni);
+            $cancello->consuma($utente, $funzione, $importazione->paga_con_gettoni);
         });
     }
 
@@ -146,7 +160,7 @@ class TrascriviPianoAlimentare implements ShouldQueue
      */
     public function failed(?Throwable $e): void
     {
-        $importazione = ImportazionePiano::withoutGlobalScopes()->find($this->importazioneId);
+        $importazione = ImportazioneDaDocumento::withoutGlobalScopes()->find($this->importazioneId);
 
         $importazione?->fallisce($e?->getMessage() ?? 'Importazione interrotta.');
     }

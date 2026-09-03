@@ -142,7 +142,7 @@ class RateLimitServiceProvider extends ServiceProvider
         | serve a proteggere dal caso in cui il cancello venga aperto tante volte
         | di fila prima che il primo job abbia scalato qualcosa.
         */
-        RateLimiter::for('importazioni-piani', function (Request $request): array {
+        RateLimiter::for('importazioni', function (Request $request): array {
             $utente = $request->user();
 
             return $utente !== null

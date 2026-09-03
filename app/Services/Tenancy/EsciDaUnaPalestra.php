@@ -68,7 +68,7 @@ final class EsciDaUnaPalestra
         'device_tokens',
         'food_entries',
         'food_favorites',
-        'importazioni_piani',
+        'importazioni_da_documento',
         'profiles',
         'stime_cibo',
     ];

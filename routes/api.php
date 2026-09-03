@@ -24,7 +24,7 @@ use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
-use App\Http\Controllers\Api\V1\Nutrition\ImportazionePianoController;
+use App\Http\Controllers\Api\V1\Nutrition\ImportazioneDaDocumentoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
 use App\Http\Controllers\Api\V1\Nutrition\TraslocoDelDiarioController;
 use App\Http\Controllers\Api\V1\ProfileController;
@@ -647,13 +647,13 @@ Route::prefix('v1')->group(function (): void {
          * bozza. ⛔ Una revoca che chiude fuori dai propri dati e' l'opposto di
          * quello che una revoca deve fare.
          */
-        Route::post('importazioni-piani', [ImportazionePianoController::class, 'store'])
-            ->middleware(['ai.consent', 'throttle:importazioni-piani']);
-        Route::get('importazioni-piani/{importazione}', [ImportazionePianoController::class, 'show'])
+        Route::post('importazioni', [ImportazioneDaDocumentoController::class, 'store'])
+            ->middleware(['ai.consent', 'throttle:importazioni']);
+        Route::get('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'show'])
             ->whereNumber('importazione');
-        Route::get('importazioni-piani/{importazione}/pdf', [ImportazionePianoController::class, 'pdf'])
+        Route::get('importazioni/{importazione}/pdf', [ImportazioneDaDocumentoController::class, 'pdf'])
             ->whereNumber('importazione');
-        Route::delete('importazioni-piani/{importazione}', [ImportazionePianoController::class, 'destroy'])
+        Route::delete('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'destroy'])
             ->whereNumber('importazione');
 
         // ── Chat (B8.4) ──────────────────────────────────────────────────

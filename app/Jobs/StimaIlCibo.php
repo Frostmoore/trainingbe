@@ -41,7 +41,7 @@ use Throwable;
  *
  * ── ⚠️ Tre tentativi, ma NON per il motivo che sembra ─────────────────────
  *
- * `TrascriviPianoAlimentare` ne fa **uno solo**, e ha ragione: costa 50 gettoni,
+ * `TrascriviIlDocumento` ne fa **uno solo**, e ha ragione: costa 50 gettoni,
  * e un ritentativo automatico e' una seconda fattura. 💡 Qui invece una stima
  * costa **una** chiamata da pochi millesimi, e la causa piu' probabile di un
  * fallimento e' passeggera — un `429` del fornitore, una connessione caduta.
@@ -172,7 +172,7 @@ class StimaIlCibo implements ShouldBeUnique, ShouldQueue
              * adesso la quota inclusa potrebbe essersi esaurita per altre
              * chiamate. Ricontrollarla qui farebbe pagare con i gettoni una
              * stima che era coperta — stessa ragione gia' scritta in
-             * `TrascriviPianoAlimentare`.
+             * `TrascriviIlDocumento`.
              */
             $cancello->consuma($utente, $funzione, $stima->paga_con_gettoni);
 
@@ -233,7 +233,7 @@ class StimaIlCibo implements ShouldBeUnique, ShouldQueue
      *
      * 💡 Senza questo, una stima morta resterebbe `in_lavorazione` per sempre e
      * l'app mostrerebbe una rotellina che non gira piu'. 🚨 E' lo stesso motivo
-     * per cui esiste in `TrascriviPianoAlimentare`: la lezione era gia' pagata.
+     * per cui esiste in `TrascriviIlDocumento`: la lezione era gia' pagata.
      */
     public function failed(?Throwable $e): void
     {

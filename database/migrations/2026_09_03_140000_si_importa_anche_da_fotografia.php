@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Models\ImportazionePiano;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -85,7 +84,10 @@ return new class extends Migration
                             'mime' => 'application/pdf',
                             'byte' => (int) $riga->byte_totali,
                         ]]),
-                        'tipo' => ImportazionePiano::TIPO_PDF,
+                        // ⚠️ Il letterale e non la costante del modello: una migration deve
+                        // poter girare anche fra un anno, quando quella
+                        // classe potrebbe non chiamarsi piu' cosi'.
+                        'tipo' => 'pdf',
                     ]);
             }
         });

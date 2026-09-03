@@ -94,6 +94,15 @@ final class Prompts
         3. Se un valore non e' leggibile con certezza, LASCIALO VUOTO e scrivi
            una riga in "dubbi" che dica dove si trova e cosa non era chiaro.
         4. Non dare consigli, non commentare il piano, non valutarlo.
+        5. La fonte puo' essere una FOTOGRAFIA di un foglio, non uno scanner:
+           storta, con l'ombra della mano, con la penna che passa sopra un
+           numero. Se un numero e' anche solo POSSIBILMENTE ambiguo — un 3 che
+           potrebbe essere un 8, un 100 che potrebbe essere 400 — LASCIALO VUOTO
+           e mettilo nei "dubbi". Non tirare a indovinare sulla forma delle
+           cifre.
+        6. Se ricevi piu' immagini, sono le PAGINE dello stesso documento,
+           nell'ordine in cui te le do. Non ripetere lo stesso giorno due volte
+           perche' compare in fondo a una pagina e in cima alla successiva.
 
         Il tuo lavoro e' fedelta', non qualita'. Un valore mancante si corregge
         in due secondi; un valore inventato non lo scopre nessuno.
@@ -676,8 +685,26 @@ final class Prompts
            evidente, vale meno. E' il campo su cui la pagina di revisione decide cosa
            far guardare a una persona: se lo gonfi, quella riga sbagliata finisce in
            mano a un iscritto senza che nessuno l'abbia controllata.
-        6. Se il documento contiene piu' giorni o piu' schede, estrai la prima e
-           scrivilo nelle note.
+        6. GIORNI. Se il documento contiene piu' giorni — «Giorno 1 / Giorno 2»,
+           «Lunedi' / Mercoledi' / Venerdi'», «A / B», «Push / Pull / Gambe» —
+           estraili TUTTI, e su ogni esercizio scrivi `day` con il numero del
+           giorno a cui appartiene, contando da 1 nell'ordine in cui compaiono.
+           Se il documento ha un giorno solo, `day` vale 1 su tutte le righe.
+           In `day_names` metti i titoli dei giorni cosi' come sono scritti
+           («Push», «Lunedi'»), uno per giorno e nello stesso ordine: servono a
+           chi rivede per ritrovarsi sul foglio.
+
+           NON estrarre solo il primo giorno: una scheda a cui mancano due giorni
+           su tre sembra completa, e chi la segue si allena per settimane con un
+           terzo del programma.
+
+        6-bis. FOTOGRAFIE. La fonte puo' essere la foto di un foglio, non uno
+           scanner: storta, con l'ombra della mano, con la penna che passa sopra
+           un numero. Se una cifra e' anche solo POSSIBILMENTE ambigua — un 3 che
+           potrebbe essere un 8, un 100 che potrebbe essere 400 — abbassa la
+           `confidence` di quella riga sotto 0.5 invece di tirare a indovinare.
+           Se ricevi piu' immagini sono le PAGINE dello stesso documento,
+           nell'ordine in cui te le do.
         7. Non inventare esercizi che non sono nel documento. Se una parte e'
            illeggibile, salta la riga e segnalalo nelle note.
         8. I MUSCOLI di ogni esercizio: `muscle_group` e' quello che fa il lavoro
@@ -1089,11 +1116,26 @@ TXT;
         return [
             'type' => 'object',
             'additionalProperties' => false,
-            'required' => ['name', 'notes', 'exercises', 'confidence'],
+            'required' => ['name', 'notes', 'exercises', 'confidence', 'day_names'],
             'properties' => [
                 'name' => ['type' => 'string'],
                 'notes' => ['type' => ['string', 'null']],
                 'confidence' => ['type' => 'number'],
+
+                /*
+                 * 🆕 **I titoli dei giorni, come sono scritti sul foglio** —
+                 * K2, 03/09/2026.
+                 *
+                 * 💡 «Push», «Lunedi'», «Giorno A». ⚠️ Servono a chi rivede per
+                 * ritrovarsi sul documento, e diventano il nome delle schede
+                 * quando una multiday si divide (K2-bis).
+                 *
+                 * ⛔ **Non si chiede quanti giorni sono**: si contano dai `day`
+                 * degli esercizi. Due sedi dello stesso numero divergono, e qui
+                 * divergerebbero in silenzio — una scheda con `giorni: 3` e
+                 * esercizi solo sul giorno 1.
+                 */
+                'day_names' => ['type' => 'array', 'items' => ['type' => 'string']],
                 'exercises' => [
                     'type' => 'array',
                     'items' => [
@@ -1109,10 +1151,22 @@ TXT;
                          */
                         'required' => [
                             'name', 'sets', 'reps', 'rest_sec', 'target_weight', 'notes',
-                            'muscle_group', 'secondary_muscles', 'confidence',
+                            'muscle_group', 'secondary_muscles', 'confidence', 'day',
                         ],
                         'properties' => [
                             'name' => ['type' => 'string'],
+
+                            /*
+                             * 🆕 **A quale giorno appartiene**, contando da 1 —
+                             * K2.
+                             *
+                             * 🚨 Sta sull'esercizio e non in una struttura a
+                             * parte perche' e' cosi' che una scheda e' scritta
+                             * su carta: un elenco di righe sotto delle
+                             * intestazioni. 💡 Raggrupparle e' un lavoro di
+                             * lettura, non di struttura.
+                             */
+                            'day' => ['type' => ['integer', 'null'], 'minimum' => 1],
                             'muscle_group' => ['type' => ['string', 'null']],
                             'secondary_muscles' => ['type' => 'array', 'items' => ['type' => 'string']],
                             'sets' => ['type' => ['integer', 'null']],

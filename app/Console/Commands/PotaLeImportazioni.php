@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\ImportazionePiano;
+use App\Models\ImportazioneDaDocumento;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
  *
  * ── ⚠️ Anche i file orfani ────────────────────────────────────────────────
  *
- * `ImportazionePiano::apri()` scrive **prima il file e poi la riga**, di
+ * `ImportazioneDaDocumento::apri()` scrive **prima il file e poi la riga**, di
  * proposito: nell'ordine inverso esisterebbe un istante in cui la riga promette
  * un PDF che non c'e', e il job partirebbe a vuoto. Il prezzo e' che un guasto
  * fra le due operazioni lascia un file senza riga — e quello non lo
@@ -46,7 +46,7 @@ class PotaLeImportazioni extends Command
          * nessuna palestra corrente. Senza, il filtro non troverebbe niente e il
          * comando direbbe «zero scadute» ogni notte, per sempre.
          */
-        $scadute = ImportazionePiano::withoutGlobalScopes()
+        $scadute = ImportazioneDaDocumento::withoutGlobalScopes()
             ->where('scade_il', '<=', now())
             ->get();
 
@@ -87,7 +87,7 @@ class PotaLeImportazioni extends Command
          */
         $vivi = [];
 
-        foreach (ImportazionePiano::withoutGlobalScopes()->pluck('documenti') as $documenti) {
+        foreach (ImportazioneDaDocumento::withoutGlobalScopes()->pluck('documenti') as $documenti) {
             foreach ((array) $documenti as $documento) {
                 $vivi[$documento['token']] = true;
             }
@@ -95,7 +95,7 @@ class PotaLeImportazioni extends Command
 
         $quanti = 0;
 
-        foreach ($disco->files(ImportazionePiano::CARTELLA) as $percorso) {
+        foreach ($disco->files(ImportazioneDaDocumento::CARTELLA) as $percorso) {
             $nome = basename($percorso);
 
             if (isset($vivi[$nome])) {

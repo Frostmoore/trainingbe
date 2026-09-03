@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\AiFeature;
 use App\Models\Concerns\BelongsToTenant;
+use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Ai\Data\PianoTrascritto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,7 +33,7 @@ use Illuminate\Support\Str;
  * un dato dell'art. 9 con un nome sopra. Confermata la bozza, il telefono se la
  * porta via e questa riga si cancella.
  */
-class ImportazionePiano extends Model
+class ImportazioneDaDocumento extends Model
 {
     /*
      * 🚨 Il filtro per palestra c'e', **e non basta da solo**: sopra ci
@@ -41,7 +43,7 @@ class ImportazionePiano extends Model
      */
     use BelongsToTenant;
 
-    protected $table = 'importazioni_piani';
+    protected $table = 'importazioni_da_documento';
 
     /**
      * ⚠️ Sette giorni: larghi per chi ci mette qualche giorno a controllare
@@ -82,6 +84,23 @@ class ImportazionePiano extends Model
         'image/webp',
     ];
 
+    /**
+     * Cosa si sta importando — K2, 03/09/2026.
+     *
+     * ══ 🚨 UNA TABELLA SOLA PER DUE OGGETTI, E NON E' PIGRIZIA ════════════
+     *
+     * ⛔ La strada breve era una classe gemella `ImportazioneScheda`. Sarebbero
+     * state **due implementazioni della stessa cosa** — carica, metti in coda,
+     * trascrivi, consegna la bozza, chiudi — e quella che diverge per prima e'
+     * sempre la copia meno provata.
+     *
+     * 💡 Il meccanismo e' **uno**. Cambiano tre cose, e cambiano tutte qui:
+     * quale funzione AI paga, quale prompt legge, e dove finisce la bozza.
+     */
+    public const GENERE_PIANO = 'piano';
+
+    public const GENERE_SCHEDA = 'scheda';
+
     public const TIPO_PDF = 'pdf';
 
     public const TIPO_IMMAGINI = 'immagini';
@@ -105,7 +124,7 @@ class ImportazionePiano extends Model
     public const FALLITA = 'fallita';
 
     protected $fillable = [
-        'user_id', 'tenant_id', 'documenti', 'tipo', 'nome_file', 'byte_totali',
+        'user_id', 'tenant_id', 'genere', 'documenti', 'tipo', 'nome_file', 'byte_totali',
         'stato', 'bozza', 'modello_usato', 'errore', 'dichiarato_il', 'scade_il',
         'paga_con_gettoni',
     ];
@@ -125,6 +144,29 @@ class ImportazionePiano extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Quale funzione AI paga questa importazione.
+     *
+     * 🚨 **Sta qui e non nel controller**, perche' i punti che devono saperlo
+     * sono **tre** — il cancello dei gettoni prima di caricare, il contesto
+     * della chiamata, e lo scalo dopo la trascrizione — e in tre posti diversi
+     * uno prima o poi guarda l'altra.
+     *
+     * 💡 Costano uguale (50 gettoni), e non e' un caso: un prezzo diverso
+     * spingerebbe verso l'oggetto sbagliato per il motivo sbagliato.
+     */
+    public function funzione(): AiFeature
+    {
+        return $this->genere === self::GENERE_SCHEDA
+            ? AiFeature::PdfImport
+            : AiFeature::NutritionPdfImport;
+    }
+
+    public function eUnaScheda(): bool
+    {
+        return $this->genere === self::GENERE_SCHEDA;
     }
 
     /**
@@ -161,6 +203,7 @@ class ImportazionePiano extends Model
         User $chi,
         array $files,
         bool $pagaConGettoni = false,
+        string $genere = self::GENERE_PIANO,
     ): self {
         $disco = Storage::disk('local');
         $documenti = [];
@@ -192,6 +235,7 @@ class ImportazionePiano extends Model
         return self::create([
             'user_id' => $chi->getKey(),
             'tenant_id' => $chi->tenant_id,
+            'genere' => $genere,
             'documenti' => $documenti,
             'tipo' => $tipo,
             'nome_file' => self::comeSiChiama($documenti),
@@ -262,17 +306,16 @@ class ImportazionePiano extends Model
     /**
      * Deposita la trascrizione.
      *
-     * 🚨 **Il PDF resta** — N20.4. Non si cancella qui e non si cancella
-     * alla conferma: chi rivede la bozza deve poter guardare l'originale
-     * accanto, riga per riga, ed e' l'unica cosa che rende la revisione
-     * qualcosa di piu' di una lettura di numeri plausibili. Se ne va con la
-     * scadenza, insieme a tutto il resto.
+     * ⚠️ **Accetta tutti e due**, perche' il genere lo decide la riga: un piano
+     * trascritto o una scheda letta sono la stessa cosa per questo metodo — una
+     * bozza da consegnare. 🚨 Due metodi gemelli sarebbero due posti in cui
+     * dimenticare `errore => null`.
      */
-    public function salvaBozza(PianoTrascritto $piano, string $modello): void
+    public function salvaBozza(PianoTrascritto|ParsedWorkoutPlan $bozza, string $modello): void
     {
         $this->update([
             'stato' => self::PRONTA,
-            'bozza' => $piano->perLApp(),
+            'bozza' => $bozza instanceof PianoTrascritto ? $bozza->perLApp() : $bozza->toArray(),
             'modello_usato' => $modello,
             'errore' => null,
         ]);

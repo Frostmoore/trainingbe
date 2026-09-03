@@ -6,8 +6,8 @@ namespace Tests\Feature\Nutrition;
 
 use App\Enums\AiFeature;
 use App\Enums\UserRole;
-use App\Jobs\TrascriviPianoAlimentare;
-use App\Models\ImportazionePiano;
+use App\Jobs\TrascriviIlDocumento;
+use App\Models\ImportazioneDaDocumento;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,7 +36,7 @@ use Tests\TestCase;
  *   3. **Cinquanta gettoni si scalano solo se la trascrizione riesce**, e mai
  *      due volte.
  */
-class ImportazionePianoTest extends TestCase
+class ImportazioneDaDocumentoTest extends TestCase
 {
     use CreaAmbiente;
     use RefreshDatabase;
@@ -77,7 +77,7 @@ class ImportazionePianoTest extends TestCase
         /*
          * ── 🔴 E il CONSENSO, che prima del 03/09/2026 non serviva ─────────
          *
-         * ⛔ `POST importazioni-piani` manda un PDF ad Anthropic e **non aveva
+         * ⛔ `POST importazioni` manda un PDF ad Anthropic e **non aveva
          * `ai.consent`**: dal 19/08 chi non aveva mai acconsentito — o chi
          * aveva revocato — poteva vedersi trasferire il proprio piano
          * alimentare negli Stati Uniti.
@@ -102,18 +102,18 @@ class ImportazionePianoTest extends TestCase
     {
         Queue::fake();
 
-        $risposta = $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $risposta = $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ]);
 
         $risposta->assertStatus(202)
-            ->assertJsonPath('data.stato', ImportazionePiano::IN_CODA)
+            ->assertJsonPath('data.stato', ImportazioneDaDocumento::IN_CODA)
             ->assertJsonPath('data.nome_file', 'piano.pdf');
 
-        Queue::assertPushed(TrascriviPianoAlimentare::class);
+        Queue::assertPushed(TrascriviIlDocumento::class);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
 
         $this->assertSame((int) $this->iscritto->id, (int) $riga->user_id);
         $this->assertNotNull($riga->dichiarato_il, 'La dichiarazione va registrata con la data.');
@@ -133,12 +133,12 @@ class ImportazionePianoTest extends TestCase
 
         foreach ([['file' => [$this->unPdf()]], ['file' => [$this->unPdf()], 'dichiarazione' => false]] as $corpo) {
             $this->actingAs($this->iscritto)
-                ->postJson('/api/v1/importazioni-piani', $corpo)
+                ->postJson('/api/v1/importazioni', $corpo)
                 ->assertStatus(422)
                 ->assertJsonValidationErrors('dichiarazione');
         }
 
-        $this->assertSame(0, ImportazionePiano::withoutGlobalScopes()->count());
+        $this->assertSame(0, ImportazioneDaDocumento::withoutGlobalScopes()->count());
         Queue::assertNothingPushed();
     }
 
@@ -160,12 +160,12 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->image('pagina.jpg')],
                 'dichiarazione' => true,
             ])
             ->assertStatus(202)
-            ->assertJsonPath('data.tipo', ImportazionePiano::TIPO_IMMAGINI);
+            ->assertJsonPath('data.tipo', ImportazioneDaDocumento::TIPO_IMMAGINI);
     }
 
     /**
@@ -182,7 +182,7 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('pagina.heic', 40, 'image/heic')],
                 'dichiarazione' => true,
             ])
@@ -207,7 +207,7 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $risposta = $this->actingAs($this->iscritto)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [
                     UploadedFile::fake()->image('uno.jpg'),
                     UploadedFile::fake()->image('due.jpg'),
@@ -218,7 +218,7 @@ class ImportazionePianoTest extends TestCase
             ->assertStatus(202)
             ->assertJsonPath('data.quanti_documenti', 3);
 
-        $riga = ImportazionePiano::query()->findOrFail($risposta->json('data.id'));
+        $riga = ImportazioneDaDocumento::query()->findOrFail($risposta->json('data.id'));
 
         $this->assertSame(
             ['uno.jpg', 'due.jpg', 'tre.jpg'],
@@ -243,19 +243,19 @@ class ImportazionePianoTest extends TestCase
 
         $troppe = [];
 
-        for ($i = 0; $i < ImportazionePiano::AL_MASSIMO + 1; $i++) {
+        for ($i = 0; $i < ImportazioneDaDocumento::AL_MASSIMO + 1; $i++) {
             $troppe[] = UploadedFile::fake()->image("pagina{$i}.jpg");
         }
 
         $this->actingAs($this->iscritto)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => $troppe,
                 'dichiarazione' => true,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file');
 
-        $this->assertSame(0, ImportazionePiano::query()->count());
+        $this->assertSame(0, ImportazioneDaDocumento::query()->count());
     }
 
     /**
@@ -271,12 +271,12 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->image('pagina.jpg'), $this->unPdf()],
                 'dichiarazione' => true,
             ])
             ->assertStatus(202)
-            ->assertJsonPath('data.tipo', ImportazionePiano::TIPO_PDF);
+            ->assertJsonPath('data.tipo', ImportazioneDaDocumento::TIPO_PDF);
     }
 
     /**
@@ -291,12 +291,12 @@ class ImportazionePianoTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
 
         $estranei = [
             'trainer' => $this->creaUtente($this->palestra, UserRole::Trainer, 'coach@olimpo.it'),
@@ -307,17 +307,17 @@ class ImportazionePianoTest extends TestCase
         foreach ($estranei as $chi => $utente) {
             foreach (['', '/pdf'] as $coda) {
                 $this->actingAs($utente)
-                    ->getJson('/api/v1/importazioni-piani/'.$riga->id.$coda)
+                    ->getJson('/api/v1/importazioni/'.$riga->id.$coda)
                     ->assertStatus(404, "«{$chi}» non deve nemmeno sapere che esiste.");
             }
 
             $this->actingAs($utente)
-                ->deleteJson('/api/v1/importazioni-piani/'.$riga->id)
+                ->deleteJson('/api/v1/importazioni/'.$riga->id)
                 ->assertStatus(404);
         }
 
         // E la riga e' ancora li': nessuno l'ha buttata per conto suo.
-        $this->assertNotNull(ImportazionePiano::withoutGlobalScopes()->find($riga->id));
+        $this->assertNotNull(ImportazioneDaDocumento::withoutGlobalScopes()->find($riga->id));
     }
 
     #[Test]
@@ -325,14 +325,14 @@ class ImportazionePianoTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
 
-        $this->assertSame(ImportazionePiano::PRONTA, $riga->refresh()->stato);
+        $this->assertSame(ImportazioneDaDocumento::PRONTA, $riga->refresh()->stato);
         $this->assertSame('Piano importato', $riga->bozza['nome']);
 
         /*
@@ -344,15 +344,15 @@ class ImportazionePianoTest extends TestCase
         $this->assertNotEmpty($riga->bozza['dubbi']);
 
         $risposta = $this->actingAs($this->iscritto)
-            ->getJson('/api/v1/importazioni-piani/'.$riga->id)
+            ->getJson('/api/v1/importazioni/'.$riga->id)
             ->assertOk();
 
-        $risposta->assertJsonPath('data.stato', ImportazionePiano::PRONTA);
+        $risposta->assertJsonPath('data.stato', ImportazioneDaDocumento::PRONTA);
         $risposta->assertJsonPath('data.righe', 2);
 
         // ⚠️ N20.4: l'originale si deve poter guardare accanto alla bozza.
         $this->actingAs($this->iscritto)
-            ->get('/api/v1/importazioni-piani/'.$riga->id.'/pdf')
+            ->get('/api/v1/importazioni/'.$riga->id.'/pdf')
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
     }
@@ -369,14 +369,14 @@ class ImportazionePianoTest extends TestCase
         $finta = $this->aiFinta();
         $finta->prossimoErrore = new \RuntimeException('Il fornitore ha detto no.');
 
-        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
 
-        $this->assertSame(ImportazionePiano::FALLITA, $riga->stato);
+        $this->assertSame(ImportazioneDaDocumento::FALLITA, $riga->stato);
         $this->assertStringContainsString('fornitore', (string) $riga->errore);
         $this->assertNull($riga->bozza);
     }
@@ -390,20 +390,20 @@ class ImportazionePianoTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
         $percorsi = $riga->percorsi();
 
         $this->actingAs($this->iscritto)
-            ->deleteJson('/api/v1/importazioni-piani/'.$riga->id)
+            ->deleteJson('/api/v1/importazioni/'.$riga->id)
             ->assertOk()
             ->assertJsonPath('data.chiusa', true);
 
-        $this->assertNull(ImportazionePiano::withoutGlobalScopes()->find($riga->id));
+        $this->assertNull(ImportazioneDaDocumento::withoutGlobalScopes()->find($riga->id));
 
         foreach ($percorsi as $percorso) {
             Storage::disk('local')->assertMissing($percorso);
@@ -419,21 +419,21 @@ class ImportazionePianoTest extends TestCase
     {
         Queue::fake();
 
-        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
             'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
-        $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
         $riga->forceFill(['scade_il' => now()->subMinute()])->save();
 
         $this->actingAs($this->iscritto)
-            ->getJson('/api/v1/importazioni-piani/'.$riga->id)
+            ->getJson('/api/v1/importazioni/'.$riga->id)
             ->assertStatus(404);
 
         $this->artisan('piani:pota-importazioni')->assertSuccessful();
 
-        $this->assertNull(ImportazionePiano::withoutGlobalScopes()->find($riga->id));
+        $this->assertNull(ImportazioneDaDocumento::withoutGlobalScopes()->find($riga->id));
         foreach ($riga->percorsi() as $percorso) {
             Storage::disk('local')->assertMissing($percorso);
         }
@@ -459,7 +459,7 @@ class ImportazionePianoTest extends TestCase
      *
      * ══ 🚨 IL DIFETTO, E PERCHE' NESSUNO SE N'ERA ACCORTO ═════════════════
      *
-     * La rotta aveva `throttle:importazioni-piani` e basta. ⛔ Mandava un PDF ad
+     * La rotta aveva `throttle:importazioni` e basta. ⛔ Mandava un PDF ad
      * **Anthropic** — un piano alimentare, cioe' art. 9 — senza che nessuno
      * avesse mai chiesto il consenso a chi lo caricava.
      *
@@ -483,14 +483,14 @@ class ImportazionePianoTest extends TestCase
         );
 
         $this->actingAs($senzaConsenso)
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
             ])
             ->assertForbidden()
             ->assertJsonPath('code', 'ai_consent_required');
 
-        $this->assertSame(0, ImportazionePiano::query()->count());
+        $this->assertSame(0, ImportazioneDaDocumento::query()->count());
 
         /*
          * 🚨 **E nemmeno sul disco.** Il cancello sta prima della scrittura del
@@ -512,12 +512,12 @@ class ImportazionePianoTest extends TestCase
         $this->iscritto->forceFill(['ai_consent_at' => null])->save();
 
         $this->actingAs($this->iscritto->fresh())
-            ->postJson('/api/v1/importazioni-piani', [
+            ->postJson('/api/v1/importazioni', [
                 'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
             ])
             ->assertForbidden();
 
-        $this->assertSame(0, ImportazionePiano::query()->count());
+        $this->assertSame(0, ImportazioneDaDocumento::query()->count());
     }
 }
