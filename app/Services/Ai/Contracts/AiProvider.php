@@ -73,7 +73,17 @@ interface AiProvider
      */
     public function progressoScheda(array $context, AiCallContext $ctx): array;
 
-    public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan;
+    /**
+     * 🆕 **Una lista, e non un percorso solo** — K1, 03/09/2026.
+     *
+     * Una scheda su carta sono spesso due o tre pagine fotografate: accettarne
+     * una sola vorrebbe dire perdere il resto **senza accorgersene**.
+     *
+     * ⚠️ L'ordine e' quello di lettura, e va conservato.
+     *
+     * @param  list<string>  $percorsi
+     */
+    public function parseWorkoutPdf(array $percorsi, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan;
 
     /**
      * Trascrive un piano alimentare da PDF — N20.2.
@@ -83,8 +93,9 @@ interface AiProvider
      * ricopiarlo in una struttura, e finche' qualcuno non lo ha guardato riga
      * per riga non vale niente.
      */
+    /** @param  list<string>  $percorsi */
     public function trascriviPianoAlimentare(
-        string $absolutePath,
+        array $percorsi,
         AiCallContext $ctx,
         ?string $forceModel = null,
     ): PianoTrascritto;

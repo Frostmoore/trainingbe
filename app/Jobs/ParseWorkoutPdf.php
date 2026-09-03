@@ -88,7 +88,13 @@ class ParseWorkoutPdf implements ShouldQueue
             $modello = $ai->modelFor(AiFeature::PdfImport);
 
             try {
-                $bozza = $provider->parseWorkoutPdf($percorso, $ctx);
+                /*
+                 * ⚠️ **Una lista di uno** — K1. Questo job nasce dal pannello
+                 * palestra, dove si carica **un** PDF alla volta: la firma e'
+                 * cambiata per le fotografie dell'app (K2), qui il caso resta
+                 * quello di sempre.
+                 */
+                $bozza = $provider->parseWorkoutPdf([$percorso], $ctx);
             } catch (Throwable $e) {
                 // Primo tentativo fallito: si sale di modello **una volta**.
                 $this->escalation($import, $percorso, $ctx, $e->getMessage());
@@ -155,7 +161,7 @@ class ParseWorkoutPdf implements ShouldQueue
         $modello = $ai->escalationModel();
 
         try {
-            $bozza = $ai->for(AiFeature::PdfImport)->parseWorkoutPdf($percorso, $ctx, $modello);
+            $bozza = $ai->for(AiFeature::PdfImport)->parseWorkoutPdf([$percorso], $ctx, $modello);
 
             // Fra i due si tiene il migliore, non l'ultimo: il modello superiore
             // di solito fa meglio, ma non e' garantito.

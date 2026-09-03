@@ -52,6 +52,40 @@ class ImportazionePiano extends Model
     /** 💡 Lo stesso tetto degli allegati di chat: un PDF e' un PDF. */
     public const BYTE_MASSIMI = 10 * 1024 * 1024;
 
+    /**
+     * Quanti documenti in un'importazione sola — K1, 03/09/2026.
+     *
+     * 🚨 **Cinque, e non uno.** Una scheda su carta sono spesso due o tre pagine
+     * fotografate: accettarne una sola vorrebbe dire che chi ne fotografa una
+     * **perde il resto senza accorgersene** — la bozza esce con meta' scheda,
+     * plausibile e incompleta.
+     *
+     * ⚠️ Cinque e non venti: ogni pagina in piu' e' un'immagine intera dentro un
+     * prompt pagato a token, e oltre le cinque pagine il documento giusto da
+     * caricare e' un PDF.
+     */
+    public const AL_MASSIMO = 5;
+
+    /**
+     * I tipi di documento che si accettano.
+     *
+     * ⛔ **`heic` non c'e'**, ed e' voluto: Anthropic non lo accetta, e mandarlo
+     * darebbe un errore che sembra un guasto nostro. 💡 Il telefono lo converte
+     * prima di caricarlo, con la stessa libreria che usa per le foto del cibo.
+     *
+     * @var list<string>
+     */
+    public const MIME_AMMESSI = [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ];
+
+    public const TIPO_PDF = 'pdf';
+
+    public const TIPO_IMMAGINI = 'immagini';
+
     public const CARTELLA = 'piani-da-importare';
 
     /*
@@ -71,7 +105,7 @@ class ImportazionePiano extends Model
     public const FALLITA = 'fallita';
 
     protected $fillable = [
-        'user_id', 'tenant_id', 'token', 'nome_file', 'byte_totali',
+        'user_id', 'tenant_id', 'documenti', 'tipo', 'nome_file', 'byte_totali',
         'stato', 'bozza', 'modello_usato', 'errore', 'dichiarato_il', 'scade_il',
         'paga_con_gettoni',
     ];
@@ -80,6 +114,7 @@ class ImportazionePiano extends Model
     {
         return [
             'bozza' => 'array',
+            'documenti' => 'array',
             'byte_totali' => 'integer',
             'paga_con_gettoni' => 'boolean',
             'dichiarato_il' => 'datetime',
@@ -92,34 +127,75 @@ class ImportazionePiano extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function percorso(): string
+    /**
+     * I percorsi relativi dei documenti, **nell'ordine di lettura**.
+     *
+     * 🚨 L'ordine e' l'informazione principale quando si tratta di pagine
+     * fotografate: la seconda pagina letta per prima da una scheda che comincia
+     * da meta'.
+     *
+     * @return list<string>
+     */
+    public function percorsi(): array
     {
-        return self::CARTELLA.'/'.$this->token;
+        return array_map(
+            fn (array $d): string => self::CARTELLA.'/'.$d['token'],
+            $this->documenti ?? [],
+        );
     }
 
     /**
-     * Deposita il PDF e apre l'importazione.
+     * Deposita i documenti e apre l'importazione.
      *
-     * 🚨 **Prima il file, poi la riga**, come per gli allegati: nell'ordine
-     * inverso esisterebbe un istante in cui la riga promette un PDF che non
-     * c'e', e il lavoro partirebbe a vuoto.
+     * 🚨 **Prima i file, poi la riga**, come per gli allegati: nell'ordine
+     * inverso esisterebbe un istante in cui la riga promette documenti che non
+     * ci sono, e il lavoro partirebbe a vuoto.
+     *
+     * ⚠️ **`nome_file` e `byte_totali` si calcolano QUI, e in nessun altro
+     * posto.** Sono derivati da `documenti`: due sedi della stessa somma
+     * divergono, e la copia e' sempre quella che sbaglia.
+     *
+     * @param  list<array{byte: string, nome: string, mime: string}>  $files
      */
     public static function apri(
         User $chi,
-        string $byte,
-        string $nomeFile,
+        array $files,
         bool $pagaConGettoni = false,
     ): self {
-        $token = Str::random(48);
+        $disco = Storage::disk('local');
+        $documenti = [];
 
-        Storage::disk('local')->put(self::CARTELLA.'/'.$token, $byte);
+        foreach ($files as $file) {
+            $token = Str::random(48);
+
+            $disco->put(self::CARTELLA.'/'.$token, $file['byte']);
+
+            $documenti[] = [
+                'token' => $token,
+                'nome' => $file['nome'],
+                'mime' => $file['mime'],
+                'byte' => strlen($file['byte']),
+            ];
+        }
+
+        /*
+         * 💡 **Basta un PDF perche' l'importazione sia "da PDF".** Il tipo serve
+         * a decidere quale avvertenza mostrare, e l'avvertenza sulle immagini —
+         * *«l'analisi delle immagini e' generalmente meno accurata»* — ha senso
+         * solo quando **tutto** e' una fotografia.
+         */
+        $tipo = array_filter(
+            $documenti,
+            static fn (array $d): bool => $d['mime'] === 'application/pdf',
+        ) === [] ? self::TIPO_IMMAGINI : self::TIPO_PDF;
 
         return self::create([
             'user_id' => $chi->getKey(),
             'tenant_id' => $chi->tenant_id,
-            'token' => $token,
-            'nome_file' => $nomeFile,
-            'byte_totali' => strlen($byte),
+            'documenti' => $documenti,
+            'tipo' => $tipo,
+            'nome_file' => self::comeSiChiama($documenti),
+            'byte_totali' => array_sum(array_column($documenti, 'byte')),
             'stato' => self::IN_CODA,
             'paga_con_gettoni' => $pagaConGettoni,
             // 🚨 Con la data: chi importa dichiara che il piano l'ha redatto un
@@ -129,11 +205,53 @@ class ImportazionePiano extends Model
         ]);
     }
 
-    public function percorsoAssoluto(): ?string
+    /**
+     * Come si chiama, in una riga che una persona possa leggere.
+     *
+     * 💡 Un file solo porta il suo nome; tre fotografie diventano «3 immagini».
+     * ⛔ Mostrare il nome del primo direbbe che e' tutto li'.
+     *
+     * @param  list<array{nome: string, mime: string}>  $documenti
+     */
+    private static function comeSiChiama(array $documenti): string
+    {
+        if (count($documenti) === 1) {
+            return $documenti[0]['nome'];
+        }
+
+        return count($documenti).' immagini';
+    }
+
+    /**
+     * I percorsi assoluti dei documenti che esistono davvero.
+     *
+     * ⚠️ **Si filtra su cio' che c'e'**: un file sparito dal disco — pulizia,
+     * ripristino, un `butta()` a meta' — non deve far leggere al provider un
+     * percorso che non apre. 🚨 Ma se ne sparisce **uno su tre**, chi chiama
+     * deve accorgersene: vedi `documentiMancanti()`.
+     *
+     * @return list<string>
+     */
+    public function percorsiAssoluti(): array
     {
         $disco = Storage::disk('local');
 
-        return $disco->exists($this->percorso()) ? $disco->path($this->percorso()) : null;
+        return array_values(array_map(
+            fn (string $p): string => $disco->path($p),
+            array_filter($this->percorsi(), fn (string $p): bool => $disco->exists($p)),
+        ));
+    }
+
+    /**
+     * Quanti documenti dichiarati non ci sono piu' sul disco.
+     *
+     * 🚨 **Zero e' l'unico valore accettabile prima di chiamare il modello.**
+     * Trascrivere due pagine su tre non da' nessun errore: da' una scheda che
+     * comincia dal secondo giorno, e sembra completa.
+     */
+    public function documentiMancanti(): int
+    {
+        return count($this->percorsi()) - count($this->percorsiAssoluti());
     }
 
     public function inLavorazione(): void
@@ -170,10 +288,10 @@ class ImportazionePiano extends Model
         ]);
     }
 
-    /** Butta il PDF e la riga. */
+    /** Butta i documenti e la riga. */
     public function butta(): void
     {
-        Storage::disk('local')->delete($this->percorso());
+        Storage::disk('local')->delete($this->percorsi());
 
         $this->delete();
     }

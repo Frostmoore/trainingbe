@@ -9,6 +9,7 @@ use Anthropic\Core\Exceptions\APIConnectionException;
 use Anthropic\Core\Exceptions\APIStatusException;
 use Anthropic\Core\Exceptions\RateLimitException;
 use App\Enums\AiFeature;
+use App\Models\ImportazionePiano;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\AiUsageRecorder;
@@ -137,20 +138,99 @@ class AnthropicProvider implements AiProvider
         ];
     }
 
-    // ───────────────────────── PDF ─────────────────────────
+    // ─────────────────────── documenti e fotografie ───────────────────────
 
-    public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
+    /**
+     * I documenti da leggere, trasformati in blocchi per il modello — K1.
+     *
+     * ══ 🚨 UN POSTO SOLO PER DUE STRADE, E NON E' PIGRIZIA ════════════════
+     *
+     * Le schede e i piani alimentari arrivano dallo stesso posto — un foglio
+     * scannerizzato o fotografato — e ⛔ due sanificatori per lo stesso genere
+     * di dato divergono: quello che diverge per primo e' sempre la copia, cioe'
+     * quella meno provata.
+     *
+     * ══ ⚠️ UN PDF E' UN `document`, UNA FOTO E' UN'`image` ════════════════
+     *
+     * Sono due blocchi diversi nel protocollo, e mandare l'uno per l'altro non
+     * da' un errore comprensibile: da' un rifiuto del fornitore che, letto dal
+     * nostro `catch`, diventa *«l'AI non e' disponibile»*.
+     *
+     * 🚨 **L'ordine si conserva**, e per le fotografie e' l'informazione
+     * principale: la seconda pagina letta per prima da una scheda che comincia
+     * da meta'.
+     *
+     * @param  list<string>  $percorsi
+     * @return list<array<string, mixed>>
+     */
+    private function blocchiDelDocumento(array $percorsi): array
     {
-        if (! is_readable($absolutePath)) {
-            throw new AiUnavailableException('ai_pdf_unreadable', 'PDF non leggibile.');
+        if ($percorsi === []) {
+            throw new AiUnavailableException('ai_pdf_unreadable', 'Nessun documento da leggere.');
         }
 
-        $bytes = (int) filesize($absolutePath);
+        $blocchi = [];
+        $totale = 0;
 
-        if ($bytes > (int) config('ai.pdf.max_bytes')) {
-            throw new AiUnavailableException('ai_pdf_too_large', 'Il PDF supera il limite di dimensione.');
+        foreach ($percorsi as $percorso) {
+            if (! is_readable($percorso)) {
+                throw new AiUnavailableException('ai_pdf_unreadable', 'Documento non leggibile.');
+            }
+
+            /*
+             * 🚨 **Il tetto e' sulla SOMMA, non sul singolo file.** Cinque
+             * immagini da sette mega ciascuna sono trentacinque mega dentro una
+             * richiesta sola: controllarle una per una le lascerebbe passare
+             * tutte.
+             */
+            $totale += (int) filesize($percorso);
+
+            if ($totale > (int) config('ai.pdf.max_bytes')) {
+                throw new AiUnavailableException('ai_pdf_too_large', 'I documenti superano il limite di dimensione.');
+            }
+
+            $mime = $this->tipoDi($percorso);
+            $dati = base64_encode((string) file_get_contents($percorso));
+
+            $blocchi[] = $mime === 'application/pdf'
+                ? [
+                    'type' => 'document',
+                    'source' => ['type' => 'base64', 'media_type' => 'application/pdf', 'data' => $dati],
+                ]
+                : [
+                    'type' => 'image',
+                    'source' => ['type' => 'base64', 'media_type' => $mime, 'data' => $dati],
+                ];
         }
 
+        return $blocchi;
+    }
+
+    /**
+     * Che cos'e' questo file, **guardandolo**.
+     *
+     * ⛔ Non dall'estensione, e non dal `mime` dichiarato al caricamento: quello
+     * lo sceglie chi carica. 🚨 Qui si decide se mandare un `document` o
+     * un'`image`, e sbagliare vuol dire una richiesta rifiutata dal fornitore
+     * che arriva a chi guarda come *«l'AI non e' disponibile»*.
+     */
+    private function tipoDi(string $percorso): string
+    {
+        $mime = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($percorso);
+
+        if (! in_array($mime, ImportazionePiano::MIME_AMMESSI, true)) {
+            throw new AiUnavailableException(
+                'ai_pdf_unsupported',
+                'Questo tipo di documento non si puo\' leggere.',
+            );
+        }
+
+        return $mime;
+    }
+
+    /** @param  list<string>  $percorsi */
+    public function parseWorkoutPdf(array $percorsi, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
+    {
         $dati = $this->call(
             $ctx,
             $forceModel ?? $this->manager->modelFor(AiFeature::PdfImport, 'anthropic'),
@@ -158,14 +238,7 @@ class AnthropicProvider implements AiProvider
             [[
                 'role' => 'user',
                 'content' => [
-                    [
-                        'type' => 'document',
-                        'source' => [
-                            'type' => 'base64',
-                            'media_type' => 'application/pdf',
-                            'data' => base64_encode((string) file_get_contents($absolutePath)),
-                        ],
-                    ],
+                    ...$this->blocchiDelDocumento($percorsi),
                     [
                         'type' => 'text',
                         'text' => 'Estrai la scheda di allenamento contenuta in questo documento.',
@@ -179,19 +252,12 @@ class AnthropicProvider implements AiProvider
         return ParsedWorkoutPlan::fromArray($dati);
     }
 
+    /** @param  list<string>  $percorsi */
     public function trascriviPianoAlimentare(
-        string $absolutePath,
+        array $percorsi,
         AiCallContext $ctx,
         ?string $forceModel = null,
     ): PianoTrascritto {
-        if (! is_readable($absolutePath)) {
-            throw new AiUnavailableException('ai_pdf_unreadable', 'PDF non leggibile.');
-        }
-
-        if ((int) filesize($absolutePath) > (int) config('ai.pdf.max_bytes')) {
-            throw new AiUnavailableException('ai_pdf_too_large', 'Il PDF supera il limite di dimensione.');
-        }
-
         $dati = $this->call(
             $ctx,
             $forceModel ?? $this->manager->modelFor(AiFeature::NutritionPdfImport, 'anthropic'),
@@ -199,14 +265,7 @@ class AnthropicProvider implements AiProvider
             [[
                 'role' => 'user',
                 'content' => [
-                    [
-                        'type' => 'document',
-                        'source' => [
-                            'type' => 'base64',
-                            'media_type' => 'application/pdf',
-                            'data' => base64_encode((string) file_get_contents($absolutePath)),
-                        ],
-                    ],
+                    ...$this->blocchiDelDocumento($percorsi),
                     [
                         'type' => 'text',
                         'text' => 'Ricopia il piano alimentare contenuto in questo documento. Non correggere niente.',

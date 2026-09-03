@@ -36,13 +36,13 @@ namespace App\Support\Training;
  *
  * | Esercizio | Perche' |
  * |---|---|
-     * | `Girata` | non c'e' in nessuna delle due raccolte |
-     * | `Glute ham raise` | non c'e' in nessuna delle due raccolte |
-     * | `Leg curl in piedi` | il rasterizzatore sbaglia il disegno di Everkinetic |
-     * | `Pullover` | il rasterizzatore sbaglia il disegno di Everkinetic |
-     * | `Rullo per avambracci` | non c'e' in nessuna delle due raccolte |
-     * | `Slam ball` | non c'e' in nessuna delle due raccolte |
-     * | `Thruster` | non c'e' in nessuna delle due raccolte |
+ * | `Girata` | non c'e' in nessuna delle due raccolte |
+ * | `Glute ham raise` | non c'e' in nessuna delle due raccolte |
+ * | `Leg curl in piedi` | il rasterizzatore sbaglia il disegno di Everkinetic |
+ * | `Pullover` | il rasterizzatore sbaglia il disegno di Everkinetic |
+ * | `Rullo per avambracci` | non c'e' in nessuna delle due raccolte |
+ * | `Slam ball` | non c'e' in nessuna delle due raccolte |
+ * | `Thruster` | non c'e' in nessuna delle due raccolte |
  *
  * 💡 Per loro `Miniatura` disegna il segnaposto, che e' il comportamento che
  * aveva gia' per tutti.

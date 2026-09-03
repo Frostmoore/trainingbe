@@ -56,8 +56,31 @@ class ImportazionePianoController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => [
-                'required', 'file', 'mimes:pdf',
+            /*
+             * ══ 🆕 UNA LISTA, E NON SOLO PDF — K1, 03/09/2026 ═══════════════
+             *
+             * 📌 *«L'import di pdf per le schede e per i piani alimentari deve
+             * funzionare anche con le immagini»*.
+             *
+             * 🚨 **Fino a cinque**, perche' una scheda su carta sono spesso due
+             * o tre pagine fotografate: accettarne una sola vorrebbe dire che chi
+             * ne fotografa una **perde il resto senza accorgersene**.
+             *
+             * ⚠️ **`file` singolo non si accetta piu'.** Tenerlo per compatibilita'
+             * vorrebbe dire due strade che fanno la stessa cosa, e quella meno
+             * percorsa e' quella che si rompe in silenzio. 💡 L'app si aggiorna
+             * insieme al server: e' l'unico client che esiste.
+             */
+            'file' => ['required', 'array', 'min:1', 'max:'.ImportazionePiano::AL_MASSIMO],
+
+            /*
+             * ⛔ **`heic` non c'e'**, e non e' una dimenticanza: Anthropic non lo
+             * accetta, e lasciarlo passare darebbe un rifiuto del fornitore che
+             * a chi guarda arriva come *«l'AI non e' disponibile»*. 💡 Il telefono
+             * lo converte prima di caricare.
+             */
+            'file.*' => [
+                'required', 'file', 'mimes:pdf,jpg,jpeg,png,webp',
                 'max:'.(int) (ImportazionePiano::BYTE_MASSIMI / 1024),
             ],
 
@@ -79,12 +102,30 @@ class ImportazionePianoController extends Controller
          */
         $conGettoni = $this->cancello->apri($utente, AiFeature::NutritionPdfImport);
 
-        $importazione = ImportazionePiano::apri(
-            $utente,
-            (string) file_get_contents($request->file('file')->getRealPath()),
-            (string) $request->file('file')->getClientOriginalName(),
-            $conGettoni,
-        );
+        /*
+         * ⚠️ **L'ordine e' quello in cui arrivano**, e va conservato: per delle
+         * pagine fotografate e' l'informazione principale — la seconda letta per
+         * prima da' una scheda che comincia da meta'.
+         */
+        $files = [];
+
+        foreach ($request->file('file') as $caricato) {
+            $files[] = [
+                'byte' => (string) file_get_contents($caricato->getRealPath()),
+                'nome' => (string) $caricato->getClientOriginalName(),
+
+                /*
+                 * 🚨 **Il tipo si legge dal FILE, non da quello che dichiara chi
+                 * carica.** `getClientMimeType()` viene dal client e si puo'
+                 * scrivere a mano; `getMimeType()` guarda i byte. 💡 Da questo
+                 * dipende se il documento parte come `document` o come `image`,
+                 * e sbagliarlo e' una richiesta rifiutata dal fornitore.
+                 */
+                'mime' => (string) $caricato->getMimeType(),
+            ];
+        }
+
+        $importazione = ImportazionePiano::apri($utente, $files, $conGettoni);
 
         TrascriviPianoAlimentare::dispatch((int) $importazione->id);
 
@@ -119,14 +160,29 @@ class ImportazionePianoController extends Controller
     {
         $riga = $this->mia($request, $importazione);
 
-        if ($riga === null || $riga->percorsoAssoluto() === null) {
+        if ($riga === null || $riga->percorsiAssoluti() === []) {
             return response(['message' => __('Importazione non trovata.')], 404);
         }
 
+        /*
+         * ⚠️ **Si consegna il PRIMO documento** — K1, 03/09/2026.
+         *
+         * 🚨 Questa rotta e' nata quando i documenti erano uno: adesso possono
+         * essere cinque, e una risposta HTTP ne porta uno. ⛔ Consegnare il
+         * primo e tacere sugli altri sarebbe il difetto silenzioso di sempre —
+         * chi confronta crede di avere tutto.
+         *
+         * 💡 Non si aggiusta qui: **questa rotta sparisce con K1-bis**. Il
+         * telefono si tiene la propria copia dei documenti dal momento in cui li
+         * sceglie, e non ha piu' niente da riscaricare. Fino ad allora resta
+         * com'e', e serve solo alle importazioni da un file solo.
+         */
+        $primo = $riga->documenti[0];
+
         return Storage::disk('local')->response(
-            $riga->percorso(),
-            $riga->nome_file,
-            ['Content-Type' => 'application/pdf'],
+            $riga->percorsi()[0],
+            $primo['nome'],
+            ['Content-Type' => $primo['mime']],
         );
     }
 
@@ -189,6 +245,17 @@ class ImportazionePianoController extends Controller
             'stato' => $riga->stato,
             'nome_file' => $riga->nome_file,
             'byte_totali' => (int) $riga->byte_totali,
+
+            /*
+             * 💡 `pdf` o `immagini` — serve all'app per sapere **quale
+             * avvertenza** mostrare in revisione: 📌 *«l'analisi delle immagini
+             * e' generalmente meno accurata di quella dei PDF»*.
+             *
+             * ⚠️ Non si deduce dal nome del file: un `.pdf` puo' essere
+             * qualunque cosa, e il tipo qui e' stato deciso guardando i byte.
+             */
+            'tipo' => $riga->tipo,
+            'quanti_documenti' => count($riga->documenti ?? []),
             'bozza' => $riga->bozza,
             'errore' => $riga->errore,
             'scade_il' => $riga->scade_il?->toIso8601String(),

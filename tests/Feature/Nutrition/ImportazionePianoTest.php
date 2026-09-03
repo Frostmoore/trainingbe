@@ -103,7 +103,7 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $risposta = $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ]);
 
@@ -117,7 +117,10 @@ class ImportazionePianoTest extends TestCase
 
         $this->assertSame((int) $this->iscritto->id, (int) $riga->user_id);
         $this->assertNotNull($riga->dichiarato_il, 'La dichiarazione va registrata con la data.');
-        Storage::disk('local')->assertExists($riga->percorso());
+        // 💡 Uno per documento: da K1 possono essere fino a cinque.
+        foreach ($riga->percorsi() as $percorso) {
+            Storage::disk('local')->assertExists($percorso);
+        }
     }
 
     /**
@@ -128,7 +131,7 @@ class ImportazionePianoTest extends TestCase
     {
         Queue::fake();
 
-        foreach ([['file' => $this->unPdf()], ['file' => $this->unPdf(), 'dichiarazione' => false]] as $corpo) {
+        foreach ([['file' => [$this->unPdf()]], ['file' => [$this->unPdf()], 'dichiarazione' => false]] as $corpo) {
             $this->actingAs($this->iscritto)
                 ->postJson('/api/v1/importazioni-piani', $corpo)
                 ->assertStatus(422)
@@ -139,18 +142,141 @@ class ImportazionePianoTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    /**
+     * 🆕 **Anche le fotografie passano** — K1, 03/09/2026.
+     *
+     * ⛔ Questo test si chiamava `solo_i_pdf_passano` e provava che un `.jpg`
+     * prendesse un 422. 📌 Il committente: *«deve funzionare anche con le
+     * immagini»*.
+     *
+     * 💡 Quello che resta vero e' il **tipo dichiarato**: l'importazione sa di
+     * essere «da immagini», ed e' cio' che fa comparire l'avvertenza giusta —
+     * *«l'analisi delle immagini e' generalmente meno accurata di quella dei
+     * PDF»*.
+     */
     #[Test]
-    public function solo_i_pdf_passano(): void
+    public function anche_le_fotografie_passano(): void
     {
         Queue::fake();
 
         $this->actingAs($this->iscritto)
             ->postJson('/api/v1/importazioni-piani', [
-                'file' => UploadedFile::fake()->create('piano.jpg', 40, 'image/jpeg'),
+                'file' => [UploadedFile::fake()->image('pagina.jpg')],
+                'dichiarazione' => true,
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.tipo', ImportazionePiano::TIPO_IMMAGINI);
+    }
+
+    /**
+     * ⛔ **`heic` no**, e non e' una dimenticanza.
+     *
+     * 🚨 Anthropic non lo accetta: lasciarlo passare darebbe un rifiuto del
+     * fornitore che a chi guarda arriva come *«l'AI non e' disponibile»*, cioe'
+     * un guasto nostro per un file che non abbiamo mai potuto leggere.
+     * 💡 Il telefono lo converte prima di caricare.
+     */
+    #[Test]
+    public function un_formato_che_il_modello_non_legge_si_rifiuta_subito(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => [UploadedFile::fake()->create('pagina.heic', 40, 'image/heic')],
+                'dichiarazione' => true,
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('file.0');
+    }
+
+    /**
+     * 🚨 **Piu' pagine in un'importazione sola, nell'ordine in cui arrivano.**
+     *
+     * 📌 Una scheda su carta sono spesso due o tre pagine fotografate: ⛔
+     * accettarne una sola vorrebbe dire che chi ne fotografa una **perde il
+     * resto senza accorgersene** — la bozza esce con meta' scheda, plausibile e
+     * incompleta.
+     *
+     * ⚠️ E l'ordine e' l'informazione principale: la seconda pagina letta per
+     * prima da' una scheda che comincia da meta'.
+     */
+    #[Test]
+    public function piu_pagine_stanno_in_una_importazione_sola(): void
+    {
+        Queue::fake();
+
+        $risposta = $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => [
+                    UploadedFile::fake()->image('uno.jpg'),
+                    UploadedFile::fake()->image('due.jpg'),
+                    UploadedFile::fake()->image('tre.jpg'),
+                ],
+                'dichiarazione' => true,
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.quanti_documenti', 3);
+
+        $riga = ImportazionePiano::query()->findOrFail($risposta->json('data.id'));
+
+        $this->assertSame(
+            ['uno.jpg', 'due.jpg', 'tre.jpg'],
+            array_column($riga->documenti, 'nome'),
+            'L\'ordine delle pagine non e\' stato conservato.',
+        );
+
+        // 💡 E il nome mostrato non e' quello del primo file: direbbe che e' tutto li'.
+        $this->assertSame('3 immagini', $riga->nome_file);
+    }
+
+    /**
+     * ⛔ **Oltre cinque non si accettano.**
+     *
+     * 💡 Ogni pagina in piu' e' un'immagine intera dentro un prompt pagato a
+     * token, e oltre le cinque pagine il documento giusto da caricare e' un PDF.
+     */
+    #[Test]
+    public function oltre_cinque_documenti_si_rifiuta(): void
+    {
+        Queue::fake();
+
+        $troppe = [];
+
+        for ($i = 0; $i < ImportazionePiano::AL_MASSIMO + 1; $i++) {
+            $troppe[] = UploadedFile::fake()->image("pagina{$i}.jpg");
+        }
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => $troppe,
                 'dichiarazione' => true,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file');
+
+        $this->assertSame(0, ImportazionePiano::query()->count());
+    }
+
+    /**
+     * 🚨 **Un PDF fra le fotografie fa dell'importazione una «da PDF».**
+     *
+     * 💡 Il tipo serve a decidere quale avvertenza mostrare, e quella sulle
+     * immagini — *«generalmente meno accurata»* — ha senso solo quando **tutto**
+     * e' una fotografia.
+     */
+    #[Test]
+    public function basta_un_pdf_perche_non_sia_un_import_da_foto(): void
+    {
+        Queue::fake();
+
+        $this->actingAs($this->iscritto)
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => [UploadedFile::fake()->image('pagina.jpg'), $this->unPdf()],
+                'dichiarazione' => true,
+            ])
+            ->assertStatus(202)
+            ->assertJsonPath('data.tipo', ImportazionePiano::TIPO_PDF);
     }
 
     /**
@@ -166,7 +292,7 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
@@ -200,7 +326,7 @@ class ImportazionePianoTest extends TestCase
         $this->aiFinta();
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
@@ -244,7 +370,7 @@ class ImportazionePianoTest extends TestCase
         $finta->prossimoErrore = new \RuntimeException('Il fornitore ha detto no.');
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
@@ -265,12 +391,12 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
         $riga = ImportazionePiano::withoutGlobalScopes()->firstOrFail();
-        $percorso = $riga->percorso();
+        $percorsi = $riga->percorsi();
 
         $this->actingAs($this->iscritto)
             ->deleteJson('/api/v1/importazioni-piani/'.$riga->id)
@@ -278,7 +404,10 @@ class ImportazionePianoTest extends TestCase
             ->assertJsonPath('data.chiusa', true);
 
         $this->assertNull(ImportazionePiano::withoutGlobalScopes()->find($riga->id));
-        Storage::disk('local')->assertMissing($percorso);
+
+        foreach ($percorsi as $percorso) {
+            Storage::disk('local')->assertMissing($percorso);
+        }
     }
 
     /**
@@ -291,7 +420,7 @@ class ImportazionePianoTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni-piani', [
-            'file' => $this->unPdf(),
+            'file' => [$this->unPdf()],
             'dichiarazione' => true,
         ])->assertStatus(202);
 
@@ -305,7 +434,9 @@ class ImportazionePianoTest extends TestCase
         $this->artisan('piani:pota-importazioni')->assertSuccessful();
 
         $this->assertNull(ImportazionePiano::withoutGlobalScopes()->find($riga->id));
-        Storage::disk('local')->assertMissing($riga->percorso());
+        foreach ($riga->percorsi() as $percorso) {
+            Storage::disk('local')->assertMissing($percorso);
+        }
     }
 
     /**
@@ -353,7 +484,7 @@ class ImportazionePianoTest extends TestCase
 
         $this->actingAs($senzaConsenso)
             ->postJson('/api/v1/importazioni-piani', [
-                'file' => UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf'),
+                'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
             ])
             ->assertForbidden()
@@ -382,7 +513,7 @@ class ImportazionePianoTest extends TestCase
 
         $this->actingAs($this->iscritto->fresh())
             ->postJson('/api/v1/importazioni-piani', [
-                'file' => UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf'),
+                'file' => [UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf')],
                 'dichiarazione' => true,
             ])
             ->assertForbidden();

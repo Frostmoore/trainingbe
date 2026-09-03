@@ -212,9 +212,10 @@ class FakeAiProvider implements AiProvider
         ];
     }
 
-    public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
+    /** @param  list<string>  $percorsi */
+    public function parseWorkoutPdf(array $percorsi, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
     {
-        $this->record('parseWorkoutPdf', ['path' => $absolutePath, 'model' => $forceModel], $ctx);
+        $this->record('parseWorkoutPdf', ['paths' => $percorsi, 'model' => $forceModel], $ctx);
 
         return $this->nextPlan ?? ParsedWorkoutPlan::fromArray([
             'name' => 'Scheda importata',
@@ -226,12 +227,13 @@ class FakeAiProvider implements AiProvider
         ]);
     }
 
+    /** @param  list<string>  $percorsi */
     public function trascriviPianoAlimentare(
-        string $absolutePath,
+        array $percorsi,
         AiCallContext $ctx,
         ?string $forceModel = null,
     ): PianoTrascritto {
-        $this->record('trascriviPianoAlimentare', ['path' => $absolutePath, 'model' => $forceModel], $ctx);
+        $this->record('trascriviPianoAlimentare', ['paths' => $percorsi, 'model' => $forceModel], $ctx);
 
         /*
          * 💡 La trascrizione finta porta **un dubbio**, di proposito.

@@ -89,10 +89,17 @@ class TrascriviPianoAlimentare implements ShouldQueue
         }
 
         $palestre->runAs($palestra, function () use ($importazione, $utente, $ai, $cancello): void {
-            $percorso = $importazione->percorsoAssoluto();
+            $percorsi = $importazione->percorsiAssoluti();
 
-            if ($percorso === null || ! is_readable($percorso)) {
-                $importazione->fallisce('Il PDF non e\' piu\' leggibile.');
+            /*
+             * 🚨 **Basta che ne manchi UNO** — K1, 03/09/2026.
+             *
+             * ⛔ Non `$percorsi === []`: trascrivere due pagine su tre non da'
+             * nessun errore, da' una scheda che comincia dal secondo giorno — e
+             * sembra completa. 💡 O ci sono tutti, o non si parte.
+             */
+            if ($percorsi === [] || $importazione->documentiMancanti() > 0) {
+                $importazione->fallisce('I documenti non sono piu\' leggibili.');
 
                 return;
             }
@@ -103,7 +110,7 @@ class TrascriviPianoAlimentare implements ShouldQueue
 
             try {
                 $piano = $ai->for(AiFeature::NutritionPdfImport)->trascriviPianoAlimentare(
-                    $percorso,
+                    $percorsi,
                     AiCallContext::for($utente, AiFeature::NutritionPdfImport),
                 );
             } catch (Throwable $e) {

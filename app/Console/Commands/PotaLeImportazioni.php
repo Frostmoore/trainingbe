@@ -77,8 +77,21 @@ class PotaLeImportazioni extends Command
         $disco = Storage::disk('local');
         $soglia = now()->subHour()->getTimestamp();
 
-        $vivi = ImportazionePiano::withoutGlobalScopes()->pluck('token')->all();
-        $vivi = array_flip($vivi);
+        /*
+         * 🆕 **I token stanno dentro `documenti`** — K1, 03/09/2026.
+         *
+         * ⛔ Qui c'era `pluck('token')`: una colonna sola, un documento solo.
+         * 🚨 Dopo K1 un'importazione ne ha fino a cinque, e leggerne uno
+         * vorrebbe dire che gli altri quattro risultano **orfani** — e questo
+         * comando li cancellerebbe da sotto a un'importazione viva.
+         */
+        $vivi = [];
+
+        foreach (ImportazionePiano::withoutGlobalScopes()->pluck('documenti') as $documenti) {
+            foreach ((array) $documenti as $documento) {
+                $vivi[$documento['token']] = true;
+            }
+        }
 
         $quanti = 0;
 

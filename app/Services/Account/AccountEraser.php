@@ -6,7 +6,6 @@ namespace App\Services\Account;
 
 use App\Models\AiAdvice;
 use App\Models\ChatKey;
-use App\Models\DailyBurn;
 use App\Models\DeviceToken;
 use App\Models\FoodEntry;
 use App\Models\FoodFavorite;
@@ -15,7 +14,6 @@ use App\Models\RecoveryKey;
 use App\Models\SocialIdentity;
 use App\Models\User;
 use App\Models\WorkoutPlan;
-use App\Models\WorkoutSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
