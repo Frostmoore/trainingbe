@@ -103,6 +103,18 @@ final class Prompts
         6. Se ricevi piu' immagini, sono le PAGINE dello stesso documento,
            nell'ordine in cui te le do. Non ripetere lo stesso giorno due volte
            perche' compare in fondo a una pagina e in cima alla successiva.
+        7. LE ALTERNATIVE NON SONO PASTI IN PIU'. Quando il documento propone una
+           variante — "Alternative rapide", "in alternativa", "oppure",
+           "Colazione alternativa" — quella e' un modo DIVERSO di fare un pasto
+           che c'e' gia', non un pasto aggiuntivo della giornata.
+           Mettila in "alternative" DENTRO il pasto che sostituisce, con i suoi
+           alimenti. Se il documento non dice quale pasto sostituisce, guarda il
+           nome: "Colazione alternativa" sostituisce la colazione.
+           Se proprio non si capisce a quale pasto si riferisce, mettila come
+           alternativa dell'ultimo pasto del giorno e scrivilo nei "dubbi".
+
+           Se le metti come pasti normali, la giornata risulta di otto pasti
+           invece di cinque, e chi la legge crede di doverli mangiare tutti.
 
         Il tuo lavoro e' fedelta', non qualita'. Un valore mancante si corregge
         in due secondi; un valore inventato non lo scopre nessuno.
@@ -173,31 +185,42 @@ final class Prompts
                                 'items' => [
                                     'type' => 'object',
                                     'additionalProperties' => false,
-                                    'required' => ['tipo', 'orario', 'alimenti'],
+                                    'required' => ['tipo', 'orario', 'alimenti', 'alternative'],
                                     'properties' => [
                                         'tipo' => ['type' => 'string'],
                                         'orario' => ['type' => ['string', 'null']],
-                                        'alimenti' => [
+                                        'alimenti' => self::alimentiDelPasto(),
+
+                                        /*
+                                         * ══ 🚨 LE ALTERNATIVE STANNO DENTRO IL
+                                         *    PASTO CHE SOSTITUISCONO ═════════
+                                         *
+                                         * ⛔ Prima non c'era nessun posto dove
+                                         * metterle, e su un documento vero (K7)
+                                         * il modello faceva l'unica cosa che
+                                         * poteva: le metteva come **pasti
+                                         * normali**. Una giornata di cinque
+                                         * pasti ne mostrava otto, e chi la legge
+                                         * crede di doverli mangiare tutti.
+                                         *
+                                         * ⚠️ **Un livello solo, non ricorsivo**:
+                                         * l'alternativa di un'alternativa non
+                                         * esiste su nessun foglio, e uno schema
+                                         * ricorsivo qui vorrebbe dire una
+                                         * struttura che nessuno sa disegnare.
+                                         */
+                                        'alternative' => [
                                             'type' => 'array',
                                             'items' => [
                                                 'type' => 'object',
                                                 'additionalProperties' => false,
-                                                'required' => ['descrizione', 'grammi', 'quantita'],
+                                                'required' => ['tipo', 'alimenti'],
                                                 'properties' => [
-                                                    'descrizione' => ['type' => 'string'],
-
-                                                    /*
-                                                     * 🚨 **`null` e' un valore
-                                                     * legittimo, e va potuto
-                                                     * dire.** Se sul foglio c'e'
-                                                     * «un cucchiaio di miele» il
-                                                     * peso non c'e': inventarlo
-                                                     * sarebbe esattamente
-                                                     * l'errore che la revisione
-                                                     * esiste per intercettare.
-                                                     */
-                                                    'grammi' => ['type' => ['number', 'null']],
-                                                    'quantita' => ['type' => ['string', 'null']],
+                                                    // 💡 Il nome che il documento
+                                                    // le da': «Colazione
+                                                    // alternativa».
+                                                    'tipo' => ['type' => 'string'],
+                                                    'alimenti' => self::alimentiDelPasto(),
                                                 ],
                                             ],
                                         ],
@@ -206,6 +229,41 @@ final class Prompts
                             ],
                         ],
                     ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Gli alimenti di un pasto — lo stesso pezzo per il pasto e per le sue
+     * alternative.
+     *
+     * ⚠️ **Scritto una volta sola apposta.** Due copie della stessa struttura
+     * divergono: si aggiunge un campo di qua e ci si dimentica di la', e le
+     * alternative restano indietro **in silenzio** — sono la parte che nessuno
+     * guarda finche' non gli serve.
+     *
+     * @return array<string, mixed>
+     */
+    private static function alimentiDelPasto(): array
+    {
+        return [
+            'type' => 'array',
+            'items' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'required' => ['descrizione', 'grammi', 'quantita'],
+                'properties' => [
+                    'descrizione' => ['type' => 'string'],
+
+                    /*
+                     * 🚨 **`null` e' un valore legittimo, e va potuto dire.** Se
+                     * sul foglio c'e' «un cucchiaio di miele» il peso non c'e':
+                     * inventarlo sarebbe esattamente l'errore che la revisione
+                     * esiste per intercettare.
+                     */
+                    'grammi' => ['type' => ['number', 'null']],
+                    'quantita' => ['type' => ['string', 'null']],
                 ],
             ],
         ];
