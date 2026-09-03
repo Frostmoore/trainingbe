@@ -623,8 +623,32 @@ Route::prefix('v1')->group(function (): void {
         //
         // ⚠️ Costa 50 gettoni: il cancello si apre nel `store`, i gettoni si
         // scalano nel job e **solo se la trascrizione riesce**.
+        //
+        /*
+         * ══ 🔴 `ai.consent` — AGGIUNTO IL 03/09/2026, ED ERA UN BUCO ═════════
+         *
+         * ⛔ Questa rotta manda un PDF ad **Anthropic** e non aveva il cancello
+         * del consenso: dal 19/08 (N20) chi non aveva mai acconsentito all'AI —
+         * o chi l'aveva **revocato** — poteva caricare il proprio piano
+         * alimentare e vederselo trasferire negli Stati Uniti.
+         *
+         * 🚨 Un piano alimentare e' art. 9: senza consenso esplicito quel
+         * trasferimento non ha nessuna base giuridica.
+         *
+         * 💡 Ed e' esattamente il difetto che il docblock di `RequireAiConsent`
+         * descrive parola per parola: *«deve valere su ogni rotta AI, comprese
+         * quelle che non esistono ancora. Il prossimo endpoint AI che qualcuno
+         * aggiungera' partira' scoperto, e non se ne accorgera' nessuno — la
+         * chiamata funzionerebbe benissimo»*. E' successo.
+         *
+         * ⚠️ **Solo qui, e non sulle altre tre.** `show`, `pdf` e `destroy` non
+         * mandano niente a nessuno: metterci il cancello vorrebbe dire che chi
+         * revoca il consenso non puo' piu' riprendersi ne' cancellare la propria
+         * bozza. ⛔ Una revoca che chiude fuori dai propri dati e' l'opposto di
+         * quello che una revoca deve fare.
+         */
         Route::post('importazioni-piani', [ImportazionePianoController::class, 'store'])
-            ->middleware('throttle:importazioni-piani');
+            ->middleware(['ai.consent', 'throttle:importazioni-piani']);
         Route::get('importazioni-piani/{importazione}', [ImportazionePianoController::class, 'show'])
             ->whereNumber('importazione');
         Route::get('importazioni-piani/{importazione}/pdf', [ImportazionePianoController::class, 'pdf'])

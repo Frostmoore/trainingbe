@@ -73,6 +73,23 @@ class ImportazionePianoTest extends TestCase
          */
         $this->palestra->forceFill(['ai_credits' => 500])->save();
         $this->iscritto->refresh()->load('tenant');
+
+        /*
+         * ── 🔴 E il CONSENSO, che prima del 03/09/2026 non serviva ─────────
+         *
+         * ⛔ `POST importazioni-piani` manda un PDF ad Anthropic e **non aveva
+         * `ai.consent`**: dal 19/08 chi non aveva mai acconsentito — o chi
+         * aveva revocato — poteva vedersi trasferire il proprio piano
+         * alimentare negli Stati Uniti.
+         *
+         * 🚨 **E tutti i test di questo file giravano senza consenso, verdi.**
+         * E' la prova che il buco c'era: nessuno di loro ha mai dovuto darlo,
+         * perche' nessuno glielo chiedeva.
+         *
+         * 💡 Adesso serve, e `senza_consenso_non_si_carica_niente()` sta qui
+         * sotto a difenderlo.
+         */
+        $this->iscritto->accendiLAi();
     }
 
     private function unPdf(string $nome = 'piano.pdf'): UploadedFile
@@ -304,5 +321,72 @@ class ImportazionePianoTest extends TestCase
         $this->assertSame(50, AiFeature::NutritionPdfImport->costoInGettoni());
         $this->assertSame(10, AiFeature::FoodPhoto->costoInGettoni());
         $this->assertSame(1, AiFeature::FoodText->costoInGettoni());
+    }
+
+    /**
+     * 🔴 **Senza consenso non si carica niente** — buco chiuso il 03/09/2026.
+     *
+     * ══ 🚨 IL DIFETTO, E PERCHE' NESSUNO SE N'ERA ACCORTO ═════════════════
+     *
+     * La rotta aveva `throttle:importazioni-piani` e basta. ⛔ Mandava un PDF ad
+     * **Anthropic** — un piano alimentare, cioe' art. 9 — senza che nessuno
+     * avesse mai chiesto il consenso a chi lo caricava.
+     *
+     * 💡 Ed e' **parola per parola** il difetto che il docblock di
+     * `RequireAiConsent` descrive: *«deve valere su ogni rotta AI, comprese
+     * quelle che non esistono ancora. Il prossimo endpoint AI che qualcuno
+     * aggiungera' partira' scoperto, e non se ne accorgera' nessuno — la
+     * chiamata funzionerebbe benissimo»*. E' successo con N20, il 19/08.
+     *
+     * ⚠️ **E vale anche per la revoca**, che e' il caso piu' importante: chi
+     * toglie il consenso non deve poter mandare altro. Un consenso che non si
+     * puo' ritirare non e' un consenso.
+     */
+    #[Test]
+    public function senza_consenso_non_si_carica_niente(): void
+    {
+        $senzaConsenso = $this->creaUtente(
+            $this->palestra,
+            UserRole::Member,
+            'bruno@olimpo.it',
+        );
+
+        $this->actingAs($senzaConsenso)
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf'),
+                'dichiarazione' => true,
+            ])
+            ->assertForbidden()
+            ->assertJsonPath('code', 'ai_consent_required');
+
+        $this->assertSame(0, ImportazionePiano::query()->count());
+
+        /*
+         * 🚨 **E nemmeno sul disco.** Il cancello sta prima della scrittura del
+         * file: aprire l'importazione e poi rifiutarla vorrebbe dire un PDF con
+         * dentro la dieta di qualcuno depositato sul nostro disco per niente.
+         */
+        $this->assertEmpty(Storage::disk('local')->allFiles());
+    }
+
+    /**
+     * ⚠️ **Chi REVOCA non puo' caricare piu' niente.**
+     *
+     * 💡 E' lo stesso cancello, ma il caso che conta davvero: il consenso dato
+     * una volta e mai piu' ritirabile non sarebbe un consenso.
+     */
+    #[Test]
+    public function chi_revoca_il_consenso_non_carica_piu(): void
+    {
+        $this->iscritto->forceFill(['ai_consent_at' => null])->save();
+
+        $this->actingAs($this->iscritto->fresh())
+            ->postJson('/api/v1/importazioni-piani', [
+                'file' => UploadedFile::fake()->create('piano.pdf', 40, 'application/pdf'),
+                'dichiarazione' => true,
+            ])
+            ->assertForbidden();
+
+        $this->assertSame(0, ImportazionePiano::query()->count());
     }
 }
