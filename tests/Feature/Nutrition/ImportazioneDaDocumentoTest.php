@@ -744,4 +744,42 @@ class ImportazioneDaDocumentoTest extends TestCase
         $this->assertFalse($riga->eUnaScheda());
         $this->assertSame(AiFeature::NutritionPdfImport, $riga->funzione());
     }
+
+    /**
+     * 🚨 **Le righe di una scheda si contano sugli esercizi.**
+     *
+     * ⛔ Fino a K il conteggio scendeva **sempre** dentro `giorni -> pasti ->
+     * alimenti`, che e' la forma di un piano alimentare. Su una scheda quelle
+     * chiavi non esistono, e il risultato sarebbe stato **zero** — senza nessun
+     * errore da nessuna parte.
+     *
+     * ⚠️ E zero non e' un numero neutro: la barra della revisione avrebbe
+     * scritto *«0 righe da controllare»* su una scheda che ne ha due, cioe'
+     * avrebbe detto a chi deve confrontare che non c'e' niente da confrontare.
+     */
+    #[Test]
+    public function le_righe_di_una_scheda_si_contano_sugli_esercizi(): void
+    {
+        $this->aiFinta();
+
+        $this->actingAs($this->iscritto)->postJson('/api/v1/importazioni', [
+            'file' => [$this->unPdf('scheda.pdf')],
+            'dichiarazione' => true,
+            'consenso_documento' => true,
+            'genere' => ImportazioneDaDocumento::GENERE_SCHEDA,
+        ])->assertStatus(202);
+
+        $riga = ImportazioneDaDocumento::withoutGlobalScopes()->firstOrFail();
+
+        $attese = count((array) ($riga->refresh()->bozza['exercises'] ?? []));
+
+        // 💡 Il doppio finto risponde con una scheda vera: se un giorno non lo
+        // facesse piu', questo test lo direbbe invece di passare a vuoto.
+        $this->assertGreaterThan(0, $attese);
+
+        $this->actingAs($this->iscritto)
+            ->getJson('/api/v1/importazioni/'.$riga->id)
+            ->assertOk()
+            ->assertJsonPath('data.righe', $attese);
+    }
 }

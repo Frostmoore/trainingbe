@@ -293,8 +293,25 @@ class ImportazioneDaDocumentoController extends Controller
         ];
     }
 
+    /**
+     * ══ 🚨 SI CONTA DIVERSAMENTE A SECONDA DI COSA E' — K2, 03/09/2026 ═════
+     *
+     * ⛔ Fino a K questo metodo scendeva **sempre** dentro `giorni → pasti →
+     * alimenti`, che e' la forma di un piano alimentare. Su una scheda quelle
+     * chiavi non esistono: il conto sarebbe uscito **zero**, e nessun errore da
+     * nessuna parte.
+     *
+     * 🚨 E zero non e' un numero neutro. La barra della revisione scrive *«0
+     * righe da controllare»* su una scheda che ne ha trentaquattro — cioe' dice
+     * a chi deve confrontare che non c'e' niente da confrontare, che e'
+     * l'esatto contrario del motivo per cui quel numero si mostra.
+     */
     private function quanteRighe(ImportazioneDaDocumento $riga): int
     {
+        if ($riga->eUnaScheda()) {
+            return count((array) ($riga->bozza['exercises'] ?? []));
+        }
+
         $totale = 0;
 
         foreach ((array) ($riga->bozza['giorni'] ?? []) as $giorno) {
