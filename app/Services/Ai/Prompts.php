@@ -337,6 +337,14 @@ final class Prompts
         Se non sai stimare il peso del pezzo, usa la porzione media, unit «g» e una
         confidence piu' bassa. Non inventare unita'.
 
+        REGOLA CHE NON SI PUO' VIOLARE: `qty` per `unit` deve fare esattamente
+        `grams`. Se unit e' «g», allora qty E' grams: non il numero dei pezzi.
+        - «un cinnamon roll» -> qty 100, unit «g», grams 100. NON qty 1.
+        - «una salsiccia»    -> qty 80,  unit «g», grams 80.  NON qty 1.
+        Il conteggio dei pezzi resta nel `name`, che e' il posto dove si rilegge:
+        scriverlo in `qty` fa comparire «1 g» accanto a 315 kcal, e chi guarda
+        pensa che il programma sia rotto.
+
         Unita' domestiche: il peso dipende dall'alimento, mai una conversione meccanica.
         - 1 cucchiaio: olio ~14 g, miele ~21 g, farina ~8 g, zucchero raso ~12 g;
         - 1 bicchiere: acqua ~200 ml, vino ~125 ml;
