@@ -13,6 +13,8 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ColorColumn;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -31,60 +33,94 @@ class TenantsTable
     public static function configure(Table $table): Table
     {
         return $table
+            /*
+             * ══ 🃏 SCHEDE, NON RIGHE — 09/09/2026 ════════════════════════
+             *
+             * 📌 *«fai tutto con cards. Stessi elementi»*. Il perché per esteso
+             * sta in `UsersTable`; qui vale la stessa cosa, e in più il colore
+             * della palestra in una scheda **serve davvero**: in tabella era una
+             * pallina in una colonna senza titolo, qui è il primo segno che
+             * distingue una palestra dall'altra a colpo d'occhio.
+             */
+            ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
-                ColorColumn::make('color_primary')
-                    ->label('')
-                    ->tooltip('Colore principale'),
+                Stack::make([
+                    /*
+                     * ⚠️ **Il colore accanto al nome, non sopra.** Da solo su
+                     * una riga sarebbe una pallina sospesa che non si capisce
+                     * cosa qualifichi.
+                     */
+                    Split::make([
+                        ColorColumn::make('color_primary')
+                            ->label('')
+                            ->tooltip('Colore principale')
+                            ->grow(false),
 
-                TextColumn::make('name')
-                    ->label('Palestra')
-                    ->searchable()
-                    ->sortable()
-                    ->description(fn (Tenant $r): string => $r->slug)
-                    ->weight('bold'),
+                        TextColumn::make('name')
+                            ->label('Palestra')
+                            ->searchable()
+                            ->sortable()
+                            ->description(fn (Tenant $r): string => $r->slug)
+                            ->weight('bold'),
+                    ]),
 
-                TextColumn::make('join_code')
-                    ->label('Codice')
-                    ->searchable()
-                    ->copyable()
-                    ->copyMessage('Codice copiato')
-                    ->fontFamily('mono'),
+                    TextColumn::make('join_code')
+                        ->label('Codice')
+                        ->searchable()
+                        ->copyable()
+                        ->copyMessage('Codice copiato')
+                        ->fontFamily('mono')
+                        // 💡 Il prefisso sostituisce l'intestazione che nella
+                        // scheda non c'è: otto caratteri in mono, da soli,
+                        // potrebbero essere qualunque cosa.
+                        ->prefix('codice ')
+                        ->color('gray'),
 
-                TextColumn::make('status')
-                    ->label('Stato')
-                    ->badge()
-                    ->formatStateUsing(fn (TenantStatus $state): string => $state->label())
-                    ->color(fn (TenantStatus $state): string => $state->color()),
+                    Split::make([
+                        TextColumn::make('status')
+                            ->label('Stato')
+                            ->badge()
+                            ->formatStateUsing(fn (TenantStatus $state): string => $state->label())
+                            ->color(fn (TenantStatus $state): string => $state->color()),
 
-                TextColumn::make('plan')
-                    ->label('Piano')
-                    ->badge()
-                    ->color('gray'),
+                        TextColumn::make('plan')
+                            ->label('Piano')
+                            ->badge()
+                            ->color('gray'),
 
-                // Conteggi via `withCount` nella query: senza, ogni riga
-                // farebbe la sua query e l'elenco ne sparerebbe una per palestra.
-                TextColumn::make('users_count')
-                    ->label('Utenti')
-                    ->counts('users')
-                    ->alignCenter()
-                    ->sortable(),
+                        // Conteggi via `withCount` nella query: senza, ogni riga
+                        // farebbe la sua query e l'elenco ne sparerebbe una per palestra.
+                        TextColumn::make('users_count')
+                            ->label('Utenti')
+                            ->counts('users')
+                            ->badge()
+                            ->icon('heroicon-m-users')
+                            ->color('gray')
+                            ->sortable(),
+                    ])->from('sm'),
 
-                TextColumn::make('trial_ends_at')
-                    ->label('Prova fino al')
-                    ->dateTime('d/m/Y')
-                    ->placeholder('—')
-                    // Rosso se il periodo di prova è già scaduto: è il caso in
-                    // cui l'abbonamento sembra attivo ma nessuno può entrare.
-                    ->color(fn (?Carbon $state): string => $state !== null && $state->isPast()
-                        ? 'danger'
-                        : 'gray')
-                    ->sortable(),
+                    TextColumn::make('trial_ends_at')
+                        ->label('Prova fino al')
+                        ->dateTime('d/m/Y')
+                        ->placeholder('—')
+                        ->prefix('prova fino al ')
+                        ->size('xs')
+                        // Rosso se il periodo di prova è già scaduto: è il caso in
+                        // cui l'abbonamento sembra attivo ma nessuno può entrare.
+                        ->color(fn (?Carbon $state): string => $state !== null && $state->isPast()
+                            ? 'danger'
+                            : 'gray')
+                        ->sortable(),
 
-                TextColumn::make('created_at')
-                    ->label('Creata')
-                    ->date('d/m/Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    TextColumn::make('created_at')
+                        ->label('Creata')
+                        ->date('d/m/Y')
+                        ->prefix('creata il ')
+                        ->size('xs')
+                        ->color('gray')
+                        ->sortable()
+                        ->toggleable(isToggledHiddenByDefault: true),
+                ])->space(2),
             ])
             ->filters([
                 SelectFilter::make('status')

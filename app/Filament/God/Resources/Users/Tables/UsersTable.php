@@ -20,6 +20,8 @@ use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -40,59 +42,116 @@ class UsersTable
     public static function configure(Table $table): Table
     {
         return $table
+            /*
+             * ══ 🃏 SCHEDE, NON RIGHE — 09/09/2026 ════════════════════════
+             *
+             * 📌 Il committente: *«mi sono rotto il cazzo de ste tabelle, fanno
+             * schifo su ogni tipo di schermo, fai tutto con cards. Stessi
+             * elementi»*.
+             *
+             * ⛔ **Una tabella con otto colonne non ha una larghezza a cui stia
+             * bene.** Su un telefono si accavalla, su un monitor largo lascia
+             * metà schermo vuoto e allontana il nome dall'ultimo dato della sua
+             * stessa riga: per leggere una persona bisogna attraversare tutto.
+             *
+             * ✅ **Stessi elementi, stesse azioni, stessi filtri.** `Stack` e
+             * `Split` sono componenti di **impaginazione**: le colonne restano
+             * quelle di prima, cambia dove finiscono.
+             *
+             * ⚠️ **Ricerca e ordinamento non si perdono**: Filament appiattisce
+             * le colonne dentro i layout (`HasColumns::columns()`), quindi
+             * `searchable()` e `sortable()` continuano a valere e la tendina
+             * «ordina» compare da sola nella barra.
+             *
+             * 🚨 **Ma le ETICHETTE spariscono.** Dentro una scheda non c'è
+             * nessuna intestazione di colonna: un `09/09/2026` da solo non dice
+             * se è la data di iscrizione o dell'ultimo accesso. ⛔ Per questo
+             * ogni valore che non si spiega da sé ha adesso un **prefisso** o
+             * un'**icona**. Senza, sarebbe una tabella smontata invece che una
+             * scheda.
+             */
+            ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
-                TextColumn::make('name')
-                    ->label('Nome')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->description(fn (User $r): string => $r->username !== null ? '@'.$r->username : ''),
+                Stack::make([
+                    TextColumn::make('name')
+                        ->label('Nome')
+                        ->searchable()
+                        ->sortable()
+                        ->weight('bold')
+                        ->description(fn (User $r): string => $r->username !== null ? '@'.$r->username : ''),
 
-                TextColumn::make('email')
-                    ->label('Email')
-                    ->searchable()
-                    ->copyable()
-                    ->copyMessage('Email copiata'),
+                    TextColumn::make('email')
+                        ->label('Email')
+                        ->searchable()
+                        ->copyable()
+                        ->copyMessage('Email copiata')
+                        // 💡 L'icona sostituisce l'intestazione che nella scheda
+                        // non c'è: una riga di testo con la @ dentro si riconosce,
+                        // ma l'icona la trova l'occhio prima di leggere.
+                        ->icon('heroicon-m-envelope')
+                        ->color('gray'),
 
-                TextColumn::make('tenant.name')
-                    ->label('Palestra')
-                    ->placeholder('Piattaforma')
-                    ->badge()
-                    ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray')
-                    ->sortable(),
+                    /*
+                     * ⚠️ **Le due targhette stanno affiancate**, non impilate:
+                     * la palestra e i ruoli sono la stessa domanda — «chi è
+                     * questo dentro il prodotto» — e su righe separate una
+                     * scheda diventa alta il doppio senza dire niente di più.
+                     */
+                    Split::make([
+                        TextColumn::make('tenant.name')
+                            ->label('Palestra')
+                            ->placeholder('Piattaforma')
+                            ->badge()
+                            ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray')
+                            ->sortable(),
 
-                TextColumn::make('ruoli')
-                    ->label('Ruoli')
-                    ->badge()
-                    ->separator(',')
-                    // Non `->roles`: in modalita' teams la relazione e' filtrata
-                    // sul tenant corrente e qui il contesto e' vuoto, quindi
-                    // sarebbe vuota per tutti. Si legge la pivot direttamente.
-                    ->getStateUsing(fn (User $r): array => static::ruoliDi($r))
-                    // 💡 I due ruoli senza palestra restano `gray` come gli
-                    // iscritti: il colore qui serve a far saltare all'occhio
-                    // **chi ha poteri**, e loro non ne hanno sulla piattaforma.
-                    ->color(fn (string $state): string => match ($state) {
-                        UserRole::SuperAdmin->value => 'danger',
-                        UserRole::GymAdmin->value => 'warning',
-                        UserRole::Trainer->value, UserRole::FreeTrainer->value => 'info',
-                        default => 'gray',
-                    }),
+                        TextColumn::make('ruoli')
+                            ->label('Ruoli')
+                            ->badge()
+                            ->separator(',')
+                                // Non `->roles`: in modalita' teams la relazione e' filtrata
+                                // sul tenant corrente e qui il contesto e' vuoto, quindi
+                                // sarebbe vuota per tutti. Si legge la pivot direttamente.
+                            ->getStateUsing(fn (User $r): array => static::ruoliDi($r))
+                                // 💡 I due ruoli senza palestra restano `gray` come gli
+                                // iscritti: il colore qui serve a far saltare all'occhio
+                                // **chi ha poteri**, e loro non ne hanno sulla piattaforma.
+                            ->color(fn (string $state): string => match ($state) {
+                                UserRole::SuperAdmin->value => 'danger',
+                                UserRole::GymAdmin->value => 'warning',
+                                UserRole::Trainer->value, UserRole::FreeTrainer->value => 'info',
+                                default => 'gray',
+                            }),
 
-                IconColumn::make('is_active')
-                    ->label('Attivo')
-                    ->boolean()
-                    ->alignCenter()
-                    ->sortable(),
+                    ])->from('sm'),
 
-                TextColumn::make('last_login_at')
-                    ->label('Ultimo accesso')
-                    ->dateTime('d/m/Y H:i')
-                    ->placeholder('mai')
-                    ->sortable()
-                    ->toggleable(),
+                    /*
+                 * 🚨 **`IconColumn` è diventato un testo, ed è l'unico elemento
+                 * cambiato davvero.** In una tabella una spunta sotto la
+                 * colonna «Attivo» si capisce; in una scheda una spunta da
+                 * sola, senza intestazione, non dice **di cosa** sia la spunta.
+                 * 💡 La targhetta dice la parola.
+                 */
+                    TextColumn::make('is_active')
+                        ->label('Attivo')
+                        ->badge()
+                        ->formatStateUsing(fn (bool $state): string => $state ? 'attivo' : 'disattivato')
+                        ->color(fn (bool $state): string => $state ? 'success' : 'danger')
+                        ->sortable(),
 
-                /*
+                    TextColumn::make('last_login_at')
+                        ->label('Ultimo accesso')
+                        ->dateTime('d/m/Y H:i')
+                        ->placeholder('mai')
+                        // ⛔ Senza il prefisso questa data e quella di iscrizione
+                        // sono due numeri identici in due righe vicine.
+                        ->prefix('ultimo accesso: ')
+                        ->size('xs')
+                        ->color('gray')
+                        ->sortable()
+                        ->toggleable(),
+
+                    /*
                  * La quota AI **effettiva** — 14/08/2026.
                  *
                  * 🚨 Non e' la colonna `ai_monthly_call_cap`, ed e' la ragione
@@ -104,23 +163,27 @@ class UsersTable
                  * ⚠️ Costa una query per riga, percio' e' spenta di default:
                  * chi fa supporto la accende quando gli serve.
                  */
-                TextColumn::make('quota_ai')
-                    ->label('Quota AI')
-                    ->badge()
-                    ->getStateUsing(fn (User $r): string => static::quotaDi($r))
-                    ->color(fn (string $state): string => match (true) {
-                        $state === 'AI spenta' => 'gray',
-                        $state === 'illimitata' => 'danger',
-                        str_starts_with($state, 'sua:') => 'warning',
-                        default => 'gray',
-                    })
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    TextColumn::make('quota_ai')
+                        ->label('Quota AI')
+                        ->badge()
+                        ->getStateUsing(fn (User $r): string => static::quotaDi($r))
+                        ->color(fn (string $state): string => match (true) {
+                            $state === 'AI spenta' => 'gray',
+                            $state === 'illimitata' => 'danger',
+                            str_starts_with($state, 'sua:') => 'warning',
+                            default => 'gray',
+                        })
+                        ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('created_at')
-                    ->label('Iscritto il')
-                    ->date('d/m/Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    TextColumn::make('created_at')
+                        ->label('Iscritto il')
+                        ->date('d/m/Y')
+                        ->prefix('iscritto il ')
+                        ->size('xs')
+                        ->color('gray')
+                        ->sortable()
+                        ->toggleable(isToggledHiddenByDefault: true),
+                ])->space(2),
             ])
             ->filters([
                 /*

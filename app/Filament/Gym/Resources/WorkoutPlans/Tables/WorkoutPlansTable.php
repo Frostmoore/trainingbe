@@ -14,6 +14,8 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ReplicateAction;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -27,43 +29,69 @@ class WorkoutPlansTable
     public static function configure(Table $table): Table
     {
         return $table
+            /*
+             * ══ 🃏 SCHEDE, NON RIGHE — 09/09/2026 ════════════════════════
+             *
+             * 📌 *«fai tutto con cards. Stessi elementi»*. Il perché per esteso
+             * sta in `UsersTable`.
+             *
+             * ⚠️ **Attenzione al nome, qui**: «scheda» è già la parola del
+             * prodotto — il piano di allenamento — e adesso è anche il modo in
+             * cui l'elenco è disegnato. 💡 Nei commenti di questo file «scheda»
+             * resta il piano; il contenitore si chiama **card**.
+             */
+            ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
-                TextColumn::make('name')
-                    ->label('Scheda')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold'),
+                Stack::make([
+                    TextColumn::make('name')
+                        ->label('Scheda')
+                        ->searchable()
+                        ->sortable()
+                        ->weight('bold'),
 
-                TextColumn::make('member.name')
-                    ->label('Assegnata a')
-                    ->placeholder('Modello')
-                    ->badge()
-                    ->color(fn (?string $state): string => $state === null ? 'gray' : 'info')
-                    ->searchable(),
+                    TextColumn::make('member.name')
+                        ->label('Assegnata a')
+                        ->placeholder('Modello')
+                        ->badge()
+                        ->color(fn (?string $state): string => $state === null ? 'gray' : 'info')
+                        // 💡 Senza l'intestazione, un nome in una targhetta non
+                        // dice se è l'autore o il destinatario. L'icona sì.
+                        ->icon('heroicon-m-user')
+                        ->searchable(),
 
-                TextColumn::make('status')
-                    ->label('Stato')
-                    ->badge()
-                    ->formatStateUsing(fn (PlanStatus $state): string => $state->label())
-                    ->color(fn (PlanStatus $state): string => $state->color()),
+                    Split::make([
+                        TextColumn::make('status')
+                            ->label('Stato')
+                            ->badge()
+                            ->formatStateUsing(fn (PlanStatus $state): string => $state->label())
+                            ->color(fn (PlanStatus $state): string => $state->color()),
 
-                TextColumn::make('exercises_count')
-                    ->label('Esercizi')
-                    ->counts('exercises')
-                    ->alignCenter()
-                    ->sortable(),
+                        TextColumn::make('exercises_count')
+                            ->label('Esercizi')
+                            ->counts('exercises')
+                            ->badge()
+                            ->color('gray')
+                            // ⛔ Un numero da solo, in una scheda, non dice di
+                            // cosa sia il conteggio.
+                            ->suffix(' esercizi')
+                            ->sortable(),
 
-                TextColumn::make('source')
-                    ->label('Origine')
-                    ->badge()
-                    ->color('gray')
-                    ->formatStateUsing(fn (PlanSource $state): string => $state->label())
-                    ->toggleable(),
+                        TextColumn::make('source')
+                            ->label('Origine')
+                            ->badge()
+                            ->color('gray')
+                            ->formatStateUsing(fn (PlanSource $state): string => $state->label())
+                            ->toggleable(),
+                    ])->from('sm'),
 
-                TextColumn::make('updated_at')
-                    ->label('Modificata')
-                    ->dateTime('d/m/Y H:i')
-                    ->sortable(),
+                    TextColumn::make('updated_at')
+                        ->label('Modificata')
+                        ->dateTime('d/m/Y H:i')
+                        ->prefix('modificata il ')
+                        ->size('xs')
+                        ->color('gray')
+                        ->sortable(),
+                ])->space(2),
             ])
             ->filters([
                 SelectFilter::make('status')

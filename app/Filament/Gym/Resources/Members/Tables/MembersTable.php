@@ -8,7 +8,7 @@ use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\TernaryFilter;
@@ -28,22 +28,40 @@ class MembersTable
     public static function configure(Table $table): Table
     {
         return $table
+            /*
+             * ══ 🃏 SCHEDE, NON RIGHE — 09/09/2026 ════════════════════════
+             *
+             * 📌 *«fai tutto con cards. Stessi elementi»*. Il perché per esteso
+             * sta in `UsersTable`.
+             *
+             * 💡 Qui il guadagno è particolare: chi lavora in palestra guarda
+             * questo elenco **dal telefono**, in sala, mentre parla con
+             * qualcuno. ⛔ Una riga con cinque colonne su uno schermo da cinque
+             * pollici è la definizione di illeggibile.
+             */
+            ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
-                TextColumn::make('name')
-                    ->label('Iscritto')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->description(fn (User $r): ?string => $r->email),
+                Stack::make([
+                    TextColumn::make('name')
+                        ->label('Iscritto')
+                        ->searchable()
+                        ->sortable()
+                        ->weight('bold')
+                        ->description(fn (User $r): ?string => $r->email),
 
-                TextColumn::make('trainers')
-                    ->label('Seguito da')
-                    ->badge()
-                    ->getStateUsing(fn (User $r): array => $r->assignedTrainers()->pluck('name')->all())
-                    ->placeholder('nessuno')
-                    ->color('info'),
+                    TextColumn::make('trainers')
+                        ->label('Seguito da')
+                        ->badge()
+                        ->getStateUsing(fn (User $r): array => $r->assignedTrainers()->pluck('name')->all())
+                        ->placeholder('nessuno')
+                        // 💡 «Seguito da» in tabella era l'intestazione della
+                        // colonna; nella scheda quella parola non c'è più, e
+                        // due nomi in una targhetta blu non dicono da soli che
+                        // sono i trainer. L'icona lo dice.
+                        ->icon('heroicon-m-user-group')
+                        ->color('info'),
 
-                /*
+                    /*
                  * ⛔ **Qui c'era «Ultimo allenamento», e non e' stata tolta per
                  * ripulire: e' stata tolta perche' NON DEVE ESSERCI** — FASE
                  * 11.6, 21/08/2026.
@@ -57,7 +75,7 @@ class MembersTable
                  * **cosa ha comprato**, non come vive.
                  */
 
-                /*
+                    /*
                  * 🚨 Qui c'era la colonna «Peso», e non e' stata tolta per
                  * ripulire: e' stata tolta perche' **non deve esserci**.
                  *
@@ -68,17 +86,28 @@ class MembersTable
                  * stesso.
                  */
 
-                IconColumn::make('is_active')
-                    ->label('Attivo')
-                    ->boolean()
-                    ->alignCenter()
-                    ->sortable(),
+                    /*
+                     * 🚨 **Era un `IconColumn`, ed è diventato una targhetta.**
+                     * In tabella una spunta sotto la colonna «Attivo» si
+                     * capisce; in una scheda una spunta da sola, senza
+                     * intestazione, non dice **di cosa** sia la spunta.
+                     */
+                    TextColumn::make('is_active')
+                        ->label('Attivo')
+                        ->badge()
+                        ->formatStateUsing(fn (bool $state): string => $state ? 'attivo' : 'disattivato')
+                        ->color(fn (bool $state): string => $state ? 'success' : 'danger')
+                        ->sortable(),
 
-                TextColumn::make('created_at')
-                    ->label('Iscritto il')
-                    ->date('d/m/Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    TextColumn::make('created_at')
+                        ->label('Iscritto il')
+                        ->date('d/m/Y')
+                        ->prefix('iscritto il ')
+                        ->size('xs')
+                        ->color('gray')
+                        ->sortable()
+                        ->toggleable(isToggledHiddenByDefault: true),
+                ])->space(2),
             ])
             ->filters([
                 TernaryFilter::make('is_active')
