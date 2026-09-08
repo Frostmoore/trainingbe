@@ -14,6 +14,7 @@ use App\Services\Billing\Stripe\Cassa;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 /**
  * Il listino per l'app, e l'apertura del pagamento — 3b-H, 26/08/2026.
@@ -82,6 +83,32 @@ class BillingController extends Controller
              */
             'abbonamento_attivo' => $this->abbonamentoAttivo($utente),
         ]]);
+    }
+
+    /**
+     * 🔁 Accende o spegne il rinnovo automatico — 08/09/2026.
+     *
+     * 📌 *«si deve rinnovare automaticamente SE E SOLO SE l'utente flagga il
+     * toggle "Rinnova in automatico"»*.
+     *
+     * 🚨 **Il `422` e' la risposta giusta per chi non ha Stripe**, e non un
+     * `500`: un abbonamento di palestra non si gestisce da qui, e non e' un
+     * guasto — e' una richiesta che non ha senso per quella persona.
+     */
+    public function rinnovo(Request $request): JsonResponse
+    {
+        $dati = $request->validate(['rinnova' => ['required', 'boolean']]);
+
+        try {
+            $this->cassa->rinnovoAutomatico($request->user(), (bool) $dati['rinnova']);
+        } catch (InvalidArgumentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'code' => 'senza_abbonamento_stripe',
+            ], 422);
+        }
+
+        return response()->json(['data' => ['rinnova' => (bool) $dati['rinnova']]]);
     }
 
     /**

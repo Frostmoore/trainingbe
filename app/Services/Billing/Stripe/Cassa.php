@@ -191,6 +191,74 @@ class Cassa
         return (string) $sessione->url;
     }
 
+    /**
+     * 🔁 Accende o spegne il rinnovo automatico — 08/09/2026.
+     *
+     * 📌 Il committente: *«l'abbonamento ovviamente si deve rinnovare
+     * automaticamente SE E SOLO SE l'utente flagga il toggle "Rinnova in
+     * automatico"»*.
+     *
+     * ══ 🚨 SI SCRIVE SU STRIPE, E LA RIGA NOSTRA LA AGGIORNA IL WEBHOOK ═══
+     *
+     * ⛔ **La verita' non e' nel nostro database.** Chi rinnova e' Stripe: se
+     * scrivessimo `rinnova` da soli senza dirlo a lui, l'app mostrerebbe
+     * «non si rinnova» e il mese dopo la carta verrebbe addebitata lo stesso.
+     * 🚨 E' il difetto peggiore possibile qui — un'app che dice una cosa e un
+     * conto corrente che ne fa un'altra.
+     *
+     * 💡 Quindi si chiama Stripe, e la nostra riga si aggiorna **due volte**:
+     * subito, perche' l'app deve rispondere adesso, e poi di nuovo quando
+     * arriva `customer.subscription.updated`. ⚠️ I due valori coincidono: il
+     * secondo non e' una correzione, e' una conferma.
+     *
+     * ⛔ **Non disdice niente.** `cancel_at_period_end` lascia l'abbonamento
+     * attivo fino alla fine del periodo gia' pagato: chi spegne il rinnovo il
+     * giorno dopo aver pagato tiene il mese che ha comprato.
+     */
+    public function rinnovoAutomatico(User $utente, bool $rinnova): void
+    {
+        $riga = $this->abbonamentoStripeDi($utente);
+
+        if ($riga === null) {
+            throw new InvalidArgumentException('Non c\'e\' nessun abbonamento di Stripe da cambiare.');
+        }
+
+        $this->stripe()->subscriptions->update(
+            (string) $riga->stripe_subscription_id,
+            ['cancel_at_period_end' => ! $rinnova],
+        );
+
+        $riga->update(['rinnova' => $rinnova]);
+
+        Log::info('Stripe: rinnovo automatico cambiato.', [
+            'abbonamento' => $riga->stripe_subscription_id,
+            'rinnova' => $rinnova,
+        ]);
+    }
+
+    /**
+     * L'abbonamento **di Stripe** di questa persona, se ne ha uno attivo.
+     *
+     * ⚠️ `whereNotNull('stripe_subscription_id')` e non solo il tenant: le
+     * palestre hanno abbonamenti che non passano da Stripe, e chiamare
+     * `subscriptions->update` con un `null` sarebbe un errore che parla di
+     * Stripe a chi non ha mai visto Stripe.
+     */
+    private function abbonamentoStripeDi(User $utente): ?PlanSubscription
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('stripe_subscription_id')
+            ->orderByDesc('starts_at')
+            ->first();
+    }
+
     /** Il cliente Stripe di questa persona, se ne ha uno. */
     public function clienteDi(User $utente): ?string
     {

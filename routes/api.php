@@ -564,6 +564,21 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:10,1');
 
         /*
+         * 🔁 **Il rinnovo automatico** — 08/09/2026.
+         *
+         * 📌 *«si deve rinnovare automaticamente SE E SOLO SE l'utente flagga
+         * il toggle "Rinnova in automatico"»*.
+         *
+         * 🚨 **Fuori da `ai.plan`, come il resto del pagamento**: chi non ha
+         * l'AI deve poter disdire. ⛔ Un cancello che impedisce di **smettere**
+         * di pagare non e' un cancello, e' una trappola.
+         *
+         * ⚠️ `throttle` stretto: ogni chiamata scrive su Stripe.
+         */
+        Route::patch('billing/rinnovo', [BillingController::class, 'rinnovo'])
+            ->middleware('throttle:10,1');
+
+        /*
          * ── «I miei utenti» — F5.1 / F6 ──────────────────────────────────
          *
          * ⚠️ Sta nell'app e non nel pannello web per la decisione D6: il
