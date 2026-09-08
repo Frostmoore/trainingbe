@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Billing;
 
+use App\Enums\TenantKind;
 use App\Http\Controllers\Controller;
 use App\Models\PlanSubscription;
 use App\Models\User;
@@ -137,8 +138,26 @@ class BillingController extends Controller
             'rinnova' => (bool) $riga->rinnova,
 
             // 💡 Solo chi viene da Stripe ha qualcosa da gestire: alle palestre
-            // il pulsante non deve nemmeno comparire.
+            // il pulsante del portale non deve nemmeno comparire.
             'gestibile' => $riga->stripe_customer_id !== null,
+
+            /*
+             * ══ 🎁 IL RINNOVO SI CAMBIA ANCHE SUI REGALI — 08/09/2026 ═════
+             *
+             * 📌 *«deve funzionare anche con gli abbonamenti che regalo»*.
+             *
+             * ⛔ **`gestibile` non poteva rispondere a questa domanda**, e
+             * riusarlo sarebbe stato il difetto: dice «esiste il portale di
+             * Stripe», che e' un'altra cosa. Un regalo il portale non ce l'ha,
+             * ma il rinnovo si', perche' a rinnovarlo e'
+             * `abbonamenti:rinnova-i-regali`.
+             *
+             * 🚨 **Le palestre restano fuori da tutti e due**: il loro
+             * abbonamento non e' di chi lo usa, e un iscritto non deve poterlo
+             * spegnere per tutti.
+             */
+            'rinnovabile' => $riga->stripe_subscription_id !== null
+                || $utente->tenant?->kind === TenantKind::Personal,
         ];
     }
 

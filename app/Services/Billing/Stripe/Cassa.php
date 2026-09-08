@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
+use App\Enums\TenantKind;
 use App\Models\AiCreditMovement;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -217,10 +218,57 @@ class Cassa
      */
     public function rinnovoAutomatico(User $utente, bool $rinnova): void
     {
-        $riga = $this->abbonamentoStripeDi($utente);
+        $riga = $this->abbonamentoDaCambiare($utente);
 
         if ($riga === null) {
-            throw new InvalidArgumentException('Non c\'e\' nessun abbonamento di Stripe da cambiare.');
+            throw new InvalidArgumentException('Non c\'e\' nessun abbonamento da cambiare.');
+        }
+
+        /*
+         * ══ 🎁 IL REGALO NON PASSA DA STRIPE — 08/09/2026 ═════════════════
+         *
+         * 📌 Il committente: *«deve funzionare anche con gli abbonamenti che
+         * regalo»*.
+         *
+         * ⛔ **Prima questo metodo lanciava** per chi non aveva un id di Stripe,
+         * e l'app nascondeva il toggle: chi aveva un abbonamento regalato non
+         * poteva ne' spegnerlo ne' vedere che esistesse la scelta.
+         *
+         * 💡 Qui non c'e' nessuno da avvisare: a rinnovare un regalo e'
+         * `abbonamenti:rinnova-i-regali`, che guarda **questa** colonna. La
+         * spunta governa qualcosa davvero.
+         */
+        if ($riga->stripe_subscription_id === null) {
+            $riga->update([
+                'rinnova' => $rinnova,
+
+                /*
+                 * ══ 🚨 SPEGNERE DEVE VOLER DIRE QUALCOSA ══════════════════
+                 *
+                 * ⛔ **Un regalo nasce senza scadenza** (`ends_at = null`, la
+                 * convenzione «non finisce mai»). Su una riga cosi', `rinnova
+                 * = false` non cambierebbe **niente**: non c'e' nessuna data a
+                 * cui smettere, e l'abbonamento resterebbe attivo per sempre
+                 * con l'app che dice «non si rinnova».
+                 *
+                 * 💡 Quindi spegnendo si fissa la fine: **un mese dal
+                 * regalo**. ⚠️ Se quel mese e' gia' passato — un regalo di
+                 * marzo — finisce **adesso**, ed e' la risposta giusta: il
+                 * periodo era finito da un pezzo, lo teneva in piedi solo il
+                 * rinnovo che si e' appena spento.
+                 */
+                'ends_at' => $rinnova
+                    ? $riga->ends_at
+                    : ($riga->ends_at ?? $this->fineDelRegalo($riga)),
+            ]);
+
+            Log::info('Regalo: rinnovo automatico cambiato.', [
+                'abbonamento' => $riga->getKey(),
+                'rinnova' => $rinnova,
+                'fino_al' => (string) $riga->ends_at,
+            ]);
+
+            return;
         }
 
         $this->stripe()->subscriptions->update(
@@ -237,26 +285,59 @@ class Cassa
     }
 
     /**
-     * L'abbonamento **di Stripe** di questa persona, se ne ha uno attivo.
+     * Quando finisce un regalo a cui non era stata data una scadenza.
      *
-     * ⚠️ `whereNotNull('stripe_subscription_id')` e non solo il tenant: le
-     * palestre hanno abbonamenti che non passano da Stripe, e chiamare
-     * `subscriptions->update` con un `null` sarebbe un errore che parla di
-     * Stripe a chi non ha mai visto Stripe.
+     * 💡 Un mese dal giorno in cui e' stato fatto — e non da adesso: chi lo
+     * spegne oggi non si sta comprando un altro mese.
      */
-    private function abbonamentoStripeDi(User $utente): ?PlanSubscription
+    private function fineDelRegalo(PlanSubscription $riga): Carbon
     {
-        $tenantId = $utente->tenant?->getKey();
+        $fine = $riga->starts_at?->copy()->addMonth()->addDay() ?? now();
 
-        if ($tenantId === null) {
+        return $fine->isPast() ? now() : $fine;
+    }
+
+    /**
+     * L'abbonamento su cui si puo' cambiare il rinnovo.
+     *
+     * ══ ⛔ LE PALESTRE RESTANO FUORI, E NON E' UN DETTAGLIO ════════════════
+     *
+     * 🚨 L'abbonamento di una palestra e quello regalato si somigliano
+     * moltissimo: **nessuno dei due ha un id di Stripe**, e tutti e due possono
+     * avere `ends_at = null`. ⚠️ Guardando solo Stripe si finirebbe per far
+     * spegnere a un iscritto il rinnovo **della sua palestra** — che paga
+     * qualcun altro, per decine di persone.
+     *
+     * 💡 La differenza sta nel **tipo del tenant**: `personal` e' suo,
+     * `gym` non lo e'.
+     */
+    private function abbonamentoDaCambiare(User $utente): ?PlanSubscription
+    {
+        $tenant = $utente->tenant;
+
+        if ($tenant === null) {
             return null;
         }
 
-        return PlanSubscription::withoutGlobalScopes()
-            ->where('tenant_id', $tenantId)
-            ->whereNotNull('stripe_subscription_id')
+        $riga = PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->attivi()
             ->orderByDesc('starts_at')
             ->first();
+
+        if ($riga === null) {
+            return null;
+        }
+
+        // ⛔ Se non e' di Stripe e il tenant e' una palestra, non si tocca.
+        if (
+            $riga->stripe_subscription_id === null
+            && $tenant->kind !== TenantKind::Personal
+        ) {
+            return null;
+        }
+
+        return $riga;
     }
 
     /** Il cliente Stripe di questa persona, se ne ha uno. */

@@ -288,14 +288,33 @@ class UsersTable
                                 'plan_id' => $piano->getKey(),
 
                                 /*
-                                 * 🚨 **`ends_at` nullo = non scade mai**, ed e'
-                                 * la convenzione gia' in uso per le palestre
-                                 * (vedi `scopeAttivi`). 💡 E' anche il modo in
-                                 * cui l'app capisce di non dover scrivere
-                                 * nessuna data di rinnovo.
+                                 * ══ 🎁 UN MESE, E SI RINNOVA — 08/09/2026 ══
+                                 *
+                                 * 📌 Il committente: *«deve funzionare anche
+                                 * con gli abbonamenti che regalo»*, del toggle
+                                 * «Rinnova in automatico».
+                                 *
+                                 * ⛔ **Prima era `ends_at = null`**, cioe' «non
+                                 * scade mai»: su una riga cosi' il toggle non
+                                 * poteva governare niente — spegnerlo non
+                                 * avrebbe cambiato nessuna data.
+                                 *
+                                 * 💡 Adesso un regalo e' **un mese che si
+                                 * rinnova da solo**, come un abbonamento vero,
+                                 * e a rinnovarlo e' `abbonamenti:rinnova-i-
+                                 * regali`. ⚠️ Chi lo spegne se lo tiene fino
+                                 * alla fine del mese in corso, e poi finisce.
+                                 *
+                                 * 🚨 **Il giorno in piu' non e' decorativo**:
+                                 * e' lo stesso margine di Stripe. Un comando
+                                 * che gira alle 3:40 non deve lasciare fuori
+                                 * nessuno fra la mezzanotte e quell'ora.
+                                 *
+                                 * ⛔ La convenzione `ends_at = null` **resta**
+                                 * per le palestre: quelle non passano di qui.
                                  */
                                 'starts_at' => now(),
-                                'ends_at' => null,
+                                'ends_at' => now()->addMonth()->addDay(),
 
                                 /*
                                  * ⛔ Niente id di Stripe: **e' il segno che
@@ -306,7 +325,11 @@ class UsersTable
                                  */
                                 'stripe_subscription_id' => null,
                                 'stripe_customer_id' => null,
-                                'rinnova' => false,
+
+                                // 🎁 Acceso: un regalo va avanti finche' non lo
+                                // si toglie da qui, o non lo spegne chi lo ha
+                                // ricevuto.
+                                'rinnova' => true,
                             ]);
                         }
 

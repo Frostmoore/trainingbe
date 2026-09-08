@@ -169,6 +169,24 @@ Schedule::command('piani:pota-importazioni')
 | 💡 Le `stime_cibo` si potano insieme: sono una **cache** (come `ai_advices`,
 | §46), e una stima non confermata dopo 24 ore non interessa piu' a nessuno.
 */
+/*
+ * ══ 🎁 I REGALI SI RINNOVANO DA SOLI — 08/09/2026 ═════════════════════════
+ *
+ * 📌 Il committente: *«deve funzionare anche con gli abbonamenti che regalo»*.
+ *
+ * 🚨 **Per Stripe il rinnovo lo fa Stripe. Per un regalo non lo fa nessuno**:
+ * senza questo giro, `rinnova = true` su un regalo sarebbe una spunta scollegata
+ * da tutto — un interruttore che sembra funzionare e non e' attaccato a niente.
+ *
+ * ⚠️ **Alle 3:40, e guarda un giorno avanti.** Rinnovare solo cio' che e' gia'
+ * scaduto lascerebbe un buco fra la mezzanotte e il giro: tre ore in cui una
+ * persona che il rinnovo non l'ha mai spento si vede «il tuo abbonamento e'
+ * scaduto».
+ */
+Schedule::command('abbonamenti:rinnova-i-regali')
+    ->dailyAt('3:40')
+    ->withoutOverlapping();
+
 Schedule::command('queue:prune-failed --hours=24')
     ->dailyAt('4:05')
     ->withoutOverlapping(30)
