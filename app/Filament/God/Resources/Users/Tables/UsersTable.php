@@ -350,6 +350,89 @@ class UsersTable
                             ->send();
                     }),
 
+                /*
+                 * == DISDIRE UN ABBONAMENTO **PAGATO** -- 09/09/2026 ==
+                 *
+                 * Il committente: "dal pannello god devo poter anche togliere
+                 * un abbonamento pagato con stripe quando voglio".
+                 *
+                 * -- PERCHE' E' UN PULSANTE A PARTE E NON LO STESSO --
+                 *
+                 * "Togli abbonamento" accanto NON tocca Stripe, e lo dice nella
+                 * sua finestra: cancella la nostra riga e l'addebito continua.
+                 * Fondere i due pulsanti avrebbe voluto dire un comando che a
+                 * volte ferma un pagamento e a volte no, a seconda di com'e'
+                 * fatta la riga sotto -- cioe' la cosa piu' pericolosa che un
+                 * pannello di amministrazione possa avere.
+                 *
+                 * Due pulsanti, due conseguenze, due frasi diverse.
+                 *
+                 * -- COSA SUCCEDE DAVVERO --
+                 *
+                 * | Su Stripe        | l'abbonamento viene disdetto SUBITO      |
+                 * | Da noi           | ends_at = adesso, senza aspettare il webhook |
+                 * | Alla persona     | l'app dice "e' scaduto" al primo rientro |
+                 * | I soldi versati  | NON tornano: il rimborso si fa da Stripe |
+                 *
+                 * Su una palestra colpisce TUTTI i suoi iscritti, perche'
+                 * l'abbonamento sta sul tenant. La finestra lo dice con il
+                 * numero di persone: un pannello che non quantifica il danno
+                 * prima di farlo non sta chiedendo davvero una conferma.
+                 */
+                Action::make('disdici_pagato')
+                    ->label('Disdici pagato')
+                    ->icon('heroicon-m-credit-card')
+                    ->color('danger')
+                    ->visible(fn (User $r): bool => self::haPagato($r))
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r): string => "Disdire l'abbonamento pagato di {$r->name}?")
+                    ->modalDescription(function (User $r): string {
+                        $quanti = self::quantiNeUsano($r);
+
+                        $avviso = $quanti > 1
+                            ? "ATTENZIONE: questo abbonamento e' di una palestra e lo usano {$quanti} persone. Lo perderanno tutte. "
+                            : '';
+
+                        return $avviso
+                            .'Viene disdetto SUBITO su Stripe: non ci saranno altri addebiti, e l\'accesso finisce adesso. '
+                            .'Quello che ha gia\' pagato NON viene rimborsato: il rimborso si fa da Stripe, a mano. '
+                            .'Finisce nel registro.';
+                    })
+                    ->modalSubmitActionLabel('Disdici su Stripe')
+                    ->action(function (User $record): void {
+                        try {
+                            app(Cassa::class)->disdiciSubito($record);
+                        } catch (\Throwable $e) {
+                            report($e);
+
+                            /*
+                             * Il messaggio VERO, non uno generico: qui chi
+                             * guarda e' un amministratore, e se Stripe ha
+                             * risposto "no such subscription" deve leggerlo --
+                             * e' l'unica informazione che gli dice cosa fare.
+                             */
+                            Notification::make()
+                                ->title('Disdetta non riuscita')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+
+                            return;
+                        }
+
+                        app(AuditLogger::class)->log(
+                            AuditAction::AbbonamentoPagatoDisdetto,
+                            $record,
+                            ['email' => $record->email, 'da' => 'elenco utenti'],
+                        );
+
+                        Notification::make()
+                            ->title('Abbonamento disdetto su Stripe')
+                            ->body('Nessun altro addebito. I soldi gia\' pagati non sono stati rimborsati.')
+                            ->success()
+                            ->send();
+                    }),
+
                 Action::make('ai_illimitata')
                     ->label(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'Togli illimitata' : 'AI illimitata')
                     ->icon('heroicon-m-sparkles')
