@@ -64,6 +64,16 @@ enum AuditAction: string
      */
     case AbbonamentoRegalato = 'user.abbonamento_regalato';
 
+    /**
+     * 🚨 Un abbonamento **pagato** disdetto dal pannello — 09/09/2026.
+     *
+     * ⚠️ Sta separata da [AbbonamentoRegalato] perche' e' un'altra cosa: quella
+     * toglie un regalo, questa **ferma un addebito su una carta vera**. 💡 Il
+     * giorno in cui qualcuno chiede «chi ha disdetto il mio abbonamento?», la
+     * risposta deve essere una riga sola, non una da interpretare.
+     */
+    case AbbonamentoPagatoDisdetto = 'user.abbonamento_pagato_disdetto';
+
     public function label(): string
     {
         return match ($this) {
@@ -81,6 +91,7 @@ enum AuditAction: string
             self::PasswordChanged => 'Password modificata',
             self::AiQuotaChanged => 'Quota AI modificata',
             self::AbbonamentoRegalato => 'Abbonamento regalato',
+            self::AbbonamentoPagatoDisdetto => 'Abbonamento pagato disdetto',
         };
     }
 

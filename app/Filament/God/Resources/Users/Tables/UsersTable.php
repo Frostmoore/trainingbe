@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Audit\AuditLogger;
 use App\Services\Billing\PianoAttivo;
+use App\Services\Billing\Stripe\Cassa;
 use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -521,6 +522,34 @@ class UsersTable
      * anche gli abbonamenti **pagati**, lasciando l'addebito attivo su Stripe e
      * il cliente senza il prodotto — cioe' il danno peggiore possibile.
      */
+    /** Ha un abbonamento **pagato** e attivo? */
+    private static function haPagato(User $utente): bool
+    {
+        return app(Cassa::class)->abbonamentoPagatoDi($utente) !== null;
+    }
+
+    /**
+     * Quante persone usano questo abbonamento.
+     *
+     * L'abbonamento sta sul TENANT, non sulla persona: su una palestra
+     * disdire tocca tutti gli iscritti, e chi preme deve vedere il NUMERO
+     * prima di premere. "Attenzione, riguarda anche altri" non e' una
+     * quantificazione, e' un'atmosfera.
+     */
+    private static function quantiNeUsano(User $utente): int
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return 0;
+        }
+
+        return User::query()
+            ->withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->count();
+    }
+
     private static function regaloDi(User $utente): ?PlanSubscription
     {
         $tenantId = $utente->tenant?->getKey();

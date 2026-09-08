@@ -298,6 +298,69 @@ class Cassa
     }
 
     /**
+     * 🛑 Disdice **subito** un abbonamento pagato — 09/09/2026.
+     *
+     * 📌 Il committente: *«dal pannello god devo poter anche togliere un
+     * abbonamento pagato con stripe quando voglio»*.
+     *
+     * ══ 🚨 SI DISDICE SU STRIPE, NON SI CANCELLA DA NOI ═══════════════════
+     *
+     * ⛔ **Cancellare la nostra riga e basta sarebbe il difetto piu' costoso di
+     * tutto il progetto**: la persona perderebbe l'accesso e **la carta
+     * continuerebbe a essere addebitata ogni mese**, perche' a fatturare e'
+     * Stripe e Stripe non saprebbe niente. 🚨 Nessun errore da nessuna parte, e
+     * ce ne accorgeremmo da un reclamo — o da una segnalazione alla banca.
+     *
+     * ⚠️ **`cancel()` e non `cancel_at_period_end`.** Qui il committente ha
+     * chiesto «quando voglio», cioe' **adesso**: chi lo usa sta togliendo
+     * l'accesso, non programmando una scadenza. 💡 Per la scadenza a fine mese
+     * c'e' gia' [rinnovoAutomatico].
+     *
+     * ⛔ **Non rimborsa niente.** Stripe non restituisce il rateo di sua
+     * iniziativa, e farlo da qui vorrebbe dire muovere soldi da un pannello di
+     * amministrazione: il rimborso si fa da Stripe, a mano, guardando il caso.
+     * 🚨 La finestra di conferma lo dice, perche' chi preme deve saperlo prima.
+     *
+     * 💡 La nostra riga si chiude **subito** e non si aspetta il webhook: il
+     * pannello deve dire la verita' nell'istante in cui si ricarica. Quando
+     * `customer.subscription.deleted` arrivera', trovera' la stessa cosa.
+     */
+    public function disdiciSubito(User $utente): void
+    {
+        $riga = $this->abbonamentoPagatoDi($utente);
+
+        if ($riga === null) {
+            throw new InvalidArgumentException('Non c\'e\' nessun abbonamento pagato da disdire.');
+        }
+
+        $this->stripe()->subscriptions->cancel((string) $riga->stripe_subscription_id);
+
+        $riga->update(['ends_at' => now(), 'rinnova' => false]);
+
+        Log::warning('Stripe: abbonamento pagato disdetto dal pannello.', [
+            'abbonamento' => $riga->stripe_subscription_id,
+            'tenant' => $riga->tenant_id,
+        ]);
+    }
+
+    /** L'abbonamento **pagato** e attivo di questa persona, se ce n'e' uno. */
+    public function abbonamentoPagatoDi(User $utente): ?PlanSubscription
+    {
+        $tenantId = $utente->tenant?->getKey();
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('stripe_subscription_id')
+            ->attivi()
+            ->orderByDesc('starts_at')
+            ->first();
+    }
+
+    /**
      * L'abbonamento su cui si puo' cambiare il rinnovo.
      *
      * ══ ⛔ LE PALESTRE RESTANO FUORI, E NON E' UN DETTAGLIO ════════════════
