@@ -7,6 +7,7 @@ namespace App\Filament\Gym\Resources\WorkoutPlans\Tables;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Filament\Support\VoceDiScheda;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Support\Tenancy\TenantContext;
@@ -14,7 +15,6 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ReplicateAction;
-use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -40,6 +40,21 @@ class WorkoutPlansTable
              * cui l'elenco è disegnato. 💡 Nei commenti di questo file «scheda»
              * resta il piano; il contenitore si chiama **card**.
              */
+            /*
+             * == LA SCHEDA NON E' TUTTA CLICCABILE -- 09/09/2026 ==
+             *
+             * Il committente: "la card non deve essere tutta cliccabile, solo
+             * il tasto modifica".
+             *
+             * In una TABELLA cliccare una riga e' un gesto che uno fa apposta.
+             * In una SCHEDA piena di targhette e pulsanti diventa una trappola:
+             * si tocca per leggere, o si sbaglia mira su un'azione, e ci si
+             * ritrova dentro un modulo di modifica senza averlo chiesto.
+             *
+             * `recordUrl(null)` toglie il collegamento dall'intera area:
+             * l'unico modo di entrare in modifica resta il suo pulsante.
+             */
+            ->recordUrl(null)
             ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
                 Stack::make([
@@ -49,49 +64,38 @@ class WorkoutPlansTable
                         ->sortable()
                         ->weight('bold'),
 
-                    TextColumn::make('member.name')
+                    VoceDiScheda::make('Assegnata a', TextColumn::make('member.name')
                         ->label('Assegnata a')
                         ->placeholder('Modello')
                         ->badge()
                         ->color(fn (?string $state): string => $state === null ? 'gray' : 'info')
-                        // 💡 Senza l'intestazione, un nome in una targhetta non
-                        // dice se è l'autore o il destinatario. L'icona sì.
-                        ->icon('heroicon-m-user')
-                        ->searchable(),
+                        ->searchable()),
 
-                    Split::make([
-                        TextColumn::make('status')
-                            ->label('Stato')
-                            ->badge()
-                            ->formatStateUsing(fn (PlanStatus $state): string => $state->label())
-                            ->color(fn (PlanStatus $state): string => $state->color()),
+                    VoceDiScheda::make('Stato', TextColumn::make('status')
+                        ->label('Stato')
+                        ->badge()
+                        ->formatStateUsing(fn (PlanStatus $state): string => $state->label())
+                        ->color(fn (PlanStatus $state): string => $state->color())),
 
-                        TextColumn::make('exercises_count')
-                            ->label('Esercizi')
-                            ->counts('exercises')
-                            ->badge()
-                            ->color('gray')
-                            // ⛔ Un numero da solo, in una scheda, non dice di
-                            // cosa sia il conteggio.
-                            ->suffix(' esercizi')
-                            ->sortable(),
+                    VoceDiScheda::make('Esercizi', TextColumn::make('exercises_count')
+                        ->label('Esercizi')
+                        ->counts('exercises')
+                        ->badge()
+                        ->color('gray')
+                        ->sortable()),
 
-                        TextColumn::make('source')
-                            ->label('Origine')
-                            ->badge()
-                            ->color('gray')
-                            ->formatStateUsing(fn (PlanSource $state): string => $state->label())
-                            ->toggleable(),
-                    ])->from('sm'),
+                    VoceDiScheda::make('Origine', TextColumn::make('source')
+                        ->label('Origine')
+                        ->badge()
+                        ->color('gray')
+                        ->formatStateUsing(fn (PlanSource $state): string => $state->label())
+                        ->toggleable()),
 
-                    TextColumn::make('updated_at')
+                    VoceDiScheda::make('Modificata', TextColumn::make('updated_at')
                         ->label('Modificata')
                         ->dateTime('d/m/Y H:i')
-                        ->prefix('modificata il ')
-                        ->size('xs')
-                        ->color('gray')
-                        ->sortable(),
-                ])->space(2),
+                        ->sortable()),
+                ])->space(3),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -118,8 +122,25 @@ class WorkoutPlansTable
                  * questa tabella non le mostra.
                  */
             ])
+            /*
+             * == LE AZIONI HANNO UN BORDO, E STANNO DUE PER RIGA ==
+             *
+             * Il committente: "i tasti azione mettine 2 per riga, altrimenti
+             * non si capisce niente (mettili centrati e con un bordo)".
+             *
+             * Il bordo lo da' `->button()->outlined()` qui sotto, azione per
+             * azione. La griglia a due colonne NON si puo' dire da qui:
+             * Filament v5 non espone nessuna API per disporre le azioni, e la
+             * regola sta in `resources/css/pannello-a-schede.css`.
+             *
+             * ATTENZIONE: se un giorno le azioni tornassero in fila, il primo
+             * posto da guardare e' se il deploy ha eseguito `filament:assets` --
+             * senza, quel foglio non esce e nulla lo segnala.
+             */
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->button()
+                    ->outlined(),
 
                 /*
                  * ⛔ **L'azione «Assegna» e' stata tolta** — 14/08/2026, come
@@ -141,6 +162,8 @@ class WorkoutPlansTable
                  */
 
                 ReplicateAction::make()
+                    ->button()
+                    ->outlined()
                     ->label('Duplica')
                     ->excludeAttributes(['published_at'])
                     ->beforeReplicaSaved(function (WorkoutPlan $replica): void {

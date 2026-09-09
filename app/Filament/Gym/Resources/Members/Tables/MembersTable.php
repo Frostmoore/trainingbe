@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\Members\Tables;
 
+use App\Filament\Support\VoceDiScheda;
 use App\Models\User;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -39,6 +40,21 @@ class MembersTable
              * qualcuno. ⛔ Una riga con cinque colonne su uno schermo da cinque
              * pollici è la definizione di illeggibile.
              */
+            /*
+             * == LA SCHEDA NON E' TUTTA CLICCABILE -- 09/09/2026 ==
+             *
+             * Il committente: "la card non deve essere tutta cliccabile, solo
+             * il tasto modifica".
+             *
+             * In una TABELLA cliccare una riga e' un gesto che uno fa apposta.
+             * In una SCHEDA piena di targhette e pulsanti diventa una trappola:
+             * si tocca per leggere, o si sbaglia mira su un'azione, e ci si
+             * ritrova dentro un modulo di modifica senza averlo chiesto.
+             *
+             * `recordUrl(null)` toglie il collegamento dall'intera area:
+             * l'unico modo di entrare in modifica resta il suo pulsante.
+             */
+            ->recordUrl(null)
             ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
                 Stack::make([
@@ -49,65 +65,46 @@ class MembersTable
                         ->weight('bold')
                         ->description(fn (User $r): ?string => $r->email),
 
-                    TextColumn::make('trainers')
+                    VoceDiScheda::make('Seguito da', TextColumn::make('trainers')
                         ->label('Seguito da')
                         ->badge()
                         ->getStateUsing(fn (User $r): array => $r->assignedTrainers()->pluck('name')->all())
                         ->placeholder('nessuno')
-                        // 💡 «Seguito da» in tabella era l'intestazione della
-                        // colonna; nella scheda quella parola non c'è più, e
-                        // due nomi in una targhetta blu non dicono da soli che
-                        // sono i trainer. L'icona lo dice.
-                        ->icon('heroicon-m-user-group')
-                        ->color('info'),
+                        ->color('info')),
 
                     /*
-                 * ⛔ **Qui c'era «Ultimo allenamento», e non e' stata tolta per
-                 * ripulire: e' stata tolta perche' NON DEVE ESSERCI** — FASE
-                 * 11.6, 21/08/2026.
-                 *
-                 * 📌 Il committente, 16/08: *«Niente, nemmeno se si allena»*.
-                 * Gli allenamenti stanno sul telefono di chi li fa, e il server
-                 * non li vede piu' — non e' che non li mostriamo, non ce li ha.
-                 *
-                 * 🚨 E' la stessa scelta gia' fatta per il peso (D9-bis) e per
-                 * il diario alimentare: la palestra sa **chi e' iscritto** e
-                 * **cosa ha comprato**, non come vive.
-                 */
-
-                    /*
-                 * 🚨 Qui c'era la colonna «Peso», e non e' stata tolta per
-                 * ripulire: e' stata tolta perche' **non deve esserci**.
-                 *
-                 * Decisione D9-bis: *«il trainer non ha bisogno di vedere peso,
-                 * altezza ed eta': puo' chiederli»*. Da S5.4 il peso non sta
-                 * nemmeno piu' sul server, quindi questa colonna non avrebbe
-                 * potuto funzionare comunque — ma sarebbe stata rimossa lo
-                 * stesso.
-                 */
-
-                    /*
-                     * 🚨 **Era un `IconColumn`, ed è diventato una targhetta.**
-                     * In tabella una spunta sotto la colonna «Attivo» si
-                     * capisce; in una scheda una spunta da sola, senza
-                     * intestazione, non dice **di cosa** sia la spunta.
+                     * Qui c'era "Ultimo allenamento", e non e' stata tolta per
+                     * ripulire: e' stata tolta perche' NON DEVE ESSERCI --
+                     * FASE 11.6, 21/08/2026.
+                     *
+                     * Il committente, 16/08: "Niente, nemmeno se si allena".
+                     * Gli allenamenti stanno sul telefono di chi li fa, e il
+                     * server non li vede piu' -- non e' che non li mostriamo,
+                     * non ce li ha.
+                     *
+                     * E' la stessa scelta gia' fatta per il peso (D9-bis) e per
+                     * il diario alimentare: la palestra sa CHI E' ISCRITTO e
+                     * COSA HA COMPRATO, non come vive.
+                     *
+                     * Per lo stesso motivo qui non c'e' la colonna "Peso":
+                     * "il trainer non ha bisogno di vedere peso, altezza ed
+                     * eta': puo' chiederli". Da S5.4 il peso non sta nemmeno
+                     * piu' sul server.
                      */
-                    TextColumn::make('is_active')
+
+                    VoceDiScheda::make('Attivo', TextColumn::make('is_active')
                         ->label('Attivo')
                         ->badge()
                         ->formatStateUsing(fn (bool $state): string => $state ? 'attivo' : 'disattivato')
                         ->color(fn (bool $state): string => $state ? 'success' : 'danger')
-                        ->sortable(),
+                        ->sortable()),
 
-                    TextColumn::make('created_at')
+                    VoceDiScheda::make('Iscritto il', TextColumn::make('created_at')
                         ->label('Iscritto il')
                         ->date('d/m/Y')
-                        ->prefix('iscritto il ')
-                        ->size('xs')
-                        ->color('gray')
                         ->sortable()
-                        ->toggleable(isToggledHiddenByDefault: true),
-                ])->space(2),
+                        ->toggleable(isToggledHiddenByDefault: true)),
+                ])->space(3),
             ])
             ->filters([
                 TernaryFilter::make('is_active')
@@ -130,8 +127,25 @@ class MembersTable
 
                 TrashedFilter::make()->label('Cancellati'),
             ])
+            /*
+             * == LE AZIONI HANNO UN BORDO, E STANNO DUE PER RIGA ==
+             *
+             * Il committente: "i tasti azione mettine 2 per riga, altrimenti
+             * non si capisce niente (mettili centrati e con un bordo)".
+             *
+             * Il bordo lo da' `->button()->outlined()` qui sotto, azione per
+             * azione. La griglia a due colonne NON si puo' dire da qui:
+             * Filament v5 non espone nessuna API per disporre le azioni, e la
+             * regola sta in `resources/css/pannello-a-schede.css`.
+             *
+             * ATTENZIONE: se un giorno le azioni tornassero in fila, il primo
+             * posto da guardare e' se il deploy ha eseguito `filament:assets` --
+             * senza, quel foglio non esce e nulla lo segnala.
+             */
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->button()
+                    ->outlined(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

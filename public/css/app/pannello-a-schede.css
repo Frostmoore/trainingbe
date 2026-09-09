@@ -1,0 +1,53 @@
+/*
+ * Le azioni delle schede: due per riga, centrate.
+ *
+ * == PERCHE' UN FOGLIO DI STILE E NON UNA API DI FILAMENT ==
+ *
+ * Il committente: "i tasti azione mettine 2 per riga, altrimenti non si capisce
+ * niente (mettili centrati e con un bordo)".
+ *
+ * Filament v5 non espone nessuna griglia per le azioni di una riga:
+ * `recordActions()` prende un elenco e una posizione, e le dispone in fila.
+ * Il bordo lo da' `->button()->outlined()` sulle azioni (quello sta nel PHP);
+ * la disposizione a due colonne no, e l'unico punto in cui si decide e' qui.
+ *
+ * == ATTENZIONE: SOLO IN MODALITA' SCHEDE ==
+ *
+ * `.fi-ta-content-grid` c'e' solo quando la tabella usa `contentGrid()`. Senza
+ * quel discendente, questa regola colpirebbe ANCHE le tabelle vere -- se un
+ * giorno ne tornasse una -- e le sue azioni finirebbero incolonnate dentro una
+ * cella larga cinquanta pixel.
+ */
+.fi-ta-content-grid .fi-ta-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    justify-items: stretch;
+
+    /*
+     * Un filo d'aria sopra: le azioni stanno sotto il contenuto della scheda
+     * (`AfterContent`), e appiccicate all'ultima riga di dati sembrano parte
+     * dei dati.
+     */
+    margin-top: 0.75rem;
+}
+
+/*
+ * Il testo del pulsante al centro del suo spazio.
+ *
+ * Serve `justify-content` sul contenuto e non `text-align`: dentro un pulsante
+ * di Filament ci sono un'icona e un'etichetta in un flex, e l'allineamento del
+ * testo non li sposta.
+ */
+.fi-ta-content-grid .fi-ta-actions .fi-btn {
+    justify-content: center;
+    width: 100%;
+}
+
+/*
+ * Un numero dispari di azioni lascia l'ultima da sola: prende tutta la riga
+ * invece di restare una mezza colonna spaiata a sinistra.
+ */
+.fi-ta-content-grid .fi-ta-actions > *:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}

@@ -12,6 +12,8 @@ use App\Services\Auth\Social\SocialTokenVerifier;
 use App\Support\Impersonation\Impersonator;
 use App\Support\Tenancy\TenantContext;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
+use Filament\Support\Assets\Css;
+use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
@@ -95,6 +97,28 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->registraBannerImpersonazione();
+        $this->registraLoStileDelleSchede();
+    }
+
+    /**
+     * Il foglio di stile delle schede dei pannelli -- 09/09/2026.
+     *
+     * == PERCHE' STA QUI E NON IN UN PANNELLO ==
+     *
+     * I pannelli sono due (god e gym) e la regola vale per tutti e due:
+     * registrarla in ognuno vorrebbe dire due righe da tenere allineate, e il
+     * giorno che se ne aggiunge un terzo se ne dimenticherebbe una.
+     *
+     * ATTENZIONE: il file lo copia in `public/` il comando
+     * `filament:assets`, che il deploy gia' esegue a ogni giro. Senza quel
+     * comando il foglio non esce, e le azioni tornano in fila senza che nulla
+     * segnali l'errore.
+     */
+    private function registraLoStileDelleSchede(): void
+    {
+        FilamentAsset::register([
+            Css::make('pannello-a-schede', resource_path('css/pannello-a-schede.css')),
+        ]);
     }
 
     /**

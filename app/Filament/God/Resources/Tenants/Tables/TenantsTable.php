@@ -6,6 +6,7 @@ namespace App\Filament\God\Resources\Tenants\Tables;
 
 use App\Enums\AuditAction;
 use App\Enums\TenantStatus;
+use App\Filament\Support\VoceDiScheda;
 use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
 use Filament\Actions\Action;
@@ -42,13 +43,29 @@ class TenantsTable
              * pallina in una colonna senza titolo, qui è il primo segno che
              * distingue una palestra dall'altra a colpo d'occhio.
              */
+            /*
+             * == LA SCHEDA NON E' TUTTA CLICCABILE -- 09/09/2026 ==
+             *
+             * Il committente: "la card non deve essere tutta cliccabile, solo
+             * il tasto modifica".
+             *
+             * In una TABELLA cliccare una riga e' un gesto che uno fa apposta.
+             * In una SCHEDA piena di targhette e pulsanti diventa una trappola:
+             * si tocca per leggere, o si sbaglia mira su un'azione, e ci si
+             * ritrova dentro un modulo di modifica senza averlo chiesto.
+             *
+             * `recordUrl(null)` toglie il collegamento dall'intera area:
+             * l'unico modo di entrare in modifica resta il suo pulsante.
+             */
+            ->recordUrl(null)
             ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
                 Stack::make([
                     /*
-                     * ⚠️ **Il colore accanto al nome, non sopra.** Da solo su
-                     * una riga sarebbe una pallina sospesa che non si capisce
-                     * cosa qualifichi.
+                     * Il colore accanto al nome, non su una riga sua: da solo
+                     * sarebbe una pallina sospesa che non si capisce cosa
+                     * qualifichi. Qui e' il titolo della scheda, e come il nome
+                     * degli utenti non porta etichetta.
                      */
                     Split::make([
                         ColorColumn::make('color_primary')
@@ -64,63 +81,52 @@ class TenantsTable
                             ->weight('bold'),
                     ]),
 
-                    TextColumn::make('join_code')
+                    VoceDiScheda::make('Codice', TextColumn::make('join_code')
                         ->label('Codice')
                         ->searchable()
                         ->copyable()
                         ->copyMessage('Codice copiato')
-                        ->fontFamily('mono')
-                        // 💡 Il prefisso sostituisce l'intestazione che nella
-                        // scheda non c'è: otto caratteri in mono, da soli,
-                        // potrebbero essere qualunque cosa.
-                        ->prefix('codice ')
-                        ->color('gray'),
+                        ->fontFamily('mono')),
 
-                    Split::make([
-                        TextColumn::make('status')
-                            ->label('Stato')
-                            ->badge()
-                            ->formatStateUsing(fn (TenantStatus $state): string => $state->label())
-                            ->color(fn (TenantStatus $state): string => $state->color()),
+                    VoceDiScheda::make('Stato', TextColumn::make('status')
+                        ->label('Stato')
+                        ->badge()
+                        ->formatStateUsing(fn (TenantStatus $state): string => $state->label())
+                        ->color(fn (TenantStatus $state): string => $state->color())),
 
-                        TextColumn::make('plan')
-                            ->label('Piano')
-                            ->badge()
-                            ->color('gray'),
+                    VoceDiScheda::make('Piano', TextColumn::make('plan')
+                        ->label('Piano')
+                        ->badge()
+                        ->color('gray')),
 
-                        // Conteggi via `withCount` nella query: senza, ogni riga
-                        // farebbe la sua query e l'elenco ne sparerebbe una per palestra.
-                        TextColumn::make('users_count')
-                            ->label('Utenti')
-                            ->counts('users')
-                            ->badge()
-                            ->icon('heroicon-m-users')
-                            ->color('gray')
-                            ->sortable(),
-                    ])->from('sm'),
+                    // Conteggi via `withCount` nella query: senza, ogni scheda
+                    // farebbe la sua query e l'elenco ne sparerebbe una per
+                    // palestra.
+                    VoceDiScheda::make('Utenti', TextColumn::make('users_count')
+                        ->label('Utenti')
+                        ->counts('users')
+                        ->badge()
+                        ->color('gray')
+                        ->sortable()),
 
-                    TextColumn::make('trial_ends_at')
+                    VoceDiScheda::make('Prova fino al', TextColumn::make('trial_ends_at')
                         ->label('Prova fino al')
                         ->dateTime('d/m/Y')
-                        ->placeholder('—')
-                        ->prefix('prova fino al ')
-                        ->size('xs')
-                        // Rosso se il periodo di prova è già scaduto: è il caso in
-                        // cui l'abbonamento sembra attivo ma nessuno può entrare.
+                        ->placeholder('nessuna')
+                        // Rosso se il periodo di prova e' gia' scaduto: e' il caso
+                        // in cui l'abbonamento sembra attivo ma nessuno puo'
+                        // entrare.
                         ->color(fn (?Carbon $state): string => $state !== null && $state->isPast()
                             ? 'danger'
                             : 'gray')
-                        ->sortable(),
+                        ->sortable()),
 
-                    TextColumn::make('created_at')
+                    VoceDiScheda::make('Creata', TextColumn::make('created_at')
                         ->label('Creata')
                         ->date('d/m/Y')
-                        ->prefix('creata il ')
-                        ->size('xs')
-                        ->color('gray')
                         ->sortable()
-                        ->toggleable(isToggledHiddenByDefault: true),
-                ])->space(2),
+                        ->toggleable(isToggledHiddenByDefault: true)),
+                ])->space(3),
             ])
             ->filters([
                 SelectFilter::make('status')
@@ -134,10 +140,29 @@ class TenantsTable
 
                 TrashedFilter::make()->label('Cancellate'),
             ])
+            /*
+             * == LE AZIONI HANNO UN BORDO, E STANNO DUE PER RIGA ==
+             *
+             * Il committente: "i tasti azione mettine 2 per riga, altrimenti
+             * non si capisce niente (mettili centrati e con un bordo)".
+             *
+             * Il bordo lo da' `->button()->outlined()` qui sotto, azione per
+             * azione. La griglia a due colonne NON si puo' dire da qui:
+             * Filament v5 non espone nessuna API per disporre le azioni, e la
+             * regola sta in `resources/css/pannello-a-schede.css`.
+             *
+             * ATTENZIONE: se un giorno le azioni tornassero in fila, il primo
+             * posto da guardare e' se il deploy ha eseguito `filament:assets` --
+             * senza, quel foglio non esce e nulla lo segnala.
+             */
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->button()
+                    ->outlined(),
 
                 Action::make('sospendi')
+                    ->button()
+                    ->outlined()
                     ->label(fn (Tenant $r): string => $r->status === TenantStatus::Suspended ? 'Riattiva' : 'Sospendi')
                     ->icon(fn (Tenant $r): string => $r->status === TenantStatus::Suspended
                         ? 'heroicon-m-play'

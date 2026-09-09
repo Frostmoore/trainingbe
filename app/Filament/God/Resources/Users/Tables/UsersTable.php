@@ -6,6 +6,7 @@ namespace App\Filament\God\Resources\Users\Tables;
 
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
+use App\Filament\Support\VoceDiScheda;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -70,9 +71,29 @@ class UsersTable
              * un'**icona**. Senza, sarebbe una tabella smontata invece che una
              * scheda.
              */
+            /*
+             * == LA SCHEDA NON E' TUTTA CLICCABILE -- 09/09/2026 ==
+             *
+             * Il committente: "la card non deve essere tutta cliccabile, solo
+             * il tasto modifica".
+             *
+             * In una TABELLA cliccare una riga e' un gesto che uno fa apposta.
+             * In una SCHEDA piena di targhette e pulsanti diventa una trappola:
+             * si tocca per leggere, o si sbaglia mira su un'azione, e ci si
+             * ritrova dentro un modulo di modifica senza averlo chiesto.
+             *
+             * `recordUrl(null)` toglie il collegamento dall'intera area:
+             * l'unico modo di entrare in modifica resta il suo pulsante.
+             */
+            ->recordUrl(null)
             ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
                 Stack::make([
+                    /*
+                     * Il nome NON ha etichetta, ed e' l'unica eccezione: e' il
+                     * titolo della scheda, e "Nome: Mario Rossi" scritto in
+                     * grassetto in cima sarebbe rumore.
+                     */
                     TextColumn::make('name')
                         ->label('Nome')
                         ->searchable()
@@ -80,90 +101,69 @@ class UsersTable
                         ->weight('bold')
                         ->description(fn (User $r): string => $r->username !== null ? '@'.$r->username : ''),
 
-                    TextColumn::make('email')
+                    VoceDiScheda::make('Email', TextColumn::make('email')
                         ->label('Email')
                         ->searchable()
                         ->copyable()
-                        ->copyMessage('Email copiata')
-                        // 💡 L'icona sostituisce l'intestazione che nella scheda
-                        // non c'è: una riga di testo con la @ dentro si riconosce,
-                        // ma l'icona la trova l'occhio prima di leggere.
-                        ->icon('heroicon-m-envelope')
-                        ->color('gray'),
+                        ->copyMessage('Email copiata')),
+
+                    VoceDiScheda::make('Palestra', TextColumn::make('tenant.name')
+                        ->label('Palestra')
+                        ->placeholder('Piattaforma')
+                        ->badge()
+                        ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray')
+                        ->sortable()),
+
+                    VoceDiScheda::make('Ruoli', TextColumn::make('ruoli')
+                        ->label('Ruoli')
+                        ->badge()
+                        ->separator(',')
+                        // Non `->roles`: in modalita' teams la relazione e' filtrata
+                        // sul tenant corrente e qui il contesto e' vuoto, quindi
+                        // sarebbe vuota per tutti. Si legge la pivot direttamente.
+                        ->getStateUsing(fn (User $r): array => static::ruoliDi($r))
+                        // I due ruoli senza palestra restano `gray` come gli
+                        // iscritti: il colore qui serve a far saltare all'occhio
+                        // CHI HA POTERI, e loro non ne hanno sulla piattaforma.
+                        ->color(fn (string $state): string => match ($state) {
+                            UserRole::SuperAdmin->value => 'danger',
+                            UserRole::GymAdmin->value => 'warning',
+                            UserRole::Trainer->value, UserRole::FreeTrainer->value => 'info',
+                            default => 'gray',
+                        })),
 
                     /*
-                     * ⚠️ **Le due targhette stanno affiancate**, non impilate:
-                     * la palestra e i ruoli sono la stessa domanda — «chi è
-                     * questo dentro il prodotto» — e su righe separate una
-                     * scheda diventa alta il doppio senza dire niente di più.
+                     * Era un `IconColumn`, ed e' diventato una targhetta: in una
+                     * tabella una spunta sotto la colonna "Attivo" si capisce, in
+                     * una scheda una spunta da sola non dice DI COSA sia.
                      */
-                    Split::make([
-                        TextColumn::make('tenant.name')
-                            ->label('Palestra')
-                            ->placeholder('Piattaforma')
-                            ->badge()
-                            ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray')
-                            ->sortable(),
-
-                        TextColumn::make('ruoli')
-                            ->label('Ruoli')
-                            ->badge()
-                            ->separator(',')
-                                // Non `->roles`: in modalita' teams la relazione e' filtrata
-                                // sul tenant corrente e qui il contesto e' vuoto, quindi
-                                // sarebbe vuota per tutti. Si legge la pivot direttamente.
-                            ->getStateUsing(fn (User $r): array => static::ruoliDi($r))
-                                // 💡 I due ruoli senza palestra restano `gray` come gli
-                                // iscritti: il colore qui serve a far saltare all'occhio
-                                // **chi ha poteri**, e loro non ne hanno sulla piattaforma.
-                            ->color(fn (string $state): string => match ($state) {
-                                UserRole::SuperAdmin->value => 'danger',
-                                UserRole::GymAdmin->value => 'warning',
-                                UserRole::Trainer->value, UserRole::FreeTrainer->value => 'info',
-                                default => 'gray',
-                            }),
-
-                    ])->from('sm'),
-
-                    /*
-                 * 🚨 **`IconColumn` è diventato un testo, ed è l'unico elemento
-                 * cambiato davvero.** In una tabella una spunta sotto la
-                 * colonna «Attivo» si capisce; in una scheda una spunta da
-                 * sola, senza intestazione, non dice **di cosa** sia la spunta.
-                 * 💡 La targhetta dice la parola.
-                 */
-                    TextColumn::make('is_active')
+                    VoceDiScheda::make('Attivo', TextColumn::make('is_active')
                         ->label('Attivo')
                         ->badge()
                         ->formatStateUsing(fn (bool $state): string => $state ? 'attivo' : 'disattivato')
                         ->color(fn (bool $state): string => $state ? 'success' : 'danger')
-                        ->sortable(),
+                        ->sortable()),
 
-                    TextColumn::make('last_login_at')
+                    VoceDiScheda::make('Ultimo accesso', TextColumn::make('last_login_at')
                         ->label('Ultimo accesso')
                         ->dateTime('d/m/Y H:i')
                         ->placeholder('mai')
-                        // ⛔ Senza il prefisso questa data e quella di iscrizione
-                        // sono due numeri identici in due righe vicine.
-                        ->prefix('ultimo accesso: ')
-                        ->size('xs')
-                        ->color('gray')
                         ->sortable()
-                        ->toggleable(),
+                        ->toggleable()),
 
                     /*
-                 * La quota AI **effettiva** — 14/08/2026.
-                 *
-                 * 🚨 Non e' la colonna `ai_monthly_call_cap`, ed e' la ragione
-                 * per cui c'e': quella colonna e' vuota per quasi tutti, e una
-                 * tabella di caselle vuote farebbe concludere «nessuno ha
-                 * quota» — il contrario del vero. Qui si legge cosa risponde la
-                 * **catena intera** (`MemberAiQuota`).
-                 *
-                 * ⚠️ Costa una query per riga, percio' e' spenta di default:
-                 * chi fa supporto la accende quando gli serve.
-                 */
-                    TextColumn::make('quota_ai')
+                     * La quota AI EFFETTIVA -- 14/08/2026.
+                     *
+                     * Non e' la colonna `ai_monthly_call_cap`, ed e' la ragione
+                     * per cui c'e': quella colonna e' vuota per quasi tutti, e un
+                     * elenco di caselle vuote farebbe concludere "nessuno ha
+                     * quota" -- il contrario del vero. Qui si legge cosa risponde
+                     * la CATENA INTERA (`MemberAiQuota`).
+                     *
+                     * Costa una query per riga, percio' e' spenta di default: chi
+                     * fa supporto la accende quando gli serve.
+                     */
+                    VoceDiScheda::make('Quota AI', TextColumn::make('quota_ai')
                         ->label('Quota AI')
                         ->badge()
                         ->getStateUsing(fn (User $r): string => static::quotaDi($r))
@@ -173,17 +173,14 @@ class UsersTable
                             str_starts_with($state, 'sua:') => 'warning',
                             default => 'gray',
                         })
-                        ->toggleable(isToggledHiddenByDefault: true),
+                        ->toggleable(isToggledHiddenByDefault: true)),
 
-                    TextColumn::make('created_at')
+                    VoceDiScheda::make('Iscritto il', TextColumn::make('created_at')
                         ->label('Iscritto il')
                         ->date('d/m/Y')
-                        ->prefix('iscritto il ')
-                        ->size('xs')
-                        ->color('gray')
                         ->sortable()
-                        ->toggleable(isToggledHiddenByDefault: true),
-                ])->space(2),
+                        ->toggleable(isToggledHiddenByDefault: true)),
+                ])->space(3),
             ])
             ->filters([
                 /*
@@ -252,8 +249,25 @@ class UsersTable
 
                 TrashedFilter::make()->label('Cancellati'),
             ])
+            /*
+             * == LE AZIONI HANNO UN BORDO, E STANNO DUE PER RIGA ==
+             *
+             * Il committente: "i tasti azione mettine 2 per riga, altrimenti
+             * non si capisce niente (mettili centrati e con un bordo)".
+             *
+             * Il bordo lo da' `->button()->outlined()` qui sotto, azione per
+             * azione. La griglia a due colonne NON si puo' dire da qui:
+             * Filament v5 non espone nessuna API per disporre le azioni, e la
+             * regola sta in `resources/css/pannello-a-schede.css`.
+             *
+             * ATTENZIONE: se un giorno le azioni tornassero in fila, il primo
+             * posto da guardare e' se il deploy ha eseguito `filament:assets` --
+             * senza, quel foglio non esce e nulla lo segnala.
+             */
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->button()
+                    ->outlined(),
 
                 /*
                  * «AI illimitata» — l'interruttore per le prove, 14/08/2026.
@@ -308,6 +322,8 @@ class UsersTable
                  * un pulsante che manca fa cercare, uno spiegato fa capire.
                  */
                 Action::make('abbonamento_regalato')
+                    ->button()
+                    ->outlined()
                     ->label(fn (User $r): string => self::haRegalo($r) ? 'Togli abbonamento' : 'Regala abbonamento')
                     ->icon('heroicon-m-gift')
                     ->color(fn (User $r): string => self::haRegalo($r) ? 'gray' : 'success')
@@ -443,6 +459,8 @@ class UsersTable
                  * prima di farlo non sta chiedendo davvero una conferma.
                  */
                 Action::make('disdici_pagato')
+                    ->button()
+                    ->outlined()
                     ->label('Disdici pagato')
                     ->icon('heroicon-m-credit-card')
                     ->color('danger')
@@ -497,6 +515,8 @@ class UsersTable
                     }),
 
                 Action::make('ai_illimitata')
+                    ->button()
+                    ->outlined()
                     ->label(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'Togli illimitata' : 'AI illimitata')
                     ->icon('heroicon-m-sparkles')
                     ->color(fn (User $r): string => $r->ai_monthly_call_cap === 0 ? 'gray' : 'warning')
@@ -568,6 +588,8 @@ class UsersTable
                 // un permesso — chi arriva all'azione per un'altra strada trova
                 // comunque il controllo vero.
                 Action::make('impersona')
+                    ->button()
+                    ->outlined()
                     ->label('Impersona')
                     ->icon('heroicon-m-user-circle')
                     ->color('danger')
