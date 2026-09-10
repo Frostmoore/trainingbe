@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Billing\Stripe;
 
 use App\Enums\TenantKind;
+use App\Enums\UserRole;
 use App\Models\AiCreditMovement;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -216,6 +217,31 @@ class Cassa
      * attivo fino alla fine del periodo gia' pagato: chi spegne il rinnovo il
      * giorno dopo aver pagato tiene il mese che ha comprato.
      */
+    /**
+     * Quanti giorni si resta abbonati DOPO la fine del periodo pagato.
+     *
+     * == PERCHE' ESISTE, E PERCHE' NON E' ZERO ==
+     *
+     * Il committente: "se un utente e' abbonato e ha il rinnovo automatico
+     * attivo, non deve avere momenti in cui il suo abbonamento gli risulta
+     * rimosso, altrimenti gli appaiono di nuovo tutte le modali".
+     *
+     * Senza questi giorni `ends_at` cade ESATTAMENTE alla fine del periodo, e
+     * fra quell'istante e l'arrivo del webhook la persona risulta non
+     * abbonata: card sfumate, un allenamento al giorno, e la modale "il tuo
+     * abbonamento e' scaduto". Poi al rinnovo, "hai sbloccato l'AI".
+     *
+     * Nel caso buono e' questione di secondi. Ma se la carta chiede il 3DS o
+     * rifiuta, Stripe RITENTA PER GIORNI: per lui l'abbonamento e' ancora
+     * attivo (`past_due`), per noi no. Sette giorni coprono la finestra di
+     * ritentativi che Stripe usa di serie.
+     *
+     * ATTENZIONE: la grazia vale SOLO a rinnovo acceso. Chi ha disdetto non
+     * ha niente da aspettare, e regalargli una settimana vorrebbe dire dirgli
+     * una data e rispettarne un'altra.
+     */
+    private const GIORNI_DI_GRAZIA = 7;
+
     public function rinnovoAutomatico(User $utente, bool $rinnova): void
     {
         $riga = $this->abbonamentoDaCambiare($utente);
@@ -376,36 +402,68 @@ class Cassa
      */
     private function abbonamentoDaCambiare(User $utente): ?PlanSubscription
     {
-        $tenant = $utente->tenant;
-
-        if ($tenant === null) {
+        if (! self::loPuoGestire($utente)) {
             return null;
         }
 
-        $riga = PlanSubscription::withoutGlobalScopes()
-            ->where('tenant_id', $tenant->getKey())
+        return PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $utente->tenant?->getKey())
             ->attivi()
             ->orderByDesc('starts_at')
             ->first();
+    }
 
-        if ($riga === null) {
-            return null;
+    /**
+     * Questa persona puo' toccare l'abbonamento del suo tenant?
+     *
+     * == IL BUCO CHE QUESTA FUNZIONE CHIUDE -- 10/09/2026 ==
+     *
+     * L'abbonamento sta sul TENANT, non sulla persona. Prima il controllo sul
+     * tipo di tenant scattava solo quando NON c'era Stripe di mezzo:
+     *
+     *     if ($riga->stripe_subscription_id === null && $tenant non personale)
+     *
+     * Il giorno in cui una palestra paga con Stripe, quella condizione e'
+     * falsa per ognuno dei suoi iscritti: ognuno di loro avrebbe potuto
+     * spegnere il rinnovo DELLA PALESTRA, per tutti. Latente oggi solo perche'
+     * nessuna palestra paga ancora con Stripe -- cioe' esplode il giorno in cui
+     * si decide quanto costa una palestra (3b-Z), non prima.
+     *
+     * La regola giusta e' una sola: comanda CHI PAGA.
+     *
+     * | Tenant | Chi puo' |
+     * |---|---|
+     * | personale | il suo proprietario, sempre |
+     * | palestra   | solo il `gym_admin` -- l'iscritto non paga niente |
+     *
+     * Il trainer indipendente ha un tenant PERSONALE, quindi rientra nel primo
+     * caso: il pacchetto allievi lo compra lui e lo gestisce lui.
+     */
+    public static function loPuoGestire(?User $utente): bool
+    {
+        $tenant = $utente?->tenant;
+
+        if ($tenant === null) {
+            return false;
         }
 
-        // ⛔ Se non e' di Stripe e il tenant e' una palestra, non si tocca.
-        if (
-            $riga->stripe_subscription_id === null
-            && $tenant->kind !== TenantKind::Personal
-        ) {
-            return null;
-        }
-
-        return $riga;
+        return $tenant->kind === TenantKind::Personal
+            || $utente->hasAppRole(UserRole::GymAdmin);
     }
 
     /** Il cliente Stripe di questa persona, se ne ha uno. */
     public function clienteDi(User $utente): ?string
     {
+        /*
+         * Stessa guardia del rinnovo, e per un motivo piu' grave: il portale di
+         * Stripe non serve solo a disdire, mostra anche LE FATTURE. Un iscritto
+         * che lo apre vede i pagamenti della palestra, e puo' cambiarle la
+         * carta.
+         */
+        if (! self::loPuoGestire($utente)) {
+            return null;
+        }
+
         $tenantId = $utente->tenant?->getKey();
 
         if ($tenantId === null) {
@@ -545,7 +603,12 @@ class Cassa
         $fine = $this->fineDelPeriodo($fattura);
 
         $riga->update([
-            'ends_at' => $fine ?? now()->addMonth()->addDay(),
+            // La grazia si legge dalla riga: se ha disdetto, `rinnova` e' gia'
+            // `false` e la data resta quella vera.
+            'ends_at' => $this->conLaGrazia(
+                $fine ?? now()->addMonth(),
+                (bool) $riga->rinnova,
+            ),
         ]);
 
         Log::info('Stripe: abbonamento rinnovato.', [
@@ -571,10 +634,21 @@ class Cassa
             return;
         }
 
+        $rinnova = ! ($abbonamento['cancel_at_period_end'] ?? false);
+        $fine = $this->quando($abbonamento['current_period_end'] ?? null);
+
         $riga->update([
-            'rinnova' => ! ($abbonamento['cancel_at_period_end'] ?? false),
-            'ends_at' => $this->quando($abbonamento['current_period_end'] ?? null)
-                ?? $riga->ends_at,
+            'rinnova' => $rinnova,
+
+            /*
+             * La grazia si calcola sul valore NUOVO di `rinnova`, non su quello
+             * in archivio: questo evento e' proprio quello che arriva quando si
+             * disdice, e leggendo il vecchio si darebbe una settimana in piu'
+             * a chi ha appena detto che non vuole rinnovare.
+             */
+            'ends_at' => $fine !== null
+                ? $this->conLaGrazia($fine, $rinnova)
+                : $riga->ends_at,
         ]);
     }
 
@@ -592,6 +666,22 @@ class Cassa
         $riga = $this->abbonamentoDi((string) ($abbonamento['id'] ?? ''));
 
         $riga?->update(['ends_at' => now(), 'rinnova' => false]);
+    }
+
+    /**
+     * La fine del periodo, piu' la grazia se c'e' un rinnovo da aspettare.
+     *
+     * Un giorno in piu' era gia' scritto in due punti come valore di ripiego
+     * ("il rinnovo puo' arrivare con qualche ora di ritardo"): quell'intuizione
+     * era giusta e bastava per il caso buono. Non basta per una carta che
+     * chiede conferma, ed e' il caso in cui la persona non ha fatto niente di
+     * sbagliato.
+     */
+    private function conLaGrazia(Carbon $fine, bool $rinnova): Carbon
+    {
+        return $rinnova
+            ? $fine->copy()->addDays(self::GIORNI_DI_GRAZIA)
+            : $fine->copy();
     }
 
     private function abbonamentoDi(string $idStripe): ?PlanSubscription

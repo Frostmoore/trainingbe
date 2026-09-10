@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1\Billing;
 
-use App\Enums\TenantKind;
 use App\Http\Controllers\Controller;
 use App\Models\PlanSubscription;
 use App\Models\User;
@@ -137,9 +136,18 @@ class BillingController extends Controller
             'fino_al' => $riga->ends_at?->toDateString(),
             'rinnova' => (bool) $riga->rinnova,
 
-            // 💡 Solo chi viene da Stripe ha qualcosa da gestire: alle palestre
-            // il pulsante del portale non deve nemmeno comparire.
-            'gestibile' => $riga->stripe_customer_id !== null,
+            /*
+             * Il portale di Stripe esiste solo per chi ha pagato con Stripe --
+             * E solo per chi quell'abbonamento lo paga.
+             *
+             * Prima qui c'era il solo controllo su `stripe_customer_id`, e il
+             * giorno in cui una palestra paga con Stripe ogni suo iscritto si
+             * sarebbe visto il pulsante: il portale non serve solo a disdire,
+             * mostra anche LE FATTURE della palestra e permette di cambiarle
+             * la carta.
+             */
+            'gestibile' => $riga->stripe_customer_id !== null
+                && Cassa::loPuoGestire($utente),
 
             /*
              * ══ 🎁 IL RINNOVO SI CAMBIA ANCHE SUI REGALI — 08/09/2026 ═════
@@ -156,8 +164,14 @@ class BillingController extends Controller
              * abbonamento non e' di chi lo usa, e un iscritto non deve poterlo
              * spegnere per tutti.
              */
-            'rinnovabile' => $riga->stripe_subscription_id !== null
-                || $utente->tenant?->kind === TenantKind::Personal,
+            /*
+             * Comanda chi paga: il proprietario di un tenant personale (utente
+             * singolo o trainer indipendente) e il `gym_admin` di una palestra.
+             *
+             * L'iscritto di una palestra non paga niente, e senza questa
+             * guardia poteva spegnere il rinnovo PER TUTTI.
+             */
+            'rinnovabile' => Cassa::loPuoGestire($utente),
         ];
     }
 
@@ -175,7 +189,7 @@ class BillingController extends Controller
                 $request->user(),
                 rtrim((string) config('app.url'), '/').'/pagamento/ok',
             );
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             report($e);
@@ -211,6 +225,31 @@ class BillingController extends Controller
         $tipo = $dati['tipo'];
 
         // ⛔ Non si vende due volte la stessa cosa.
+        /*
+         * == UN ISCRITTO NON COMPRA PER LA SUA PALESTRA -- 10/09/2026 ==
+         *
+         * L'abbonamento si scrive sul TENANT (`accendiLAbbonamento()`), quindi
+         * un iscritto di una palestra SENZA abbonamento che comprasse il piano
+         * individuale abbonerebbe l'intera palestra -- pagando da solo, per
+         * tutti.
+         *
+         * Non lo fermava niente: il controllo qui sotto guarda se e' gia'
+         * abbonato, e in una palestra che non paga non lo e'.
+         *
+         * Chi vuole l'abbonamento suo lo chiede alla palestra, che e' il modo
+         * in cui il prodotto e' venduto: la palestra compra il pacchetto
+         * allievi.
+         */
+        if (
+            $tipo === Cassa::ABBONAMENTO
+            && ! Cassa::loPuoGestire($request->user())
+        ) {
+            return response()->json([
+                'message' => __('L\'abbonamento della tua palestra lo gestisce la palestra.'),
+                'code' => 'non_lo_gestisci_tu',
+            ], 403);
+        }
+
         if ($tipo === Cassa::ABBONAMENTO && $this->piano->eAbbonato($request->user())) {
             return response()->json([
                 'message' => 'Hai gia\' un abbonamento attivo.',
@@ -223,7 +262,7 @@ class BillingController extends Controller
                 $tipo,
                 isset($dati['gettoni']) ? (int) $dati['gettoni'] : null,
             );
-        } catch (\InvalidArgumentException $e) {
+        } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             /*
