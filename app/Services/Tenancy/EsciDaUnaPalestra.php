@@ -136,7 +136,23 @@ final class EsciDaUnaPalestra
     {
         $palestra = $utente->tenant;
 
-        if ($palestra === null || $palestra->ePersonale()) {
+        /*
+         * ══ 🆕 «NON E' MIO», non «non e' personale» — 3b-AH, 12/09/2026 ══════
+         *
+         * ⛔ Prima si chiedeva `ePersonale()`, e voleva dire la stessa cosa
+         * finche' in un tenant personale ci stava una persona sola.
+         *
+         * 🚨 Dopo AH.1 gli allievi di un trainer vivranno nel tenant del
+         * trainer, che resta `personal`: con la domanda vecchia, a loro
+         * l'uscita sarebbe stata **negata** — sarebbero rimasti dentro lo
+         * spazio di qualcun altro senza nessun modo di uscirne, e la richiesta
+         * del committente e' l'opposto (*«anche loro devono poter disdire per
+         * conto loro»*).
+         *
+         * 💡 Da chi e' coperto da qualcun altro si esce; dal proprio spazio no,
+         * perche' non c'e' nessuno da cui uscire.
+         */
+        if ($palestra === null || $palestra->eDi($utente)) {
             throw ValidationException::withMessages([
                 'gym' => __('Non sei iscritto a nessuna palestra.'),
             ]);

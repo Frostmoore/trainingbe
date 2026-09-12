@@ -110,9 +110,24 @@ class AccountController extends Controller
 
     public function gym(Request $request): JsonResponse
     {
-        $palestra = $request->user()?->tenant;
+        $utente = $request->user();
+        $palestra = $utente?->tenant;
 
-        if ($palestra === null || $palestra->ePersonale()) {
+        /*
+         * ══ 🆕 Si mostra chi ti COPRE, non «una palestra» — 3b-AH, 12/09/2026 ══
+         *
+         * ⛔ Prima la domanda era `ePersonale()`, e lasciava fuori due persone:
+         *
+         * | Chi | Cosa vedeva prima | Cosa vede adesso |
+         * |---|---|---|
+         * | Un `gym_admin` | la scheda della **propria** palestra, con il tasto per uscirne — che poi rifiutava | ⛔ niente: da casa propria non si esce |
+         * | 🆕 L'allievo di un trainer (dopo AH.1) | niente, quindi **nessun modo di andarsene** | ✅ chi lo copre, e come uscirne |
+         *
+         * 💡 `name` si legge dal tenant e non da `branding()`, che per un tenant
+         * personale risponde `null` apposta: quello è il payload **pubblico**,
+         * questo lo legge solo chi sta già dentro.
+         */
+        if ($palestra === null || $palestra->eDi($utente)) {
             return response()->json(['data' => null]);
         }
 

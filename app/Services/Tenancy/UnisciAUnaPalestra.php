@@ -82,15 +82,52 @@ class UnisciAUnaPalestra
     {
         $vecchio = $utente->tenant;
 
-        if ($vecchio === null || ! $vecchio->ePersonale()) {
+        if ($vecchio === null || ! $vecchio->eDi($utente)) {
             /*
-             * 🚨 **Solo da un tenant personale.** Spostare un iscritto da una
+             * 🚨 **Solo dal proprio spazio.** Spostare un iscritto da una
              * palestra a un'altra è un'operazione **commerciale**, non una
              * scelta dell'utente: vorrebbe dire che chiunque conosca il codice
              * di un'altra palestra può portarsi via i propri dati dalla propria.
+             *
+             * ══ 🆕 PERCHE' NON E' PIU' `ePersonale()` — 3b-AH, 12/09/2026 ═══
+             *
+             * ⛔ **`ePersonale()` qui stava per diventare una falla grave.**
+             * Questo metodo **sposta tutte le righe del tenant di partenza**
+             * dentro la palestra. Dopo AH.1 gli allievi di un trainer vivranno
+             * nel tenant del trainer, che resta `personal`: un allievo che
+             * digita il codice di una palestra si sarebbe portato dietro **il
+             * tenant intero del suo trainer** — le schede degli altri allievi,
+             * gli esercizi, tutto. Nessun errore, e i dati di venti persone
+             * dentro una palestra che non c'entra niente.
+             *
+             * 💡 La domanda giusta non è *«questo spazio è di una persona
+             * sola?»* ma *«questo spazio è **tuo**?»*.
              */
             throw ValidationException::withMessages([
                 'join_code' => __('Sei già iscritto a una palestra. Per cambiarla, parlane con loro.'),
+            ]);
+        }
+
+        /*
+         * 🚨 **E deve essere tuo E vuoto**, non solo tuo.
+         *
+         * ⛔ Senza questa riga il `gym_admin` di una palestra potrebbe digitare
+         * il codice di un'altra palestra e portarle **la propria palestra
+         * intera**: il suo tenant è suo — `eDi()` dice di sì — e il metodo
+         * sposterebbe ogni riga di ogni suo iscritto.
+         *
+         * ⚠️ Lo stesso varrà per un trainer dopo AH.1, con i suoi allievi
+         * dentro. 💡 In tutti e due i casi non è una cosa che si fa digitando
+         * un codice: è una faccenda commerciale, e la si fa parlando.
+         */
+        $altri = User::withoutGlobalScopes()
+            ->where('tenant_id', $vecchio->getKey())
+            ->whereKeyNot($utente->getKey())
+            ->exists();
+
+        if ($altri) {
+            throw ValidationException::withMessages([
+                'join_code' => __('Nel tuo spazio ci sono altre persone: non puoi portarlo dentro una palestra.'),
             ]);
         }
 
