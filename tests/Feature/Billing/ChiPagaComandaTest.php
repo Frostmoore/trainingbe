@@ -103,15 +103,55 @@ final class ChiPagaComandaTest extends TestCase
     /**
      * Il trainer indipendente ha un tenant personale: il pacchetto allievi lo
      * compra lui e lo gestisce lui.
+     *
+     * == AGGIORNATO IL 12/09/2026 -- 3b-AH, Passo 0 ==
+     *
+     * Prima questo test diceva "chi sta in un tenant personale lo gestisce", e
+     * passava perche' in un tenant personale ci stava UNA PERSONA SOLA:
+     * "personale" voleva dire "tuo".
+     *
+     * Da AH.1 in poi non e' piu' vero -- nel tenant di un trainer ci stanno
+     * anche i suoi allievi -- e quella frase sarebbe diventata "ogni allievo
+     * gestisce l'abbonamento del suo trainer". La domanda giusta non e' di che
+     * TIPO e' il tenant: e' di CHI e'.
      */
     #[Test]
-    public function chi_ha_un_tenant_personale_gestisce_sempre_il_suo(): void
+    public function il_proprietario_di_un_tenant_personale_lo_gestisce(): void
     {
         $suo = $this->creaPalestra('Personale', 'personale', 'PERS2345');
         $suo->update(['kind' => 'personal']);
 
-        $tizio = $this->creaUtente($suo->fresh(), UserRole::Member, 'tizio@test.it');
+        $tizio = $this->creaUtente($suo->fresh(), UserRole::FreeUser, 'tizio@test.it');
+
+        $suo->forceFill(['proprietario_id' => $tizio->getKey()])->save();
 
         self::assertTrue(Cassa::loPuoGestire($tizio->fresh()));
+    }
+
+    /**
+     * IL CASO CHE AH.1 STA PER CREARE, provato adesso che il danno non c'e'
+     * ancora: un allievo dentro il tenant personale del suo trainer.
+     *
+     * Il tenant e' `personal` e NON e' suo. Con la regola vecchia -- "tenant
+     * personale -> chiunque ci stia dentro" -- questa persona avrebbe potuto
+     * spegnere il rinnovo del trainer e aprire il portale con le sue fatture.
+     */
+    #[Test]
+    public function ma_un_allievo_dentro_quel_tenant_no(): void
+    {
+        $delTrainer = $this->creaPalestra('Trainer', 'trainer-suo', 'TRAI2345');
+        $delTrainer->update(['kind' => 'personal']);
+
+        $trainer = $this->creaUtente($delTrainer->fresh(), UserRole::FreeTrainer, 'coach@test.it');
+        $delTrainer->forceFill(['proprietario_id' => $trainer->getKey()])->save();
+
+        $allievo = $this->creaUtente($delTrainer->fresh(), UserRole::Member, 'allievo@test.it');
+
+        self::assertFalse(
+            Cassa::loPuoGestire($allievo->fresh()),
+            'un allievo avrebbe potuto disdire per il suo trainer',
+        );
+
+        self::assertTrue(Cassa::loPuoGestire($trainer->fresh()));
     }
 }

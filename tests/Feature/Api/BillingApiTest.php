@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -113,22 +114,61 @@ class BillingApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    /**
+     * Qualcuno che l'abbonamento lo paga DAVVERO: un utente con il suo spazio.
+     *
+     * 🚨 **Serve dal 10/09**, da quando esiste `Cassa::loPuoGestire()`: un
+     * iscritto di palestra non gestisce niente, e ogni prova che riguarda
+     * l'acquisto va fatta con chi paga.
+     *
+     * ⛔ **Prima questo test usava `$this->iscritto` e non passava piu'.** Era
+     * rosso da due giorni senza che nessuno se ne accorgesse, perche'
+     * `tests/Feature/Api` non veniva lanciata: verificava il comportamento che
+     * il 10/09 e' stato chiuso come falla.
+     */
+    private function chiPaga(string $email): User
+    {
+        return app(CreaTenantPersonale::class)('Paga', $email, [
+            'password' => TestCase::FAKE_PASSWORD,
+        ]);
+    }
+
     /** 🚨 Non si vende due volte la stessa cosa. */
     #[Test]
     public function chi_e_gia_abbonato_non_si_riabbona(): void
     {
         $piano = Plan::where('code', Plan::PLUS)->firstOrFail();
+        $paga = $this->chiPaga('paga@esempio.test');
 
-        PlanSubscription::create([
-            'tenant_id' => $this->iscritto->tenant->getKey(),
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $paga->tenant->getKey(),
             'plan_id' => $piano->getKey(),
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addMonth(),
         ]);
 
-        $this->comeApp($this->iscritto)
+        $this->comeApp($paga)
             ->postJson('/api/v1/billing/checkout', ['tipo' => 'abbonamento'])
             ->assertStatus(409);
+    }
+
+    /**
+     * ⛔ E un iscritto di palestra non arriva nemmeno a quella domanda: gli si
+     * risponde **403**, perche' l'abbonamento della palestra lo gestisce la
+     * palestra.
+     *
+     * 💡 Sta qui accanto apposta: le due risposte si somigliano — «non puoi
+     * comprare» — e vengono da due ragioni diverse. Chi cambia l'ordine dei due
+     * controlli nel `BillingController` rompe una delle due, e senza questa
+     * coppia non se ne accorgerebbe.
+     */
+    #[Test]
+    public function ma_un_iscritto_non_puo_comprare_per_la_sua_palestra(): void
+    {
+        $this->comeApp($this->iscritto)
+            ->postJson('/api/v1/billing/checkout', ['tipo' => 'abbonamento'])
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'non_lo_gestisci_tu');
     }
 
     /**

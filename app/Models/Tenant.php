@@ -7,10 +7,12 @@ namespace App\Models;
 use App\Enums\SocialProvider;
 use App\Enums\TenantKind;
 use App\Enums\TenantStatus;
+use App\Models\Scopes\TenantScope;
 use App\Services\Auth\Social\SocialTokenVerifier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -89,6 +91,22 @@ class Tenant extends Model
         return $this->hasMany(User::class);
     }
 
+    /**
+     * 🆕 **Chi paga per questo tenant** — 3b-AH, Passo 0 (12/09/2026).
+     *
+     * 🚨 **`withoutGlobalScopes([TenantScope::class])`, e non è decorativo.**
+     * È il punto per cui questa colonna esiste: dopo AH.1-quater il proprietario
+     * di un tenant **può stare in un altro tenant** — un trainer che lavora in una
+     * palestra e ha un portfolio suo. Senza, la relazione sarebbe filtrata dal
+     * tenant corrente e risponderebbe `null` **proprio nel caso nuovo**, cioè
+     * l'unico per cui la colonna è stata aggiunta.
+     */
+    public function proprietario(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'proprietario_id')
+            ->withoutGlobalScopes([TenantScope::class]);
+    }
+
     // ───────────────────────── natura ─────────────────────────
 
     /**
@@ -104,6 +122,44 @@ class Tenant extends Model
     public function ePersonale(): bool
     {
         return $this->kind === TenantKind::Personal;
+    }
+
+    /**
+     * 🆕 **Questo spazio è TUO?** — 3b-AH, Passo 0 (12/09/2026).
+     *
+     * 🚨 **Non è `ePersonale()`, e la differenza è tutta la fase AH.**
+     *
+     * | Domanda | Il metodo |
+     * |---|---|
+     * | «Questo spazio è di una persona sola o di un'organizzazione?» | `ePersonale()` |
+     * | «Questo spazio è **tuo**?» | `eDi()` |
+     *
+     * ⛔ Le due domande si somigliavano finché in un tenant personale ci stava
+     * una persona sola: «personale» voleva dire «tuo», e `loPuoGestire()` poteva
+     * chiedere il tipo. ⚠️ Da AH.1 in avanti nel tenant di un trainer ci stanno
+     * anche i suoi allievi: il tenant resta personale **e non è più loro**.
+     *
+     * 💡 Chi decide **chi può disdire, chi può uscire e chi può portarsi le
+     * proprie cose altrove** deve chiedere questo, non il `kind`.
+     */
+    public function eDi(?User $utente): bool
+    {
+        if ($utente === null || $this->proprietario_id === null) {
+            /*
+             * 🚨 **Mai `null === null → true`.** Sarebbe «il tenant senza
+             * proprietario appartiene all'utente senza account»: un cancello
+             * aperto scritto per distrazione, in un metodo che decide chi può
+             * disdire un abbonamento.
+             *
+             * ⚠️ La direzione dell'errore è quella giusta: un tenant a cui manca
+             * il proprietario non è **di nessuno**, e chi ci sta dentro non
+             * comanda niente. Il comando `abbonamenti:tenant-senza-proprietario`
+             * esiste per accorgersene prima che sia qualcuno a farlo.
+             */
+            return false;
+        }
+
+        return (int) $this->proprietario_id === (int) $utente->getKey();
     }
 
     /**

@@ -158,6 +158,21 @@ final class CreaTenantPersonale
 
                 $utente->assignRole($ruolo->value);
 
+                /*
+                 * 🆕 **Chi ha appena aperto lo spazio ne è il proprietario**
+                 * — 3b-AH, Passo 0.
+                 *
+                 * ⚠️ **Si scrive qui e non nel `Tenant::create()` di sopra**, ed
+                 * è il motivo per cui la colonna è `nullable`: in quella riga
+                 * l'utente non esiste ancora. Non c'è modo di invertire
+                 * l'ordine, perché `User::create()` ha bisogno del `tenant_id`.
+                 *
+                 * 🚨 `forceFill()` e non `update()`: `proprietario_id` **non è
+                 * nel `$fillable`**, apposta. Una colonna che dice chi paga non
+                 * deve poter cambiare per un'assegnazione di massa.
+                 */
+                $tenant->forceFill(['proprietario_id' => $utente->getKey()])->save();
+
                 return $utente;
             });
         });

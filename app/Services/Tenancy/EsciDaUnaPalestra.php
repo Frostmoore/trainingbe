@@ -263,6 +263,17 @@ final class EsciDaUnaPalestra
         ]);
 
         /*
+         * 🆕 **Lo spazio nuovo è suo** — 3b-AH, Passo 0.
+         *
+         * 💡 Qui, a differenza di `CreaTenantPersonale`, la persona esiste
+         * già: si potrebbe scrivere nella `create()` di sopra. ⚠️ Si scrive
+         * dopo lo stesso, così le due strade che creano un tenant personale
+         * riempiono la colonna **nello stesso modo** — e chi ne aggiunge una
+         * terza domani copia un gesto solo.
+         */
+        $tenant->forceFill(['proprietario_id' => $utente->getKey()])->save();
+
+        /*
          * 🚨 **I ruoli si creano dentro il tenant nuovo, o `syncRoles()`
          * lancia.** In modalita' teams spatie cerca il ruolo nel tenant
          * corrente: in uno appena nato non c'e' niente, e l'errore che si

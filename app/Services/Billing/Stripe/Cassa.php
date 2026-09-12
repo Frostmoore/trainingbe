@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
-use App\Enums\TenantKind;
-use App\Enums\UserRole;
 use App\Models\AiCreditMovement;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -431,13 +429,30 @@ class Cassa
      *
      * La regola giusta e' una sola: comanda CHI PAGA.
      *
-     * | Tenant | Chi puo' |
-     * |---|---|
-     * | personale | il suo proprietario, sempre |
-     * | palestra   | solo il `gym_admin` -- l'iscritto non paga niente |
+     * == E DAL 12/09/2026 LA DOMANDA E' UNA SOLA -- 3b-AH, Passo 0 ==
      *
-     * Il trainer indipendente ha un tenant PERSONALE, quindi rientra nel primo
-     * caso: il pacchetto allievi lo compra lui e lo gestisce lui.
+     * Prima erano due casi:
+     *
+     *     tenant personale -> chiunque ci stia dentro
+     *     palestra         -> solo il gym_admin
+     *
+     * Funzionavano perche' in un tenant personale ci stava UNA PERSONA SOLA:
+     * "personale" voleva dire "tuo". Da AH.1 in poi non e' piu' vero -- nel
+     * tenant di un trainer ci stanno anche i suoi allievi -- e la prima riga
+     * sarebbe diventata "ogni allievo puo' disdire l'abbonamento del suo
+     * trainer". Lo stesso buco delle palestre, riaperto il giorno dopo averlo
+     * chiuso, e in un tenant che il tipo continuava a chiamare "personale".
+     *
+     * Adesso si chiede quello che si vuole sapere davvero: SEI TU IL
+     * PROPRIETARIO? Un caso solo, e la risposta sta scritta in una colonna
+     * invece che dedotta da due cose diverse.
+     *
+     * ATTENZIONE alla direzione dell'errore: se `tenants.proprietario_id`
+     * fosse vuoto su un tenant che paga, chi paga NON vedrebbe i comandi. Si
+     * scopre subito, e si perde una persona. E' il lato caro e visibile
+     * dell'avvertenza di AH -- accettabile solo perche' esiste il comando
+     * `abbonamenti:tenant-senza-proprietario`, che lo dice prima che lo dica
+     * un cliente.
      */
     public static function loPuoGestire(?User $utente): bool
     {
@@ -447,8 +462,7 @@ class Cassa
             return false;
         }
 
-        return $tenant->kind === TenantKind::Personal
-            || $utente->hasAppRole(UserRole::GymAdmin);
+        return $tenant->eDi($utente);
     }
 
     /** Il cliente Stripe di questa persona, se ne ha uno. */

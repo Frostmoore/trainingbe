@@ -10,6 +10,7 @@ use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\Stripe\Cassa;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -224,17 +225,59 @@ class AbbonamentiStripeTest extends TestCase
 
     // ───────────────────────── quello che l'app vede ─────────────────────────
 
+    /**
+     * ⚠️ **Il listino si guarda con gli occhi di chi paga**, non di un iscritto.
+     *
+     * ⛔ Fino a oggi questo test usava `$this->iscritto` — un `Member` dentro
+     * una palestra — e pretendeva `gestibile: true`. 🚨 Cioe' pretendeva
+     * esattamente la falla chiusa il 10/09 da `Cassa::loPuoGestire()`: un
+     * iscritto che apre il portale di Stripe **della palestra**, con dentro le
+     * sue fatture e la sua carta.
+     *
+     * 💡 Era **rosso da due giorni** e non lo sapeva nessuno, perche'
+     * `tests/Feature/Api` non veniva lanciata: si lanciavano solo `Billing` e
+     * `Panels`. Un test che diventa rosso e non viene eseguito non protegge
+     * niente.
+     */
     #[Test]
     public function il_listino_dice_quando_scade_e_se_si_rinnova(): void
+    {
+        $paga = app(CreaTenantPersonale::class)('Paga', 'paga@esempio.test', [
+            'password' => TestCase::FAKE_PASSWORD,
+        ]);
+
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $paga->tenant->getKey(),
+            'plan_id' => Plan::where('code', Plan::PLUS)->value('id'),
+            'stripe_subscription_id' => 'sub_suo',
+            'stripe_customer_id' => 'cus_suo',
+            'starts_at' => now()->subDays(29),
+            'ends_at' => now()->addDay(),
+            'rinnova' => true,
+        ]);
+
+        $this->comeApp($paga)
+            ->getJson('/api/v1/billing/listino')
+            ->assertOk()
+            ->assertJsonPath('data.abbonamento_attivo.rinnova', true)
+            ->assertJsonPath('data.abbonamento_attivo.gestibile', true)
+            ->assertJsonStructure(['data' => ['abbonamento_attivo' => ['fino_al']]]);
+    }
+
+    /**
+     * ⛔ E allo stesso iscritto quel pulsante **non** compare: il portale non
+     * serve solo a disdire, mostra le fatture e permette di cambiare la carta.
+     */
+    #[Test]
+    public function ma_a_un_iscritto_della_palestra_non_e_gestibile(): void
     {
         $this->abbonamento();
 
         $this->comeApp($this->iscritto)
             ->getJson('/api/v1/billing/listino')
             ->assertOk()
-            ->assertJsonPath('data.abbonamento_attivo.rinnova', true)
-            ->assertJsonPath('data.abbonamento_attivo.gestibile', true)
-            ->assertJsonStructure(['data' => ['abbonamento_attivo' => ['fino_al']]]);
+            ->assertJsonPath('data.abbonamento_attivo.gestibile', false)
+            ->assertJsonPath('data.abbonamento_attivo.rinnovabile', false);
     }
 
     /**

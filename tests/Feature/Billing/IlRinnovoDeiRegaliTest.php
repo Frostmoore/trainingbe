@@ -157,7 +157,18 @@ class IlRinnovoDeiRegaliTest extends TestCase
         $tenant = $this->tenantPersonale();
         $utente = $this->creaUtente($tenant, UserRole::Member, 'regalato@test.it');
 
-        $this->regala($tenant, null);
+        /*
+         * 🆕 **Lo spazio è suo** — 3b-AH, Passo 0 (12/09/2026).
+         *
+         * ⚠️ Nella vita vera questa riga la scrive `CreaTenantPersonale`, che
+         * un tenant personale lo crea insieme a chi ci sta dentro. Qui il
+         * tenant è costruito a mano partendo da una palestra, quindi va detto:
+         * senza, `Cassa::loPuoGestire()` risponde di no — giustamente, perché
+         * un tenant senza proprietario non è di nessuno.
+         */
+        $tenant->forceFill(['proprietario_id' => $utente->getKey()])->save();
+
+        $this->regala($tenant->fresh(), null);
 
         self::assertTrue(app(PianoAttivo::class)->eAbbonato($utente->fresh()));
 

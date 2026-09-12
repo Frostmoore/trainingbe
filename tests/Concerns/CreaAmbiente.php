@@ -105,7 +105,7 @@ trait CreaAmbiente
     /** Un utente dentro la palestra, con il ruolo assegnato nel contesto giusto. */
     protected function creaUtente(Tenant $tenant, UserRole $ruolo, string $email, array $extra = []): User
     {
-        return $this->ctx()->runAs($tenant, function () use ($ruolo, $email, $extra): User {
+        return $this->ctx()->runAs($tenant, function () use ($tenant, $ruolo, $email, $extra): User {
             $u = User::create(array_merge([
                 'name' => ucfirst(explode('@', $email)[0]),
                 'email' => $email,
@@ -132,6 +132,30 @@ trait CreaAmbiente
             ])->save();
 
             $u->assignRole($ruolo->value);
+
+            /*
+             * 🆕 **Il primo `gym_admin` diventa il proprietario del tenant**
+             * — 3b-AH, Passo 0.
+             *
+             * 💡 Non è una comodità per i test: è **la stessa invariante** che
+             * la migration di riempimento scrive sui tenant già esistenti —
+             * *«il proprietario di una palestra è il suo `gym_admin`»*. Senza,
+             * ogni test su chi comanda l'abbonamento verificherebbe un
+             * ambiente che in produzione non esiste.
+             *
+             * ⚠️ **Solo se non c'è già**: un secondo amministratore non porta
+             * via la proprietà al primo. Chi vuole provare il passaggio di
+             * mano lo scrive a mano, e si vede leggendo.
+             *
+             * 🚨 **E oggi in produzione nessuna strada assegna `GymAdmin`**:
+             * le palestre e i loro amministratori nascono a mano o da seeder.
+             * Il giorno in cui il pannello lo farà, deve fare anche questo —
+             * e finché non lo fa, se ne accorge
+             * `abbonamenti:tenant-senza-proprietario`.
+             */
+            if ($ruolo === UserRole::GymAdmin && $tenant->proprietario_id === null) {
+                $tenant->forceFill(['proprietario_id' => $u->getKey()])->save();
+            }
 
             return $u;
         });
