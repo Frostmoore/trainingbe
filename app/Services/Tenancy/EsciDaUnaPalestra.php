@@ -423,11 +423,35 @@ final class EsciDaUnaPalestra
      */
     private function sciogliIlLegameConLaPalestra(User $utente, Tenant $palestra): void
     {
+        /*
+         * ══ 🆕 SI DISATTIVANO, NON SI CANCELLANO — 3b-AH.2 (12/09/2026) ══════
+         *
+         * ⛔ **Qui c'era una `delete()`**, e contraddiceva la decisione D5 —
+         * *«il legame resta, la storia si conserva, il canale si chiude»* —
+         * che `InvitiDelTrainer::disattiva()` applica **sulla stessa tabella**.
+         *
+         * 🚨 Due regole opposte sulla stessa riga, e la differenza si vedeva
+         * solo dallo storico che spariva: chi usciva da una palestra perdeva la
+         * traccia di **chi l'aveva seguito e quando**, e la palestra perdeva la
+         * traccia di aver avuto quella persona fra gli assegnati.
+         *
+         * 💡 **L'effetto pratico è identico**: un rapporto con `disattivato_il`
+         * valorizzato non copre più niente, non conta per nessuno slot e non
+         * apre nessun canale — lo dicono già `QuotaDelTrainer` e la chat.
+         *
+         * ⚠️ **`updateExistingPivot` non si può usare qui**: il pivot è quello
+         * del **trainer** e vale per ogni trainer di quel tenant, non per uno.
+         * Si scrive sulla tabella, con lo stesso filtro di prima.
+         *
+         * 🆕 **E si toccano solo i rapporti ancora in piedi**: uno disattivato
+         * sei mesi fa conserva la sua data, che è il suo pezzo di storia.
+         */
         $this->context->runWithoutTenant(function () use ($utente, $palestra): void {
             DB::table('trainer_member')
                 ->where('tenant_id', $palestra->getKey())
                 ->where('member_id', $utente->getKey())
-                ->delete();
+                ->whereNull('disattivato_il')
+                ->update(['disattivato_il' => now()]);
         });
     }
 

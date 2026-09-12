@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\EUnInvito;
 use Illuminate\Database\Eloquent\Model;
@@ -35,11 +36,22 @@ class InvitoInPalestra extends Model
 
     protected $fillable = [
         'tenant_id', 'invitato_da', 'token', 'email', 'expires_at',
+
+        /*
+         * 🆕 **Con che ruolo si entra** — 3b-AH.1-quater (12/09/2026).
+         *
+         * ⚠️ È assegnabile perché chi crea l'invito è **la palestra**, dal suo
+         * pannello, e lì il ruolo è una scelta legittima. 🚨 Quello che non deve
+         * mai succedere è che arrivi da **chi riscatta**: il token dice già
+         * tutto, e il ruolo si legge da qui, non dalla richiesta.
+         */
+        'ruolo',
     ];
 
     protected function casts(): array
     {
         return [
+            'ruolo' => UserRole::class,
             'expires_at' => 'datetime',
             'used_at' => 'datetime',
             'revoked_at' => 'datetime',

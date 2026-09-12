@@ -138,7 +138,23 @@ class InvitiDelTrainer
             return null;
         }
 
-        $occupati = $trainer->assignedMembers()->count()
+        /*
+         * ══ 🆕 SOLO I RAPPORTI IN PIEDI — 3b-AH.1-ter (12/09/2026) ══════════
+         *
+         * 📌 *«se uno dei due libera l'allievo, semplicemente gli si libera uno
+         * slot allievo»*.
+         *
+         * ⛔ **Qui si contavano tutte le righe**, disattivate comprese. Finché
+         * chi se ne andava veniva **cancellato** dalla tabella il conto tornava
+         * per caso; da AH.2 le righe si disattivano e basta (D5: *«il legame
+         * resta, la storia si conserva»*), e senza questo filtro un trainer si
+         * ritroverebbe i posti occupati da rapporti finiti — **per sempre, e
+         * senza nessun errore**.
+         *
+         * 🚨 È lo slot che è **il rapporto**, non la persona: un rapporto
+         * chiuso non occupa niente.
+         */
+        $occupati = $trainer->assignedMembers()->wherePivotNull('disattivato_il')->count()
             + TrainerInvite::withoutGlobalScopes()
                 ->where('trainer_id', $trainer->getKey())
                 ->validi()

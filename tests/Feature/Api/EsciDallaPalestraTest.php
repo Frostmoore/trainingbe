@@ -144,10 +144,30 @@ class EsciDallaPalestraTest extends TestCase
 
         $this->esci();
 
-        $this->assertDatabaseMissing('trainer_member', [
+        /*
+         * ══ 🆕 SI DISATTIVA, NON SPARISCE — 3b-AH.2 (12/09/2026) ════════════
+         *
+         * ⛔ Qui si pretendeva `assertDatabaseMissing`, cioè una `delete()`. 🚨
+         * Contraddiceva la decisione **D5** — *«il legame resta, la storia si
+         * conserva, il canale si chiude»* — che `InvitiDelTrainer::disattiva()`
+         * applica **sulla stessa tabella**: due regole opposte sulla stessa
+         * riga, e la differenza si vedeva solo dallo storico che spariva.
+         *
+         * 💡 **L'effetto pratico è identico** — un rapporto disattivato non
+         * copre niente, non occupa slot e non apre canali — e in più resta
+         * scritto **chi** seguiva questa persona e **fino a quando**.
+         */
+        $this->assertDatabaseHas('trainer_member', [
             'tenant_id' => $this->palestra->getKey(),
             'member_id' => $this->mario->getKey(),
         ]);
+
+        $riga = DB::table('trainer_member')
+            ->where('tenant_id', $this->palestra->getKey())
+            ->where('member_id', $this->mario->getKey())
+            ->first();
+
+        $this->assertNotNull($riga->disattivato_il, 'il rapporto era rimasto in piedi');
     }
 
     // ───────────────────────── chi non può ─────────────────────────
@@ -208,7 +228,7 @@ class EsciDallaPalestraTest extends TestCase
                 ." 2. sono della palestra → RESTANO_ALLA_PALESTRA, col motivo;\n"
                 ." 3. servono una regola loro → REGOLE_PROPRIE, e il codice.\n\n"
                 ."Non lasciarla così: una tabella non classificata è un dato che\n"
-                ."finisce nel tenant sbagliato senza che nessuno se ne accorga.",
+                .'finisce nel tenant sbagliato senza che nessuno se ne accorga.',
         );
     }
 

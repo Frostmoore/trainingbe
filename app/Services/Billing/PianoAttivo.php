@@ -268,6 +268,52 @@ class PianoAttivo
     }
 
     /**
+     * 🆕 **Chi paga l'abbonamento di questa persona** — 3b-AH.4 (12/09/2026).
+     *
+     * 📌 Il committente: *«la modale per lui deve dire che non e' piu' abbonato
+     * **perche' non e' piu' abbonato il suo trainer o la sua palestra**»*.
+     *
+     * ⛔ **Oggi l'app dice a tutti la stessa cosa**: *«il rinnovo automatico era
+     * spento, quindi non abbiamo addebitato niente»*. 🚨 A un iscritto di
+     * palestra e' falso due volte — non ha spento niente e non ha mai pagato
+     * niente. Gli fa cercare un'impostazione che non ha, e gli nasconde l'unica
+     * cosa utile: parlarne con la palestra.
+     *
+     * | Valore | Chi |
+     * |---|---|
+     * | `io` | lo spazio e' suo: utente singolo, trainer indipendente, o l'amministratore di una palestra |
+     * | `palestra` | sta dentro una palestra che non e' sua |
+     * | `trainer` | sta dentro lo spazio di un'altra **persona** — da AH.1, l'allievo di un trainer |
+     *
+     * 🚨 **`eDi()` prima del `kind`**, e l'ordine e' tutto: un `gym_admin` sta
+     * dentro una palestra, e guardando il tipo per primo gli si direbbe che paga
+     * qualcun altro — che e' lui.
+     *
+     * ⚠️ **Sta qui e non nel controller** perche' la stessa risposta serve al
+     * listino e al profilo. Due copie divergono, ed e' la trappola gia' pagata
+     * con `TenantAiQuota`.
+     *
+     * 💡 **Non lo deduce l'app dal tipo di tenant**: sarebbe la stessa
+     * informazione dedotta due volte. Da AH.1 il tenant di un trainer e'
+     * `personal` come quello di un utente singolo, e dedurlo dal tipo direbbe
+     * «trainer» a chi paga per se'.
+     */
+    public function chiPaga(?User $utente): ?string
+    {
+        $tenant = $utente?->tenant;
+
+        if ($tenant === null) {
+            return null;
+        }
+
+        if ($tenant->eDi($utente)) {
+            return 'io';
+        }
+
+        return $tenant->ePersonale() ? 'trainer' : 'palestra';
+    }
+
+    /**
      * Il **livello** del piano, per l'app.
      *
      * 💡 E' il `code` del piano — `free`, `plus`, `gym`, `trainer_pro`… — e non

@@ -117,6 +117,21 @@ class UserResource extends JsonResource
              * `ai_enabled` qui sopra.
              */
             'abbonato' => app(PianoAttivo::class)->eAbbonato($this->resource),
+
+            /*
+             * 🆕 **Chi paga per questa persona** — 3b-AH.4 (12/09/2026).
+             *
+             * ⚠️ Sta **anche** qui e non solo nel listino perche' la modale
+             * «l'abbonamento e' scaduto» la apre il ricontrollo al rientro, che
+             * legge il profilo e non chiama il listino. 🚨 Farle chiedere una
+             * seconda risposta in quel momento vorrebbe dire una richiesta di
+             * rete prima di poter scrivere una frase — e con la rete lenta la
+             * frase sbagliata comparirebbe per prima.
+             *
+             * 💡 La risposta la calcola `PianoAttivo::chiPaga()`, una volta
+             * sola: due copie divergono.
+             */
+            'chi_pagava' => app(PianoAttivo::class)->chiPaga($this->resource),
             'tier' => app(PianoAttivo::class)->livello($this->resource),
             /*
              * C7.2 — il profilo c'è **sempre**, anche vuoto.

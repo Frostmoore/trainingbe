@@ -18,6 +18,7 @@ use App\Services\Scoperta\ChiaveComune;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiInPalestra;
 use App\Support\Tenancy\CosaOttieniInPalestra;
+use App\Support\Tenancy\TenantContext;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -460,9 +461,21 @@ final class InvitoInPalestraTest extends TestCase
     public function finiti_i_posti_non_si_creano_altri_inviti(): void
     {
         $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
-        $piano->forceFill(['max_members' => 2])->save();
+        $piano->forceFill(['max_members' => 1])->save();
 
-        // Il gestore occupa già un posto.
+        /*
+         * ══ 🆕 IL GESTORE NON OCCUPA PIÙ UN POSTO — AH.1-quater (12/09/2026) ══
+         *
+         * ⛔ Prima questo test dava `max_members = 2` e commentava *«il gestore
+         * occupa già un posto»*: si contavano **tutti** gli utenti del tenant.
+         *
+         * 🚨 Da AH.1-quater i posti allievo contano **le persone con ruolo
+         * `member`**, perché una palestra ha anche dello staff — e far pagare a
+         * una palestra i propri dipendenti come clienti è un errore che si vede
+         * solo dalla fattura.
+         *
+         * 💡 Il test prova la stessa identica cosa con un posto invece di due.
+         */
         $this->inviti()->invita($this->palestra, $this->gestore, 'uno@esempio.test');
 
         $this->assertSame(0, $this->inviti()->postiRimasti($this->palestra));
@@ -470,6 +483,109 @@ final class InvitoInPalestraTest extends TestCase
         $this->expectException(ValidationException::class);
 
         $this->inviti()->invita($this->palestra, $this->gestore, 'due@esempio.test');
+    }
+
+    /**
+     * 🆕 **E lo staff non consuma posti allievo** — AH.1-quater.
+     *
+     * ⛔ È l'altra metà, e va provata da sola: sembra ovvio scritto a parole, ed
+     * è esattamente il genere di cosa che si somma per sbaglio quando i due
+     * numeri finiscono nella stessa query.
+     */
+    #[Test]
+    public function un_trainer_non_consuma_un_posto_allievo(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => 1, 'max_trainers' => 5])->save();
+
+        $prima = $this->inviti()->postiRimasti($this->palestra);
+
+        $this->inviti()->invita($this->palestra, $this->gestore, 'coach@esempio.test', UserRole::Trainer);
+
+        $this->assertSame($prima, $this->inviti()->postiRimasti($this->palestra));
+        $this->assertSame(4, $this->inviti()->postiTrainerRimasti($this->palestra));
+    }
+
+    /**
+     * 🚨 **`plans.max_trainers` esisteva dal 14/08 e non lo leggeva nessuno.**
+     *
+     * ⛔ Un numero a listino senza nessuna guardia dietro è il caso peggiore:
+     * sembra una regola e non lo è. `gym_5` prometteva cinque trainer e non ne
+     * avrebbe fermati cinquanta.
+     */
+    #[Test]
+    public function finiti_i_posti_trainer_non_si_invitano_altri_trainer(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_trainers' => 1])->save();
+
+        $this->inviti()->invita($this->palestra, $this->gestore, 'coach@esempio.test', UserRole::Trainer);
+
+        $this->assertSame(0, $this->inviti()->postiTrainerRimasti($this->palestra));
+
+        $this->expectException(ValidationException::class);
+
+        $this->inviti()->invita($this->palestra, $this->gestore, 'altro@esempio.test', UserRole::Trainer);
+    }
+
+    /**
+     * ⛔ **E revocare un invito da trainer libera il posto** — il controllo che
+     * nessuno pensa a fare.
+     */
+    #[Test]
+    public function revocare_un_invito_da_trainer_libera_il_posto(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_trainers' => 1])->save();
+
+        $invito = $this->inviti()->invita($this->palestra, $this->gestore, 'coach@esempio.test', UserRole::Trainer);
+
+        $this->assertSame(0, $this->inviti()->postiTrainerRimasti($this->palestra));
+
+        $this->inviti()->revoca($invito);
+
+        $this->assertSame(1, $this->inviti()->postiTrainerRimasti($this->palestra));
+    }
+
+    /**
+     * 🚨 **Da un invito non si entra come amministratore.**
+     *
+     * ⛔ Un invito da `gym_admin` regalerebbe a chi lo riceve il comando
+     * sull'abbonamento della palestra. Si rifiuta invece di correggere il
+     * valore: chi ha scritto quella riga voleva fare qualcosa che non si fa.
+     */
+    #[Test]
+    public function non_si_invita_nessuno_come_amministratore(): void
+    {
+        $this->expectException(ValidationException::class);
+
+        $this->inviti()->invita($this->palestra, $this->gestore, 'furbo@esempio.test', UserRole::GymAdmin);
+    }
+
+    /**
+     * 🚨 **Chi accetta un invito da trainer entra come `trainer`**, e il ruolo
+     * viene **dall'invito**, non dalla richiesta di chi lo riscatta.
+     */
+    #[Test]
+    public function chi_accetta_un_invito_da_trainer_entra_come_trainer(): void
+    {
+        $invito = $this->inviti()->invita($this->palestra, $this->gestore, 'coach@esempio.test', UserRole::Trainer);
+
+        $coach = app(CreaTenantPersonale::class)('Coach', 'coach@esempio.test', [
+            'password' => self::FAKE_PASSWORD,
+        ]);
+
+        $this->inviti()->accetta($invito->token, $coach);
+
+        $dentro = app(TenantContext::class)->runAs($this->palestra, function () use ($coach): bool {
+            $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+            $fresco->unsetRelation('roles');
+
+            return $fresco->hasRole(UserRole::Trainer->value);
+        });
+
+        $this->assertTrue($dentro, 'doveva entrare come trainer');
+        $this->assertSame($this->palestra->getKey(), $coach->fresh()->tenant_id);
     }
 
     /**

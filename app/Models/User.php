@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\TenantScope;
+use App\Observers\ChiEsceDallaPalestraOsservatore;
 use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
@@ -14,6 +15,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -49,6 +51,16 @@ use Spatie\Permission\Traits\HasRoles;
 // genere in `$fillable` è una scalata di privilegi in attesa di un controller
 // distratto che passi `$request->all()`.
 #[Hidden(['password', 'remember_token'])]
+/*
+ * 🆕 **Chi se ne va si porta dietro i rapporti chiusi** — 3b-AH.1-ter.
+ *
+ * ⚠️ Sta su un osservatore e non su un'azione del pannello perché un trainer se
+ * ne va per più strade — il pannello palestra, `/god`, un comando — e appendere
+ * la regola a una sola vorrebbe dire che le altre lasciano in piedi rapporti di
+ * qualcuno che non c'è più. 🚨 Un rapporto in piedi **occupa uno slot** e
+ * **tiene aperto un canale di chat**.
+ */
+#[ObservedBy(ChiEsceDallaPalestraOsservatore::class)]
 class User extends Authenticatable implements FilamentUser, HasMedia
 {
     /** @use HasFactory<UserFactory> */

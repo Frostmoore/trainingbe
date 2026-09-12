@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Tenancy;
 
+use App\Enums\UserRole;
 use App\Models\InvitoInPalestra;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -12,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -62,7 +64,60 @@ class InvitiInPalestra
      */
     public function postiRimasti(Tenant $palestra): ?int
     {
-        $piano = $this->context->runWithoutTenant(
+        $massimo = $this->pianoDi($palestra)?->max_members;
+
+        if ($massimo === null) {
+            return null;
+        }
+
+        /*
+         * ══ 🆕 I TRAINER NON CONSUMANO POSTI ALLIEVO — AH.1-quater ══════════
+         *
+         * ⛔ Qui si contavano **tutti** gli utenti del tenant, staff compreso.
+         * 🚨 Da quando una palestra può invitare anche dei trainer, quel conto
+         * direbbe che una palestra da cinquanta posti ne ha quarantasette
+         * perché ha tre allenatori — cioè le farebbe pagare i propri dipendenti
+         * come se fossero clienti.
+         *
+         * 💡 I due contatori si comprano insieme e si contano separati:
+         * `max_members` le persone iscritte, `max_trainers` lo staff.
+         */
+        $occupati = $this->quanteNePorta($palestra, UserRole::Member)
+            + $this->invitiValidiPer($palestra, UserRole::Member);
+
+        return max(0, $massimo - $occupati);
+    }
+
+    /**
+     * 🆕 **Quanti trainer può ancora prendere questa palestra** — AH.1-quater.
+     *
+     * 📌 *«una palestra può avere un numero limitato di trainer»*.
+     *
+     * 🚨 **`plans.max_trainers` esisteva dal 14/08 e non lo leggeva nessuno**:
+     * un numero a listino senza nessuna guardia dietro. ⛔ È il caso peggiore,
+     * perché sembra una regola e non lo è — `gym_5` prometteva cinque trainer e
+     * non ne avrebbe fermati cinquanta.
+     *
+     * ⚠️ `null` = senza limite, come per `max_members`.
+     */
+    public function postiTrainerRimasti(Tenant $palestra): ?int
+    {
+        $massimo = $this->pianoDi($palestra)?->max_trainers;
+
+        if ($massimo === null) {
+            return null;
+        }
+
+        $occupati = $this->quanteNePorta($palestra, UserRole::Trainer)
+            + $this->invitiValidiPer($palestra, UserRole::Trainer);
+
+        return max(0, $massimo - $occupati);
+    }
+
+    /** Il piano in corso di questa palestra, `null` se non ne ha. */
+    private function pianoDi(Tenant $palestra): ?Plan
+    {
+        return $this->context->runWithoutTenant(
             fn (): ?Plan => PlanSubscription::query()
                 ->where('tenant_id', $palestra->id)
                 ->attivi()
@@ -70,24 +125,53 @@ class InvitiInPalestra
                 ->orderByDesc('starts_at')
                 ->first()?->plan,
         );
+    }
 
-        $massimo = $piano?->max_members;
-
-        if ($massimo === null) {
-            return null;
-        }
-
-        $occupati = $this->context->runWithoutTenant(
-            fn (): int => User::withoutGlobalScopes()
-                ->where('tenant_id', $palestra->id)
-                ->count()
-                + InvitoInPalestra::withoutGlobalScopes()
-                    ->where('tenant_id', $palestra->id)
-                    ->validi()
-                    ->count(),
+    /**
+     * Quante persone con questo ruolo stanno dentro la palestra.
+     *
+     * ⚠️ **Si conta dai ruoli spatie**, non da `users.tenant_id` e basta: da
+     * `AH.1-quater` un trainer con un portfolio suo lavora nella palestra
+     * **senza** avere lì il proprio `tenant_id`, e contarlo dalla colonna lo
+     * lascerebbe fuori dal tetto che la palestra paga.
+     *
+     * 🚨 `model_has_roles` si legge a mano e non con `hasAppRole()`: quello
+     * risponde sul tenant **della persona**, che per un trainer con portfolio è
+     * un altro — e direbbe di no a tutti, in silenzio.
+     */
+    private function quanteNePorta(Tenant $palestra, UserRole $ruolo): int
+    {
+        return $this->context->runWithoutTenant(
+            fn (): int => (int) DB::table('model_has_roles as mhr')
+                ->join('roles as r', function ($join): void {
+                    $join->on('r.id', '=', 'mhr.role_id')
+                        ->on('r.tenant_id', '=', 'mhr.tenant_id');
+                })
+                ->where('mhr.tenant_id', $palestra->getKey())
+                ->where('mhr.model_type', (new User)->getMorphClass())
+                ->where('r.name', $ruolo->value)
+                ->distinct()
+                ->count('mhr.model_id'),
         );
+    }
 
-        return max(0, $massimo - $occupati);
+    /**
+     * Gli inviti ancora spendibili per quel ruolo.
+     *
+     * ⚠️ **Contano come posti occupati.** Senza, una palestra con tre posti
+     * potrebbe mandare trenta link e ritrovarsi trenta persone: il limite
+     * verrebbe verificato quando è troppo tardi per dire di no a qualcuno che
+     * ha già cliccato.
+     */
+    private function invitiValidiPer(Tenant $palestra, UserRole $ruolo): int
+    {
+        return $this->context->runWithoutTenant(
+            fn (): int => InvitoInPalestra::withoutGlobalScopes()
+                ->where('tenant_id', $palestra->getKey())
+                ->where('ruolo', $ruolo->value)
+                ->validi()
+                ->count(),
+        );
     }
 
     /**
@@ -95,8 +179,29 @@ class InvitiInPalestra
      *
      * @throws ValidationException
      */
-    public function invita(Tenant $palestra, User $chiInvita, ?string $email = null): InvitoInPalestra
-    {
+    public function invita(
+        Tenant $palestra,
+        User $chiInvita,
+        ?string $email = null,
+        UserRole $ruolo = UserRole::Member,
+    ): InvitoInPalestra {
+        if (! in_array($ruolo, [UserRole::Member, UserRole::Trainer], true)) {
+            /*
+             * 🆕 **Un elenco chiuso, non una validazione all'ingresso** —
+             * AH.1-quater.
+             *
+             * 🚨 Un invito da `gym_admin` regalerebbe a chi lo riceve il comando
+             * sull'abbonamento della palestra; uno da `super_admin` non è
+             * nemmeno un ruolo spatie e `hasAppRole()` lancia. ⛔ Qui si rifiuta
+             * invece di correggere: chi ha scritto quella riga voleva fare
+             * qualcosa che non si fa, e un valore «aggiustato» glielo
+             * nasconderebbe.
+             */
+            throw ValidationException::withMessages([
+                'ruolo' => __('Da un invito si entra come iscritto o come trainer.'),
+            ]);
+        }
+
         if ($palestra->ePersonale()) {
             /*
              * ⛔ Un tenant personale non e' una palestra: non ha iscritti e non
@@ -116,21 +221,40 @@ class InvitiInPalestra
          * becca un errore che non la riguarda. 💡 Chi invita, invece, il
          * problema puo' risolverlo — comprando un posto o togliendo un invito.
          */
-        $rimasti = $this->postiRimasti($palestra);
-
-        if ($rimasti !== null && $rimasti <= 0) {
-            throw ValidationException::withMessages([
-                'posti' => __('Non ci sono piu\' posti sul vostro piano. Liberatene uno o passate a un piano piu\' grande.'),
-            ]);
-        }
+        $this->pretendiUnPosto($palestra, $ruolo);
 
         return $this->context->runAs($palestra, fn (): InvitoInPalestra => InvitoInPalestra::create([
             'tenant_id' => $palestra->id,
             'invitato_da' => $chiInvita->getKey(),
             'token' => InvitoInPalestra::generaToken(),
             'email' => $email,
+            'ruolo' => $ruolo,
             'expires_at' => now()->addDays(InvitoInPalestra::GIORNI_DI_VITA),
         ]));
+    }
+
+    /**
+     * 🚨 **Il posto si verifica DUE volte: alla creazione e all'uso.**
+     *
+     * ⚠️ Fra i due momenti possono passare giorni, e nel frattempo i posti
+     * possono essere finiti. ⛔ **Solo il secondo protegge**; il primo è
+     * cortesia — serve a non mandare un link che non potrà funzionare.
+     *
+     * @throws ValidationException
+     */
+    private function pretendiUnPosto(Tenant $palestra, UserRole $ruolo): void
+    {
+        $rimasti = $ruolo === UserRole::Trainer
+            ? $this->postiTrainerRimasti($palestra)
+            : $this->postiRimasti($palestra);
+
+        if ($rimasti !== null && $rimasti <= 0) {
+            throw ValidationException::withMessages([
+                'posti' => $ruolo === UserRole::Trainer
+                    ? __('Non ci sono piu\' posti trainer sul vostro piano.')
+                    : __('Non ci sono piu\' posti sul vostro piano. Liberatene uno o passate a un piano piu\' grande.'),
+            ]);
+        }
     }
 
     /**
@@ -205,20 +329,35 @@ class InvitiInPalestra
             ]);
         }
 
+        $ruolo = $invito->ruolo ?? UserRole::Member;
+
         /*
-         * ⚠️ **Si passa dal `join_code` della palestra**, e sembra un giro
-         * strano: l'invito ha gia' il `tenant_id`.
+         * 🚨 **Il posto si ricontrolla ADESSO** — AH.1-quater.
          *
-         * 💡 E' voluto. `UnisciAUnaPalestra` e' l'unico posto che sa spostare
-         * una persona — tabelle che restano indietro, transazione, email gia'
-         * presa — e prende un codice. Dargli un secondo ingresso «per tenant»
-         * vorrebbe dire due strade dentro lo stesso metodo, e la seconda e'
-         * sempre quella meno provata.
+         * ⚠️ Fra la creazione dell'invito e questo momento possono passare
+         * giorni, e nel frattempo i posti possono essere finiti. ⛔ **È questo
+         * il controllo che protegge**: quello alla creazione è cortesia.
          *
-         * 🚨 **Non e' un buco**: il codice non esce di qui. Chi accetta non lo
-         * vede mai, e l'autorizzazione l'ha data l'invito, non il codice.
+         * 💡 Stesso ragionamento già scritto per le schede bloccate — *«un
+         * controllo al momento di partire è l'unico che guarda lo stato di quel
+         * momento»*.
          */
-        $entrata = $this->unisci->__invoke($utente, $palestra->join_code);
+        $this->pretendiUnPosto($palestra, $ruolo);
+
+        /*
+         * ⚠️ **Si passa da `dentroQuestoTenant()`**, che è lo stesso trasloco
+         * del `join_code` con il tenant già in mano.
+         *
+         * 💡 `UnisciAUnaPalestra` è l'unico posto che sa spostare una persona —
+         * tabelle che restano indietro, transazione, email già presa. Dargli un
+         * secondo ingresso vorrebbe dire due strade, e la seconda è sempre
+         * quella meno provata.
+         *
+         * 🆕 Fino all'11/09 si passava dal `join_code` della palestra; da
+         * `AH.1` esiste l'ingresso «per tenant», che serviva agli inviti dei
+         * trainer, e questa chiamata diventa più diretta **e** porta il ruolo.
+         */
+        $entrata = $this->unisci->dentroQuestoTenant($utente, $palestra, $ruolo, 'token');
 
         $invito->forceFill([
             'used_at' => now(),

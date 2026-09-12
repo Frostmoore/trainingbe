@@ -53,6 +53,29 @@ class BillingController extends Controller
             'abbonato' => $this->piano->eAbbonato($utente),
             'livello' => $this->piano->livello($utente),
 
+            /*
+             * ══ 🆕 CHI PAGA PER TE — 3b-AH.4 (12/09/2026) ═══════════════════
+             *
+             * 📌 Il committente: *«la modale per lui deve dire che non è più
+             * abbonato **perché non è più abbonato il suo trainer o la sua
+             * palestra**»*.
+             *
+             * ⛔ **Oggi l'app dice a tutti la stessa cosa**: *«il rinnovo
+             * automatico era spento, quindi non abbiamo addebitato niente»*.
+             * 🚨 A un iscritto di palestra è falso due volte — non ha spento
+             * niente e non ha mai pagato niente. Gli fa cercare
+             * un'impostazione che non ha, e gli nasconde l'unica cosa utile:
+             * parlarne con la palestra.
+             *
+             * ⚠️ **Lo dice il server, non lo deduce l'app.** Il tipo di tenant
+             * l'app ce l'ha, e potrebbe dedurlo — ma sarebbe la stessa
+             * informazione dedotta due volte, e le due deduzioni divergono al
+             * primo caso nuovo. Da AH.1 il tenant di un trainer è `personal`
+             * come quello di un utente singolo: dedurlo dal tipo direbbe
+             * «trainer» a chi paga per sé.
+             */
+            'chi_pagava' => $this->piano->chiPaga($utente),
+
             'abbonamento' => [
                 'prezzo_cent' => $this->listino->singolo(),
                 'chiamate_mensili' => $this->listino->chiamateMensili(),

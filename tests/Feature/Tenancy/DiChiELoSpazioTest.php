@@ -6,14 +6,18 @@ namespace Tests\Feature\Tenancy;
 
 use App\Enums\TenantKind;
 use App\Enums\UserRole;
+use App\Models\Plan;
+use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\EsciDaUnaPalestra;
+use App\Services\Tenancy\InvitiDelTrainer;
 use App\Services\Tenancy\UnisciAUnaPalestra;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -178,6 +182,81 @@ final class DiChiELoSpazioTest extends TestCase
 
         self::assertNotSame((int) $spazio->getKey(), (int) $suo->getKey());
         self::assertTrue($suo->fresh()->eDi($allievo->fresh()));
+    }
+
+    /**
+     * AH.2 -- uscire scioglie il legame, ma NON cancella la riga.
+     *
+     * Qui c'era una `delete()`, e contraddiceva D5 -- "il legame resta, la
+     * storia si conserva, il canale si chiude" -- che
+     * `InvitiDelTrainer::disattiva()` applica sulla STESSA tabella. Due regole
+     * opposte sulla stessa riga, e la differenza si vedeva solo dallo storico
+     * che spariva.
+     */
+    #[Test]
+    public function uscendo_il_rapporto_si_disattiva_e_non_si_cancella(): void
+    {
+        [$spazio, $trainer, $allievo] = $this->spazioDiUnTrainer();
+
+        $this->ctx()->runWithoutTenant(fn () => DB::table('trainer_member')->insert([
+            'tenant_id' => $spazio->getKey(),
+            'trainer_id' => $trainer->getKey(),
+            'member_id' => $allievo->getKey(),
+            'assigned_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+
+        app(EsciDaUnaPalestra::class)($allievo);
+
+        $riga = DB::table('trainer_member')
+            ->where('tenant_id', $spazio->getKey())
+            ->where('member_id', $allievo->getKey())
+            ->first();
+
+        self::assertNotNull($riga, 'la riga era stata cancellata invece che disattivata');
+        self::assertNotNull($riga->disattivato_il, 'il rapporto era rimasto in piedi');
+    }
+
+    /**
+     * E LO SLOT SI LIBERA -- AH.1-ter.
+     *
+     * E' la meta' che rende sicura la disattivazione: se gli slot contassero
+     * anche le righe disattivate, un trainer si ritroverebbe i posti occupati
+     * da rapporti finiti per sempre, senza nessun errore. Finche' chi usciva
+     * veniva cancellato il conto tornava per caso.
+     */
+    #[Test]
+    public function e_lo_slot_si_libera(): void
+    {
+        [$spazio, $trainer, $allievo] = $this->spazioDiUnTrainer();
+
+        $this->ctx()->runWithoutTenant(fn () => DB::table('trainer_member')->insert([
+            'tenant_id' => $spazio->getKey(),
+            'trainer_id' => $trainer->getKey(),
+            'member_id' => $allievo->getKey(),
+            'assigned_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]));
+
+        /*
+         * Un piano con un tetto vero: senza, `postiRimasti()` risponde `null`
+         * -- "senza limite" -- e il test non proverebbe niente restando verde.
+         */
+        PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $spazio->getKey())
+            ->update(['plan_id' => Plan::query()->where('code', Plan::TRAINER_10)->firstOrFail()->getKey()]);
+
+        $prima = app(InvitiDelTrainer::class)->postiRimasti($trainer->fresh());
+
+        self::assertNotNull($prima, 'il piano di prova deve avere un tetto, o il test non prova niente');
+
+        app(EsciDaUnaPalestra::class)($allievo);
+
+        $dopo = app(InvitiDelTrainer::class)->postiRimasti($trainer->fresh());
+
+        self::assertSame($prima + 1, $dopo, 'lo slot non si era liberato');
     }
 
     /** Dal proprio spazio non si esce: non c'e' nessuno da cui uscire. */

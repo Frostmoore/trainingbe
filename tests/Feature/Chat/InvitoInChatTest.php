@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Chat;
 
+use App\Enums\TenantKind;
 use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
 use App\Events\MessageSent;
@@ -55,7 +56,21 @@ class InvitoInChatTest extends TestCase
         ]);
 
         $suo = $this->creaPalestra('Studio Libero', 'libero', 'LIBE2345');
-        $this->trainer = $this->creaUtente($suo, UserRole::FreeTrainer, 'coach@esempio.it');
+
+        /*
+         * 🆕 **Lo spazio del trainer è personale, ed è suo** — 3b-AH (12/09).
+         *
+         * ⚠️ Qui `creaPalestra()` costruiva un tenant di **tipo palestra** con
+         * dentro un `free_trainer`: una finzione comoda che non esiste in
+         * produzione. 🚨 Da `AH.1-bis` un trainer può creare inviti personali
+         * **solo se lo spazio è suo**, perché altrimenti farebbe entrare gente
+         * dentro una palestra saltandone il tetto dei posti.
+         */
+        $suo->forceFill(['kind' => TenantKind::Personal])->save();
+
+        $this->trainer = $this->creaUtente($suo->fresh(), UserRole::FreeTrainer, 'coach@esempio.it');
+
+        $suo->forceFill(['proprietario_id' => $this->trainer->getKey()])->save();
 
         $this->scheda = ProfiloPubblico::create([
             'user_id' => $this->trainer->id,
