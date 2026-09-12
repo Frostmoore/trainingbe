@@ -240,42 +240,31 @@ class PianoAttivo
      */
     public function eAbbonato(User $utente): bool
     {
-        if ($this->per($utente)->code !== Plan::FREE) {
-            return true;
-        }
-
         /*
-         * == L'ALLIEVO DI UN TRAINER E' ABBONATO PIENO -- 10/09/2026 ==
+         * == E DA AH.1 LA RISPOSTA E' TUTTA QUI -- 12/09/2026 ==
          *
-         * Il committente: "un utente allievo di una palestra sta pagando la
-         * palestra per il suo abbonamento, quindi deve avere un abbonamento
-         * pieno. Idem un allievo di un trainer".
+         * Sotto c'era una seconda strada, che passava da QuotaDelTrainer. E'
+         * stata tolta, ed e' una SOTTRAZIONE e non una perdita: da AH.1
+         * l'allievo di un trainer sta NEL TENANT DEL TRAINER, e l'abbonamento
+         * sta sul tenant. La riga qui sopra lo copre gia'.
          *
-         * L'iscritto di una PALESTRA era gia' coperto dalla riga sopra: la
-         * palestra e' il suo tenant, e l'abbonamento sta sul tenant.
+         * Perche' quella deviazione era nata (09/09): l'allievo stava in un
+         * tenant personale suo, sul piano free. Aveva l'AI -- haLaAi() passa da
+         * QuotaDelTrainer -- ma NON risultava abbonato: cinque card sfumate e
+         * un allenamento al giorno a chi paga un trainer. Due domande vicine
+         * ("ha l'AI?" / "e' abbonato?") che rispondevano in modo diverso alla
+         * stessa situazione, senza nessun errore da nessuna parte.
          *
-         * L'allievo di un TRAINER indipendente no: sta in un tenant PERSONALE
-         * suo, sul piano `free`. Aveva l'AI -- `haLaAi()` passa da
-         * `QuotaDelTrainer` -- ma NON risultava abbonato: cinque card sfumate
-         * e UN ALLENAMENTO AL GIORNO a chi paga un trainer.
+         * Perche' toglierla adesso invece di lasciarla li': legava il gate
+         * dell'abbonamento alle regole della quota AI. Chi ne cambiava una
+         * cambiava l'altra senza saperlo, e non c'era piu' nessun motivo per
+         * cui quelle due cose dovessero muoversi insieme.
          *
-         * Nessun errore da nessuna parte: due domande vicine ("ha l'AI?" /
-         * "e' abbonato?") che rispondevano in modo diverso alla stessa
-         * situazione.
-         *
-         * La copertura sa gia' scadere da sola: `QuotaDelTrainer` guarda
-         * l'abbonamento del trainer e vale fino alla fine del ciclo pagato.
-         * Quindi la disdetta del trainer si propaga agli allievi senza che
-         * nessuno debba propagarla -- ed e' esattamente la regola chiesta:
-         * "in caso di disdetta, questa avviene alla fine del periodo di
-         * fatturazione per la palestra e per tutti i suoi allievi, idem per il
-         * trainer".
-         *
-         * ATTENZIONE: da oggi `QuotaDelTrainer::copre()` governa DUE cose --
-         * la quota AI e il gate dell'abbonamento. Chi ne cambia le regole le
-         * cambia a tutte e due.
+         * ATTENZIONE: resta in haLaAi(), dove e' nata e dove serve ancora --
+         * il livello 3 di MemberAiQuota, per chi il tenant del trainer non ce
+         * l'ha (l'iscritto di una palestra con un trainer esterno, AH.1-ter).
          */
-        return app(QuotaDelTrainer::class)->copre($utente);
+        return $this->per($utente)->code !== Plan::FREE;
     }
 
     /**

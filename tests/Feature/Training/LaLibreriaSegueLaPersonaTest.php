@@ -144,18 +144,55 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
     }
 
     /**
-     * ⛔ **La libreria scende, non sale.** Chi si e' scritto un esercizio nel
-     * proprio diario non se lo ritrova nell'elenco del trainer.
+     * ══ 🚨 QUESTO TEST DICEVA IL CONTRARIO, FINO ALL'11/09/2026 ═══════════
+     *
+     * ⛔ Diceva: *«la libreria scende, non sale — chi si e' scritto un esercizio
+     * nel proprio diario non se lo ritrova nell'elenco del trainer»*, con
+     * l'esempio della «Panca della vergogna».
+     *
+     * 🆕 **AH.1 lo rovescia, e non di proposito**: e' una conseguenza. L'allievo
+     * di un trainer adesso sta **nel tenant del trainer**, e un esercizio nasce
+     * nel tenant di chi lo scrive — quindi nasce li', e il trainer lo vede.
+     *
+     * ── ⚠️ Non e' una regressione: e' un allineamento ─────────────────────
+     *
+     * 💡 **Dentro una palestra funzionava gia' cosi'** e nessuno l'ha mai
+     * chiamato difetto: iscritto e trainer stanno nello stesso tenant, quindi
+     * un esercizio scritto da un iscritto e' sempre stato visibile allo staff.
+     * 🚨 La «discesa» non era una regola: era un effetto del fatto che il
+     * trainer indipendente e i suoi allievi stavano in tenant diversi — cioe'
+     * esattamente la cosa che AH.1 e' stata chiesta per togliere.
+     *
+     * ⏳ **Da confermare al committente**, perche' e' un cambio visibile: un
+     * personal trainer adesso vede gli esercizi che i suoi allievi si scrivono
+     * da soli, come li vede una palestra. Se non deve, serve una regola nuova —
+     * e varrebbe **anche per le palestre**, dove il caso e' identico.
      */
     #[Test]
-    public function il_trainer_non_vede_gli_esercizi_inventati_dall_iscritto(): void
+    public function il_trainer_vede_gli_esercizi_dei_suoi_allievi_come_una_palestra(): void
     {
         $trainer = $this->trainerIndipendente('coach@esempio.test');
         $iscritto = $this->iscrittoDi($trainer, 'seguito@esempio.test');
 
         $this->esercizioDi($iscritto, 'Panca della vergogna');
 
-        self::assertNotContains('Panca della vergogna', $this->catalogoDi($trainer));
+        self::assertContains('Panca della vergogna', $this->catalogoDi($trainer));
+    }
+
+    /**
+     * ⛔ **E invece fra due spazi diversi la libreria NON sale**, che e' la meta'
+     * della regola rimasta in piedi: un utente libero che si fa seguire da un
+     * trainer **senza** traslocare non gli passa i propri esercizi.
+     */
+    #[Test]
+    public function ma_da_un_altro_spazio_non_sale(): void
+    {
+        $trainer = $this->trainerIndipendente('coach@esempio.test');
+        $estraneo = $this->utenteLibero('estraneo@esempio.test');
+
+        $this->esercizioDi($estraneo, 'Panca dell\'estraneo');
+
+        self::assertNotContains('Panca dell\'estraneo', $this->catalogoDi($trainer));
     }
 
     /**
@@ -314,9 +351,13 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
     }
 
     /**
-     * ⚠️ **Si cerca nella libreria del trainer, ma si crea sempre nella
-     * propria.** ⛔ Creando la' dentro, un iscritto potrebbe allargare la
-     * libreria del trainer a sua insaputa.
+     * ⚠️ **Un esercizio nasce sempre nel tenant di chi lo scrive**, e questa
+     * regola non e' cambiata: e' cambiato **quale** tenant sia.
+     *
+     * 🆕 Dopo AH.1 l'allievo sta nello spazio del trainer, quindi «il proprio
+     * tenant» e «quello del trainer» sono lo stesso. ⛔ La riga che contava —
+     * *«non si crea dentro la libreria di qualcun altro»* — resta vera e resta
+     * provata: si guarda che il `tenant_id` sia quello di chi scrive.
      */
     #[Test]
     public function un_esercizio_nuovo_nasce_nel_tenant_di_chi_lo_scrive(): void
@@ -336,8 +377,23 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
             ->where('slug_normalized', Exercise::normalize('Panca mia soltanto'))
             ->firstOrFail();
 
-        self::assertSame($iscritto->tenant_id, $nato->tenant_id);
-        self::assertNotContains('Panca mia soltanto', $this->catalogoDi($trainer));
+        self::assertSame($iscritto->fresh()->tenant_id, $nato->tenant_id);
+
+        /*
+         * 🚨 E un utente di un ALTRO spazio non allarga niente a nessuno: e' il
+         * caso che questa asserzione difendeva davvero.
+         */
+        $estraneo = $this->utenteLibero('estraneo@esempio.test');
+
+        $this->comeApp($estraneo)
+            ->postJson('/api/v1/exercises', [
+                'name' => 'Panca di un estraneo',
+                'muscle_group' => MuscleGroup::Chest->value,
+                'secondary_muscles' => [],
+            ])
+            ->assertCreated();
+
+        self::assertNotContains('Panca di un estraneo', $this->catalogoDi($trainer));
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -375,8 +431,45 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
         )->keyBy('name');
 
         self::assertSame('mia', $righe['Panca mia']['origine']);
-        self::assertSame('condivisa', $righe['Panca del coach']['origine']);
+
+        /*
+         * 🆕 **«mia» e non piu' «condivisa»** — 3b-AH, AH.1 (12/09/2026).
+         *
+         * ⚠️ Allievo e trainer stanno nello stesso spazio: quella libreria e'
+         * **la sua**, non una che gli viene passata. E' la stessa cosa che vede
+         * un iscritto di palestra per gli esercizi della palestra.
+         *
+         * ⛔ **`condivisa` non e' morta**: resta per chi e' **uscito** da uno
+         * spazio e continua a poter leggere quella libreria (`librerie_viste`,
+         * 3b-M) — ed e' provata dal test qui sotto.
+         */
+        self::assertSame('mia', $righe['Panca del coach']['origine']);
         self::assertSame('piattaforma', $righe['Panca di tutti']['origine']);
+    }
+
+    /**
+     * 🚨 **`condivisa` esiste ancora**, ed e' il caso di chi se n'e' andato: la
+     * libreria di uno spazio che non e' piu' il suo, ma che il suo storico
+     * nomina ancora.
+     */
+    #[Test]
+    public function chi_e_uscito_vede_quella_libreria_come_condivisa(): void
+    {
+        $trainer = $this->trainerIndipendente('coach@esempio.test');
+        $iscritto = $this->iscrittoDi($trainer, 'seguito@esempio.test');
+
+        $this->esercizioDi($trainer, 'Panca del coach');
+
+        app(EsciDaUnaPalestra::class)($iscritto);
+
+        $righe = collect(
+            $this->comeApp($iscritto->fresh())
+                ->getJson('/api/v1/exercises?limit=1000')
+                ->assertOk()
+                ->json('data')
+        )->keyBy('name');
+
+        self::assertSame('condivisa', $righe['Panca del coach']['origine']);
     }
 
     // ═══════════════════════════════════════════════════════════════════

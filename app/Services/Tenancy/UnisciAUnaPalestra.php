@@ -80,6 +80,80 @@ class UnisciAUnaPalestra
      */
     public function __invoke(User $utente, string $joinCode): Tenant
     {
+        $this->pretendiUnoSpazioTuoEVuoto($utente, 'join_code');
+
+        $palestra = Tenant::where('join_code', $joinCode)->first();
+
+        // ⚠️ Stesso rifiuto indistinguibile del login: codice inesistente,
+        // palestra sospesa e tenant personale danno lo stesso errore.
+        if ($palestra === null || $palestra->ePersonale() || ! $palestra->isActive()) {
+            throw ValidationException::withMessages([
+                'join_code' => __('Codice palestra non valido.'),
+            ]);
+        }
+
+        return $this->dentroQuestoTenant($utente, $palestra, UserRole::Member, 'join_code');
+    }
+
+    /**
+     * 🆕 **Lo stesso trasloco, verso un tenant che si ha già in mano** —
+     * 3b-AH, AH.1 (12/09/2026).
+     *
+     * ══ 📌 PERCHE' ESISTE ═════════════════════════════════════════════════
+     *
+     * 📌 Il committente: *«un allievo che è iscritto a un `free_trainer` deve
+     * avere come tenant quel trainer — un trainer in sostanza è **una palestra
+     * con un unico trainer***».
+     *
+     * ⛔ **E allora entrare da un trainer deve essere lo stesso gesto di entrare
+     * in una palestra**, non un gesto che gli somiglia. Scriverne una seconda
+     * versione vorrebbe dire due elenchi di tabelle da spostare, due modi di
+     * rifare i ruoli, due modi di sbloccare le conversazioni — e il giorno in
+     * cui qualcuno ne aggiorna uno solo, la differenza non la segnala nessuno.
+     *
+     * ⚠️ **La sola differenza è come si trova il tenant**: con il `join_code`
+     * per una palestra, con un invito monouso per un trainer. Tutto il resto —
+     * le guardie, il trasloco, i ruoli — è identico, e sta qui dentro una volta.
+     *
+     * @param  UserRole  $ruolo  con che ruolo si entra. ⛔ Mai un dato in ingresso: lo decide il chiamante che ha già verificato l'invito
+     * @param  string  $campo  su quale campo appendere l'errore di validazione
+     *
+     * @throws ValidationException
+     */
+    public function dentroQuestoTenant(
+        User $utente,
+        Tenant $destinazione,
+        UserRole $ruolo = UserRole::Member,
+        string $campo = 'gym',
+    ): Tenant {
+        $vecchio = $this->pretendiUnoSpazioTuoEVuoto($utente, $campo);
+
+        if ($destinazione->is($vecchio)) {
+            /*
+             * 💡 Ci si può già essere: un invito riscattato due volte, o una
+             * richiesta ripetuta. ⛔ Proseguire vorrebbe dire cancellare il
+             * tenant di destinazione, che è anche quello di partenza.
+             */
+            return $destinazione;
+        }
+
+        if (! $destinazione->isActive()) {
+            throw ValidationException::withMessages([
+                $campo => __('Questo spazio non è attivo.'),
+            ]);
+        }
+
+        return $this->trasferisci($utente, $vecchio, $destinazione, $ruolo, $campo);
+    }
+
+    /**
+     * Lo spazio da cui si parte dev'essere **tuo** e **senza nessun altro
+     * dentro**.
+     *
+     * @throws ValidationException
+     */
+    private function pretendiUnoSpazioTuoEVuoto(User $utente, string $campo): Tenant
+    {
         $vecchio = $utente->tenant;
 
         if ($vecchio === null || ! $vecchio->eDi($utente)) {
@@ -104,7 +178,7 @@ class UnisciAUnaPalestra
              * sola?»* ma *«questo spazio è **tuo**?»*.
              */
             throw ValidationException::withMessages([
-                'join_code' => __('Sei già iscritto a una palestra. Per cambiarla, parlane con loro.'),
+                $campo => __('Sei già iscritto a una palestra. Per cambiarla, parlane con loro.'),
             ]);
         }
 
@@ -127,20 +201,26 @@ class UnisciAUnaPalestra
 
         if ($altri) {
             throw ValidationException::withMessages([
-                'join_code' => __('Nel tuo spazio ci sono altre persone: non puoi portarlo dentro una palestra.'),
+                $campo => __('Nel tuo spazio ci sono altre persone: non puoi portarlo dentro una palestra.'),
             ]);
         }
 
-        $palestra = Tenant::where('join_code', $joinCode)->first();
+        return $vecchio;
+    }
 
-        // ⚠️ Stesso rifiuto indistinguibile del login: codice inesistente,
-        // palestra sospesa e tenant personale danno lo stesso errore.
-        if ($palestra === null || $palestra->ePersonale() || ! $palestra->isActive()) {
-            throw ValidationException::withMessages([
-                'join_code' => __('Codice palestra non valido.'),
-            ]);
-        }
-
+    /**
+     * Il trasloco vero e proprio. ⚠️ Da qui in poi non si rifiuta più niente:
+     * chi ci arriva è già stato verificato.
+     *
+     * @throws ValidationException
+     */
+    private function trasferisci(
+        User $utente,
+        Tenant $vecchio,
+        Tenant $palestra,
+        UserRole $ruolo,
+        string $campo,
+    ): Tenant {
         /*
          * 🚨 **L'email è unica PER palestra, e in quella nuova può essere già
          * presa.**
@@ -162,16 +242,16 @@ class UnisciAUnaPalestra
 
         if ($giaPresente) {
             throw ValidationException::withMessages([
-                'join_code' => __('In questa palestra esiste già un account con la tua email. Contattala.'),
+                $campo => __('In questa palestra esiste già un account con la tua email. Contattala.'),
             ]);
         }
 
-        return DB::transaction(function () use ($utente, $vecchio, $palestra): Tenant {
+        return DB::transaction(function () use ($utente, $vecchio, $palestra, $ruolo): Tenant {
             $spostate = $this->spostaLeRighe($vecchio, $palestra);
 
             $utente->forceFill(['tenant_id' => $palestra->getKey()])->save();
 
-            $this->rifaiIRuoli($utente, $vecchio, $palestra);
+            $this->rifaiIRuoli($utente, $vecchio, $palestra, $ruolo);
 
             $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
 
@@ -321,11 +401,15 @@ class UnisciAUnaPalestra
      * ritroverebbe **senza nessun ruolo** nella palestra — cioè un account che
      * esiste e non può fare niente.
      *
-     * ⚠️ E si entra come `Member`, sempre: il ruolo non è un dato in ingresso.
-     * Chi era `FreeTrainer` non diventa trainer della palestra perché ha
-     * digitato il suo codice — quello lo decide la palestra dal suo pannello.
+     * ⚠️ **Il ruolo non è mai un dato in ingresso.** Chi era `FreeTrainer` non
+     * diventa trainer della palestra perché ha digitato il suo codice: entrando
+     * con un `join_code` si entra come `Member`, sempre.
+     *
+     * 🆕 Il parametro esiste dal 12/09 perché `dentroQuestoTenant()` serve anche
+     * all'invito di un trainer — ma anche lì lo decide **il chiamante che ha già
+     * verificato l'invito**, non chi lo riscatta.
      */
-    private function rifaiIRuoli(User $utente, Tenant $vecchio, Tenant $palestra): void
+    private function rifaiIRuoli(User $utente, Tenant $vecchio, Tenant $palestra, UserRole $ruolo = UserRole::Member): void
     {
         /*
          * 🚨 **`syncRoles()` tocca solo il tenant corrente.**
@@ -347,10 +431,10 @@ class UnisciAUnaPalestra
             ->where('tenant_id', $vecchio->getKey())
             ->delete();
 
-        $this->context->runAs($palestra, function () use ($utente): void {
+        $this->context->runAs($palestra, function () use ($utente, $ruolo): void {
             $fresco = User::withoutGlobalScopes()->findOrFail($utente->getKey());
             $fresco->unsetRelation('roles');
-            $fresco->syncRoles([UserRole::Member->value]);
+            $fresco->syncRoles([$ruolo->value]);
         });
     }
 }

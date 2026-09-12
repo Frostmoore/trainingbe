@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Services\Tenancy;
 
 use App\Enums\TipoConversazione;
+use App\Enums\UserRole;
 use App\Models\Conversation;
 use App\Models\Plan;
 use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -25,7 +27,50 @@ class InvitiDelTrainer
     public function __construct(
         private readonly PianoAttivo $piano,
         private readonly CreaTenantPersonale $creaTenantPersonale,
+        private readonly UnisciAUnaPalestra $unisci,
+        private readonly TenantContext $context,
     ) {}
+
+    /**
+     * 🆕 Un allievo nuovo, dentro lo spazio del suo trainer — AH.1.
+     *
+     * ⚠️ **Non passa da `CreaTenantPersonale`**, che di mestiere crea *un tenant
+     * e una persona dentro*: qui il tenant c'è già ed è quello del trainer.
+     *
+     * 🚨 **Se il trainer non avesse un tenant si ricade sulla strada vecchia.**
+     * ⛔ Un `tenant_id` nullo su un utente significa **super admin**
+     * (`TenantScope` non filtra niente): la direzione dell'errore dev'essere
+     * «questa persona resta nel suo spazio», mai «questa persona vede tutto».
+     *
+     * @param  array<string, mixed>  $attributi
+     */
+    private function nasceNelloSpazioDi(User $trainer, string $nome, string $email, array $attributi): User
+    {
+        $spazio = $trainer->tenant;
+
+        if ($spazio === null) {
+            return ($this->creaTenantPersonale)($nome, $email, $attributi);
+        }
+
+        return $this->context->runAs($spazio, function () use ($spazio, $nome, $email, $attributi): User {
+            $utente = User::create(array_merge($attributi, [
+                'name' => $nome,
+                'email' => $email,
+
+                /*
+                 * ⚠️ Esplicito anche se `BelongsToTenant` lo riempirebbe dal
+                 * contesto: è la riga da cui dipende tutto, e un valore scritto
+                 * a mano si nota leggendo mentre un riempimento implicito si
+                 * nota solo quando manca.
+                 */
+                'tenant_id' => $spazio->getKey(),
+            ]));
+
+            $utente->assignRole(UserRole::Member->value);
+
+            return $utente;
+        });
+    }
 
     /**
      * Quanti utenti può ancora accettare. `null` = senza limite — F6.5.
@@ -142,7 +187,28 @@ class InvitiDelTrainer
             ]);
         }
 
-        $utente = ($this->creaTenantPersonale)($nome, $email, $attributi);
+        /*
+         * ══ 🆕 NASCE DENTRO LO SPAZIO DEL TRAINER — 3b-AH, AH.1 (12/09/2026) ══
+         *
+         * 📌 Il committente: *«un allievo che è iscritto a un `free_trainer`
+         * deve avere come tenant quel trainer — un trainer in sostanza è **una
+         * palestra con un unico trainer***».
+         *
+         * ⛔ **Prima nasceva con un tenant personale tutto suo**, e la copertura
+         * dell'abbonamento gli arrivava per una strada laterale
+         * (`QuotaDelTrainer`, nata per la quota AI e allargata al gate il
+         * 09/09). 🚨 Due domande vicine — *«ha l'AI?»* e *«è abbonato?»* —
+         * rispondevano in modo diverso alla stessa situazione, e per settimane
+         * nessuna delle due ha dato un errore.
+         *
+         * 💡 Con il tenant giusto quella deviazione **non serve più**, ed è
+         * stata tolta: l'abbonamento sta sul tenant, e adesso l'allievo sta nel
+         * tenant che paga.
+         *
+         * ⚠️ Lo spazio del trainer resta `kind = personal`: il cliente è **lui**,
+         * non un'organizzazione. Chi lo possiede lo dice `proprietario_id`.
+         */
+        $utente = $this->nasceNelloSpazioDi($trainer, $nome, $email, $attributi);
 
         $utente->forceFill([
             'age_confirmed_at' => now(),
@@ -188,10 +254,29 @@ class InvitiDelTrainer
      * apre la chat illimitata **con lui**, che e' un rapporto vero e non un
      * contatto a freddo.
      *
-     * 🚨 **Non tocca il tenant.** Chi si allena da solo resta nel proprio spazio
-     * personale: il legame `trainer_member` attraversa i tenant di proposito
-     * (F6.1). ⚠️ Spostarlo dentro quello del trainer sarebbe un trasloco di dati
-     * che nessuno ha chiesto, per un rapporto che si puo' interrompere domani.
+     * ══ 🆕 E ADESSO IL TENANT LO TOCCA, MA SOLO A CHI HA UNO SPAZIO SUO ═══
+     *
+     * 🚨 **Fino all'11/09 non toccava il tenant**, e con AH.1 quella scelta si
+     * sarebbe rovesciata da sola: togliendo la deviazione da `QuotaDelTrainer`,
+     * chi arriva da questa strada **smetterebbe di risultare abbonato** — cioè
+     * un allievo che paga il trainer con cinque card sfumate e un allenamento
+     * al giorno. ⛔ Lo stesso difetto chiuso il 09/09, riaperto dall'altro lato.
+     *
+     * 💡 Quindi si trasloca, con **lo stesso identico gesto** di chi entra in
+     * una palestra (`UnisciAUnaPalestra::dentroQuestoTenant()`): stesse
+     * guardie, stesso elenco di tabelle, stesso modo di rifare i ruoli.
+     *
+     * ── ⛔ Ma solo chi lo spazio ce l'ha suo, e vuoto ──────────────────────
+     *
+     * 🚨 **Un iscritto di palestra resta dov'è**, ed è la richiesta di AH.1-ter:
+     * *«un allievo di una palestra potrebbe avere anche un personal trainer che
+     * non è parte della palestra»*. Per lui il rapporto attraversa i tenant come
+     * sempre, e occupa uno slot da tutte e due le parti.
+     *
+     * ⚠️ **E chi ha già degli allievi nel proprio spazio non si muove**: un
+     * trainer che diventa allievo di un altro trainer si porterebbe dietro i
+     * propri. In tutti e due i casi il rapporto si crea lo stesso — cambia solo
+     * chi paga, che resta chi pagava prima.
      *
      * @throws ValidationException
      */
@@ -245,6 +330,8 @@ class InvitiDelTrainer
         }
 
         return DB::transaction(function () use ($invito, $trainer, $utente): User {
+            $this->traslocaSeHaUnoSpazioSuo($utente, $trainer);
+
             $gia = $utente->assignedTrainers()->where('users.id', $trainer->getKey())->exists();
 
             if (! $gia) {
@@ -281,6 +368,40 @@ class InvitiDelTrainer
 
             return $utente;
         });
+    }
+
+    /**
+     * 🆕 Chi ha uno spazio suo e vuoto passa in quello del trainer — AH.1.
+     *
+     * ⛔ **Chi non ce l'ha resta dov'è, e non è un errore**: un iscritto di
+     * palestra è coperto dalla palestra, e il rapporto con un trainer esterno
+     * attraversa i tenant come ha sempre fatto (AH.1-ter).
+     *
+     * ⚠️ **Il rifiuto delle guardie non deve far fallire il riscatto**, e
+     * questo `try` è la riga che lo dice: `dentroQuestoTenant()` lancia quando
+     * lo spazio non è tuo o non è vuoto — che qui non è un guasto, è il caso
+     * normale di chi sta già da qualche parte. 🚨 Lasciar salire l'eccezione
+     * vorrebbe dire che un iscritto di palestra **non può più farsi seguire da
+     * un trainer esterno**, cioè rompere una cosa che oggi funziona.
+     */
+    private function traslocaSeHaUnoSpazioSuo(User $utente, User $trainer): void
+    {
+        $suo = $utente->tenant;
+        $delTrainer = $trainer->tenant;
+
+        if ($suo === null || $delTrainer === null || $suo->is($delTrainer)) {
+            return;
+        }
+
+        if (! $suo->eDi($utente)) {
+            return;
+        }
+
+        try {
+            $this->unisci->dentroQuestoTenant($utente, $delTrainer, UserRole::Member, 'token');
+        } catch (ValidationException) {
+            // Non si trasloca: il rapporto si crea lo stesso, e paga chi pagava.
+        }
     }
 
     /**

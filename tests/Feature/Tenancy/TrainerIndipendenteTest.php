@@ -10,6 +10,8 @@ use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\TrainerInvite;
 use App\Models\User;
+use App\Services\Billing\PianoAttivo;
+use App\Services\Billing\Stripe\Cassa;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Database\Seeders\PlanSeeder;
@@ -120,9 +122,17 @@ class TrainerIndipendenteTest extends TestCase
         $trainer = $this->creaTrainer();
         $invito = $this->inviti()->invita($trainer);
 
+        /*
+         * 🆕 **`member` e non piu' `free_user`** — 3b-AH, AH.1 (12/09/2026).
+         *
+         * ⛔ Chi entra con l'invito di un trainer non e' piu' «uno che si
+         * allena da solo»: sta **dentro lo spazio del trainer**, come un
+         * iscritto sta in quello della palestra. 📌 *«un trainer in sostanza e'
+         * una palestra con un unico trainer»*.
+         */
         $this->postJson('/api/v1/auth/register-with-invite', $this->modulo($invito->token))
             ->assertCreated()
-            ->assertJsonPath('data.roles', [UserRole::FreeUser->value]);
+            ->assertJsonPath('data.roles', [UserRole::Member->value]);
 
         // 🚨 Il secondo che prova lo stesso link non entra.
         $this->postJson('/api/v1/auth/register-with-invite', $this->modulo($invito->token, [
@@ -224,11 +234,78 @@ class TrainerIndipendenteTest extends TestCase
         $legame = DB::table('trainer_member')->first();
 
         $this->assertSame($trainer->tenant_id, $legame->tenant_id);
-        $this->assertNotSame(
+
+        /*
+         * ══ 🆕 E ADESSO ANCHE L'ALLIEVO STA LI' — 3b-AH, AH.1 (12/09/2026) ══
+         *
+         * ⛔ **Questo test diceva l'opposto**, e c'era scritto a chiare lettere:
+         * *«l'utente invitato deve avere un tenant SUO, non quello del
+         * trainer»*. Era giusto fino all'11/09 e il committente l'ha rovesciato:
+         * *«un allievo che e' iscritto a un `free_trainer` deve avere come
+         * tenant quel trainer»*.
+         *
+         * 🚨 **Il perche' e' nei soldi, non nell'ordine dei dati.** Con un
+         * tenant suo l'allievo stava sul piano `free`, e risultava **non
+         * abbonato** mentre il suo trainer pagava per lui: cinque card sfumate e
+         * un allenamento al giorno a chi paga.
+         *
+         * 💡 La riga di sopra resta vera e resta importante: il **rapporto** e'
+         * del trainer (F6.1). Adesso combaciano tutti e due, ed e' proprio
+         * questo che rende il trainer «una palestra con un unico trainer».
+         */
+        $allievo = User::withoutGlobalScopes()->where('email', 'nuovo@esempio.test')->firstOrFail();
+
+        $this->assertSame(
             $trainer->tenant_id,
-            User::withoutGlobalScopes()->where('email', 'nuovo@esempio.test')->firstOrFail()->tenant_id,
-            'L\'utente invitato deve avere un tenant SUO, non quello del trainer.',
+            $allievo->tenant_id,
+            'l\'allievo deve stare nello spazio del suo trainer, che e\' chi paga per lui',
         );
+    }
+
+    /**
+     * LA CONSEGUENZA CHE VALE SOLDI, provata dal lato del gate e non del
+     * `tenant_id`.
+     *
+     * Fino all'11/09 questa cosa funzionava per una strada laterale
+     * (`QuotaDelTrainer`, nata per la quota AI). Adesso e' l'abbonamento del
+     * tenant, e questo test la guarda dove la guarda l'app.
+     */
+    #[Test]
+    public function un_allievo_del_trainer_risulta_abbonato(): void
+    {
+        $trainer = $this->creaTrainer();
+        $invito = $this->inviti()->invita($trainer);
+
+        $this->postJson('/api/v1/auth/register-with-invite', $this->modulo($invito->token))->assertCreated();
+
+        $allievo = User::withoutGlobalScopes()->where('email', 'nuovo@esempio.test')->firstOrFail();
+
+        $this->assertTrue(
+            app(PianoAttivo::class)->eAbbonato($allievo),
+            'chi paga un trainer deve risultare abbonato',
+        );
+    }
+
+    /**
+     * E non comanda l'abbonamento del trainer.
+     *
+     * E' la meta' che rende sicuro il trasloco: l'allievo sta dentro lo spazio
+     * di qualcun altro, e senza `proprietario_id` -- cioe' con la regola
+     * vecchia *«tenant personale -> chiunque ci stia dentro»* -- avrebbe potuto
+     * spegnere il rinnovo del suo trainer.
+     */
+    #[Test]
+    public function ma_non_gestisce_l_abbonamento_del_trainer(): void
+    {
+        $trainer = $this->creaTrainer();
+        $invito = $this->inviti()->invita($trainer);
+
+        $this->postJson('/api/v1/auth/register-with-invite', $this->modulo($invito->token))->assertCreated();
+
+        $allievo = User::withoutGlobalScopes()->where('email', 'nuovo@esempio.test')->firstOrFail();
+
+        $this->assertFalse(Cassa::loPuoGestire($allievo));
+        $this->assertTrue(Cassa::loPuoGestire($trainer->fresh()));
     }
 
     /** E il trainer li vede, dal proprio contesto. */

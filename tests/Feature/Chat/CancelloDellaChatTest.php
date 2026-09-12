@@ -553,7 +553,20 @@ class CancelloDellaChatTest extends TestCase
 
         $this->ctxRuoli($suo);
 
-        return $this->creaUtente($suo, UserRole::FreeUser, $email);
+        $utente = $this->creaUtente($suo, UserRole::FreeUser, $email);
+
+        /*
+         * 🆕 **Lo spazio è suo** — 3b-AH, Passo 0 (12/09/2026).
+         *
+         * ⚠️ Nella vita vera la scrive `CreaTenantPersonale`, che il tenant e la
+         * persona li crea insieme. Qui il tenant è costruito a mano, quindi va
+         * detto: da `Passo 1` `join-gym` pretende uno spazio **tuo**, non uno
+         * spazio «di tipo personale» — o un allievo dentro lo spazio del suo
+         * trainer se lo porterebbe dietro digitando il codice di una palestra.
+         */
+        $suo->forceFill(['proprietario_id' => $utente->getKey()])->save();
+
+        return $utente;
     }
 
     /** 💡 I ruoli spatie vivono dentro il tenant: vanno creati lì. */

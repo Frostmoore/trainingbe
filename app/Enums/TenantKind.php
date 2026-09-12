@@ -55,11 +55,30 @@ enum TenantKind: string
     case Gym = 'gym';
 
     /**
-     * Il tenant di una persona sola.
+     * Lo spazio **di una persona**.
      *
      * ⚠️ Non è «una palestra piccola»: non ha staff, non compare nei conteggi,
      * e il suo `join_code` **non deve far entrare nessuno** (vedi
      * `AuthController::resolveActiveTenant()`).
+     *
+     * ══ 🆕 12/09/2026 — «di una persona», non «con una persona sola» ══════
+     *
+     * 🚨 Fino a `3b-AH` le due letture coincidevano, e questo commento diceva
+     * *«il tenant di una persona sola»*. ⛔ **Non è più vero**: nello spazio di
+     * un trainer indipendente ci stanno anche i suoi allievi, e resta
+     * `personal` — perché il cliente è **lui**, non un'organizzazione.
+     *
+     * 💡 **E le tre regole di sopra restano giuste esattamente com'erano**, ed
+     * è il motivo per cui si è scelto di non inventare un terzo `kind`:
+     *
+     * | Regola | Perché vale ancora |
+     * |---|---|
+     * | Niente staff | Un trainer indipendente non ha uno staff: ha degli allievi |
+     * | Fuori dai conteggi commerciali | Non è una palestra cliente, e contarlo come tale direbbe un numero falso |
+     * | `join_code` che non apre niente | ⛔ **Serve più di prima**: gli allievi di un trainer entrano per invito, e un codice che funziona sarebbe una porta sul loro spazio |
+     *
+     * ⛔ **Chi possiede lo spazio lo dice `tenants.proprietario_id`.** Questo
+     * `case` non risponde a *«è tuo?»*: per quello c'è `Tenant::eDi()`.
      */
     case Personal = 'personal';
 

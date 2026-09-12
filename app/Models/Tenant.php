@@ -110,7 +110,24 @@ class Tenant extends Model
     // ───────────────────────── natura ─────────────────────────
 
     /**
-     * È il tenant di una persona sola, e non una palestra cliente?
+     * È lo spazio **di una persona**, e non una palestra cliente?
+     *
+     * ══ ⚠️ «DI UNA PERSONA», NON «CON UNA PERSONA SOLA» — 12/09/2026 ═══════
+     *
+     * 🚨 Questa distinzione era inutile finché le due cose coincidevano, e ha
+     * smesso di esserlo con `3b-AH`: nello spazio di un trainer indipendente
+     * ci stanno **anche i suoi allievi**, e resta comunque `personal`.
+     *
+     * 💡 Il `kind` risponde a *«chi è il cliente»* — una persona o
+     * un'organizzazione — e da quello dipendono le due regole qui sotto, che
+     * restano giuste parola per parola anche con venti allievi dentro.
+     *
+     * ⛔ **Chi è quella persona lo dice `proprietario_id`, non il conteggio
+     * degli utenti.** E *«questo spazio è tuo?»* si chiede a [eDi], mai a
+     * questo metodo: usarlo per decidere chi comanda vorrebbe dire che ogni
+     * allievo comanda l'abbonamento del suo trainer.
+     *
+     * ── 🚨 Perché è un controllo di sicurezza ─────────────────────────────
      *
      * 🚨 **È un controllo di sicurezza, non una comodità di visualizzazione.**
      * Da questo dipende che il `join_code` di un tenant personale non apra
