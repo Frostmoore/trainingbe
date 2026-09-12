@@ -32,6 +32,56 @@ class InvitiDelTrainer
     ) {}
 
     /**
+     * 🚨 **Solo chi ha uno spazio SUO può invitare allievi propri** — AH.1-bis.
+     *
+     * ══ ⛔ IL BUCO CHE AH.1 AVEVA APERTO, E CHE QUESTA RIGA CHIUDE ═════════
+     *
+     * Da AH.1 chi riscatta un invito di un trainer **nasce dentro il tenant del
+     * trainer**. ⚠️ Per un trainer di palestra quel tenant **è la palestra**.
+     *
+     * 🚨 Quindi, senza questa guardia, un trainer dipendente avrebbe potuto
+     * creare inviti personali e far entrare persone **dentro la palestra**
+     * saltando `InvitiInPalestra::postiRimasti()`, cioè **il tetto dei posti
+     * che la palestra paga**. ⛔ Il suo conteggio (`postiRimasti()` qui sotto)
+     * guarda gli allievi assegnati **a lui**, non gli iscritti della palestra:
+     * con tre trainer, una palestra da cinquanta posti se ne sarebbe ritrovati
+     * centocinquanta, e nessun errore da nessuna parte.
+     *
+     * 💡 **Prima di AH.1 non era un buco** perché l'invitato nasceva in un
+     * tenant personale suo e nella palestra non entrava.
+     *
+     * ── ⚠️ E non è una perdita di funzioni per il trainer di palestra ──────
+     *
+     * I suoi allievi sono **gli iscritti della palestra**, che l'amministratore
+     * gli assegna dal pannello: è la divisione già scritta in `AH.1-bis`, dove
+     * *«può comprare un pacchetto allievi»* è `no` per lui e `sì` per un
+     * indipendente. 💡 Chi lavora in palestra e vuole clienti suoi **si abbona
+     * da `free_trainer`**, e allora ha uno spazio suo — le due cose non sono
+     * mutuamente esclusive (`AH.1-quater`).
+     *
+     * 🚨 **La domanda è `eDi()`, non `isFreeTrainer()`**, ed è la regola 1 di
+     * AH: quello che conta non è il ruolo, è **chi paga per quello spazio**.
+     *
+     * @throws ValidationException
+     */
+    private function pretendiUnoSpazioSuo(User $trainer): void
+    {
+        if (! $this->haUnoSpazioSuo($trainer)) {
+            throw ValidationException::withMessages([
+                'invito' => __('Per avere allievi tuoi ti serve un abbonamento da trainer indipendente: gli iscritti della palestra te li assegna la palestra.'),
+            ]);
+        }
+    }
+
+    /** Lo spazio in cui vive questo trainer è suo? */
+    private function haUnoSpazioSuo(User $trainer): bool
+    {
+        $suo = $trainer->tenant;
+
+        return $suo !== null && $suo->eDi($trainer);
+    }
+
+    /**
      * 🆕 Un allievo nuovo, dentro lo spazio del suo trainer — AH.1.
      *
      * ⚠️ **Non passa da `CreaTenantPersonale`**, che di mestiere crea *un tenant
@@ -104,6 +154,8 @@ class InvitiDelTrainer
      */
     public function invita(User $trainer, ?string $email = null): TrainerInvite
     {
+        $this->pretendiUnoSpazioSuo($trainer);
+
         $rimasti = $this->postiRimasti($trainer);
 
         if ($rimasti !== null && $rimasti <= 0) {
@@ -173,7 +225,21 @@ class InvitiDelTrainer
 
         $trainer = $invito->trainer;
 
-        if ($trainer === null || ! $trainer->is_active) {
+        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
+            /*
+             * 🚨 **Lo spazio si ricontrolla ADESSO, non solo quando l'invito è
+             * nato** — AH.1-bis.
+             *
+             * ⚠️ Fra i due momenti passa fino a una settimana, e in mezzo il
+             * trainer può essere entrato in una palestra o aver smesso di
+             * pagare. ⛔ Un invito nato valido non è un permesso perpetuo: è
+             * lo stesso ragionamento già scritto per i posti, due righe più in
+             * basso.
+             *
+             * 💡 E copre anche gli inviti creati **prima** di questa guardia,
+             * che altrimenti resterebbero a far entrare gente dentro una
+             * palestra per un'altra settimana.
+             */
             throw ValidationException::withMessages([
                 'token' => __('Questo invito non è più valido.'),
             ]);
@@ -310,7 +376,8 @@ class InvitiDelTrainer
          */
         $trainer = User::query()->withoutGlobalScopes()->find($invito->trainer_id);
 
-        if ($trainer === null || ! $trainer->is_active) {
+        // 🚨 Stessa guardia di `riscatta()`, per la stessa ragione — AH.1-bis.
+        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
             $nonValido();
         }
 
