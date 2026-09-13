@@ -22,10 +22,16 @@
     'sottotitolo',
     'unita',
     'unitaSingolare',
-    'pacchetti',
-    'aConsumo',
-    'minimo',
+    'piani',
     'formatta',
+
+    /*
+     * 🆕 13/09/2026 — `null` per chi non ha un piano a consumo.
+     *
+     * ⚠️ **Solo le palestre ce l'hanno.** Un valore di ripiego avrebbe
+     * scritto «0,00 a allievo» sotto il listino dei trainer.
+     */
+    'aConsumo' => null,
 ])
 
 <div class="intestazione-sezione" style="text-align: left;">
@@ -35,7 +41,7 @@
 </div>
 
 <div class="griglia-pacchetti">
-    @foreach ($pacchetti as $indice => $p)
+    @foreach ($piani as $indice => $p)
         {{-- 💡 Il secondo è quello evidenziato: è il taglio che sceglie la
              maggior parte, e un listino senza una scelta suggerita costringe
              chi legge a decidere da zero. --}}
@@ -44,14 +50,21 @@
                 <span class="etichetta">{{ $p['nota'] }}</span>
             @endif
 
-            <h3>{{ $p['posti'] }} {{ $unita }}</h3>
+            <h3>{{ $p['slot'] }} {{ $unita }}</h3>
+
+            {{-- 🆕 **Il secondo tetto** — 13/09/2026. Un piano da palestra ne
+                 ha due, e valgono tutti e due: scriverne uno solo sarebbe la
+                 metà del contratto. ⚠️ I piani da trainer non ce l'hanno. --}}
+            @if ($p['trainer'] !== null)
+                <p class="nota">e {{ $p['trainer'] }} trainer</p>
+            @endif
 
             <div class="prezzo">{{ $formatta($p['prezzo']) }} <small>/mese</small></div>
 
-            {{-- 🚨 Il prezzo per posto è il numero che vende, ed è quello che
-                 nessuno ha voglia di calcolarsi: «249,90 per 50» non dice
+            {{-- 🚨 Il prezzo per slot è il numero che vende, ed è quello che
+                 nessuno ha voglia di calcolarsi: «199,90 per 50» non dice
                  niente, «4,00 a {{ $unitaSingolare }}» dice tutto. --}}
-            <p class="per-posto">{{ $formatta($p['perPosto']) }} a {{ $unitaSingolare }}</p>
+            <p class="per-posto">{{ $formatta($p['perSlot']) }} a {{ $unitaSingolare }}</p>
 
             @if ($indice !== 1)
                 <p class="nota">{{ $p['nota'] }}</p>
@@ -67,19 +80,21 @@
 {{-- ⚠️ Il piano a consumo costa **più** del pacchetto più piccolo, ed è
      giusto: è il prezzo della flessibilità. Senza quella differenza il
      pacchetto non converrebbe a nessuno e sarebbe lì per finta. --}}
-<div class="scheda tenue" style="margin-top: var(--sp-3);">
-    <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
-        <div style="flex: 1; min-width: 220px;">
-            <h3>Oppure a consumo</h3>
-            <p class="nota">
-                Nessun pacchetto e nessun impegno: paghi solo i {{ $unita }} che hai acceso
-                quel mese, minimo {{ $minimo }}. Si contano al
-                <strong>massimo raggiunto nel mese</strong>, e i posti spenti non si pagano.
-            </p>
-        </div>
-        <div style="text-align: right;">
-            <div class="prezzo" style="font-size: 30px;">{{ $formatta($aConsumo) }}</div>
-            <div class="nota">a {{ $unitaSingolare }} al mese</div>
+@if ($aConsumo !== null)
+    <div class="scheda tenue" style="margin-top: var(--sp-3);">
+        <div style="display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: center;">
+            <div style="flex: 1; min-width: 220px;">
+                <h3>Oppure a consumo</h3>
+                <p class="nota">
+                    Nessun piano e nessun tetto: paghi per ogni {{ $unitaSingolare }} a cui
+                    regali l'abbonamento, minimo {{ $aConsumo['minimo_iscritti'] }}.
+                    I trainer sono <strong>illimitati</strong>.
+                </p>
+            </div>
+            <div style="text-align: right;">
+                <div class="prezzo" style="font-size: 30px;">{{ $formatta($aConsumo['prezzo_iscritto_cent']) }}</div>
+                <div class="nota">a {{ $unitaSingolare }} al mese</div>
+            </div>
         </div>
     </div>
-</div>
+@endif

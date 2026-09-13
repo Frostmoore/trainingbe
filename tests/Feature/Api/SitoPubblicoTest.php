@@ -66,8 +66,18 @@ class SitoPubblicoTest extends TestCase
     public function no_price_is_written_inside_a_view(): void
     {
         config()->set('listino.singolo_cent', 4321);
-        config()->set('listino.palestre.pacchetti', [
-            ['posti' => 10, 'prezzo_cent' => 1234, 'nota' => 'finto'],
+
+        /*
+         * 🆕 **La forma del listino è cambiata il 13/09/2026**: non più
+         * «pacchetti di posti» con un numero solo, ma **piani a due tetti**.
+         *
+         * 🚨 Quello che questo test difende non è cambiato: **nessun prezzo
+         * scritto dentro una vista**. Se un giorno qualcuno ne incolla uno nel
+         * template, questo test resta verde solo perché il numero finto non
+         * compare — ed è per quello che ce ne sono due, uno per platea.
+         */
+        config()->set('listino.palestre.piani', [
+            ['codice' => 'finto', 'nome' => 'Finto', 'iscritti' => 10, 'trainer' => 2, 'prezzo_cent' => 1234, 'nota' => 'finto'],
         ]);
 
         $this->get('/prezzi')
@@ -405,20 +415,20 @@ class SitoPubblicoTest extends TestCase
         $listino = app(Listino::class);
 
         foreach (['palestre', 'trainer'] as $platea) {
-            $pacchetti = $listino->pacchettiPosti($platea);
+            $piani = $listino->piani($platea);
 
-            $this->assertGreaterThan(1, count($pacchetti), "{$platea}: servono almeno due pacchetti");
+            $this->assertGreaterThan(1, count($piani), "{$platea}: servono almeno due piani");
 
             $precedente = null;
 
-            foreach ($pacchetti as $p) {
+            foreach ($piani as $p) {
                 if ($precedente !== null) {
                     $this->assertLessThan(
-                        $precedente['perPosto'],
-                        $p['perPosto'],
+                        $precedente['perSlot'],
+                        $p['perSlot'],
                         sprintf(
-                            '%s: il pacchetto da %d costa %d centesimi a posto, quello da %d ne costava %d',
-                            $platea, $p['posti'], $p['perPosto'], $precedente['posti'], $precedente['perPosto'],
+                            '%s: il piano da %d costa %d centesimi a slot, quello da %d ne costava %d',
+                            $platea, $p['slot'], $p['perSlot'], $precedente['slot'], $precedente['perSlot'],
                         ),
                     );
                 }
@@ -443,13 +453,13 @@ class SitoPubblicoTest extends TestCase
         $singolo = $listino->singolo();
 
         foreach (['palestre', 'trainer'] as $platea) {
-            foreach ($listino->pacchettiPosti($platea) as $p) {
+            foreach ($listino->piani($platea) as $p) {
                 $this->assertLessThan(
                     $singolo,
-                    $p['perPosto'],
+                    $p['perSlot'],
                     sprintf(
-                        '%s: il pacchetto da %d costa %d a posto, l\'abbonamento singolo %d',
-                        $platea, $p['posti'], $p['perPosto'], $singolo,
+                        '%s: il piano da %d costa %d a slot, l\'abbonamento singolo %d',
+                        $platea, $p['slot'], $p['perSlot'], $singolo,
                     ),
                 );
             }
@@ -467,15 +477,25 @@ class SitoPubblicoTest extends TestCase
     {
         $listino = app(Listino::class);
 
-        foreach (['palestre', 'trainer'] as $platea) {
-            $piuPiccolo = $listino->pacchettiPosti($platea)[0];
+        /*
+         * 🆕 **Solo le palestre hanno il piano a consumo** — 13/09/2026.
+         *
+         * ⛔ Prima ce l'aveva anche il trainer. Per lui non ha senso: i suoi
+         * allievi sono pochi e li conosce per nome, e un minimo di cento
+         * iscritti sarebbe venti volte il suo piano più grande.
+         */
+        $consumo = $listino->aConsumo('palestre');
 
-            $this->assertGreaterThan(
-                $piuPiccolo['perPosto'],
-                $listino->aConsumo($platea),
-                "{$platea}: a consumo costa quanto o meno del pacchetto piu' piccolo",
-            );
-        }
+        $this->assertNotNull($consumo, 'le palestre devono avere un piano a consumo');
+        $this->assertNull($listino->aConsumo('trainer'), 'un trainer non ha un piano a consumo');
+
+        $piuPiccolo = $listino->piani('palestre')[0];
+
+        $this->assertGreaterThan(
+            $piuPiccolo['perSlot'],
+            $consumo['prezzo_iscritto_cent'],
+            'a consumo costa quanto o meno del piano piu\' piccolo',
+        );
     }
 
     #[Test]
@@ -485,7 +505,7 @@ class SitoPubblicoTest extends TestCase
 
         // 💡 È il numero che vende: non «4,99 a posto» ma «incasso 600 e ne
         // pago 264».
-        $this->assertSame(25, $e['posti']);
+        $this->assertSame(25, $e['slot']);
         $this->assertSame($e['ricavo'] - $e['costo'], $e['margine']);
         $this->assertGreaterThan(0, $e['margine']);
     }

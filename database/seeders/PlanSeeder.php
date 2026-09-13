@@ -9,83 +9,51 @@ use App\Models\Plan;
 use Illuminate\Database\Seeder;
 
 /**
- * Il listino — F4.1 della Parte B (D4), esteso a tre livelli in G1 (D5-D8).
+ * Il listino, seminato **da `config/listino.php`** — rifatto il 13/09/2026.
  *
- * 🚨 **Il pavimento del prezzo è misurato**: `STIMA-COSTI-AI.md` (rimisurato il
- * 13/08/2026) dice ≈ **1,58 $/mese** per utente attivo che usa l'AI, ≈ **79 $/mese**
- * per una palestra da 50 iscritti. Qualunque piano **con** AI deve stare sopra
- * quel numero, e il gratuito **senza** AI ci sta sotto per costruzione.
+ * ══ ✅ UN SOLO POSTO IN CUI STANNO I NUMERI ═══════════════════════════════
  *
- * ⚠️ **Quei numeri sono quasi raddoppiati il 13/08**, e non perché sia cambiato
- * un listino: perché `FOOD_SYSTEM` era cresciuto del **329%** con il
- * classificatore alimentare (`v7.1.0`) e nessuno aveva rimisurato. Il documento
- * dei costi non aveva un errore — aveva **smesso di essere aggiornato**, e ha
- * continuato a rispondere come se sapesse.
+ * ⛔ **Fino al 12/09 i listini erano due**: `config/listino.php` lo leggeva solo
+ * il sito, e questa classe — con numeri diversi e un'unità di misura diversa —
+ * governava tutti i cancelli. Una palestra leggeva *«25 posti a 109,90»*,
+ * comprava, e finiva su un piano da **349,99** che contava i **trainer**.
  *
- * 💡 È la ragione per cui B2 («il gratuito non ha l'AI») non è solo una scelta
- * commerciale: è ciò che rende il gratuito sostenibile per sempre invece che
- * fino al primo mese in cui qualcuno lo usa davvero.
+ * 🚨 Non era un difetto che desse errore: erano **due promesse diverse**, e non
+ * c'era nessun modo di accorgersene se non da un cliente.
  *
- * ── 📐 Come sono tarate le quote (D6, D7) ─────────────────────────────────
+ * ✅ Adesso i numeri stanno **solo** in configurazione, e questa classe li
+ * trascrive in tabella. Cambiare un prezzo è cambiare una riga di quel file.
  *
- * Da `STIMA-COSTI-AI.md` §4, l'utente **medio** fa ≈ 10,6 chiamate al giorno di
- * cui ≈ 1 con foto: ≈ 320 chiamate al mese, ≈ 30 con foto. Il tetto è
- * **400 di cui 40 con foto** — sopra il medio, sotto il pesante — e costa nel
- * caso peggiore:
+ * ══ 🚨 UN PIANO NON SI CANCELLA MAI: SI RITIRA ════════════════════════════
  *
- *     405 × 0,0051 $ + 45 × 0,0225 $ ≈ **3,08 $/mese** per persona
- *
- * 🚨 **450 di cui 45 è una decisione del committente del 13/08/2026**, non un
- * calcolo: il tetto precedente era 400/40. Alza il costo per persona del 13%, e
- * quindi il pavimento di ogni tier.
- *
- * ⚠️ **I prezzi restano segnaposto**, e vanno decisi dal committente prima di
- * pubblicare il sito (F9). Ciò che **non** è un segnaposto è `ai_enabled`:
- * quello è il requisito B2 ed è definitivo. Le quote nemmeno: sono ricavate dai
- * consumi misurati, e cambiarle è una decisione commerciale, non un ritocco.
- *
- * ── ⚠️ Due piani ritirati, e perché non cancellati ────────────────────────
- *
- * `trainer_pro` e `gym` avevano **nessun limite** di allievi a prezzo fisso. Con
- * la quota per allievo (D8) il costo per noi cresce con gli allievi mentre il
- * prezzo sta fermo: sono piani che perdono soldi tanto più quanto hanno
- * successo.
- *
- * 🚨 **Restano in tabella**: `plan_subscriptions` punta a `plans.id`, e
- * cancellarli lascerebbe senza piano chi ce l'ha — cioè, nella fotografia del
- * 13/08/2026, entrambe le palestre vere. `is_public = false` li toglie dal
+ * `plan_subscriptions.plan_id` punta a `plans.id`: cancellare un piano
+ * lascerebbe **senza piano** chi ce l'ha. ⛔ `is_public = false` lo toglie dal
  * listino senza togliere niente a nessuno.
  *
- * 🚨 **`updateOrCreate` per codice.** Rilanciare il seeder non deve creare
- * doppioni né azzerare gli abbonamenti in corso.
+ * 💡 È la stessa regola già applicata a `trainer_pro` e a `gym` in G1, e dal
+ * 13/09 vale anche per `trainer_free`, `gym_5` e `gym_15`.
+ *
+ * ══ 📌 IL MODELLO, DECISO IL 13/09/2026 ═══════════════════════════════════
+ *
+ * *«Ogni piano per le palestre ha un tot di slot per trainer e iscritti. Quegli
+ * iscritti riceveranno un abbonamento in omaggio, e i trainer potranno agire
+ * come trainer ricevendo l'abbonamento trainer gratuitamente.»*
+ *
+ * 🚨 **Due tetti, e valgono tutti e due.** Per un trainer indipendente il piano
+ * ha **solo** slot allievo: *«il trainer sarà solo lui»*.
  */
 class PlanSeeder extends Seeder
 {
     /**
-     * Il tetto di chiamate mensili per persona, e quante possono essere foto.
+     * Le chiamate AI comprese in un abbonamento, per persona e per mese.
      *
-     * 💡 Sono le stesse per tutti i piani a pagamento **di proposito**: quello
-     * che cambia fra un tier e l'altro è **quante persone** si possono seguire,
-     * non quanto può usare ciascuna. Un trainer che passa al tier superiore
-     * compra più allievi, non allievi migliori — ed è più facile da spiegare e
-     * da fatturare.
-     */
-    /*
-     * 🚨 **QUESTO e' il tetto vero di un abbonato**, non `listino.gettoni_mensili`:
-     * finisce in `plans.ai_monthly_calls_per_member`, che e' quello che
-     * `QuotaAi::capFor()` legge per dire si' o no a una richiesta.
-     *
-     * 📌 450 → **150** il 26/08/2026: *«non va bene 300 chiamate per gli
-     * abbonati, facciamo 150, stesso prezzo»*.
-     *
-     * ⚠️ Il committente diceva «300» perche' 300 e' il numero che l'app gli
-     * mostrava. Quello vero era 450: si e' portato a 150 **anche questo**, o
-     * l'app avrebbe continuato a promettere una cosa e il server a concederne
-     * un'altra — nel verso piu' generoso, che e' quello che non si scopre mai.
+     * 💡 È **la quota dell'abbonamento**, non del piano di chi lo regala: un
+     * iscritto coperto da una palestra ha lo stesso tetto di un abbonato
+     * singolo. ⛔ Le funzioni **a richiesta** non stanno qui: si pagano a
+     * gettoni.
      */
     private const CHIAMATE = 150;
 
-    /** 💡 Un decimo delle chiamate, com'era prima: 45 su 450, 15 su 150. */
     private const CHIAMATE_FOTO = 15;
 
     public function run(): void
@@ -95,16 +63,27 @@ class PlanSeeder extends Seeder
         }
     }
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     private function listino(): array
     {
+        return array_merge(
+            $this->persone(),
+            $this->trainer(),
+            $this->palestre(),
+            $this->ritirati(),
+        );
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function persone(): array
+    {
         return [
-            // ── Persona ────────────────────────────────────────────────────
             [
                 'code' => Plan::FREE,
                 'name' => 'Gratuito',
                 'kind' => PlanKind::Person,
-                // 🚨 Il `false` che regge il modello commerciale. Vedi sopra.
                 'ai_enabled' => false,
                 'ai_monthly_calls_per_member' => null,
                 'ai_monthly_photo_calls_per_member' => null,
@@ -118,145 +97,188 @@ class PlanSeeder extends Seeder
                 'ai_enabled' => true,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
+
                 /*
-                 * 🚨 **7,99 €, ed è il perno di tutto il listino** — 30/08/2026.
-                 *
-                 * 📌 *«l'abbonato singolo deve pagare 7.99»*. Da questo numero
-                 * discendono le due regole di `config/listino.php`: un posto in
-                 * un pacchetto costa **sempre meno** di 7,99, e più il pacchetto
-                 * è grande meno costa a posto.
-                 *
-                 * ⚠️ **Stava a 499, e `config/listino.php` diceva già 799.** Due
-                 * listini che si contraddicono non fanno sbagliare *se* qualcuno
-                 * sbaglia: fanno sbagliare chi legge per primo quello sbagliato,
-                 * ed è successo. 🚨 Se si tocca uno dei due si toccano
-                 * **entrambi**, finché H1.5 non ne lascia uno solo.
-                 *
-                 * 💡 Nessun codice **incassa** da qui: oggi `price_cents` è un
-                 * numero esposto, non addebitato — il pagamento vero è Parte H.
-                 * Per questo la correzione non tocca nessun abbonamento attivo.
+                 * 💡 **Il perno del listino.** È il numero che chiunque può
+                 * vedere e con cui chiunque fa il confronto: ogni slot di un
+                 * piano deve costare **meno** di questo, o alla palestra
+                 * conviene dire ai suoi iscritti «abbonatevi da soli».
                  */
-                'price_cents' => 799,
+                'price_cents' => (int) config('listino.singolo_cent'),
                 'is_public' => true,
             ],
+        ];
+    }
 
-            // ── Trainer indipendente — il tier è il numero di allievi (D5) ──
+    /**
+     * I piani da trainer indipendente: **solo slot allievo**.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function trainer(): array
+    {
+        return array_map(
+            fn (array $p): array => [
+                'code' => $p['codice'],
+                'name' => $p['nome'],
+                'kind' => PlanKind::Trainer,
+                'ai_enabled' => true,
+                'max_members' => $p['allievi'],
+
+                /*
+                 * ⛔ **`max_trainers` resta `null` e non è una dimenticanza**:
+                 * nel piano di un trainer indipendente il trainer è **lui**, e
+                 * non ce ne sono altri da contare.
+                 */
+                'max_trainers' => null,
+                'ai_monthly_calls_per_member' => self::CHIAMATE,
+                'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
+                'price_cents' => $p['prezzo_cent'],
+                'is_public' => true,
+            ],
+            config('listino.trainer.piani'),
+        );
+    }
+
+    /**
+     * I piani da palestra: **due tetti**, più quello a consumo.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function palestre(): array
+    {
+        $piani = array_map(
+            fn (array $p): array => [
+                'code' => $p['codice'],
+                'name' => $p['nome'],
+                'kind' => PlanKind::Gym,
+                'ai_enabled' => true,
+
+                /*
+                 * 🚨 **Tutti e due, e tutti e due veri.** Fino al 12/09
+                 * `max_members` era `null` su ogni piano palestra, quindi gli
+                 * iscritti erano **infiniti**: si vendevano scaglioni di
+                 * trainer e si regalava il resto.
+                 */
+                'max_members' => $p['iscritti'],
+                'max_trainers' => $p['trainer'],
+
+                'ai_monthly_calls_per_member' => self::CHIAMATE,
+                'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
+                'price_cents' => $p['prezzo_cent'],
+                'is_public' => true,
+            ],
+            config('listino.palestre.piani'),
+        );
+
+        $consumo = config('listino.palestre.a_consumo');
+
+        $piani[] = [
+            'code' => $consumo['codice'],
+            'name' => $consumo['nome'],
+            'kind' => PlanKind::Gym,
+            'ai_enabled' => true,
+
+            /*
+             * ⚠️ **Nessun tetto, ed è il punto del piano**: si paga per ogni
+             * iscritto a cui si regala l'abbonamento, con un minimo. 📌 *«per un
+             * minimo di 100»*, e i trainer sono illimitati.
+             */
+            'max_members' => null,
+            'max_trainers' => null,
+
+            /*
+             * 🚨 **`price_cents = 0` e non è gratis.** Un piano a consumo non ha
+             * un canone: quello che si paga sta in `prezzo_iscritto_cent`, e
+             * chi legge solo `price_cents` deve trovarci **zero canone**, non un
+             * numero inventato.
+             */
+            'price_cents' => 0,
+            'prezzo_iscritto_cent' => $consumo['prezzo_iscritto_cent'],
+            'minimo_iscritti' => $consumo['minimo_iscritti'],
+
+            'ai_monthly_calls_per_member' => self::CHIAMATE,
+            'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
+            'is_public' => true,
+        ];
+
+        return $piani;
+    }
+
+    /**
+     * ⚠️ **I ritirati si seminano lo stesso.**
+     *
+     * 🚨 Un'installazione nuova deve avere in tabella anche i piani che nessuno
+     * può più comprare: senza, un ripristino da backup di un abbonamento vecchio
+     * troverebbe un `plan_id` che non esiste. 💡 Il prezzo e la capienza sono
+     * quelli con cui furono venduti, e non si toccano.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function ritirati(): array
+    {
+        return [
             [
                 'code' => Plan::TRAINER_FREE,
-                'name' => 'Trainer — gratuito',
+                'name' => 'Trainer — gratuito (ritirato)',
                 'kind' => PlanKind::Trainer,
                 'ai_enabled' => false,
                 'max_members' => 3,
                 'ai_monthly_calls_per_member' => null,
                 'ai_monthly_photo_calls_per_member' => null,
                 'price_cents' => 0,
-                'is_public' => true,
+                'is_public' => false,
             ],
             [
                 'code' => Plan::TRAINER_10,
-                'name' => 'Trainer — 10 allievi',
+                'name' => 'Trainer — 10 allievi (ritirato)',
                 'kind' => PlanKind::Trainer,
                 'ai_enabled' => true,
                 'max_members' => 10,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                // Costo nel caso peggiore: 10 × 3,08 $ ≈ 31 $.
                 'price_cents' => 2999,
-                'is_public' => true,
-            ],
-            [
-                'code' => Plan::TRAINER_30,
-                'name' => 'Trainer — 30 allievi',
-                'kind' => PlanKind::Trainer,
-                'ai_enabled' => true,
-                'max_members' => 30,
-                'ai_monthly_calls_per_member' => self::CHIAMATE,
-                'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                // Costo nel caso peggiore: 30 × 3,08 $ ≈ 92 $.
-                'price_cents' => 6999,
-                'is_public' => true,
+                'is_public' => false,
             ],
             [
                 'code' => Plan::TRAINER_PRO,
                 'name' => 'Trainer — pro (ritirato)',
                 'kind' => PlanKind::Trainer,
                 'ai_enabled' => true,
-                // ⚠️ `null` = allievi illimitati. È la ragione del ritiro.
                 'max_members' => null,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
                 'price_cents' => 1999,
-                // 🚨 Fuori dal listino, dentro la tabella. Vedi la nota in testa.
                 'is_public' => false,
             ],
-
-            // ── Palestra — il tier è il numero di trainer (D5) ──────────────
             [
                 'code' => Plan::GYM_5,
-                'name' => 'Palestra — 5 trainer',
+                'name' => 'Palestra — 5 trainer (ritirato)',
                 'kind' => PlanKind::Gym,
                 'ai_enabled' => true,
-                // ⚠️ NON `max_members`: per una palestra il limite è per trainer.
                 'max_trainers' => 5,
-                'max_members_per_trainer' => 50,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                /*
-                 * 5 × 40 = 200 persone. Pavimento **rimisurato il 13/08**:
-                 * 200 × 2,72 $ × 30% ≈ **163 €/mese** di AI.
-                 *
-                 * ⚠️ Il segnaposto era 99,99 € (sotto), poi 199,99 € (sopra di
-                 * appena il 22%). 🚨 Il pavimento e' raddoppiato quando i costi
-                 * sono stati rimisurati: `FOOD_SYSTEM` era cresciuto del 329%
-                 * col classificatore alimentare e nessuno aveva rifatto i conti.
-                 *
-                 * 💡 A 349,99 € il margine sull'AI e' ~2×, come i tier trainer.
-                 */
                 'price_cents' => 34999,
-                'is_public' => true,
+                'is_public' => false,
             ],
             [
                 'code' => Plan::GYM_15,
-                'name' => 'Palestra — 15 trainer',
+                'name' => 'Palestra — 15 trainer (ritirato)',
                 'kind' => PlanKind::Gym,
                 'ai_enabled' => true,
                 'max_trainers' => 15,
-                'max_members_per_trainer' => 50,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
-                /*
-                 * 🚨 **Qui il test ha trovato un prezzo che perdeva soldi. Due
-                 * volte.**
-                 *
-                 * 15 × 40 = **600 persone**. Col pavimento vecchio (1,45 $) il
-                 * segnaposto di 249,99 € stava **sotto il costo**, e il test
-                 * l'ha bocciato. Alzato a 499,99 €. Poi i costi sono stati
-                 * **rimisurati** (2,72 $) e il pavimento e' salito a ≈ 490 €:
-                 * quel 499,99 € tornava sopra di appena il **2%**.
-                 *
-                 * ⚠️ Il test passava. Un margine del 2% su un numero con ±15%
-                 * di incertezza **non e' un margine**: e' un pareggio con la
-                 * virgola dalla parte fortunata.
-                 *
-                 * 💡 999,99 € porta il margine a ~2×, come gli altri tier.
-                 *
-                 * 🚨 **E c'e' una leva alternativa che non e' mia da tirare**:
-                 * 600 persone con 400 chiamate ciascuna sono tante. Abbassare
-                 * `max_members_per_trainer` o il tetto di chiamate ridurrebbe il
-                 * pavimento invece del prezzo — ed e' una decisione commerciale
-                 * del committente, non un ritocco tecnico.
-                 */
                 'price_cents' => 99999,
-                'is_public' => true,
+                'is_public' => false,
             ],
             [
                 'code' => Plan::GYM,
                 'name' => 'Palestra (ritirato)',
                 'kind' => PlanKind::Gym,
                 'ai_enabled' => true,
-                // ⚠️ Nessun limite di trainer né di allievi: la ragione del ritiro.
                 'max_trainers' => null,
-                'max_members_per_trainer' => null,
                 'ai_monthly_calls_per_member' => self::CHIAMATE,
                 'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
                 'price_cents' => 4999,

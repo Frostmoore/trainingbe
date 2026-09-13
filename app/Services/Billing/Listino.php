@@ -61,84 +61,99 @@ class Listino
     }
 
     /**
-     * I pacchetti di posti di una platea, col prezzo per posto gia' calcolato.
+     * I piani di una platea, con il prezzo per slot gia' calcolato.
      *
-     * 💡 **Il prezzo per posto e' il numero che vende**, ed e' anche quello che
-     * nessuno ha voglia di calcolarsi: «249,90 per 50 posti» non dice niente,
-     * «4,00 a posto» dice tutto.
+     * 🆕 **Rifatto il 13/09/2026**: prima erano «pacchetti di posti» con un
+     * numero solo. 🚨 Da oggi un piano da palestra ha **due tetti** — slot
+     * iscritto e slot trainer — e tutti e due valgono.
+     *
+     * 💡 **Il prezzo per slot e' il numero che vende**, ed e' anche quello che
+     * nessuno ha voglia di calcolarsi: «199,90 per 50 iscritti» non dice niente,
+     * «4,00 a iscritto» dice tutto.
+     *
+     * ⚠️ Un piano da trainer non ha slot trainer, e `trainer` torna `null`: nel
+     * suo piano il trainer e' **lui**, e non ce ne sono altri da contare.
      *
      * @param  'palestre'|'trainer'  $platea
-     * @return list<array{posti: int, prezzo: int, perPosto: int, nota: string}>
+     * @return list<array{codice: string, nome: string, slot: int, trainer: int|null, prezzo: int, perSlot: int, nota: string}>
      */
-    public function pacchettiPosti(string $platea): array
+    public function piani(string $platea): array
     {
         return array_map(
             static fn (array $p): array => [
-                'posti' => $p['posti'],
+                'codice' => $p['codice'],
+                'nome' => $p['nome'],
+                'slot' => $p['iscritti'] ?? $p['allievi'],
+                'trainer' => $p['trainer'] ?? null,
                 'prezzo' => $p['prezzo_cent'],
+
                 // ⚠️ `intdiv` e non una divisione in virgola mobile: qui si
                 // stampa un prezzo, e `4.9899999` stampato diventa «4,99» solo
                 // per fortuna.
-                'perPosto' => intdiv($p['prezzo_cent'], $p['posti']),
+                'perSlot' => intdiv($p['prezzo_cent'], $p['iscritti'] ?? $p['allievi']),
                 'nota' => $p['nota'],
             ],
-            config("listino.{$platea}.pacchetti"),
+            config("listino.{$platea}.piani"),
         );
     }
 
-    /** Il prezzo per posto del piano a consumo, in centesimi. */
-    public function aConsumo(string $platea): int
+    /**
+     * Il piano a consumo di una platea, se ne ha uno.
+     *
+     * 🆕 **Solo le palestre ce l'hanno** — 13/09/2026. ⛔ Per un trainer non
+     * avrebbe senso: i suoi allievi sono pochi e li conosce per nome.
+     *
+     * ⚠️ Torna `null` per chi non ce l'ha, e chi lo stampa deve gestirlo: uno
+     * zero al suo posto scriverebbe «0,00 a iscritto» su una pagina di prezzi.
+     *
+     * @return ?array{codice: string, nome: string, prezzo_iscritto_cent: int, minimo_iscritti: int}
+     */
+    public function aConsumo(string $platea = 'palestre'): ?array
     {
-        return (int) config("listino.{$platea}.a_consumo_cent");
-    }
-
-    /** Quanti posti bisogna accendere come minimo sul piano a consumo. */
-    public function minimo(string $platea): int
-    {
-        return (int) config("listino.{$platea}.minimo");
+        return config("listino.{$platea}.a_consumo");
     }
 
     /**
-     * Il pacchetto piu' conveniente di una platea, per posto.
+     * Il piano piu' conveniente di una platea, per slot.
      *
-     * 💡 Serve alla frase «da X a posto»: e' il numero che si annuncia, e va
+     * 💡 Serve alla frase «da X a iscritto»: e' il numero che si annuncia, e va
      * preso dai dati invece che scritto a mano — o il giorno che si aggiunge un
-     * pacchetto piu' grande, l'annuncio resta indietro.
+     * piano piu' grande, l'annuncio resta indietro.
      */
-    public function migliorPrezzoPerPosto(string $platea): int
+    public function migliorPrezzoPerSlot(string $platea): int
     {
-        return min(array_column($this->pacchettiPosti($platea), 'perPosto'));
+        return min(array_column($this->piani($platea), 'perSlot'));
     }
 
     /**
      * L'esempio che vende: cosa paga una palestra e cosa le resta.
      *
-     * 💡 **E' il numero che conta davvero.** Una palestra non compra «4,40 a
-     * posto»: compra «incasso 250 e ne pago 110». Senza la differenza, il
+     * 💡 **E' il numero che conta davvero.** Una palestra non compra «4,00 a
+     * iscritto»: compra «incasso 250 e ne pago 200». Senza la differenza, il
      * listino e' solo un costo.
      *
-     * @return array{posti: int, costo: int, ricavo: int, margine: int}
+     * @return array{slot: int, costo: int, ricavo: int, margine: int}
      */
-    public function esempio(string $platea = 'palestre', ?int $posti = null): array
+    public function esempio(string $platea = 'palestre', ?int $slot = null): array
     {
-        $posti ??= (int) config('listino.esempio_posti');
+        $slot ??= (int) config('listino.esempio_posti');
 
-        $pacchetti = $this->pacchettiPosti($platea);
+        $piani = $this->piani($platea);
 
-        // Il pacchetto che copre quei posti; se nessuno basta, il piu' grande.
+        // Il piano che copre quegli slot; se nessuno basta, il piu' grande.
         $scelto = null;
-        foreach ($pacchetti as $p) {
-            if ($p['posti'] >= $posti) {
+        foreach ($piani as $p) {
+            if ($p['slot'] >= $slot) {
                 $scelto = $p;
                 break;
             }
         }
-        $scelto ??= $pacchetti[count($pacchetti) - 1];
+        $scelto ??= $piani[count($piani) - 1];
 
-        $ricavo = $posti * (int) config('listino.rivendita_suggerita_cent');
+        $ricavo = $slot * (int) config('listino.rivendita_suggerita_cent');
 
         return [
-            'posti' => $posti,
+            'slot' => $slot,
             'costo' => $scelto['prezzo'],
             'ricavo' => $ricavo,
             'margine' => $ricavo - $scelto['prezzo'],

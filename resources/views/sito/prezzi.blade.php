@@ -57,11 +57,11 @@
                 </a>
                 <a href="#trainer">
                     <strong>Sei un trainer</strong>
-                    <span>da {{ $formatta($listino->migliorPrezzoPerPosto('trainer')) }} ad allievo</span>
+                    <span>da {{ $formatta($listino->migliorPrezzoPerSlot('trainer')) }} ad allievo</span>
                 </a>
                 <a href="#palestre">
                     <strong>Sei una palestra</strong>
-                    <span>da {{ $formatta($listino->migliorPrezzoPerPosto('palestre')) }} a iscritto</span>
+                    <span>da {{ $formatta($listino->migliorPrezzoPerSlot('palestre')) }} a iscritto</span>
                 </a>
             </div>
 
@@ -149,13 +149,11 @@
                 <div class="anta" id="trainer">
                     <x-sito.listino-posti
                         occhiello="Sei un trainer indipendente"
-                        titolo="Paghi per gli allievi a cui accendi l'AI."
+                        titolo="Paghi per gli allievi che abboni."
                         sottotitolo="Non serve una palestra: i tuoi allievi entrano con un link tuo."
                         unita="allievi"
                         unitaSingolare="allievo"
-                        :pacchetti="$listino->pacchettiPosti('trainer')"
-                        :aConsumo="$listino->aConsumo('trainer')"
-                        :minimo="$listino->minimo('trainer')"
+                        :piani="$listino->piani('trainer')"
                         :formatta="$formatta"
                     />
 
@@ -170,13 +168,12 @@
                 <div class="anta" id="palestre">
                     <x-sito.listino-posti
                         occhiello="Sei una palestra"
-                        titolo="Paghi per gli iscritti a cui accendi l'AI."
+                        titolo="Paghi per gli iscritti che abboni, e per i trainer che ci lavorano."
                         sottotitolo="Tutti gli altri usano l'app gratis, con il tuo marchio."
                         unita="iscritti"
                         unitaSingolare="iscritto"
-                        :pacchetti="$listino->pacchettiPosti('palestre')"
+                        :piani="$listino->piani('palestre')"
                         :aConsumo="$listino->aConsumo('palestre')"
-                        :minimo="$listino->minimo('palestre')"
                         :formatta="$formatta"
                     />
 
@@ -186,7 +183,7 @@
                         pago 110». Il numero che conta è la differenza.
                     --}}
                     <div class="scheda evidenziata" style="margin-top: var(--sp-3);">
-                        <h3>Un esempio con {{ $esempio['posti'] }} iscritti</h3>
+                        <h3>Un esempio con {{ $esempio['slot'] }} iscritti</h3>
                         <div class="conti">
                             <div>
                                 <div class="nota">Paghi a noi</div>

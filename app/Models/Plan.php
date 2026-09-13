@@ -60,7 +60,10 @@ class Plan extends Model
         'code', 'name', 'kind', 'ai_enabled',
         'max_members', 'price_cents', 'is_public',
         // G1 — D5, D6, D7.
-        'max_trainers', 'max_members_per_trainer',
+        'max_trainers',
+
+        // 🆕 3b-AH.6 — il piano a consumo: si paga a iscritto, con un minimo.
+        'prezzo_iscritto_cent', 'minimo_iscritti',
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
     ];
 
@@ -84,7 +87,8 @@ class Plan extends Model
             'max_members' => 'integer',
             'price_cents' => 'integer',
             'max_trainers' => 'integer',
-            'max_members_per_trainer' => 'integer',
+            'prezzo_iscritto_cent' => 'integer',
+            'minimo_iscritti' => 'integer',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
         ];
@@ -141,16 +145,37 @@ class Plan extends Model
     }
 
     /**
-     * Quanti allievi puo' seguire **ciascun trainer** di una palestra — D5.
+     * 🆕 **Si paga a iscritto invece che a canone?** — 3b-AH.6 (13/09/2026).
      *
-     * 🚨 **Solo per i piani `PlanKind::Gym`.** Su un piano trainer il limite e'
-     * `max_members`, che vuol dire un'altra cosa: «quanti allievi seguo io».
-     * Chiedere questo a un piano trainer torna `null`, che nella catena vuol
-     * dire «non lo decide questo livello» — ed e' la risposta giusta, non un
-     * caso non gestito.
+     * 📌 *«Se una palestra sceglie il piano a consumo pagherà un tot per ogni
+     * iscritto a cui regala l'abbonamento, per un minimo di 100.»*
+     *
+     * ⚠️ **`price_cents = 0` su un piano a consumo è vero, non un buco**: non
+     * c'è nessun canone. Chi mostra un prezzo deve chiedere **prima** questo
+     * metodo, o scriverà «gratis» sul piano più caro del listino.
      */
-    public function tettoAllieviPerTrainer(): ?int
+    public function aConsumo(): bool
     {
-        return $this->kind === PlanKind::Gym ? $this->max_members_per_trainer : null;
+        return $this->prezzo_iscritto_cent !== null;
+    }
+
+    /**
+     * Quanto costa un mese con questo numero di iscritti abbonati.
+     *
+     * 🚨 **Il minimo si applica al CONTEGGIO, non al totale.** Una palestra con
+     * 40 iscritti su un minimo di 100 paga **100 × il prezzo**: è il senso della
+     * soglia. ⛔ Applicarlo al totale — «almeno tot euro» — sembrerebbe la stessa
+     * cosa e non lo è appena il prezzo a iscritto cambia.
+     *
+     * ⚠️ Torna `null` per i piani a canone: lì il prezzo è `price_cents` e non
+     * dipende da quanti sono.
+     */
+    public function costoDelMese(int $iscrittiAbbonati): ?int
+    {
+        if (! $this->aConsumo()) {
+            return null;
+        }
+
+        return max($iscrittiAbbonati, $this->minimo_iscritti ?? 0) * $this->prezzo_iscritto_cent;
     }
 }

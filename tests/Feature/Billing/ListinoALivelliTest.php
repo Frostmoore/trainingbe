@@ -45,60 +45,111 @@ final class ListinoALivelliTest extends TestCase
         return Plan::query()->where('code', $codice)->firstOrFail();
     }
 
+    /**
+     * 🆕 **Un piano da palestra ha DUE tetti, e valgono tutti e due** — 13/09.
+     *
+     * ⛔ Questo test diceva l'opposto: *«la palestra limita per trainer»*, e
+     * pretendeva `max_members = null`. 🚨 Voleva dire **iscritti infiniti**, e lo
+     * era davvero: `InvitiInPalestra::postiRimasti()` rispondeva «senza limite»
+     * su ogni piano palestra.
+     *
+     * 📌 *«Ogni piano per le palestre ha un tot di slot per trainer e
+     * iscritti»*.
+     */
     #[Test]
-    public function a_gym_plan_caps_members_per_trainer_not_members(): void
+    public function un_piano_palestra_ha_due_tetti(): void
     {
-        $palestra = $this->piano(Plan::GYM_5);
+        $palestra = $this->piano('gym_20');
 
-        // 🚨 Il cuore di D5: la palestra limita **per trainer**.
-        $this->assertSame(5, $palestra->max_trainers);
-        $this->assertSame(50, $palestra->max_members_per_trainer);
-        $this->assertSame(50, $palestra->tettoAllieviPerTrainer());
+        $this->assertSame(20, $palestra->max_members, 'gli iscritti non sono contati');
+        $this->assertSame(5, $palestra->max_trainers, 'i trainer non sono contati');
+    }
 
-        /*
-         * ⚠️ E **non** tocca `max_members`, che significa un'altra cosa. Se un
-         * giorno qualcuno lo valorizzasse «per comodita'», `InvitiDelTrainer`
-         * lo leggerebbe come «quanti allievi puo' seguire questo trainer in
-         * proprio» e limiterebbe la persona sbagliata.
-         */
-        $this->assertNull($palestra->max_members);
+    /**
+     * 🚨 **E gli slot trainer sono sproporzionati, di proposito.**
+     *
+     * 📌 *«Una palestra deve poter inserire più o meno tutti i suoi trainer
+     * anche se vuole dare l'abbonamento a pochissimi allievi»*, ma il tetto resta
+     * un massimo — *«se una palestra ha 50 trainer non mi sta bene che paghi
+     * soltanto per 10-20 iscritti»*.
+     *
+     * ⚠️ Il test prova il **rapporto**, non i numeri: quelli sono segnaposto e
+     * cambieranno. Il giorno in cui qualcuno mettesse un trainer ogni due
+     * iscritti, il listino smetterebbe di essere quello deciso.
+     */
+    #[Test]
+    public function i_trainer_sono_proporzionalmente_piu_generosi_degli_iscritti(): void
+    {
+        foreach (Plan::query()->pubblici()->diTipo(PlanKind::Gym)->get() as $piano) {
+            if ($piano->max_trainers === null) {
+                continue; // il piano a consumo: nessun tetto, nessun rapporto.
+            }
+
+            $this->assertGreaterThanOrEqual(
+                3,
+                $piano->max_members / $piano->max_trainers,
+                "{$piano->code}: un trainer ogni meno di tre iscritti",
+            );
+        }
     }
 
     #[Test]
     public function a_trainer_plan_caps_its_own_members(): void
     {
-        $dieci = $this->piano(Plan::TRAINER_10);
+        $cinque = $this->piano('trainer_5');
 
-        $this->assertSame(10, $dieci->max_members);
+        $this->assertSame(5, $cinque->max_members);
 
-        // ⚠️ Un piano trainer non ha trainer sotto di se': le due colonne della
-        // palestra restano vuote, e chiedere il tetto per trainer torna `null`.
-        $this->assertNull($dieci->max_trainers);
-        $this->assertNull($dieci->max_members_per_trainer);
-        $this->assertNull($dieci->tettoAllieviPerTrainer());
+        /*
+         * ⚠️ Un piano trainer non ha trainer sotto di se': nel suo piano il
+         * trainer e' **lui**, e non ce ne sono altri da contare.
+         */
+        $this->assertNull($cinque->max_trainers);
     }
 
+    /**
+     * 🆕 **Il piano a consumo si paga a iscritto, con un minimo** — 13/09.
+     *
+     * 📌 *«Pagherà un tot per ogni iscritto a cui regala l'abbonamento, per un
+     * minimo di 100»*, e i trainer sono illimitati.
+     *
+     * 🚨 **Il minimo si applica al CONTEGGIO, non al totale**: una palestra con
+     * 40 iscritti paga 100 × il prezzo. ⛔ «Almeno tot euro» sembrerebbe la stessa
+     * cosa e smetterebbe di esserlo appena il prezzo a iscritto cambia.
+     */
     #[Test]
-    public function asking_a_trainer_plan_for_the_gym_cap_is_null_not_a_number(): void
+    public function il_piano_a_consumo_si_paga_a_iscritto(): void
     {
-        /*
-         * 🚨 Il caso che tiene in piedi la catena. `tettoAllieviPerTrainer()` su
-         * un piano trainer **deve** tornare `null` anche se la colonna fosse
-         * valorizzata per sbaglio: `null` vuol dire «non lo decide questo
-         * livello», e la catena scende. Un numero vorrebbe dire «deciso», e la
-         * catena si fermerebbe sul valore sbagliato.
-         */
-        $dieci = $this->piano(Plan::TRAINER_10);
-        $dieci->forceFill(['max_members_per_trainer' => 999])->save();
+        $consumo = $this->piano('gym_consumo');
 
-        $this->assertSame(PlanKind::Trainer, $dieci->fresh()->kind);
-        $this->assertNull($dieci->fresh()->tettoAllieviPerTrainer());
+        $this->assertTrue($consumo->aConsumo());
+        $this->assertNull($consumo->max_members, 'un piano a consumo non ha tetti');
+        $this->assertNull($consumo->max_trainers);
+        $this->assertSame(0, $consumo->price_cents, 'un piano a consumo non ha canone');
+
+        $minimo = $consumo->minimo_iscritti;
+        $prezzo = $consumo->prezzo_iscritto_cent;
+
+        // Sotto il minimo si paga il minimo.
+        $this->assertSame($minimo * $prezzo, $consumo->costoDelMese(40));
+        $this->assertSame($minimo * $prezzo, $consumo->costoDelMese($minimo));
+
+        // Sopra, si paga quello che si usa.
+        $this->assertSame(($minimo + 30) * $prezzo, $consumo->costoDelMese($minimo + 30));
+    }
+
+    /** ⛔ E un piano a canone non risponde a quella domanda: il prezzo e' fisso. */
+    #[Test]
+    public function un_piano_a_canone_non_ha_un_costo_a_iscritto(): void
+    {
+        $this->assertFalse($this->piano('gym_20')->aConsumo());
+        $this->assertNull($this->piano('gym_20')->costoDelMese(999));
     }
 
     #[Test]
     public function the_photo_cap_is_a_sub_limit_of_the_general_one(): void
     {
-        foreach ([Plan::PLUS, Plan::TRAINER_10, Plan::TRAINER_30, Plan::GYM_5, Plan::GYM_15] as $codice) {
+        foreach ([Plan::PLUS, 'trainer_5', Plan::TRAINER_30, 'gym_20', 'gym_100'] as $codice) {
             $piano = $this->piano($codice);
 
             $this->assertNotNull($piano->chiamateAlMese(), "{$codice} senza tetto di chiamate");
@@ -150,7 +201,7 @@ final class ListinoALivelliTest extends TestCase
     #[Test]
     public function the_retired_plans_are_out_of_the_price_list_but_still_in_the_table(): void
     {
-        foreach ([Plan::TRAINER_PRO, Plan::GYM] as $codice) {
+        foreach ([Plan::TRAINER_PRO, Plan::GYM, Plan::TRAINER_FREE, Plan::GYM_5, Plan::GYM_15] as $codice) {
             $piano = $this->piano($codice);
 
             $this->assertFalse($piano->is_public, "{$codice} e' ancora nel listino");
@@ -161,15 +212,25 @@ final class ListinoALivelliTest extends TestCase
              * palestre vere della fotografia del 13/08/2026 — che scenderebbero
              * al gratuito, cioe' **senza AI**, pur pagando.
              */
-            $this->assertNotNull($piano->chiamateAlMese(), "{$codice} ritirato E svuotato");
+            if ($codice !== Plan::TRAINER_FREE) {
+                // ⚠️ `trainer_free` l'AI non l'ha mai avuta: e' il motivo per cui
+                // non poteva coprire nessuno, ed e' giusto che resti cosi'.
+                $this->assertNotNull($piano->chiamateAlMese(), "{$codice} ritirato E svuotato");
+            }
         }
 
         $pubblici = Plan::query()->pubblici()->pluck('code')->all();
 
         $this->assertNotContains(Plan::TRAINER_PRO, $pubblici);
         $this->assertNotContains(Plan::GYM, $pubblici);
-        $this->assertContains(Plan::TRAINER_10, $pubblici);
-        $this->assertContains(Plan::GYM_5, $pubblici);
+
+        // 🆕 13/09: ritirati insieme al modello vecchio.
+        $this->assertNotContains(Plan::TRAINER_FREE, $pubblici);
+        $this->assertNotContains(Plan::GYM_5, $pubblici);
+        $this->assertNotContains(Plan::GYM_15, $pubblici);
+
+        $this->assertContains('trainer_5', $pubblici);
+        $this->assertContains('gym_20', $pubblici);
     }
 
     #[Test]
@@ -194,11 +255,41 @@ final class ListinoALivelliTest extends TestCase
         $costoPerPersonaCent = 308;
 
         foreach (Plan::query()->pubblici()->where('ai_enabled', true)->get() as $piano) {
+            /*
+             * 🆕 **Quante persone abbona davvero questo piano** — 13/09/2026.
+             *
+             * ⛔ Prima per una palestra si moltiplicava `max_trainers` per
+             * `max_members_per_trainer` — 5 × 50 = **250 persone** — e quel
+             * numero non lo abbonava nessuno: era una capienza teorica di un
+             * modello che non esiste piu'.
+             *
+             * 🚨 **Si contano gli slot veri, trainer compresi**: anche loro
+             * ricevono l'abbonamento, e anche loro consumano AI. ⚠️ Dimenticarli
+             * abbasserebbe il pavimento proprio sui piani grandi, dove sono di
+             * piu'.
+             */
             $persone = match ($piano->kind) {
                 PlanKind::Person => 1,
-                PlanKind::Trainer => $piano->max_members ?? 1,
-                PlanKind::Gym => ($piano->max_trainers ?? 1) * ($piano->max_members_per_trainer ?? 1),
+                PlanKind::Trainer => ($piano->max_members ?? 1) + 1,
+                PlanKind::Gym => ($piano->max_members ?? 0) + ($piano->max_trainers ?? 0),
             };
+
+            /*
+             * 🆕 **Il piano a consumo si giudica a persona**, non sul totale:
+             * non ha un canone, quindi `price_cents` e' zero ed e' vero. ⛔ Senza
+             * questo ramo il pavimento lo boccerebbe **perche' costa zero**, che
+             * e' esattamente la lettura sbagliata che `Plan::aConsumo()` esiste
+             * per impedire.
+             */
+            if ($piano->aConsumo()) {
+                $this->assertGreaterThan(
+                    (int) round($costoPerPersonaCent * 0.30),
+                    $piano->prezzo_iscritto_cent,
+                    "{$piano->code}: il prezzo a iscritto non copre l'AI di un iscritto",
+                );
+
+                continue;
+            }
 
             /*
              * ⚠️ Non tutti gli allievi consumano tutto: si assume che il 30%

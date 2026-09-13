@@ -5,18 +5,21 @@ declare(strict_types=1);
 /**
  * Il listino — rifatto il 18/08/2026.
  *
- * ── 🚨 Perche' sta in configurazione e non in `plans` ─────────────────────
+ * ── ✅ QUESTO FILE E' LA FONTE UNICA DEI NUMERI — 13/09/2026 ─────────────
  *
- * La tabella `plans` contiene ancora il **modello vecchio**, a scaglioni di
- * trainer («Palestra — 5 trainer», 349,99 €), ed e' quello su cui poggiano gli
- * abbonamenti gia' attivi (`plan_subscriptions`). Riscriverla adesso vorrebbe
- * dire cambiare cosa viene fatturato, che e' lavoro della **Parte H** e non del
- * sito.
+ * ⛔ **Fino al 12/09 i listini erano due**: questo lo leggeva solo il sito, e
+ * la tabella `plans` — con numeri diversi e un'unità di misura diversa —
+ * governava tutti i cancelli. Una palestra leggeva *«25 posti a 109,90»*,
+ * comprava, e si ritrovava su un piano da 349,99 che contava i **trainer**.
  *
- * ⚠️ **QUINDI OGGI IL SITO E IL SISTEMA DI FATTURAZIONE DICONO DUE COSE
- * DIVERSE**, ed e' scritto qui perche' non lo si scopra da un cliente. Si
- * allineano in `H1.5` e `H2.2`. Fino ad allora **non si vende a nessuno** su
- * questi numeri senza saperlo.
+ * 🚨 Non era un difetto che desse errore: erano **due promesse diverse**.
+ *
+ * ✅ Da oggi **`PlanSeeder` legge da qui**. I numeri stanno in un posto solo,
+ * e cambiarli è cambiare una riga di questo file e riseminare.
+ *
+ * ⚠️ **Quello che NON sta qui e' la capienza gia' venduta**: le righe di
+ * `plan_subscriptions` puntano a un `plan_id`, e un piano ritirato resta in
+ * tabella con `is_public = false`. ⛔ Un piano non si cancella mai: si ritira.
  *
  * ── 🎯 Da dove vengono i prezzi ───────────────────────────────────────────
  *
@@ -136,41 +139,130 @@ return [
 
     /*
      |--------------------------------------------------------------------------
-     | Palestre e trainer: pacchetti di posti, piu' un piano a consumo
+     | Palestre e trainer: piani a DUE tetti — rifatto il 13/09/2026
      |--------------------------------------------------------------------------
      |
-     | 🚨 Un «posto» e' una persona a cui l'AI e' stata accesa. Tutti gli altri
-     | iscritti usano l'app gratis e non si pagano.
+     | 🚨 **Uno «slot» è un abbonamento regalato a una persona.** Non è «un posto
+     | AI»: chi riceve lo slot è abbonato, con tutto quello che l'abbonamento
+     | comprende — e l'AI **automatica** è dentro l'abbonamento.
      |
-     | ⚠️ Il piano a consumo e' **uno solo** per ciascuno: piu' d'uno sarebbe un
-     | listino da studiare invece che da leggere.
+     | ⛔ Le funzioni **on-demand** non sono comprese in nessun piano: si pagano
+     | a gettoni, che si comprano a parte.
+     |
+     | ── 📌 La decisione del committente, 13/09/2026 ──────────────────────────
+     |
+     | *«Ogni piano per le palestre ha un tot di slot per trainer e iscritti.
+     | Quegli iscritti riceveranno un abbonamento in omaggio, e i trainer
+     | potranno agire come trainer ricevendo l'abbonamento trainer
+     | gratuitamente.»*
+     |
+     | 🚨 **DUE tetti, e valgono tutti e due.** Gli slot trainer sono
+     | volutamente sproporzionati rispetto agli slot iscritto — *«una palestra
+     | deve poter inserire più o meno tutti i suoi trainer anche se vuole dare
+     | l'abbonamento a pochissimi allievi»* — ma restano un **massimo**: *«se una
+     | palestra ha 50 trainer non mi sta bene che paghi soltanto per 10-20
+     | iscritti»*.
+     |
+     | ⚠️ **Questo supera la decisione Z.1 del 31/08**, che diceva *«l'unità è il
+     | posto (l'iscritto) — non tutte e due»*.
+     |
+     | ── 🚨 I NUMERI QUI SOTTO SONO SEGNAPOSTO ───────────────────────────────
+     |
+     | 📌 *«Per il momento mettici dei valori placeholder e via, devo fare prima
+     | un'analisi di costi e ritorni. Non è fondamentale per il codice, è solo un
+     | numero che possiamo decidere di cambiare in qualunque momento.»*
+     |
+     | ⛔ **Non si vende a nessuno su questi numeri.** Rispettano le due regole
+     | del listino e il pavimento del costo AI, quindi il codice gira e i test
+     | passano — ma il prezzo vero lo decide l'analisi di costi e ritorni.
+     |
+     | 💡 **Cambiarli è una riga qui**: `PlanSeeder` li legge da questo file, e
+     | il sito pure. Un solo posto, come dev'essere.
      */
 
     'palestre' => [
-        'pacchetti' => [
-            ['posti' => 10,  'prezzo_cent' => 4990,  'nota' => 'per cominciare'],
-            ['posti' => 25,  'prezzo_cent' => 10990, 'nota' => 'il piu\' scelto'],
-            ['posti' => 50,  'prezzo_cent' => 19990, 'nota' => 'per una palestra piena'],
-            ['posti' => 100, 'prezzo_cent' => 34990, 'nota' => 'per piu\' sedi'],
+        'piani' => [
+            [
+                'codice' => 'gym_20',
+                'nome' => 'Palestra — piccola',
+                'iscritti' => 20,
+                'trainer' => 5,
+                'prezzo_cent' => 9990,
+                'nota' => 'per cominciare',
+            ],
+            [
+                'codice' => 'gym_50',
+                'nome' => 'Palestra — media',
+                'iscritti' => 50,
+                'trainer' => 10,
+                'prezzo_cent' => 19990,
+                'nota' => 'il piu\' scelto',
+            ],
+            [
+                'codice' => 'gym_100',
+                'nome' => 'Palestra — grande',
+                'iscritti' => 100,
+                'trainer' => 30,
+                'prezzo_cent' => 34990,
+                'nota' => 'per piu\' sedi',
+            ],
         ],
 
-        /** A consumo: si paga per ogni posto acceso, mese per mese. */
-        'a_consumo_cent' => 599,
-
-        /** Il minimo di posti sul piano a consumo. */
-        'minimo' => 5,
+        /*
+         * 🆕 **Il piano a consumo** — 13/09/2026.
+         *
+         * 📌 *«Se una palestra sceglie il piano a consumo pagherà un tot per
+         * ogni iscritto a cui regala l'abbonamento, per un minimo di 100.»*
+         *
+         * ⚠️ **Trainer illimitati**: oltre i cento iscritti il numero di
+         * allenatori smette di essere la leva commerciale.
+         *
+         * 🚨 Il prezzo a iscritto è **più alto** del migliore pacchetto, e deve
+         * restarlo: a consumo si paga la flessibilità.
+         */
+        'a_consumo' => [
+            'codice' => 'gym_consumo',
+            'nome' => 'Palestra — a consumo',
+            'prezzo_iscritto_cent' => 599,
+            'minimo_iscritti' => 100,
+        ],
     ],
 
     'trainer' => [
-        'pacchetti' => [
-            ['posti' => 5,  'prezzo_cent' => 2990,  'nota' => 'per cominciare'],
-            ['posti' => 10, 'prezzo_cent' => 5490,  'nota' => 'il piu\' scelto'],
-            ['posti' => 25, 'prezzo_cent' => 11990, 'nota' => 'per chi ne segue tanti'],
+        /*
+         * ⛔ **Niente fascia gratuita** — decisione del 13/09/2026.
+         *
+         * 📌 *«Ogni free trainer avrà il suo piano trainer, con un tot di
+         * allievi minimo (diciamo 5).»*
+         *
+         * ⚠️ `trainer_free` non si cancella: si **ritira** (`is_public = false`),
+         * come `trainer_pro` e `gym`. Chi ce l'ha se lo tiene; nessuno lo può
+         * più scegliere. ⛔ Cancellarlo romperebbe le righe di
+         * `plan_subscriptions` che ci puntano.
+         */
+        'piani' => [
+            [
+                'codice' => 'trainer_5',
+                'nome' => 'Trainer — 5 allievi',
+                'allievi' => 5,
+                'prezzo_cent' => 1990,
+                'nota' => 'per cominciare',
+            ],
+            [
+                'codice' => 'trainer_15',
+                'nome' => 'Trainer — 15 allievi',
+                'allievi' => 15,
+                'prezzo_cent' => 4990,
+                'nota' => 'il piu\' scelto',
+            ],
+            [
+                'codice' => 'trainer_30',
+                'nome' => 'Trainer — 30 allievi',
+                'allievi' => 30,
+                'prezzo_cent' => 6990,
+                'nota' => 'per chi ne segue tanti',
+            ],
         ],
-
-        'a_consumo_cent' => 699,
-
-        'minimo' => 3,
     ],
 
     /**
