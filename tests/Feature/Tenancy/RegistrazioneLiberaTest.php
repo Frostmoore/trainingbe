@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Tenancy;
 
 use App\Enums\TenantKind;
+use App\Enums\TenantStatus;
 use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
@@ -225,28 +226,54 @@ class RegistrazioneLiberaTest extends TestCase
     }
 
     /**
-     * 🚨 L'accesso senza codice **non deve trovare gli utenti delle palestre**.
+     * ══ 🆕 RISCRITTO IL 14/09/2026 — LA REGOLA È CAMBIATA, IL MOTIVO NO ═══════
      *
-     * Altrimenti sarebbe un modo per accedere a un account di palestra saltando
-     * il codice — e con esso il controllo che la palestra sia attiva.
+     * ⛔ **Prima questo test diceva: «l'accesso senza codice non deve trovare
+     * gli utenti delle palestre», e pretendeva 422 anche a palestra attiva.**
+     *
+     * 🚨 Quella regola chiudeva fuori **chiunque fosse entrato in una palestra
+     * dall'app**: `Entra in una palestra` sposta l'account nel tenant della
+     * palestra, e da 3b-J.1 la schermata di accesso il codice non lo chiede più.
+     * Password giusta, «Credenziali non valide», nessuna via d'uscita.
+     *
+     * 💡 **Il motivo per cui la regola esisteva è invece sacrosanto**, ed è
+     * questo che il test difende adesso: senza codice non si deve saltare **il
+     * controllo che la palestra sia attiva**. Quel controllo ora si fa dentro
+     * `accediSenzaPalestra()`, dopo aver verificato la password.
+     *
+     * ⚖️ E la risposta è migliore di un 422: chi sta in una palestra sospesa
+     * riceve `403 tenant_inactive`, cioè la schermata che glielo dice, invece di
+     * riprovare all'infinito una password che è giusta.
      */
     #[Test]
-    public function logging_in_without_a_code_never_finds_a_gym_user(): void
+    public function logging_in_without_a_code_still_checks_the_gym_is_active(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test', [
             'username' => 'iscritto.alfa',
         ]);
 
+        // ✅ Palestra attiva: si entra, che è la cosa che prima non si poteva.
         $this->postJson('/api/v1/auth/login', [
             'login' => 'iscritto@alfa.test',
             'password' => self::FAKE_PASSWORD,
-        ])->assertStatus(422);
+        ])->assertOk();
 
+        $palestra->forceFill(['status' => TenantStatus::Suspended])->save();
+
+        // 🚨 Sospesa: non si entra, e si dice **perché**.
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'iscritto@alfa.test',
+            'password' => self::FAKE_PASSWORD,
+        ])
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'tenant_inactive');
+
+        // ⚠️ E vale anche per il nome utente: è la stessa porta.
         $this->postJson('/api/v1/auth/login', [
             'login' => 'iscritto.alfa',
             'password' => self::FAKE_PASSWORD,
-        ])->assertStatus(422);
+        ])->assertStatus(403);
     }
 
     /** Una password sbagliata resta indistinguibile da un indirizzo inesistente. */

@@ -281,4 +281,51 @@ class InvitoInChatTest extends TestCase
             'body' => base64_encode('busta finta per il test'),
         ]);
     }
+
+    /**
+     * ══ 🚨 E L'ELENCO DICE CON CHI SI STA PARLANDO — 15/09/2026 ══════════════
+     *
+     * ⛔ **`GET /conversations` rispondeva `with: {id: null, name: null}`** per
+     * un filo nato dal catalogo, e l'app disegnava una riga con **«—» al posto
+     * del nome** e un cerchio vuoto al posto dell'iniziale. Una conversazione
+     * con nessuno.
+     *
+     * 🚨 La causa: `Conversation` era stata liberata dal `TenantScope` — il suo
+     * dartdoc lo spiega, un filo dal catalogo **attraversa due tenant** — ma le
+     * relazioni `trainer()` e `member()` no. `User` usa `BelongsToTenant`,
+     * quindi l'altra persona, che sta sempre dall'altra parte, veniva filtrata
+     * via. ⚠️ Nessun errore: un nome nullo, e basta.
+     *
+     * 💡 Questo test guarda **il payload**, non il metodo: è la stessa cosa che
+     * legge l'app, ed è dove il difetto si vedeva.
+     */
+    #[Test]
+    public function l_elenco_nomina_l_altra_persona_anche_fra_due_tenant(): void
+    {
+        $this->actingAs($this->tizio)
+            ->postJson('/api/v1/conversations/informazioni', ['profilo_id' => $this->scheda->id])
+            ->assertCreated();
+
+        // 🚨 Chi guarda sta nel **suo** tenant, il trainer in un altro.
+        $this->actingAs($this->tizio)
+            ->getJson('/api/v1/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.with.id', $this->trainer->getKey())
+            ->assertJsonPath('data.0.with.name', $this->trainer->name);
+    }
+
+    /** ⚖️ E lo stesso vale guardando dall'altra parte. */
+    #[Test]
+    public function e_lo_stesso_dall_altra_parte(): void
+    {
+        $this->actingAs($this->tizio)
+            ->postJson('/api/v1/conversations/informazioni', ['profilo_id' => $this->scheda->id])
+            ->assertCreated();
+
+        $this->actingAs($this->trainer)
+            ->getJson('/api/v1/conversations')
+            ->assertOk()
+            ->assertJsonPath('data.0.with.id', $this->tizio->getKey())
+            ->assertJsonPath('data.0.with.name', $this->tizio->name);
+    }
 }

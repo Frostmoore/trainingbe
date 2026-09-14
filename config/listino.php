@@ -134,7 +134,10 @@ return [
     'pacchetti' => [
         ['gettoni' => 100,  'prezzo_cent' => 250,  'nota' => 'per provare'],
         ['gettoni' => 500,  'prezzo_cent' => 1000, 'nota' => 'per chi la usa spesso'],
-        ['gettoni' => 2000, 'prezzo_cent' => 2990, 'nota' => 'il piu\' conveniente'],
+        // ⚠️ **Accentata, non apostrofata.** Questa nota si legge nella modale
+        // degli acquisti: «il piu' conveniente» in mezzo a «l'app», «più» e
+        // «perché» scritti bene sembra un refuso, e lo è.
+        ['gettoni' => 2000, 'prezzo_cent' => 2990, 'nota' => 'il più conveniente'],
     ],
 
     /*

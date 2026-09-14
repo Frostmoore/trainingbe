@@ -97,6 +97,27 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         // dopo `User::create()` vale `null` e il consiglio automatico
         // risulterebbe spento per chi si e' appena iscritto.
         'consiglio_automatico' => true,
+
+        /*
+         * 🆕 **14/09/2026 — la quinta colonna, dimenticata.**
+         *
+         * 🚨 Il docblock qui sopra descrive questa trappola da agosto, e
+         * `password_is_set` era **l'unica colonna con un default nel database a
+         * non stare in questo elenco**. ⛔ Quindi la risposta di
+         * `POST /auth/register` diceva `password_is_set: false` a una persona
+         * che aveva **appena scelto una password**, e al login successivo
+         * diceva `true`.
+         *
+         * ⚠️ **Conseguenza vera, trovata sull'emulatore**: chi si registrava e
+         * andava subito in *Profilo → Credenziali* si vedeva il percorso
+         * «imposta una password» invece di «cambiala» — cioè gli si chiedeva
+         * di crearne una che aveva appena creato.
+         *
+         * 💡 Nessun errore, nessun log: uno stato sbagliato e plausibile, che
+         * si raddrizzava da solo alla prima rilettura. È **la** forma che i
+         * difetti prendono in questo progetto.
+         */
+        'password_is_set' => true,
     ];
 
     /** @return array<string, string> */

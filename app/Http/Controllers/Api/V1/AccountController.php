@@ -175,6 +175,26 @@ class AccountController extends Controller
      */
     public function preview(Request $request): JsonResponse
     {
+        /*
+         * ══ 🆕 A CHI NON HA UNA PALESTRA NON SI PARLA DI PALESTRA ════════════
+         *
+         * ⛔ **Le due righe di «Resteranno» erano fisse**, e a un iscritto
+         * individuale dicevano due cose false: che i suoi messaggi restano
+         * «nella conversazione del tuo trainer», e che le schede «restano alla
+         * palestra». 🚨 Visto sull'emulatore il 14/09 con un account senza
+         * palestra e senza trainer.
+         *
+         * ⚠️ **Su una schermata irreversibile è peggio che altrove**: chi legge
+         * una cosa che non lo riguarda smette di leggere il resto, e il resto è
+         * l'elenco di quello che sta per perdere.
+         *
+         * 💡 Chi non ha una palestra ha comunque qualcosa che resta — il
+         * conto dei pagamenti — e quel qualcosa si dice, invece di lasciare la
+         * sezione vuota: «non resta niente» sarebbe un'altra frase falsa.
+         */
+        $utente = $request->user();
+        $inPalestra = $utente?->tenant?->ePersonale() === false;
+
         return response()->json(['data' => [
             'deleted' => [
                 'Il diario alimentare e i preferiti',
@@ -183,11 +203,16 @@ class AccountController extends Controller
                 'Le foto dei progressi',
                 'I dati del sonno e i consigli ricevuti',
             ],
-            'kept' => [
-                'I messaggi già scambiati con il tuo trainer restano nella sua'
-                    .' conversazione, ma non risulteranno più tuoi.',
-                'Le schede che ti ha scritto il trainer restano alla palestra.',
-            ],
+            'kept' => $inPalestra
+                ? [
+                    'I messaggi già scambiati con il tuo trainer restano nella sua'
+                        .' conversazione, ma non risulteranno più tuoi.',
+                    'Le schede che ti ha scritto il trainer restano alla palestra.',
+                ]
+                : [
+                    'Le ricevute dei pagamenti restano a chi li ha incassati,'
+                        .' come vuole la legge.',
+                ],
             'irreversible' => true,
         ]]);
     }

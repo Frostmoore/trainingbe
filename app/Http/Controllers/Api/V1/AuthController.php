@@ -372,7 +372,51 @@ class AuthController extends Controller
     }
 
     /**
-     * Accesso **senza** codice palestra: si entra nel proprio account personale.
+     * Accesso **senza** codice palestra.
+     *
+     * ══ 🆕 NON PIÙ «SOLO GLI ACCOUNT PERSONALI» — 14/09/2026 ════════════════
+     *
+     * ⛔ **Questo metodo cercava fra i soli tenant personali, e chiudeva fuori
+     * chiunque fosse entrato in una palestra dall'app.**
+     *
+     * 🚨 Trovato provando l'app sull'emulatore: si entra in Palestra Demo da
+     * *Profilo › Entra in una palestra*, che sposta l'account nel tenant della
+     * palestra; al rientro successivo `POST /auth/login` rispondeva
+     * **«Credenziali non valide»** con la password giusta. Con il `join_code`
+     * funzionava — ma da 3b-J.1 **la schermata di accesso il codice non lo
+     * chiede più**, quindi per quella persona non esisteva nessuna strada.
+     *
+     * ⚠️ **L'assunto era vero quando è stato scritto**: allora in palestra si
+     * entrava solo iscrivendosi con il codice, quindi chi stava in un tenant
+     * palestra il codice ce l'aveva per forza. `Entra in una palestra` ha tolto
+     * quel vincolo, e nessuno è tornato qui. 💡 È il difetto di sempre: una
+     * condizione giusta che diventa falsa altrove, senza che niente si rompa.
+     *
+     * 🚨 **La regola sull'ambiguità non cambia**: si guarda fra tutti gli
+     * account con quell'identificativo e, se non ce n'è **esattamente uno**, si
+     * rifiuta invece di indovinare. Il prezzo è quello già messo in conto qui
+     * sotto — con un'email ripetuta si entra con il **nome utente**, che è unico
+     * su tutta la piattaforma — e resta molto più piccolo di un'app in cui chi
+     * entra in palestra non rientra più.
+     *
+     * ══ ⚖️ E IL CONTROLLO CHE IL FILTRO PROTEGGEVA RESTA ═════════════════════
+     *
+     * 🚨 **Il filtro sui tenant personali non era solo un assunto: teneva in
+     * piedi una regola.** `RegistrazioneLiberaTest` la scrive per esteso — senza
+     * codice non si devono trovare gli utenti delle palestre, *«altrimenti
+     * sarebbe un modo per accedere a un account di palestra saltando il codice —
+     * e con esso il controllo che la palestra sia attiva»*.
+     *
+     * 💡 Quel controllo adesso si fa qui, esplicitamente, e la risposta è la
+     * stessa dell'accesso con Google (`SocialAuthController`) e del middleware
+     * `tenant.active`: **403 con `code: tenant_inactive`**, che porta l'app alla
+     * schermata «palestra sospesa».
+     *
+     * ⚖️ Ed è più onesto di prima: chi è in una palestra sospesa leggeva
+     * «Credenziali non valide» e riprovava all'infinito una password giusta.
+     *
+     * ⚖️ **ADR-04 regge ancora**: il tenant non arriva dal client, si legge da
+     * `$user->tenant_id` dopo aver verificato la password.
      *
      * 🚨 **Non era nel piano, ed è stato aggiunto perché senza sarebbe stata una
      * funzione rotta.** `plan_parte_b.md` §5.3 descriveva solo la registrazione;
@@ -402,8 +446,14 @@ class AuthController extends Controller
     {
         $identificativo = $request->identifier();
 
+        /*
+         * ⛔ **Qui c'era `->whereHas('tenant', fn ($q) => $q->personali())`**, e
+         * teneva fuori chi era entrato in una palestra dall'app: vedi la nota
+         * in cima al metodo. Chi tocca questa query si ricordi che il filtro
+         * per categoria di tenant **non può tornare**: l'unica cosa che
+         * delimita la ricerca è l'identificativo, e a decidere è l'unicità.
+         */
         $candidati = User::withoutGlobalScopes()
-            ->whereHas('tenant', fn (Builder $q): Builder => $q->personali())
             ->where(fn (Builder $q): Builder => $q
                 ->where('email', $identificativo)
                 ->orWhere('username', $identificativo)
@@ -432,11 +482,34 @@ class AuthController extends Controller
             ]);
         }
 
+        $tenant = $user->tenant;
+
+        /*
+         * 🚨 **Il controllo che il vecchio filtro proteggeva.** Vedi la nota in
+         * cima al metodo: senza codice si arriva anche agli account di palestra,
+         * quindi la palestra va guardata **qui**.
+         *
+         * ⚠️ 403 con `code: tenant_inactive`, non un errore di credenziali: è la
+         * stessa risposta del middleware `tenant.active` e dell'accesso con
+         * Google, ed è quella che porta l'app a «palestra sospesa» invece che a
+         * riprovare una password che è giusta.
+         *
+         * 💡 `$tenant === null` non dovrebbe succedere — `users.tenant_id` è
+         * obbligatorio — ma se succede il posto giusto dove fermarsi è questo,
+         * non due righe più in là dentro `runAs(null)`.
+         */
+        if ($tenant === null || ! $tenant->isActive()) {
+            return response()->json([
+                'message' => __('La tua palestra è sospesa. Contattala per riattivare l\'accesso.'),
+                'code' => 'tenant_inactive',
+            ], 403);
+        }
+
         $user->forceFill(['last_login_at' => now()])->saveQuietly();
 
         return $this->context->runAs(
-            $user->tenant,
-            fn (): JsonResponse => $this->tokenResponse($user, $user->tenant, $request),
+            $tenant,
+            fn (): JsonResponse => $this->tokenResponse($user, $tenant, $request),
         );
     }
 

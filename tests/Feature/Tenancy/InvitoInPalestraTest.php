@@ -393,6 +393,42 @@ final class InvitoInPalestraTest extends TestCase
     }
 
     /**
+     * ══ 🚨 E IL GIORNO DOPO SI RIENTRA — 14/09/2026 ══════════════════════════
+     *
+     * ⛔ **Accettare l'invito rendeva l'app inaccessibile alla volta
+     * successiva.** `accetta()` passa da `dentroQuestoTenant()`, cioè sposta la
+     * persona nel tenant della palestra; e `accediSenzaPalestra()` cercava fra
+     * i **soli tenant personali**, quindi `POST /auth/login` rispondeva
+     * «Credenziali non valide» **con la password giusta**.
+     *
+     * ⚠️ **Non c'era una seconda strada**: da 3b-J.1 la schermata di accesso il
+     * codice palestra non lo chiede più.
+     *
+     * 🚨 Questo test sta **qui** e non solo accanto al login perché il link
+     * d'invito è la strada per entrare in palestra: se si rompe il ritorno, si
+     * rompe l'unica porta. ⚖️ `accettare_dall_app_fa_entrare` finiva
+     * all'ingresso; una funzione però si misura anche al rientro.
+     */
+    #[Test]
+    public function dopo_l_invito_si_rientra_senza_nessun_codice(): void
+    {
+        $invito = $this->unInvito();
+        $persona = $this->unaPersonaFuori();
+
+        $this->actingAs($persona, 'sanctum')
+            ->postJson('/api/v1/inviti-palestra/'.$invito->token.'/accetta')
+            ->assertStatus(200);
+
+        // 🚨 Solo email e password: è tutto quello che la schermata di accesso ha.
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'mario@esempio.test',
+            'password' => self::FAKE_PASSWORD,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.email', 'mario@esempio.test');
+    }
+
+    /**
      * 🚨 **Un tentativo fallito non brucia l'invito** — l'ordine è
      * entrare-poi-bruciare.
      *

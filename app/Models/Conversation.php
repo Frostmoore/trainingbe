@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\TipoConversazione;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
+use App\Models\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -74,14 +75,35 @@ class Conversation extends Model
         return $this->tipo === TipoConversazione::Informazioni;
     }
 
+    /**
+     * ══ 🆕 SENZA IL GLOBAL SCOPE, E PER LA STESSA IDENTICA RAGIONE ═══════════
+     *
+     * ⛔ **Il modello era stato liberato dal tenant, le due relazioni no.** Una
+     * conversazione nata dal catalogo attraversa due tenant — lo dice il
+     * dartdoc qui sopra — quindi l'altra persona sta **sempre** dall'altra
+     * parte: `User` usa `BelongsToTenant`, e il global scope la filtrava via.
+     *
+     * 🚨 Il risultato l'ha mostrato l'emulatore il 14/09: l'elenco dei messaggi
+     * disegnava una riga con **«—» al posto del nome** e un cerchio vuoto al
+     * posto dell'iniziale. L'API rispondeva `with: {id: null, name: null}` —
+     * nessun errore, una conversazione con nessuno.
+     *
+     * ⚖️ **E non apre niente.** Chi legge il nome è già passato da `includes()`,
+     * che confronta i due partecipanti con l'id di chi chiede: per arrivare qui
+     * bisogna **essere** uno dei due. Sapere con chi si sta parlando è il minimo
+     * che una conversazione debba dire — e il nome della palestra, nel caso del
+     * catalogo, era già pubblico prima che il filo esistesse.
+     */
     public function trainer(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'trainer_id');
+        return $this->belongsTo(User::class, 'trainer_id')
+            ->withoutGlobalScopes([TenantScope::class]);
     }
 
     public function member(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'member_id');
+        return $this->belongsTo(User::class, 'member_id')
+            ->withoutGlobalScopes([TenantScope::class]);
     }
 
     public function messages(): HasMany

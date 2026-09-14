@@ -13,6 +13,7 @@ use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Account\AccountEraser;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
@@ -73,6 +74,51 @@ class AccountAndPhotoApiTest extends TestCase
     }
 
     /**
+     * ⛔ **E a chi non ha una palestra non si parla di palestra** — 14/09/2026.
+     *
+     * 🚨 Le due righe di «Resteranno» erano fisse, e a un iscritto individuale
+     * dicevano due cose false: i messaggi «nella conversazione del tuo trainer»
+     * e le schede «restano alla palestra». ⚠️ Su una schermata irreversibile
+     * una riga che non riguarda chi legge fa smettere di leggere anche il
+     * resto — e il resto è l'elenco di quello che sta per perdere.
+     */
+    #[Test]
+    public function the_preview_does_not_mention_a_gym_to_someone_without_one(): void
+    {
+        $solo = app(CreaTenantPersonale::class)(
+            'dasolo@esempio.test',
+            'dasolo@esempio.test',
+            ['password' => self::FAKE_PASSWORD],
+        );
+
+        $risposta = $this->comeApp($solo)
+            ->getJson('/api/v1/account/deletion-preview')
+            ->assertOk();
+
+        $resta = implode(' ', $risposta->json('data.kept'));
+
+        $this->assertStringNotContainsString('palestra', $resta);
+        $this->assertStringNotContainsString('trainer', $resta);
+
+        // 💡 E non è vuoto: «non resta niente» sarebbe un'altra frase falsa.
+        $this->assertNotEmpty($risposta->json('data.kept'));
+    }
+
+    /** ⚖️ Mentre a chi in palestra ci sta, le due righe servono e restano. */
+    #[Test]
+    public function but_a_gym_member_still_reads_them(): void
+    {
+        $risposta = $this->comeApp($this->iscritto)
+            ->getJson('/api/v1/account/deletion-preview')
+            ->assertOk();
+
+        $this->assertStringContainsString(
+            'trainer',
+            implode(' ', $risposta->json('data.kept')),
+        );
+    }
+
+    /**
      * 🚨 È l'unica azione irreversibile dell'app: un telefono sbloccato
      * lasciato sul tavolo non deve bastare a compierla.
      */
@@ -102,7 +148,6 @@ class AccountAndPhotoApiTest extends TestCase
             'description' => 'Pasto',
             'kcal' => 500,
         ]));
-
 
         $this->comeApp($this->iscritto)
             ->deleteJson('/api/v1/account', ['password' => TestCase::FAKE_PASSWORD])

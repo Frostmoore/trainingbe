@@ -335,4 +335,94 @@ class EntrareInUnaPalestraTest extends TestCase
             .'ognuna ha una motivazione scritta, e va aggiornata insieme.',
         );
     }
+
+    // ─────────────── 🚨 E il giorno dopo si rientra ───────────────
+
+    /**
+     * **Il test che mancava, ed è costato l'accesso a chiunque entri in
+     * palestra** — 14/09/2026.
+     *
+     * ⛔ `accediSenzaPalestra()` cercava fra i **soli tenant personali**. Chi
+     * entrava in una palestra dall'app finiva nel tenant della palestra, e al
+     * rientro successivo `POST /auth/login` rispondeva «Credenziali non valide»
+     * **con la password giusta**.
+     *
+     * 🚨 Nessun errore, nessun log, nessun test rosso: la funzione di ingresso
+     * funzionava benissimo, e a rompersi era quella di ritorno — una schermata
+     * più in là e un giorno dopo.
+     *
+     * ⚠️ E non c'era una seconda strada: la schermata di accesso il codice
+     * palestra **non lo chiede più** da 3b-J.1.
+     *
+     * 💡 Questo test finisce dove finisce la persona: non al `join-gym`, ma al
+     * login successivo.
+     */
+    #[Test]
+    public function after_joining_you_can_still_log_in_without_the_code(): void
+    {
+        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $utente = $this->libero('rientro@esempio.test');
+
+        $this->comeApp($utente)
+            ->postJson('/api/v1/account/join-gym', ['join_code' => 'ALFA2345'])
+            ->assertOk();
+
+        // 🚨 Senza `join_code`: è tutto quello che la schermata di accesso ha.
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'rientro@esempio.test',
+            'password' => self::FAKE_PASSWORD,
+        ])->assertOk()->assertJsonPath('data.email', 'rientro@esempio.test');
+    }
+
+    /**
+     * ⚖️ **E il nome utente funziona come l'email**, che è la strada che resta a
+     * chi ha un indirizzo ripetuto su due tenant: è unico su tutta la
+     * piattaforma, quindi non è mai ambiguo.
+     */
+    #[Test]
+    public function after_joining_the_username_works_too(): void
+    {
+        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $utente = $this->libero('conutente@esempio.test');
+
+        $utente->forceFill(['username' => 'quellodelrientro'])->save();
+
+        $this->comeApp($utente)
+            ->postJson('/api/v1/account/join-gym', ['join_code' => 'ALFA2345'])
+            ->assertOk();
+
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'quellodelrientro',
+            'password' => self::FAKE_PASSWORD,
+        ])->assertOk()->assertJsonPath('data.username', 'quellodelrientro');
+    }
+
+    /**
+     * 🚨 **E l'ambiguità si rifiuta ancora, invece di indovinare.**
+     *
+     * ⚠️ Allargare la ricerca a tutti i tenant allarga anche i casi in cui lo
+     * stesso indirizzo esiste due volte. ⛔ Scegliere «il più probabile»
+     * porterebbe qualcuno dentro un diario che non è il suo, e penserebbe di
+     * aver perso i propri dati: molto peggio di un rifiuto.
+     */
+    #[Test]
+    public function a_repeated_email_is_refused_not_guessed(): void
+    {
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+
+        $this->libero('doppio@esempio.test');
+
+        $this->ctx()->runAs($palestra, fn (): User => User::create([
+            'tenant_id' => $palestra->getKey(),
+            'name' => 'Omonimo',
+            'email' => 'doppio@esempio.test',
+            'username' => 'omonimo',
+            'password' => self::FAKE_PASSWORD,
+        ]));
+
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'doppio@esempio.test',
+            'password' => self::FAKE_PASSWORD,
+        ])->assertStatus(422);
+    }
 }
