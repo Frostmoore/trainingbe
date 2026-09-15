@@ -6,6 +6,7 @@ namespace App\Observers;
 
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -19,6 +20,12 @@ use Illuminate\Support\Facades\Log;
  * un `free_trainer`, deve perdere anche tutti i suoi allievi»* — e quegli allievi
  * **restano alla palestra**, perché non erano suoi: erano iscritti della
  * palestra, affidati a lui.
+ *
+ * 🆕 ⚠️ **Il «ma non è un `free_trainer`» era scritto e non applicato**, fino al
+ * 16/09/2026: qui si chiudeva tutto, per tutti. La deroga adesso c'è, e non
+ * guarda il ruolo ma **di chi è lo spazio** in cui il rapporto vive — vedi
+ * `spaziSuoi()`. 💡 Il ruolo dice cosa uno può fare, la proprietà dice di chi è
+ * la roba: ed è la seconda domanda che conta, qui.
  *
  * ══ 🚨 PERCHE' UN OSSERVATORE E NON UN'AZIONE DEL PANNELLO ════════════════
  *
@@ -80,6 +87,7 @@ class ChiEsceDallaPalestraOsservatore
         $quanti = app(TenantContext::class)->runWithoutTenant(
             fn (): int => DB::table('trainer_member')
                 ->whereNull('disattivato_il')
+                ->whereNotIn('tenant_id', $this->spaziSuoi($id))
                 ->where(fn ($q) => $q->where('trainer_id', $id)->orWhere('member_id', $id))
                 ->update(['disattivato_il' => now()]),
         );
@@ -91,5 +99,40 @@ class ChiEsceDallaPalestraOsservatore
                 'quanti' => $quanti,
             ]);
         }
+    }
+
+    /**
+     * 🆕 ⛔ **Gli spazi di cui questa persona è la proprietaria** — 16/09/2026.
+     *
+     * 📌 Il committente: *«un trainer indipendente che lavora in una palestra, se
+     * dovesse lasciare la palestra, manterrebbe tutti i suoi allievi personali»*.
+     *
+     * 🚨 **Il difetto**: questo osservatore chiudeva ogni rapporto della persona,
+     * in ogni spazio, senza guardare **di chi** fosse lo spazio. ⚠️ E il modo in
+     * cui una palestra toglie di mezzo un trainer, dal pannello, è spegnerlo o
+     * cancellarlo — due gesti che partono da lì e arrivano qui. Risultato: la
+     * palestra, con un click, chiudeva anche i clienti che quel trainer paga di
+     * tasca sua e che con la palestra non c'entrano niente. 🚨 Provato: un
+     * trainer con un allievo suo, spento dalla palestra, si ritrovava il
+     * rapporto personale con `disattivato_il` valorizzato.
+     *
+     * 💡 La riga di `trainer_member` porta il `tenant_id` dello spazio in cui il
+     * rapporto vive: quelle **dentro casa sua** sono roba sua, e non finiscono
+     * perché qualcun altro ha chiuso una porta diversa.
+     *
+     * ⚠️ **Vale anche quando la cancellazione è vera.** Qui `users` usa
+     * `SoftDeletes` e il pannello ha il `RestoreAction`: una persona ripescata si
+     * riprenderebbe l'account ma non i rapporti, perché una data già scritta non
+     * si toglie. E finché è cancellata non la vede nessuno lo stesso —
+     * `ChiSiVede` legge `users` con lo scope dei cancellati attivo.
+     *
+     * 💡 Un `whereNotIn` con l'elenco vuoto non filtra niente: chi non possiede
+     * nessuno spazio — cioè quasi tutti — passa di qui come prima.
+     *
+     * @return Collection<int, int>
+     */
+    private function spaziSuoi(int $id): Collection
+    {
+        return DB::table('tenants')->where('proprietario_id', $id)->pluck('id');
     }
 }

@@ -11,12 +11,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\ProfiloPubblico;
+use App\Models\Scopes\TenantScope;
 use App\Models\User;
 use App\Services\Chat\CancelloDellaChat;
 use App\Services\Chat\LimiteDeiTreMessaggi;
+use App\Services\Tenancy\ChiSiVede;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -35,6 +36,7 @@ class ConversationController extends Controller
     public function __construct(
         private readonly CancelloDellaChat $cancello,
         private readonly LimiteDeiTreMessaggi $limite,
+        private readonly ChiSiVede $chiSiVede,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -118,11 +120,24 @@ class ConversationController extends Controller
             return response()->json(['data' => []]);
         }
 
-        // Le due direzioni del legame: un utente puo' essere entrambe le cose
-        // (un trainer che si allena ha a sua volta un trainer).
-        $persone = $utente->assignedTrainers()->get()
-            ->merge($utente->assignedMembers()->get())
-            ->merge($this->trainerDellaPalestra($utente))
+        /*
+         * ══ 🆕 LE DUE DIREZIONI, DALLA REGOLA UNICA — 15/09/2026 ═════════
+         *
+         * Un utente puo' essere entrambe le cose: un trainer che si allena ha a
+         * sua volta un trainer.
+         *
+         * ⛔ **Mancava una meta' della regola.** Un iscritto vedeva tutti i
+         * trainer della sua palestra, ma un trainer di palestra **non vedeva
+         * nessun iscritto**: si leggeva solo `trainer_member`, che per lui e'
+         * vuota. 🚨 Provato su staging: in una palestra con tre iscritti,
+         * questa rotta gliene mostrava zero.
+         *
+         * 💡 Adesso le due direzioni le risponde `ChiSiVede`, dove la regola
+         * sta scritta una volta sola — e dove c'e' anche il caso del trainer che
+         * ha un giro suo **e** lavora in palestra.
+         */
+        $persone = $this->chiSiVede->trainerDi($utente)
+            ->merge($this->chiSiVede->allieviDi($utente))
             ->unique('id')
             ->values();
 
@@ -147,37 +162,21 @@ class ConversationController extends Controller
      * rilegge e' sempre quella che sbaglia.
      */
 
-    /**
-     * Tutti i trainer della palestra di questa persona — F7.1.
+    /*
+     * ⛔ **`trainerDellaPalestra()` non sta piu' qui** — 15/09/2026.
      *
-     * 🚨 **Solo se è una palestra vera.** In un tenant personale l'unico utente
-     * è la persona stessa: senza questo controllo l'app le proporrebbe di
-     * scrivere a sé stessa.
+     * 🚨 Faceva meta' della regola — un iscritto vede i trainer della sua
+     * palestra — e l'altra meta' non la faceva nessuno: un trainer di palestra
+     * non vedeva nessun iscritto.
      *
-     * ⚠️ E **mai** l'utente corrente nell'elenco, nemmeno quando è lui stesso un
-     * trainer di quella palestra: `whereKeyNot()`. Un trainer che apre «a chi
-     * posso scrivere» non deve trovarsi fra i contatti.
+     * ⚠️ E aveva un limite che si vedeva solo col trainer che ha anche un giro
+     * suo: cercava con `role()` di spatie **dentro il tenant corrente**, quindi
+     * trovava solo chi ha `users.tenant_id` uguale alla palestra. Chi allena li'
+     * ma sta nel proprio spazio non compariva — ed e' proprio la persona che la
+     * regola esiste per includere.
      *
-     * 💡 La ricerca passa da `role()` di spatie, che filtra sul team corrente —
-     * ed è quello che serve, perché il contesto **è** la palestra dell'utente
-     * autenticato (`ResolveTenant`). Il `TenantScope` fa il resto.
-     *
-     * @return Collection<int, User>
+     * 💡 Adesso la regola sta tutta in `ChiSiVede`, per le due direzioni.
      */
-    private function trainerDellaPalestra(User $utente): Collection
-    {
-        $tenant = $utente->tenant;
-
-        if ($tenant === null || $tenant->ePersonale()) {
-            return collect();
-        }
-
-        return User::query()
-            ->whereKeyNot($utente->getKey())
-            ->where('is_active', true)
-            ->role(UserRole::Trainer->value)
-            ->get();
-    }
 
     public function messages(Request $request, int $conversation): JsonResponse
     {
@@ -403,10 +402,12 @@ class ConversationController extends Controller
     /**
      * Apre (o riapre) la conversazione con una persona.
      *
-     * L'iscritto scrive al proprio trainer, il trainer a un proprio assegnato:
-     * fuori da quel legame non si apre niente. Una chat aperta verso chiunque
-     * della palestra sarebbe, per un iscritto, il modo per scrivere a tutti gli
-     * altri iscritti.
+     * 🚨 **Si apre solo verso chi si vede** — la regola sta in `ChiSiVede` e la
+     * applica `coppia()`, la stessa che riempie l'elenco dei contatti.
+     *
+     * ⛔ E fra due iscritti non si apre niente, mai: una chat verso chiunque
+     * della palestra sarebbe, per un iscritto, il modo di scrivere a tutti gli
+     * altri clienti.
      */
     public function open(Request $request): JsonResponse
     {
@@ -415,9 +416,24 @@ class ConversationController extends Controller
         ]);
 
         $io = $request->user();
-        $altro = User::find($dati['user_id']);
 
-        if ($altro === null || $altro->tenant_id !== $io->tenant_id) {
+        /*
+         * ══ 🆕 SI CERCA FUORI DAL PROPRIO TENANT — 16/09/2026 ════════════════
+         *
+         * ⛔ Prima: `User::find()` (filtrato dal `TenantScope`) più un confronto
+         * fra `tenant_id`. 🚨 Quel confronto escludeva **il trainer con un giro
+         * suo**, che allena in palestra ma vive nel proprio spazio: i suoi
+         * iscritti se lo vedevano in elenco e ricevevano 404 al tocco.
+         *
+         * 💡 Chi sia raggiungibile lo decide `coppia()`, che è la stessa regola
+         * dell'elenco. Qui si toglie solo il filtro che impediva perfino di
+         * **guardare** la riga.
+         */
+        $altro = User::query()
+            ->withoutGlobalScopes([TenantScope::class])
+            ->find($dati['user_id']);
+
+        if ($altro === null) {
             return response()->json(['message' => __('Persona non trovata.')], 404);
         }
 
@@ -429,7 +445,19 @@ class ConversationController extends Controller
         [$trainer, $membro] = $this->coppia($io, $altro);
 
         if ($trainer === null) {
-            return response()->json(['message' => __('Non c\'e\' un collegamento fra voi due.')], 403);
+            /*
+             * 🚨 **Due risposte diverse, e la differenza è voluta.**
+             *
+             * ⚠️ Nella propria palestra l'esistenza di quella persona non è un
+             * segreto — ci si vede in sala — e dire *«non c'è collegamento»*
+             * spiega. Fuori invece 404: distinguere «esiste ma non ti è
+             * collegato» da «non esiste» trasformerebbe questa rotta in un modo
+             * per **sondare gli id** e sapere quali account esistono sulla
+             * piattaforma, un id alla volta.
+             */
+            return $altro->tenant_id === $io->tenant_id
+                ? response()->json(['message' => __('Non c\'e\' un collegamento fra voi due.')], 403)
+                : response()->json(['message' => __('Persona non trovata.')], 404);
         }
 
         $c = Conversation::between($trainer, $membro);
@@ -541,47 +569,40 @@ class ConversationController extends Controller
     /**
      * Chi dei due e' il trainer, e solo se sono davvero collegati.
      *
+     * ══ 🆕 UNA REGOLA SOLA, ED È `ChiSiVede` — 16/09/2026 ══════════════════
+     *
+     * ⛔ Qui c'erano tre rami scritti a mano — assegnati, assegnanti, e il ramo
+     * F7.1 per i trainer della propria palestra — e `contacts()` ne aveva altri
+     * suoi. 🚨 Due elenchi della stessa regola divergono sempre, e la volta
+     * scorsa è successo: dopo la regola del 15/09 l'elenco dei contatti mostrava
+     * il trainer con un giro suo agli iscritti della palestra, e il tocco
+     * rispondeva **404** — perché quel trainer vive nel proprio tenant e questo
+     * metodo pretendeva lo stesso `tenant_id`.
+     *
+     * 💡 Adesso la domanda è una: *lo vede o no?* — la stessa che risponde
+     * all'elenco. Se compare nei contatti si apre, per costruzione.
+     *
+     * ⚠️ **Cosa NON è cambiato**, e non deve cambiare:
+     *
+     * - fra due iscritti non c'è chat, mai: `allieviDi()` di un iscritto è
+     *   vuoto e `trainerDi()` porta solo trainer, mai altri iscritti;
+     * - un `gym_admin` non è raggiungibile da qui: `trainerDi()` cerca il ruolo
+     *   `trainer` e basta;
+     * - un rapporto **disattivato** resta una coppia valida. 💡 `assignedMembers`
+     *   non filtra `disattivato_il`, ed è voluto: il filo si riapre, e a dire
+     *   che è chiuso ci pensa `CancelloDellaChat::canaleChiuso()` con il suo
+     *   messaggio. Rispondere «non c'è collegamento» sarebbe una bugia su una
+     *   storia che quelle due persone hanno davvero.
+     *
      * @return array{0: ?User, 1: User}
      */
     private function coppia(User $io, User $altro): array
     {
-        if ($io->assignedMembers()->where('users.id', $altro->getKey())->exists()) {
+        if ($this->chiSiVede->allieviDi($io)->contains('id', $altro->getKey())) {
             return [$io, $altro];
         }
 
-        if ($io->assignedTrainers()->where('users.id', $altro->getKey())->exists()) {
-            return [$altro, $io];
-        }
-
-        /*
-         * 🆕 **F7.1 — un iscritto può scrivere a un trainer della sua palestra
-         * anche senza essere stato assegnato a lui.**
-         *
-         * Senza questo ramo, `contacts()` avrebbe elencato dei trainer a cui
-         * `open()` avrebbe poi risposto **403**: un elenco di persone
-         * irraggiungibili, che è peggio di un elenco vuoto — l'utente prova, non
-         * funziona, e non capisce perché.
-         *
-         * ⚠️ **Le condizioni sono tre e servono tutte:**
-         *
-         * 1. l'altro è un `Trainer` — ⚠️ **non** un `GymAdmin` e **non** un
-         *    altro iscritto. Il requisito B8 parla di trainer;
-         * 2. stesso tenant — già garantito da `open()`, ripetuto qui perché
-         *    `coppia()` non dipenda da chi la chiama;
-         * 3. 🚨 **il tenant è una palestra vera.** In un tenant personale
-         *    l'unico utente è la persona stessa, e questo ramo le farebbe aprire
-         *    una conversazione con sé stessa.
-         *
-         * 💡 E resta vero ciò che conta: poter **scrivere** a un trainer non è
-         * poter **leggere** niente. La cifratura non cambia, e la palestra non
-         * legge i messaggi dei suoi trainer nemmeno impersonando.
-         */
-        $tenant = $io->tenant;
-
-        if ($tenant !== null
-            && ! $tenant->ePersonale()
-            && $io->tenant_id === $altro->tenant_id
-            && $altro->hasAppRole(UserRole::Trainer)) {
+        if ($this->chiSiVede->trainerDi($io)->contains('id', $altro->getKey())) {
             return [$altro, $io];
         }
 

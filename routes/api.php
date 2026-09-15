@@ -286,8 +286,28 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('account/leave-gym', [AccountController::class, 'leaveGym']);
 
-        Route::post('account/join-gym', [AccountController::class, 'joinGym'])
-            ->middleware('throttle:auth-login');
+        /*
+         * ══ 🆕 IN PALESTRA SI ENTRA DA UN INVITO — 15/09/2026 ═══════════
+         *
+         * 📌 Il committente: *«Il codice d'ingresso va tolto»*, e l'ingresso
+         * *«dovra' funzionare solo con link di invito»*.
+         *
+         * ⛔ **`POST account/join-gym` non c'e' piu'.** Prendeva un `join_code`
+         * digitato a mano e faceva il trasloco: era l'ultimo posto in cui un
+         * codice palestra si scriveva a mano, dopo che le schermate d'ingresso
+         * avevano smesso di chiederlo con 3b-J.1.
+         *
+         * 🚨 **Il trasloco non e' stato buttato**: `UnisciAUnaPalestra` resta,
+         * e la usa `POST inviti-palestra/{token}/accetta`. Cambia **da dove si
+         * entra**, non cosa succede quando si entra.
+         *
+         * ⚖️ E l'invito e' piu' forte del codice: e' **monouso** e **scade**.
+         * Un codice finito in una chat di gruppo fa entrare venti persone e
+         * consuma venti posti; un link ne fa entrare una.
+         *
+         * ⚠️ `tenants.join_code` resta in tabella: e' il codice con cui il
+         * pannello genera gli inviti, non quello che digitava una persona.
+         */
         Route::delete('account', [AccountController::class, 'destroy']);
 
         // G8 — email e password si cambiano dall'app. Entrambe chiedono la

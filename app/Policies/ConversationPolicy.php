@@ -6,6 +6,7 @@ namespace App\Policies;
 
 use App\Models\Conversation;
 use App\Models\User;
+use App\Services\Tenancy\ChiSiVede;
 use App\Support\Impersonation\Impersonator;
 
 /**
@@ -135,10 +136,28 @@ class ConversationPolicy
          * semplicemente la misura sbagliata.
          *
          * 💡 E resta stretta dove serve: per tutte le conversazioni normali
-         * (`tenant_id` valorizzato) il controllo e' identico a prima.
+         * (`tenant_id` valorizzato) si continua a pretendere che il filo stia
+         * in uno spazio di questa persona — vedi qui sotto.
+         *
+         * ══ 🆕 «UNO DEI SUOI SPAZI», NON «IL SUO SPAZIO» — 16/09/2026 ════════
+         *
+         * ⛔ Qui c'era `=== $utente->tenant_id`, e per chiunque abbia un solo
+         * cappello vuol dire la stessa identica cosa.
+         *
+         * 🚨 **Ma un trainer con un giro suo ne ha due**: il filo con un
+         * iscritto della palestra vive **nella palestra**, e lui lo guarda dal
+         * **proprio** spazio. Con il confronto secco la policy gli negava le
+         * sue stesse conversazioni — aperte un attimo prima dalla regola di
+         * `ChiSiVede`, e poi illeggibili.
+         *
+         * ⚖️ **La cintura resta della stessa larghezza.** Serviva contro gli id
+         * progressivi globali: si continua a pretendere che il filo stia in uno
+         * spazio di cui questa persona fa **parte**, e per chi ne ha uno solo
+         * non cambia niente. 💡 Il controllo vero resta `includes()`, qui
+         * sopra: bisogna comunque **essere** uno dei due.
          */
         return $conversazione->tenant_id === null
-            || $conversazione->tenant_id === $utente->tenant_id;
+            || app(ChiSiVede::class)->spaziDi($utente)->contains($conversazione->tenant_id);
     }
 
     /**

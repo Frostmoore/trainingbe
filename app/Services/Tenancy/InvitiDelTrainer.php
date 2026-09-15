@@ -52,8 +52,9 @@ class InvitiDelTrainer
      *
      * ── ⚠️ E non è una perdita di funzioni per il trainer di palestra ──────
      *
-     * I suoi allievi sono **gli iscritti della palestra**, che l'amministratore
-     * gli assegna dal pannello: è la divisione già scritta in `AH.1-bis`, dove
+     * I suoi allievi sono **gli iscritti della palestra**, che vede tutti e
+     * subito senza che nessuno glieli assegni — vedi `ChiSiVede`. È la divisione
+     * già scritta in `AH.1-bis`, dove
      * *«può comprare un pacchetto allievi»* è `no` per lui e `sì` per un
      * indipendente. 💡 Chi lavora in palestra e vuole clienti suoi **si abbona
      * da `free_trainer`**, e allora ha uno spazio suo — le due cose non sono
@@ -68,13 +69,29 @@ class InvitiDelTrainer
     {
         if (! $this->haUnoSpazioSuo($trainer)) {
             throw ValidationException::withMessages([
-                'invito' => __('Per avere allievi tuoi ti serve un abbonamento da trainer indipendente: gli iscritti della palestra te li assegna la palestra.'),
+                /*
+                 * 🆕 ⛔ **La frase diceva una cosa falsa** — 15/09/2026.
+                 *
+                 * Diceva *«gli iscritti della palestra te li assegna la
+                 * palestra»*, e non glieli assegna nessuno: gli iscritti di una
+                 * palestra sono **gia' di tutti** i suoi trainer, senza nessuna
+                 * assegnazione. 📌 E' la regola detta dal committente, e sta
+                 * scritta per esteso in `ChiSiVede`.
+                 */
+                'invito' => __('Gli iscritti della palestra li vedi gia\' tutti. Per avere allievi tuoi, fuori dalla palestra, serve un abbonamento da trainer indipendente.'),
             ]);
         }
     }
 
-    /** Lo spazio in cui vive questo trainer è suo? */
-    private function haUnoSpazioSuo(User $trainer): bool
+    /**
+     * Lo spazio in cui vive questo trainer è suo?
+     *
+     * 🆕 **Pubblica da 15/09/2026**: e' la stessa domanda che decide se
+     * mostrargli i posti del piano. ⛔ Un trainer di sola palestra non ha posti
+     * propri — gli iscritti li paga la palestra — e vedersi scritto «utenti
+     * illimitati» gli dice una cosa che non lo riguarda.
+     */
+    public function haUnoSpazioSuo(User $trainer): bool
     {
         $suo = $trainer->tenant;
 

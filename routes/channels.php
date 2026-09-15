@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Gate;
 | 🚨 **Il controllo qui e' l'ultimo che c'e'.** Una volta che il client e'
 | iscritto a un canale, riceve tutto quello che ci passa: non c'e' un secondo
 | filtro a valle. Per questo si verificano DUE cose e non una — che l'utente sia
-| uno dei due partecipanti **e** che la conversazione sia della sua palestra.
+| uno dei due partecipanti **e** che la conversazione stia in uno degli spazi di
+| cui fa parte (🆕 dal 16/09/2026 «uno dei suoi», non «il suo»: chi allena in una
+| palestra e ha un giro proprio ne ha due — vedi `ChiSiVede::spaziDi()`).
 |
 | La seconda sembra ridondante e non lo e': gli id sono numeri progressivi
 | globali, e senza il controllo del tenant basterebbe indovinarne uno per

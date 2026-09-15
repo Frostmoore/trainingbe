@@ -20,6 +20,7 @@ use App\Services\Chat\CancelloDellaChat;
 use App\Services\Chat\LimiteDeiTreMessaggi;
 use App\Services\Chat\Permesso;
 use App\Services\Scoperta\ChiaveComune;
+use App\Services\Tenancy\UnisciAUnaPalestra;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -382,13 +383,18 @@ class CancelloDellaChatTest extends TestCase
          * conversazione, con la storia sotto gli occhi e la penna ferma —
          * esattamente a chi ha appena pagato.
          *
-         * 💡 **Il flusso vero è `join-gym`**, non «aprire una chat». Nella prima
+         * 💡 **Il flusso vero è entrare in palestra**, non «aprire una chat». Nella prima
          * stesura questo test collegava le due persone col pivot e chiamava
-         * `POST /conversations`: fallisce, perché `open()` pretende lo stesso
-         * tenant per entrambi — cioè proprio la condizione che qui non c'è. Il
-         * test sbagliato ha mostrato che avevo agganciato lo sblocco al posto
-         * sbagliato: ora sta in `UnisciAUnaPalestra`, dove uno «diventa
+         * `POST /conversations`: falliva, perché quel metodo pretendeva lo
+         * stesso tenant per entrambi — cioè proprio la condizione che qui non
+         * c'è. Il test sbagliato ha mostrato che avevo agganciato lo sblocco al
+         * posto sbagliato: ora sta in `UnisciAUnaPalestra`, dove uno «diventa
          * iscritto» davvero.
+         *
+         * ⚠️ 🆕 Dal 16/09 `open()` non guarda più i tenant ma chiede a
+         * `ChiSiVede`: la strada sbagliata di allora oggi arriverebbe da
+         * un'altra parte, e questo resta comunque il posto giusto dove
+         * sbloccare.
          */
         $senzaPalestra = $this->personaConTenantPersonale('nuovo@esempio.it');
 
@@ -405,10 +411,16 @@ class CancelloDellaChatTest extends TestCase
 
         $this->scrivi($senzaPalestra, $c)->assertStatus(403);
 
-        // 🎯 Si iscrive davvero, col codice della palestra.
-        $this->actingAs($senzaPalestra)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => $this->palestra->join_code])
-            ->assertOk();
+        /*
+         * 🎯 Si iscrive davvero.
+         *
+         * ⛔ **Qui c'era `POST /account/join-gym`**, che dal 15/09 non esiste
+         * piu': in palestra si entra solo da un invito. 💡 Si chiama il
+         * servizio, che e' quello che l'accettazione dell'invito chiama a sua
+         * volta: a questo test interessa **l'effetto** dell'iscrizione sul
+         * filo, non da quale porta sia passata.
+         */
+        app(UnisciAUnaPalestra::class)($senzaPalestra, $this->palestra->join_code);
 
         $this->assertSame(
             TipoConversazione::Iscritto,
@@ -444,10 +456,8 @@ class CancelloDellaChatTest extends TestCase
                 ->json('data.id'),
         );
 
-        // Si iscrive a Olimpo, non a Zeus.
-        $this->actingAs($senzaPalestra)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => $this->palestra->join_code])
-            ->assertOk();
+        // Si iscrive a Olimpo, non a Zeus. 🆕 Dal servizio: vedi sopra.
+        app(UnisciAUnaPalestra::class)($senzaPalestra, $this->palestra->join_code);
 
         $this->assertSame(TipoConversazione::Informazioni, $conZeus->fresh()->tipo);
     }
@@ -536,7 +546,7 @@ class CancelloDellaChatTest extends TestCase
      * Una persona che si allena da sola: tenant **personale**, nessun
      * abbonamento.
      *
-     * 🚨 È l'unico stato da cui `join-gym` funziona — spostare un iscritto da
+     * 🚨 È l'unico stato da cui l'ingresso in palestra funziona — spostare un iscritto da
      * una palestra a un'altra è un'operazione commerciale, non una scelta
      * dell'utente.
      */
@@ -560,7 +570,7 @@ class CancelloDellaChatTest extends TestCase
          *
          * ⚠️ Nella vita vera la scrive `CreaTenantPersonale`, che il tenant e la
          * persona li crea insieme. Qui il tenant è costruito a mano, quindi va
-         * detto: da `Passo 1` `join-gym` pretende uno spazio **tuo**, non uno
+         * detto: da `Passo 1` l'ingresso pretende uno spazio **tuo**, non uno
          * spazio «di tipo personale» — o un allievo dentro lo spazio del suo
          * trainer se lo porterebbe dietro digitando il codice di una palestra.
          */

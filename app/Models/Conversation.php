@@ -6,7 +6,9 @@ namespace App\Models;
 
 use App\Enums\TipoConversazione;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
+use App\Models\Scopes\TenantOrGlobalScope;
 use App\Models\Scopes\TenantScope;
+use App\Services\Tenancy\ChiSiVede;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -149,23 +151,75 @@ class Conversation extends Model
          *
          * 🚨 E' anche la meta' del meccanismo di M4.4: diventare iscritti
          * **sblocca la conversazione esistente** invece di aprirne un'altra.
+         *
+         * ══ 🆕 SI CERCA SENZA IL FILTRO DEL TENANT — 16/09/2026 ══════════════
+         *
+         * 🚨 Un `firstOrCreate` normale cerca **dentro il tenant corrente**: se
+         * il filo esiste ma vive altrove, non lo trova, prova a crearlo e sbatte
+         * sul vincolo unico — errore 500, e l'app non apre una chat che c'e'.
+         *
+         * ⚠️ Non è teorico: succede al trainer con un giro suo. La
+         * conversazione con un iscritto della palestra nasce **nella palestra**
+         * (`$membro->tenant_id`), ma lui la riapre dal **proprio** spazio.
+         * Provato: 201 al primo tocco, 500 al secondo.
+         *
+         * 💡 Non è un bypass: la coppia di id è già la chiave più stretta
+         * possibile — è il vincolo unico stesso — e chi ha il diritto di stare
+         * in questo filo l'ha deciso `coppia()` un attimo fa. È lo stesso
+         * ragionamento, e lo stesso gesto, di `CancelloDellaChat::canaleChiuso()`.
          */
-        return static::firstOrCreate(
-            ['trainer_id' => $trainer->getKey(), 'member_id' => $membro->getKey()],
-            [
-                'tipo' => $tipo,
-                // 💡 Per un filo di informazioni resta `null` comunque: ci pensa
-                // l'ascoltatore in `booted()`.
-                'tenant_id' => $membro->tenant_id,
-            ],
-        );
+        return static::query()
+            ->withoutGlobalScopes([TenantOrGlobalScope::class])
+            ->firstOrCreate(
+                ['trainer_id' => $trainer->getKey(), 'member_id' => $membro->getKey()],
+                [
+                    'tipo' => $tipo,
+                    // 💡 Per un filo di informazioni resta `null` comunque: ci
+                    // pensa l'ascoltatore in `booted()`.
+                    'tenant_id' => $membro->tenant_id,
+                ],
+            );
     }
 
+    /**
+     * I fili di questa persona.
+     *
+     * ══ 🆕 GLI SPAZI A CUI APPARTIENE, NON SOLO QUELLO CORRENTE — 16/09 ═════
+     *
+     * 🚨 Il global scope limita al tenant **corrente**, e per il trainer con un
+     * giro suo quello è il **proprio** spazio: la conversazione con un iscritto
+     * della palestra nasce **nella palestra** e da lì spariva. ⛔ L'avrebbe
+     * aperta, scritto dentro, e poi non trovata più — né nell'elenco né
+     * aprendola per id, perché `conversazioneDi()` passa da qui.
+     *
+     * ✅ Si sostituisce il filtro con quello giusto: **i tenant di cui questa
+     * persona fa parte** — il suo, più le palestre dove ha il ruolo di trainer,
+     * più i fili di nessuno (`NULL`, quelli nati dal catalogo).
+     *
+     * ⚖️ **E chi esce da una palestra continua a non vederle.** Era già così, e
+     * deve restarci: uscendo perde il ruolo e cambia tenant, quindi quel
+     * `tenant_id` non è più in nessuno dei due elenchi. 💡 La regola vecchia
+     * («il tenant corrente») e questa danno lo stesso risultato per tutti
+     * tranne che per chi porta due cappelli — cioè il caso per cui esiste.
+     */
     public function scopeForUser(Builder $query, User|int $utente): Builder
     {
+        $persona = $utente instanceof User
+            ? $utente
+            : User::withoutGlobalScopes()->find($utente);
+
         $id = $utente instanceof User ? $utente->getKey() : $utente;
 
-        return $query->where(fn (Builder $q) => $q->where('trainer_id', $id)->orWhere('member_id', $id));
+        $suoi = $persona === null
+            ? collect()
+            : app(ChiSiVede::class)->spaziDi($persona);
+
+        return $query
+            ->withoutGlobalScopes([TenantOrGlobalScope::class])
+            ->where(fn (Builder $q) => $q
+                ->whereNull('tenant_id')
+                ->orWhereIn('tenant_id', $suoi->all()))
+            ->where(fn (Builder $q) => $q->where('trainer_id', $id)->orWhere('member_id', $id));
     }
 
     /**

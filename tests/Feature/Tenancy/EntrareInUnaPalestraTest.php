@@ -11,9 +11,11 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Services\Tenancy\CreaTenantPersonale;
+use App\Services\Tenancy\InvitiInPalestra;
 use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -44,6 +46,33 @@ class EntrareInUnaPalestraTest extends TestCase
         return app(CreaTenantPersonale::class)($email, $email, [
             'password' => self::FAKE_PASSWORD,
         ]);
+    }
+
+    /**
+     * Fa entrare qualcuno in palestra **come si entra davvero** — 15/09/2026.
+     *
+     * ⛔ **Qui si passava da `POST /account/join-gym`, col codice digitato a
+     * mano**, e quell'endpoint non esiste piu': dal 15/09 in palestra si entra
+     * solo da un link d'invito. 📌 *«Il codice d'ingresso va tolto»*.
+     *
+     * 🚨 **Il trasloco che questi test sorvegliano non cambia**: e' sempre
+     * `UnisciAUnaPalestra`, chiamata da `accetta()` invece che dal controller.
+     * Cambia la porta, non cosa succede quando si entra.
+     *
+     * ⚠️ L'invito lo emette un `gym_admin`, che e' quello che fa il pannello.
+     */
+    private function entraDaInvito(User $chi, Tenant $palestra): TestResponse
+    {
+        $gestore = $this->creaUtente(
+            $palestra,
+            UserRole::GymAdmin,
+            'gestore-'.$palestra->getKey().'@esempio.test',
+        );
+
+        $invito = app(InvitiInPalestra::class)->invita($palestra, $gestore, $chi->email);
+
+        return $this->comeApp($chi)
+            ->postJson('/api/v1/inviti-palestra/'.$invito->token.'/accetta');
     }
 
     private function conDeiDati(User $utente): void
@@ -105,10 +134,9 @@ class EntrareInUnaPalestraTest extends TestCase
         $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
         $utente = $this->libero();
 
-        $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'alfa2345'])
+        $this->entraDaInvito($utente, Tenant::where('slug', 'alfa')->firstOrFail())
             ->assertOk()
-            ->assertJsonPath('branding.name', 'Palestra Alfa');
+            ->assertJsonPath('data.palestra.name', 'Palestra Alfa');
     }
 
     /**
@@ -219,8 +247,8 @@ class EntrareInUnaPalestraTest extends TestCase
 
         $iscritto = $this->creaUtente($alfa, UserRole::Member, 'iscritto@alfa.test');
 
-        $this->comeApp($iscritto)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'BETA2345'])
+        // 🆕 Anche con un invito in mano: il rifiuto non dipende dalla porta.
+        $this->entraDaInvito($iscritto, Tenant::where('slug', 'beta')->firstOrFail())
             ->assertStatus(422);
 
         $this->assertSame($alfa->id, $iscritto->fresh()->tenant_id);
@@ -241,35 +269,27 @@ class EntrareInUnaPalestraTest extends TestCase
 
         $utente = $this->libero();
 
-        $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'ALFA2345'])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('join_code');
+        // 🆕 A dire di no e' `UnisciAUnaPalestra`, che adesso la chiama
+        // l'accettazione dell'invito.
+        $this->entraDaInvito($utente, $palestra)->assertStatus(422);
 
         $this->assertNotSame($palestra->id, $utente->fresh()->tenant_id);
     }
 
-    /** Un codice inesistente, una palestra sospesa e un tenant personale: stesso errore. */
-    #[Test]
-    public function a_bad_code_is_refused_without_saying_why(): void
-    {
-        $utente = $this->libero();
-        $altro = $this->libero('anna@esempio.test');
-
-        $a = $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'NONESIST']);
-
-        $b = $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => $altro->tenant->join_code]);
-
-        $a->assertStatus(422);
-        $b->assertStatus(422);
-
-        $this->assertSame(
-            $a->json('errors.join_code'),
-            $b->json('errors.join_code'),
-        );
-    }
+    /*
+     * ⛔ **«Un codice sbagliato non dice perche'» non e' piu' qui** — 15/09/2026.
+     *
+     * 🚨 Quel test provava che un codice inventato, una palestra sospesa e un
+     * tenant personale dessero **lo stesso** errore: distinguerli avrebbe
+     * permesso di provare codici a tappeto e sapere quali esistono.
+     *
+     * 💡 La regola non e' sparita, e' **cambiata di porta**: adesso vale sui
+     * token d'invito, e la sorvegliano `InvitoInPalestraTest` con
+     * `tutti_i_rifiuti_si_somigliano` e
+     * `rifiutare_un_token_inventato_non_lo_dice`.
+     *
+     * ⚠️ Tenerlo qui vorrebbe dire provare un endpoint che non esiste.
+     */
 
     // ─────────────── Il tenant che resta indietro ───────────────
 
@@ -354,7 +374,7 @@ class EntrareInUnaPalestraTest extends TestCase
      * ⚠️ E non c'era una seconda strada: la schermata di accesso il codice
      * palestra **non lo chiede più** da 3b-J.1.
      *
-     * 💡 Questo test finisce dove finisce la persona: non al `join-gym`, ma al
+     * 💡 Questo test finisce dove finisce la persona: non all'invito accettato, ma al
      * login successivo.
      */
     #[Test]
@@ -363,8 +383,7 @@ class EntrareInUnaPalestraTest extends TestCase
         $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
         $utente = $this->libero('rientro@esempio.test');
 
-        $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'ALFA2345'])
+        $this->entraDaInvito($utente, Tenant::where('slug', 'alfa')->firstOrFail())
             ->assertOk();
 
         // 🚨 Senza `join_code`: è tutto quello che la schermata di accesso ha.
@@ -387,8 +406,7 @@ class EntrareInUnaPalestraTest extends TestCase
 
         $utente->forceFill(['username' => 'quellodelrientro'])->save();
 
-        $this->comeApp($utente)
-            ->postJson('/api/v1/account/join-gym', ['join_code' => 'ALFA2345'])
+        $this->entraDaInvito($utente, Tenant::where('slug', 'alfa')->firstOrFail())
             ->assertOk();
 
         $this->postJson('/api/v1/auth/login', [

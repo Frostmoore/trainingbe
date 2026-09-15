@@ -10,6 +10,7 @@ use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Billing\Exceptions\AbbonamentoTrainerScadutoException;
 use App\Services\Billing\PianoAttivo;
+use App\Services\Tenancy\ChiSiVede;
 use App\Services\Tenancy\InvitiDelTrainer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,10 @@ use Illuminate\Http\Request;
  */
 class TrainerController extends Controller
 {
-    public function __construct(private readonly InvitiDelTrainer $inviti) {}
+    public function __construct(
+        private readonly InvitiDelTrainer $inviti,
+        private readonly ChiSiVede $chiSiVede,
+    ) {}
 
     /** Gli utenti che questo trainer segue. */
     public function members(Request $request): JsonResponse
@@ -42,15 +46,51 @@ class TrainerController extends Controller
         $trainer = $this->trainerOrAbort($request);
 
         return response()->json([
-            'data' => $trainer->assignedMembers()->get()->map(fn (User $u): array => [
+            /*
+             * ══ 🆕 NON SOLO I SUOI: ANCHE QUELLI DELLA PALESTRA — 15/09 ═════
+             *
+             * ⛔ **Qui c'era solo `assignedMembers()`**, cioe' i rapporti
+             * uno-a-uno di `trainer_member`. Per un trainer di palestra quella
+             * tabella e' vuota e resta vuota: nessuno crea quelle righe.
+             *
+             * 🚨 Il risultato, provato su staging il 15/09: in una palestra
+             * con tre iscritti questa rotta rispondeva `[]`. **Un trainer che
+             * non vede nessuno.**
+             *
+             * 💡 La regola sta tutta in `ChiSiVede`, insieme al suo perche'.
+             */
+            'data' => $this->chiSiVede->allieviDi($trainer)->map(fn (User $u): array => [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
                 'avatar_url' => $u->avatarUrl(),
 
-                // 💡 Il pivot dice se il rapporto è sospeso: l'app deve poter
-                // mostrare «disattivato» invece di far sparire la persona.
-                'attivo' => $u->pivot->disattivato_il === null,
+                /*
+                 * 💡 Il pivot dice se il rapporto è sospeso: l'app deve poter
+                 * mostrare «disattivato» invece di far sparire la persona.
+                 *
+                 * 🆕 ⚠️ **Gli iscritti della palestra non hanno nessun
+                 * pivot**: non c'è nessun rapporto uno-a-uno da sospendere, sono
+                 * lì perché sono iscritti lì. ⛔ Senza questo controllo
+                 * `$u->pivot` è `null` e la rotta lancia — cioè la schermata
+                 * passerebbe da «vuota» a «rotta».
+                 */
+                'attivo' => $u->pivot?->disattivato_il === null,
+
+                /*
+                 * 🆕 **Il rapporto è tuo, o è della palestra?** — 16/09/2026.
+                 *
+                 * 🚨 L'app mette su ogni riga il pulsante «chiudi la
+                 * conversazione», che chiama `toggleMember()` — e quello cerca
+                 * il rapporto in `trainer_member`. ⛔ Per un iscritto della
+                 * palestra quella riga non c'è: il pulsante rispondeva **404
+                 * «Persona non trovata»** su una persona lì in elenco.
+                 *
+                 * ⚠️ E il rifiuto è **giusto**: quel rapporto non è suo da
+                 * chiudere. Lo decide la palestra, che gliel'ha affidata. Ciò
+                 * che era sbagliato è **offrire il gesto** e poi negarlo.
+                 */
+                'suo' => $u->pivot !== null,
             ])->all(),
 
             /*
@@ -60,6 +100,21 @@ class TrainerController extends Controller
              * modulo è il modo di far sembrare rotto un vincolo commerciale.
              */
             'meta' => [
+                /*
+                 * 🆕 **Se questa persona può avere allievi suoi** — 15/09/2026.
+                 *
+                 * 📌 Il committente: *«un trainer di una palestra non serve che
+                 * veda il banner utenti illimitati, e un trainer indipendente
+                 * (anche se lavora in una palestra) deve vederlo con il numero
+                 * di allievi possibili per il suo piano»*.
+                 *
+                 * ⛔ Senza questo campo l'app non può distinguere i due casi:
+                 * per un trainer di sola palestra il limite è `null`, che l'app
+                 * leggeva come «illimitati» — mentre la verità è che di posti
+                 * suoi non ne ha **nessuno**, perché gli iscritti li paga la
+                 * palestra.
+                 */
+                'allievi_propri' => $this->inviti->haUnoSpazioSuo($trainer),
                 'posti_rimasti' => $this->inviti->postiRimasti($trainer),
                 'limite' => $this->inviti->limiteDelPiano($trainer),
                 'piano' => $this->inviti->codicePiano($trainer),

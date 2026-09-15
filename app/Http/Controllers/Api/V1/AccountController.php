@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Services\Account\AccountEraser;
 use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\EsciDaUnaPalestra;
-use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -31,22 +30,9 @@ class AccountController extends Controller
     public function __construct(
         private readonly AccountEraser $eraser,
         private readonly AuditLogger $audit,
-        private readonly UnisciAUnaPalestra $unisci,
         private readonly EsciDaUnaPalestra $esci,
     ) {}
 
-    /**
-     * Entra in una palestra, portandosi dietro la propria storia — B4.
-     *
-     * 🚨 **Il lavoro vero è in `UnisciAUnaPalestra`**, e il perché sta lì: non è
-     * un `UPDATE` su una colonna, è una **migrazione di dati**. Qui c'è solo la
-     * porta.
-     *
-     * ⚠️ **Si risponde con il branding nuovo**: l'app deve poter cambiare
-     * colori e nome subito, senza un secondo giro. Chi entra in una palestra si
-     * aspetta di vederla, e vedere ancora la schermata neutra farebbe pensare
-     * che non abbia funzionato.
-     */
     /**
      * I dettagli della palestra a cui si e' iscritti — 3b-P.13.1, 23/08/2026.
      *
@@ -75,11 +61,11 @@ class AccountController extends Controller
      * Esce dalla palestra — 3b-P.13.3, 23/08/2026.
      *
      * 🚨 **Il lavoro vero è in `EsciDaUnaPalestra`**, e il perché sta lì: non è
-     * l'inverso simmetrico di `join-gym`. Entrare sposta tutte le righe di un
+     * l'inverso simmetrico dell'ingresso da invito. Entrare sposta tutte le righe di un
      * tenant che ha una persona sola; uscire deve estrarre le righe di **una**
      * persona da un tenant che ne ha molte.
      *
-     * ⚠️ **Si risponde con il branding nuovo**, come `joinGym`: l'app deve
+     * ⚠️ **Si risponde con il branding nuovo**, come l'accettazione di un invito: l'app deve
      * poter togliere colori e insegna subito. Chi esce da una palestra si
      * aspetta di smettere di vederla.
      */
@@ -139,7 +125,7 @@ class AccountController extends Controller
 
             /*
              * 💡 Da quando ne fai parte: e' `created_at` **dell'utente dentro
-             * quel tenant**, non del tenant. ⚠️ Chi e' entrato con `join-gym`
+             * quel tenant**, non del tenant. ⚠️ Chi e' entrato da un invito
              * ha portato con se' la propria data di iscrizione originale, che
              * e' la risposta giusta alla domanda «da quando sono qui?» solo se
              * ci si e' iscritti da li'. Per gli altri e' comunque la data piu'
@@ -147,23 +133,6 @@ class AccountController extends Controller
              */
             'iscritto_dal' => $request->user()?->created_at?->toDateString(),
         ]]);
-    }
-
-    public function joinGym(Request $request): JsonResponse
-    {
-        $dati = $request->validate([
-            'join_code' => ['required', 'string', 'size:8'],
-        ]);
-
-        $palestra = ($this->unisci)(
-            $request->user(),
-            strtoupper(trim($dati['join_code'])),
-        );
-
-        return response()->json([
-            'message' => __('Sei entrato in :palestra.', ['palestra' => $palestra->name]),
-            'branding' => $palestra->branding(),
-        ]);
     }
 
     /**
