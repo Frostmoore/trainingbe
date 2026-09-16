@@ -208,7 +208,15 @@ class CancelloDeiGettoni
         if (! $soloGettoni
             && $this->portafoglio->saldo($utente) === 0
             && ! AiCreditMovement::withoutGlobalScopes()
-                ->where('tenant_id', $utente->tenant_id)
+                /*
+                 * 🆕 ⚠️ **Su `user_id`, non su `tenant_id`** — 16/09/2026.
+                 *
+                 * ⛔ Con il filtro sul tenant, chi non aveva mai comprato niente
+                 * si vedeva il messaggio dei **gettoni** solo perche' un
+                 * collega ne aveva comprati: *«ricarica»* detto a chi non sa
+                 * nemmeno che esistano.
+                 */
+                ->where('user_id', $utente->getKey())
                 ->exists()) {
             $this->quota->assertWithinQuota($utente, $funzione);
         }

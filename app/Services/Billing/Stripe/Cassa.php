@@ -761,8 +761,19 @@ class Cassa
             return;
         }
 
+        /*
+         * 🆕 🚨 **A LUI, non al suo tenant** — 16/09/2026.
+         *
+         * ⛔ Qui c'era `$utente->tenant`, e per un iscritto voleva dire che i
+         * gettoni che aveva appena pagato finivano nel portafoglio **della
+         * palestra**, dove li spendeva chiunque altro.
+         *
+         * 📌 Il committente: *«ovvio che i gettoni sono soltanto di chi li
+         * compra»*. 💡 Questa riga e' il difetto, e questa riga e' la correzione:
+         * chi ha comprato lo sappiamo gia', e' il parametro di questo metodo.
+         */
         $this->portafoglio->accredita(
-            $utente->tenant,
+            $utente,
             $gettoni,
             // ⚠️ Nessun operatore: non l'ha accreditato una persona, l'ha
             // pagato il cliente. Metterci lui falserebbe il registro.

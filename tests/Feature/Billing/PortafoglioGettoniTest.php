@@ -69,7 +69,7 @@ final class PortafoglioGettoniTest extends TestCase
         $utente->tenant->update(['ai_monthly_calls_per_member' => $quotaMensile]);
 
         if ($gettoni > 0) {
-            $this->portafoglio()->accredita($utente->tenant, $gettoni);
+            $this->portafoglio()->accredita($utente, $gettoni);
         }
 
         $utente->forceFill([
@@ -343,8 +343,8 @@ final class PortafoglioGettoniTest extends TestCase
     {
         $utente = $this->iscritto();
 
-        $this->portafoglio()->accredita($utente->tenant, 50, nota: 'pacchetto piccolo');
-        $this->portafoglio()->accredita($utente->tenant->fresh(), 30, nota: 'ricarica');
+        $this->portafoglio()->accredita($utente, 50, nota: 'pacchetto piccolo');
+        $this->portafoglio()->accredita($utente->fresh(), 30, nota: 'ricarica');
 
         $movimenti = AiCreditMovement::withoutGlobalScopes()->orderBy('id')->get();
 
@@ -356,14 +356,14 @@ final class PortafoglioGettoniTest extends TestCase
          */
         $this->assertSame(50, $movimenti[0]->saldo_dopo);
         $this->assertSame(80, $movimenti[1]->saldo_dopo);
-        $this->assertSame(80, $utente->tenant->fresh()->ai_credits);
+        $this->assertSame(80, $utente->fresh()->ai_credits);
     }
 
     #[Test]
     public function a_correction_cannot_push_the_balance_below_zero(): void
     {
         $utente = $this->iscritto();
-        $this->portafoglio()->accredita($utente->tenant, 10);
+        $this->portafoglio()->accredita($utente, 10);
 
         $this->expectException(\InvalidArgumentException::class);
 
@@ -374,7 +374,7 @@ final class PortafoglioGettoniTest extends TestCase
          * silenzio. Meglio rifiutare la rettifica.
          */
         $this->portafoglio()->accredita(
-            $utente->tenant->fresh(), -50, causale: AiCreditMovement::RETTIFICA,
+            $utente->fresh(), -50, causale: AiCreditMovement::RETTIFICA,
         );
     }
 
@@ -387,14 +387,14 @@ final class PortafoglioGettoniTest extends TestCase
         // cambiato e non trova niente.
         $this->expectException(\InvalidArgumentException::class);
 
-        $this->portafoglio()->accredita($utente->tenant, 0);
+        $this->portafoglio()->accredita($utente, 0);
     }
 
     #[Test]
     public function spending_more_than_the_balance_is_refused(): void
     {
         $utente = $this->iscritto();
-        $this->portafoglio()->accredita($utente->tenant, 3);
+        $this->portafoglio()->accredita($utente, 3);
 
         $this->expectException(GettoniEsauritiException::class);
 
@@ -402,26 +402,41 @@ final class PortafoglioGettoniTest extends TestCase
         $this->portafoglio()->consuma($utente->fresh(), AiFeature::FoodPhoto);
     }
 
+    /**
+     * 🆕 🪙 **Il portafoglio e' della persona, non del tenant** — 16/09/2026.
+     *
+     * ⛔ **Questo test diceva l'opposto**, e si chiamava
+     * `the_wallet_belongs_to_the_tenant_not_to_the_person`: era il monte
+     * condiviso di D16, *«i gettoni li compra chi paga e li consumano i suoi»*,
+     * col debito §7.4 aperto sulla conseguenza — un allievo poteva prosciugarli
+     * per gli altri.
+     *
+     * 📌 Il committente ha chiuso il debito cambiando la regola: *«ovvio che i
+     * gettoni sono soltanto di chi li compra»*, e poi, scegliendo fra tre
+     * strade, **un solo portafoglio: quello personale**.
+     */
     #[Test]
-    public function the_wallet_belongs_to_the_tenant_not_to_the_person(): void
+    public function the_wallet_belongs_to_the_person_not_to_the_tenant(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@alfa.test')->fresh();
         $due = $this->creaUtente($palestra, UserRole::Member, 'due@alfa.test')->fresh();
 
-        $this->portafoglio()->accredita($palestra, 10);
+        $this->portafoglio()->accredita($uno, 10);
 
-        /*
-         * 💡 E' il monte condiviso di D16, ed e' voluto: i gettoni li compra chi
-         * paga, e li consumano i suoi. ⚠️ La conseguenza — un allievo puo'
-         * prosciugarli per gli altri — e' il debito §7.4, e va **mostrata**
-         * nell'interfaccia, non lasciata scoprire.
-         */
-        $this->assertSame(10, $this->portafoglio()->saldo($uno));
-        $this->assertSame(10, $this->portafoglio()->saldo($due));
+        $this->assertSame(10, $this->portafoglio()->saldo($uno->fresh()));
+        $this->assertSame(
+            0,
+            $this->portafoglio()->saldo($due->fresh()),
+            'I gettoni comprati da uno sono finiti anche nelle tasche di un altro.',
+        );
 
-        $this->portafoglio()->consuma($uno, AiFeature::FoodText);
+        $this->portafoglio()->consuma($uno->fresh(), AiFeature::FoodText);
 
-        $this->assertSame(9, $this->portafoglio()->saldo($due->fresh()));
+        $this->assertSame(
+            0,
+            $this->portafoglio()->saldo($due->fresh()),
+            'La spesa di uno ha intaccato il saldo di un altro.',
+        );
     }
 }

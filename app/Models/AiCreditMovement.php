@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Scopes\TenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -32,7 +33,7 @@ class AiCreditMovement extends Model
     public const RETTIFICA = 'rettifica';
 
     protected $fillable = [
-        'tenant_id', 'delta', 'saldo_dopo', 'causale',
+        'tenant_id', 'user_id', 'delta', 'saldo_dopo', 'causale',
         'ai_usage_log_id', 'operatore_id', 'nota',
     ];
 
@@ -44,6 +45,26 @@ class AiCreditMovement extends Model
         ];
     }
 
+    /**
+     * 🆕 **Di chi sono questi gettoni** — 16/09/2026.
+     *
+     * 📌 Il committente: *«ovvio che i gettoni sono soltanto di chi li
+     * compra»*. ⛔ Fino al 15/09 il proprietario era il **tenant**, e il
+     * registro non sapeva dire di chi fosse un gettone.
+     */
+    public function utente(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id')
+            ->withoutGlobalScopes([TenantScope::class]);
+    }
+
+    /**
+     * ⚠️ **Dove e' successo**, non di chi e'.
+     *
+     * 💡 Serve a ricostruire una storia — in quale palestra stava quella
+     * persona quando li ha spesi — e resta apposta: il proprietario e'
+     * `utente()`.
+     */
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);

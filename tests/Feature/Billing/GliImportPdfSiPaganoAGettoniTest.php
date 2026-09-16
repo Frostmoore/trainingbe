@@ -70,7 +70,7 @@ final class GliImportPdfSiPaganoAGettoniTest extends TestCase
 
     private function gettoni(int $quanti): void
     {
-        $this->palestra->forceFill(['ai_credits' => $quanti])->save();
+        $this->gettoniATutti($this->palestra, $quanti);
         $this->iscritto->refresh()->load('tenant');
     }
 

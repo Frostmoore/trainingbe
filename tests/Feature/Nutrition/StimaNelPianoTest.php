@@ -64,7 +64,7 @@ final class StimaNelPianoTest extends TestCase
          * l'allievo) e della forma della risposta: senza credito fallirebbero
          * con un 402 che non c'entra niente.
          */
-        $this->dagliGettoni($this->palestra);
+        $this->gettoniATutti($this->palestra);
     }
 
     #[Test]
@@ -167,7 +167,7 @@ final class StimaNelPianoTest extends TestCase
          * ⚠️ Il `setUp` accredita da 3b-AE, perche' la stima nel piano si paga
          * a gettoni: la premessa va ricreata qui.
          */
-        $this->palestra->forceFill(['ai_credits' => 0])->save();
+        $this->senzaGettoni($this->palestra);
 
         $this->actingAs($this->trainer->fresh(), 'sanctum')
             ->postJson('/api/v1/nutrition-plans/stima-alimento', ['text' => 'due uova'])

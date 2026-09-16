@@ -185,6 +185,21 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'ai_monthly_photo_call_cap' => 'integer',
 
             /*
+             * 🆕 🪙 **Il portafoglio gettoni** — 3b-AH.8, 16/09/2026.
+             *
+             * 📌 *«Ovvio che i gettoni sono soltanto di chi li compra»*: fino al
+             * 15/09 il saldo stava sul **tenant**, e chi comprava li regalava
+             * alla palestra.
+             *
+             * ⚠️ **Fuori da `$fillable`, ed e' voluto**: si muove solo attraverso
+             * `PortafoglioGettoni`, che scrive anche il movimento nel registro.
+             * Renderlo assegnabile in massa vorrebbe dire che una `update()`
+             * qualsiasi puo' cambiare un saldo senza lasciare traccia — e un
+             * saldo senza traccia non si puo' contestare (D16).
+             */
+            'ai_credits' => 'integer',
+
+            /*
              * 🆕 15/08/2026 — l'AI accesa o spenta per **una persona sola**.
              *
              * ⚠️ **Tre valori, non due**: `null` = decide il piano, `true` =

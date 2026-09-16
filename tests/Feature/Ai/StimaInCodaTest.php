@@ -71,7 +71,7 @@ final class StimaInCodaTest extends TestCase
          * 💡 Che il cancello commerciale funzioni e' provato dove deve esserlo,
          * in `PortafoglioGettoniTest` e `CicloDeiGettoniTest`.
          */
-        $this->dagliGettoni($this->palestra);
+        $this->gettoniATutti($this->palestra);
     }
 
     #[Test]

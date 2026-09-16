@@ -71,7 +71,7 @@ class ImportazioneDaDocumentoTest extends TestCase
          * fatto che togliendo questa riga sei test diventino 402 e' adesso la
          * prova che la regola nuova e' viva.
          */
-        $this->palestra->forceFill(['ai_credits' => 500])->save();
+        $this->gettoniATutti($this->palestra, 500);
         $this->iscritto->refresh()->load('tenant');
 
         /*

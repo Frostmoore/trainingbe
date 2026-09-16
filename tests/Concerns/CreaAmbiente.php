@@ -13,6 +13,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -163,7 +164,13 @@ trait CreaAmbiente
 
     /** Il super admin: fuori da ogni palestra, con la colonna e non con un ruolo. */
     /**
-     * Mette gettoni nel portafoglio della palestra — 3b-AE, 31/08/2026.
+     * 🆕 Mette gettoni nel portafoglio **di una persona** — 3b-AH.8, 16/09/2026.
+     *
+     * ⛔ Fino al 15/09 prendeva un `Tenant`, perche' il portafoglio era uno solo
+     * per spazio. 📌 Adesso i gettoni sono di chi li compra: per riempire i
+     * portafogli di tutti gli abitanti di uno spazio c'e' `gettoniATutti()`.
+     *
+     * ── la ragione per cui questo aiutante esiste — 3b-AE, 31/08/2026 ─────
      *
      * ══ 🚨 PERCHE' SERVE, DA OGGI ═════════════════════════════════════════
      *
@@ -182,14 +189,54 @@ trait CreaAmbiente
      * lascerebbe un saldo senza movimento — cioe' un portafoglio che nel test
      * si comporta diversamente da come si comporta in produzione.
      */
-    protected function dagliGettoni(Tenant $tenant, int $quanti = 500): void
+    protected function dagliGettoni(User $chi, int $quanti = 500): void
     {
         app(PortafoglioGettoni::class)->accredita(
-            $tenant,
+            $chi,
             $quanti,
             nota: 'test',
             causale: AiCreditMovement::RETTIFICA,
         );
+    }
+
+    /**
+     * 🆕 Il saldo di **tutti** gli abitanti di uno spazio — 16/09/2026.
+     *
+     * ⛔ Fino al 15/09 questi test scrivevano `ai_credits` sul `Tenant`, perche'
+     * il portafoglio era uno solo per spazio. 📌 Da 3b-AH.8 i gettoni sono
+     * della **persona**, e quei test volevano dire una cosa sola: *«qui dentro
+     * c'e' (o non c'e') di che pagare l'AI»*.
+     *
+     * ⚠️ **Imposta, non somma**, come faceva il `forceFill` che sostituisce: un
+     * `setUp` che ne da' 500 e un test che ne vuole 50 devono finire a 50, non a
+     * 550. 💡 Ed e' per questo che azzera prima.
+     *
+     * ⚠️ Sta qui, e non e' un `dagliGettoni()` travestito: chi legge un test
+     * deve vedere subito che i portafogli sono **tanti**, uno per persona.
+     */
+    protected function gettoniATutti(Tenant $tenant, int $quanti = 500): void
+    {
+        $abitanti = User::withoutGlobalScopes()->where('tenant_id', $tenant->getKey())->get();
+
+        foreach ($abitanti as $chi) {
+            /*
+             * ⚠️ **L'azzeramento passa dal database e non dal portafoglio**, ed
+             * e' l'unica scorciatoia ammessa qui: `accredita()` rifiuta lo zero,
+             * e una rettifica negativa scriverebbe nel registro un movimento
+             * che nel test non e' mai avvenuto.
+             */
+            DB::table('users')->where('id', $chi->getKey())->update(['ai_credits' => 0]);
+
+            if ($quanti > 0) {
+                $this->dagliGettoni($chi->fresh(), $quanti);
+            }
+        }
+    }
+
+    /** 🆕 Nessuno qui dentro ha gettoni da spendere. */
+    protected function senzaGettoni(Tenant $tenant): void
+    {
+        $this->gettoniATutti($tenant, 0);
     }
 
     protected function creaSuperAdmin(string $email = 'god@piattaforma.test'): User

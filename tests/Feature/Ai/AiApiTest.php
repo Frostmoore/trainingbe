@@ -65,16 +65,6 @@ class AiApiTest extends TestCase
          * 💡 Che il cancello commerciale funzioni e' provato dove deve esserlo,
          * in `PortafoglioGettoniTest` e `CicloDeiGettoniTest`.
          */
-        $this->dagliGettoni($this->alfa);
-
-        /*
-         * ⚠️ **E anche Beta.** `usage_is_isolated_between_gyms` fa chiamare
-         * l'iscritto dell'altra palestra: senza credito la sua chiamata prende
-         * 402, non consuma niente, e il test misura l'isolamento fra un
-         * contatore e **il nulla**.
-         */
-        $this->dagliGettoni($this->beta);
-
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
 
         // 🚨 S9.1 — senza consenso esplicito niente esce verso Anthropic, e
@@ -84,6 +74,24 @@ class AiApiTest extends TestCase
         // arrivasse di serie da `creaUtente()`, il giorno in cui il cancello si
         // rompesse non se ne accorgerebbe nessuno.
         $this->iscritto->accendiLAi();
+
+        /*
+         * 🆕 ⚠️ **I gettoni si danno per ultimi, quando le persone esistono**
+         * — 16/09/2026.
+         *
+         * ⛔ Prima queste righe stavano in cima e riempivano il portafoglio
+         * **del tenant**, che esisteva gia'. 📌 Da 3b-AH.8 il portafoglio e' della
+         * persona: darglieli prima di crearla vorrebbe dire non darli a
+         * nessuno, e ogni test qui dentro fallirebbe con un **402** che non
+         * c'entra niente con quello che sta provando.
+         *
+         * ⚠️ **E anche Beta.** `usage_is_isolated_between_gyms` fa chiamare
+         * l'iscritto dell'altra palestra: senza credito la sua chiamata prende
+         * 402, non consuma niente, e il test misura l'isolamento fra un
+         * contatore e **il nulla**.
+         */
+        $this->gettoniATutti($this->alfa);
+        $this->gettoniATutti($this->beta);
     }
 
     private function comeIscritto(?User $u = null): static
@@ -420,7 +428,7 @@ class AiApiTest extends TestCase
      */
     private function comeSeIGettoniNonFosseroMaiEsistiti(): void
     {
-        $this->alfa->forceFill(['ai_credits' => 0])->save();
+        $this->senzaGettoni($this->alfa);
 
         AiCreditMovement::withoutGlobalScopes()
             ->where('tenant_id', $this->alfa->getKey())
@@ -435,6 +443,13 @@ class AiApiTest extends TestCase
 
         $altroIscritto = $this->creaUtente($this->beta, UserRole::Member, 'anna@beta.test');
         $altroIscritto->accendiLAi();
+
+        /*
+         * 🆕 ⚠️ **Nasce dopo il `setUp`, quindi i gettoni glieli si danno qui.**
+         * 💡 Senza, la sua chiamata prende 402 e questo test misurerebbe
+         * l'isolamento fra un contatore e **il nulla**.
+         */
+        $this->dagliGettoni($altroIscritto, 500);
 
         $this->comeIscritto()->postJson('/api/v1/ai/food/text', ['text' => 'mela']);
         $this->comeIscritto($altroIscritto)->postJson('/api/v1/ai/food/text', ['text' => 'pera']);
@@ -568,7 +583,7 @@ class AiApiTest extends TestCase
          * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
          * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
          */
-        $this->alfa->forceFill(['ai_credits' => 0])->save();
+        $this->senzaGettoni($this->alfa);
 
         /*
          * ⚠️ **Automatica** — 3b-AE: con il portafoglio a zero, una stima da
@@ -619,7 +634,7 @@ class AiApiTest extends TestCase
          * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
          * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
          */
-        $this->alfa->forceFill(['ai_credits' => 0])->save();
+        $this->senzaGettoni($this->alfa);
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/usage')
@@ -647,9 +662,9 @@ class AiApiTest extends TestCase
          * ma qui il numero mostrato *e'* la cosa che si sta provando: ereditarlo
          * vorrebbe dire scriverlo in due posti e vederlo cambiare da solo.
          */
-        $this->alfa->forceFill(['ai_credits' => 0])->save();
+        $this->senzaGettoni($this->alfa);
 
-        app(PortafoglioGettoni::class)->accredita($this->alfa, 42);
+        app(PortafoglioGettoni::class)->accredita($this->iscritto->fresh(), 42);
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/usage')

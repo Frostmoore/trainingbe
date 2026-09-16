@@ -66,7 +66,7 @@ class ProgressoDellaSchedaTest extends TestCase
          * 💡 Che l'automatica invece passi dalla quota lo prova
          * [l_analisi_automatica_non_costa_gettoni], qui sotto.
          */
-        $this->dagliGettoni($this->palestra);
+        $this->gettoniATutti($this->palestra);
     }
 
     /**
@@ -468,10 +468,11 @@ class ProgressoDellaSchedaTest extends TestCase
             'starts_at' => now()->subYears(5),
         ]);
 
-        $tenant->forceFill(['ai_credits' => 50])->save();
-
         $utente = $this->creaUtente($tenant, UserRole::Member, 'libero@beta.test');
         $utente->accendiLAi();
+
+        // 🆕 Dopo che esiste: da 3b-AH.8 il portafoglio e' suo, non del tenant.
+        $this->dagliGettoni($utente, 50);
 
         return $utente->fresh();
     }

@@ -346,7 +346,7 @@ class PdfImportTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->alfa->forceFill(['ai_credits' => 120])->save();
+        $this->gettoniATutti($this->alfa, 120);
 
         $import = $this->importConPdf();
         $import->forceFill(['paga_con_gettoni' => true])->save();
@@ -380,7 +380,7 @@ class PdfImportTest extends TestCase
     {
         $this->aiFinta();
 
-        $this->alfa->forceFill(['ai_credits' => 120])->save();
+        $this->gettoniATutti($this->alfa, 120);
 
         // ⚠️ Nessun media: `pdfPath()` torna `null` e l'import fallisce prima
         // ancora di arrivare al modello.

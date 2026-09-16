@@ -30,31 +30,45 @@ use Illuminate\Support\Facades\DB;
  * altro, mesi dopo. Per questo `MemberAiQuota` viene interrogato **per primo** e
  * questo servizio entra in gioco **solo** quando quello ha detto di no.
  *
- * ── ⚠️ Qui il monte torna condiviso, e va detto ───────────────────────────
+ * ── 🆕 🚨 IL MONTE CONDIVISO NON C'E' PIU' — 16/09/2026 ──────────
  *
- * D8 aveva scartato il monte condiviso perche' «il primo entusiasta lascia gli
- * altri a secco, e a sentirsi dire *non funziona* e' il trainer». I gettoni
- * comprati **sono** un monte condiviso, ed e' voluto: la quota inclusa resta un
- * tetto per persona, quindi il servizio di base non si puo' prosciugare. I
- * gettoni sono un extra che il trainer ha comprato e di cui decide lui.
+ * ⛔ **Fino al 15/09 il saldo stava su `tenants.ai_credits`**, e la decisione
+ * D16 era scritta e motivata: *«i gettoni sono un extra che il trainer ha
+ * comprato e di cui decide lui»*, spesi dai suoi allievi.
  *
- * 🚨 Ma la conseguenza va **mostrata** nell'interfaccia (`G11.3`): quanto ne ha
- * consumati ciascun allievo. Senza quel numero, il trainer sa solo che sono
- * finiti.
+ * 🚨 **Ma la porta d'acquisto non la sorvegliava nessuno.** Per l'abbonamento
+ * c'e' una guardia dal 10/09 — *«un iscritto non compra per la sua palestra»* —
+ * e per i gettoni **no**: chiunque comprava, e il saldo finiva nel portafoglio
+ * della palestra, dove lo spendeva chiunque altro. ⚠️ Chi aveva pagato poteva
+ * ritrovarsi a zero senza aver chiesto niente.
+ *
+ * 📌 Il committente, scegliendo fra tre strade: **un solo portafoglio, quello
+ * personale**. ✅ Da adesso ogni gettone ha **un proprietario solo**, e lo spende
+ * solo lui.
+ *
+ * ⚖️ **Cosa questo NON toglie a nessuno**: l'accesso all'AI. Il portafoglio e'
+ * solo l'extra oltre la quota inclusa — chi ha l'AI la ha da
+ * `PianoAttivo::haLaAi()`, che guarda il piano, l'override personale e il
+ * rapporto col trainer, mai il saldo. E «AI illimitata» non arriva mai qui:
+ * `CancelloDeiGettoni::apri()` la guarda per prima.
+ *
+ * ⚠️ **E cosa toglie davvero**: una palestra non puo' piu' comprare gettoni per
+ * i suoi iscritti. 💡 Era una conseguenza dichiarata della scelta, non una
+ * sorpresa: il giorno che servisse, la strada e' un gesto per **regalarli**, non
+ * un monte da cui pescano tutti.
  */
 class PortafoglioGettoni
 {
     /**
-     * Il saldo del tenant che paga per questa persona.
+     * 🆕 **Il saldo di questa persona** — 16/09/2026.
      *
-     * 🚨 **Il tenant dell'utente, non quello del trainer.** Chi paga per un
-     * iscritto e' la sua palestra; per chi non ne ha una, il suo tenant
-     * personale — dove il saldo e' zero, perche' i gettoni li comprano trainer e
-     * palestre, non i singoli (D16).
+     * ⛔ Fino al 15/09 era il saldo del **tenant**, e i gettoni di chiunque
+     * finivano in un monte che spendeva chiunque altro. 📌 Il committente:
+     * *«ovvio che i gettoni sono soltanto di chi li compra»*.
      */
     public function saldo(User $utente): int
     {
-        return (int) ($utente->tenant?->ai_credits ?? 0);
+        return (int) ($utente->ai_credits ?? 0);
     }
 
     /**
@@ -72,10 +86,15 @@ class PortafoglioGettoni
      * Scala il costo di questa chiamata dal portafoglio.
      *
      * 🚨 **Transazione e `lockForUpdate`, e non e' pignoleria.** Due chiamate
-     * insieme dello stesso allievo — l'app che manda due stime mentre la rete
+     * insieme della stessa persona — l'app che manda due stime mentre la rete
      * arranca — leggerebbero lo stesso saldo e lo scriverebbero due volte: il
      * secondo consumo sovrascrive il primo, e il cliente si ritrova gettoni che
      * ha gia' speso. Su un saldo di soldi, «capita di rado» non e' una risposta.
+     *
+     * 🆕 ⚠️ **Dal 16/09 si blocca la riga della PERSONA, non quella del tenant.**
+     * Spostare il lock non e' un dettaglio: e' il lock a decidere quale riga
+     * nessun altro puo' toccare mentre si scrive. Lasciarlo sul tenant vorrebbe
+     * dire proteggere la riga sbagliata, cioe' non proteggere niente.
      *
      * @param  ?int  $usageLogId  la chiamata che li ha consumati, se gia' scritta
      *
@@ -83,23 +102,17 @@ class PortafoglioGettoni
      */
     public function consuma(User $utente, AiFeature $funzione, ?int $usageLogId = null): AiCreditMovement
     {
-        $tenant = $utente->tenant;
-
-        if ($tenant === null) {
-            /*
-             * 🚨 Un utente senza tenant e' un super admin (R1). Non ha un
-             * portafoglio perche' non e' un cliente — e arrivare qui vorrebbe
-             * dire che la catena della quota l'ha lasciato passare fin qui: si
-             * rifiuta, invece di creargli un portafoglio dal nulla.
-             */
-            throw new GettoniEsauritiException(saldo: 0, servivano: $funzione->costoInGettoni());
-        }
-
         $costo = $funzione->costoInGettoni();
 
-        return DB::transaction(function () use ($tenant, $costo, $funzione, $usageLogId): AiCreditMovement {
-            $bloccato = Tenant::withoutGlobalScopes()
-                ->whereKey($tenant->getKey())
+        return DB::transaction(function () use ($utente, $costo, $funzione, $usageLogId): AiCreditMovement {
+            /*
+             * ⚠️ `withoutGlobalScopes()`: il `TenantScope` su `users` filtra sul
+             * contesto, e questo metodo gira anche da una coda — dove un
+             * contesto non c'e'. La chiave primaria e' gia' il filtro piu'
+             * stretto possibile.
+             */
+            $bloccato = User::withoutGlobalScopes()
+                ->whereKey($utente->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -115,12 +128,19 @@ class PortafoglioGettoni
             // `$fillable` di proposito, perche' il saldo si muove solo di qui.
             $bloccato->forceFill(['ai_credits' => $dopo])->save();
 
-            // 💡 Il tenant in memoria dell'utente e' una copia: senza questo,
-            // un `saldo()` chiamato subito dopo direbbe ancora il valore vecchio.
-            $tenant->setAttribute('ai_credits', $dopo);
+            // 💡 L'oggetto in mano a chi ha chiamato e' un'altra copia: senza
+            // questo, un `saldo()` subito dopo direbbe ancora il valore vecchio.
+            $utente->setAttribute('ai_credits', $dopo);
 
             return AiCreditMovement::withoutGlobalScopes()->create([
-                'tenant_id' => $bloccato->getKey(),
+                /*
+                 * 💡 **`tenant_id` resta, e dice dove e' successo.** Il
+                 * proprietario dei gettoni e' `user_id`; il tenant serve a
+                 * ricostruire la storia — in quale palestra stava quella persona
+                 * quando li ha spesi.
+                 */
+                'tenant_id' => $bloccato->tenant_id,
+                'user_id' => $bloccato->getKey(),
                 'delta' => -$costo,
                 'saldo_dopo' => $dopo,
                 'causale' => AiCreditMovement::CONSUMO,
@@ -131,14 +151,16 @@ class PortafoglioGettoni
     }
 
     /**
-     * Accredita gettoni comprati — `G11.2`, per ora a mano.
+     * Accredita gettoni comprati — `G11.2`.
      *
-     * ⛔ **Non c'e' nessun incasso qui dentro**, e non e' una dimenticanza: il
-     * fornitore di pagamento non e' stato scelto (D12). Il giorno che esiste,
-     * chiamera' questo metodo dopo aver incassato, e non cambiera' nient'altro.
+     * 🆕 🚨 **Si accredita a una PERSONA** — 16/09/2026.
+     *
+     * 📌 Il committente: *«ovvio che i gettoni sono soltanto di chi li compra»*.
+     * ⛔ Prima il primo parametro era un `Tenant`, e chiunque comprasse riempiva
+     * il portafoglio della **palestra**, dove li spendeva chiunque altro.
      */
     public function accredita(
-        Tenant $tenant,
+        User $utente,
         int $gettoni,
         ?User $operatore = null,
         ?string $nota = null,
@@ -150,9 +172,9 @@ class PortafoglioGettoni
             throw new \InvalidArgumentException('Un accredito da zero gettoni non e\' un movimento.');
         }
 
-        return DB::transaction(function () use ($tenant, $gettoni, $operatore, $nota, $causale): AiCreditMovement {
-            $bloccato = Tenant::withoutGlobalScopes()
-                ->whereKey($tenant->getKey())
+        return DB::transaction(function () use ($utente, $gettoni, $operatore, $nota, $causale): AiCreditMovement {
+            $bloccato = User::withoutGlobalScopes()
+                ->whereKey($utente->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
@@ -171,10 +193,11 @@ class PortafoglioGettoni
             }
 
             $bloccato->forceFill(['ai_credits' => $dopo])->save();
-            $tenant->setAttribute('ai_credits', $dopo);
+            $utente->setAttribute('ai_credits', $dopo);
 
             return AiCreditMovement::withoutGlobalScopes()->create([
-                'tenant_id' => $bloccato->getKey(),
+                'tenant_id' => $bloccato->tenant_id,
+                'user_id' => $bloccato->getKey(),
                 'delta' => $gettoni,
                 'saldo_dopo' => $dopo,
                 'causale' => $causale,

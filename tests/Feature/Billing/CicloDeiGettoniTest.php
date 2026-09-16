@@ -73,7 +73,7 @@ final class CicloDeiGettoniTest extends TestCase
     /** Il tenant compra gettoni: e' il gesto che tutta questa classe verifica. */
     private function compra(int $gettoni): void
     {
-        $this->palestra->forceFill(['ai_credits' => $gettoni])->save();
+        $this->gettoniATutti($this->palestra, $gettoni);
         $this->iscritto = $this->iscritto->fresh();
     }
 
@@ -153,12 +153,21 @@ final class CicloDeiGettoniTest extends TestCase
     public function buying_credits_enables_the_ai_for_a_plan_without_it(): void
     {
         $senzaAi = $this->creaPalestra('Beta', 'beta', 'BETA2345');
-        $senzaAi->forceFill(['ai_credits' => 100])->save();
 
         // Il piano di questo tenant non comprende l'AI.
         Plan::query()->update(['ai_enabled' => false]);
         $utente = $this->creaUtente($senzaAi, UserRole::Member, 'compra@beta.test')->fresh();
         $utente->accendiLAi();
+
+        /*
+         * 🆕 ⚠️ **I gettoni si danno a LUI, e dopo che esiste** — 16/09/2026.
+         *
+         * ⛔ Prima si riempiva il portafoglio **del tenant**, e si poteva farlo
+         * anche prima di creare qualcuno. 📌 Da 3b-AH.8 il portafoglio e' della
+         * persona: darglieli prima che esista vorrebbe dire non darli a nessuno,
+         * e il test misurerebbe un 402 invece della regola.
+         */
+        $this->dagliGettoni($utente, 100);
 
         /*
          * 🚨 **La premessa si verifica, non si assume.**
@@ -196,12 +205,14 @@ final class CicloDeiGettoniTest extends TestCase
     public function credits_do_not_come_with_free_included_calls(): void
     {
         $tenant = $this->creaPalestra('Gamma', 'gamma', 'GAMM2345');
-        $tenant->forceFill(['ai_credits' => 10])->save();
 
         Plan::query()->update(['ai_enabled' => false]);
 
         $utente = $this->creaUtente($tenant, UserRole::Member, 'gamma@esempio.test')->fresh();
         $utente->accendiLAi();
+
+        // 🆕 A lui, e dopo che esiste: il portafoglio e' suo.
+        $this->dagliGettoni($utente, 10);
 
         $this->stima();
 
@@ -262,7 +273,7 @@ final class CicloDeiGettoniTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.ai_enabled', false);
 
-        $tenant->forceFill(['ai_credits' => 50])->save();
+        $this->gettoniATutti($tenant, 50);
 
         $this->comeApp($utente->fresh())
             ->getJson('/api/v1/auth/me')
@@ -520,10 +531,25 @@ final class CicloDeiGettoniTest extends TestCase
         $this->assertSame(5, $this->saldo());
     }
 
-    // ═══════════════ Il portafoglio e' del tenant ═══════════════
+    // ═══════════════ 🆕 Il portafoglio e' della persona ══════════════
 
+    /**
+     * 🆕 🪙 **Due iscritti della stessa palestra, due portafogli** — 16/09/2026.
+     *
+     * ⛔ **Questo test diceva l'opposto**, e si chiamava
+     * `two_members_of_the_same_gym_draw_from_the_same_wallet`. Il commento
+     * spiegava per esteso la conseguenza e la dichiarava voluta: *«un iscritto
+     * che stima venti alimenti al giorno svuota i gettoni della palestra»*.
+     *
+     * 📌 Il committente l'ha ribaltata: *«ovvio che i gettoni sono soltanto di
+     * chi li compra»*, e poi, scegliendo fra tre strade, **un solo portafoglio:
+     * quello personale**.
+     *
+     * ⚖️ Quindi l'altro iscritto non prosciuga niente: paga con i propri, e
+     * quando finiscono prende **402** lui, non chi aveva comprato.
+     */
     #[Test]
-    public function two_members_of_the_same_gym_draw_from_the_same_wallet(): void
+    public function two_members_of_the_same_gym_have_two_wallets(): void
     {
         $this->compra(3);
         $this->stima();
@@ -533,34 +559,20 @@ final class CicloDeiGettoniTest extends TestCase
         $altro->accendiLAi();
         $altro->forceFill(['ai_monthly_call_cap' => 1])->save();
 
-        foreach (['la prima', 'la seconda'] as $cosa) {
-            $this->comeApp($altro->fresh())
-                ->postJson('/api/v1/ai/food/text', ['text' => $cosa, 'save' => false])
-                ->assertStatus(202);
-        }
+        /*
+         * ⚠️ **L'altro non ha comprato niente**, quindi non ha di che pagare una
+         * richiesta fatta a mano: da 3b-AE la quota non la guarda nemmeno.
+         */
+        $this->comeApp($altro->fresh())
+            ->postJson('/api/v1/ai/food/text', ['text' => 'la prima', 'save' => false])
+            ->assertStatus(402);
 
         /*
-         * 💡 **I gettoni sono un monte condiviso, ed e' voluto** (D16): li ha
-         * comprati il trainer, e ne decide lui. Qui li ha spesi **un altro
-         * iscritto**, ed e' il punto del test.
+         * 🚨 **E il saldo di chi aveva comprato non si e' mosso di un gettone.**
          *
-         * ⚠️ Ma la conseguenza va **mostrata**: senza il consumo per allievo
-         * (G11.3) il trainer sa solo che sono finiti.
-         *
-         * ══ 🎟️ DA 3b-AE SE NE VANNO DUE, NON UNO ═══════════════════════════
-         *
-         * ⛔ **Prima la prima chiamata era coperta dalla quota** di questa
-         * persona, e solo la seconda pagava. Da 31/08/2026 una stima da testo e'
-         * una richiesta fatta a mano: la quota non la guarda nemmeno, e pagano
-         * tutte e due.
-         *
-         * 🚨 **E la conseguenza commerciale e' piu' grossa di un numero**: la
-         * quota inclusa non fa piu' da pavimento al portafoglio condiviso. Un
-         * iscritto che stima venti alimenti al giorno svuota i gettoni della
-         * palestra, e prima non poteva. E' voluto — *«per massimizzare i
-         * profitti»* — ma va saputo, ed e' scritto qui perche' si scopra
-         * leggendo un test e non una fattura.
+         * ⚠️ E' tutto il punto della modifica: con il monte condiviso questa
+         * riga diceva **1**, perche' le chiamate dell'altro le pagava lui.
          */
-        $this->assertSame(1, $this->saldo());
+        $this->assertSame(3, $this->saldo());
     }
 }

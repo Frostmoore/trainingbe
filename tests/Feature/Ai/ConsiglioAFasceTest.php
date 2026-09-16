@@ -447,7 +447,7 @@ final class ConsiglioAFasceTest extends TestCase
          * ⛔ Fino a ieri era una promessa che il server non manteneva — la
          * chiamata passava dalla quota inclusa.
          */
-        $this->dagliGettoni($this->palestra, 10);
+        $this->gettoniATutti($this->palestra, 10);
 
         $this->alle('2026-08-30 09:41');
         $this->chiediIlConsiglio('2026-08-30 09:30')->assertOk();

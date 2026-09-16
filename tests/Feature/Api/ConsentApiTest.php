@@ -217,7 +217,7 @@ class ConsentApiTest extends TestCase
          * parla del primo. Che il secondo funzioni e' provato in
          * `PortafoglioGettoniTest`.
          */
-        $this->dagliGettoni($this->alfa);
+        $this->gettoniATutti($this->alfa);
 
         $this->comeApp($this->iscritto)
             ->patchJson('/api/v1/account/consents', ['ai' => true, 'ai_disclaimer' => true])

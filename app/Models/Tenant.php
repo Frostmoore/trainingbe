@@ -63,11 +63,13 @@ class Tenant extends Model
         // G2 — la quota in chiamate (D6/D7).
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
         /*
-         * 🚨 **`ai_credits` NON e' qui, ed e' voluto.** Il saldo dei gettoni si
-         * muove **solo** attraverso `PortafoglioGettoni`, che scrive anche il
-         * movimento nel registro. Renderlo assegnabile in massa vorrebbe dire
-         * che una `update()` qualsiasi puo' cambiare un saldo senza lasciare
-         * traccia — e un saldo senza traccia non si puo' contestare (D16).
+         * 🆕 ⛔ **`ai_credits` non esiste piu' su questa tabella** — 16/09/2026.
+         *
+         * 📌 I gettoni sono della **persona** che li compra (3b-AH.8): il saldo
+         * sta su `users.ai_credits` e lo muove solo `PortafoglioGettoni`. ⚠️ La
+         * colonna e' stata **tolta**, non lasciata li' a zero: una colonna che
+         * nessuno legge piu' e' la trappola gia' pagata con `plans.max_trainers`
+         * — sembrava una regola e non lo era.
          */
     ];
 
@@ -80,7 +82,6 @@ class Tenant extends Model
             'trial_ends_at' => 'datetime',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
-            'ai_credits' => 'integer',
         ];
     }
 

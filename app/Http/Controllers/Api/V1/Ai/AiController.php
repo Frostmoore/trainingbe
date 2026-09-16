@@ -1091,7 +1091,13 @@ class AiController extends Controller
             'cap_photo_calls' => $this->quota->capFor($utente, conFoto: true),
             'remaining_photo_calls' => $this->quota->remaining($utente, conFoto: true),
 
-            // 🆕 D16 — quanto resta nel portafoglio di chi paga per questa persona.
+            /*
+             * 🆕 **Quanto resta nel portafoglio di questa persona** — 16/09/2026.
+             *
+             * ⛔ Era *«il portafoglio di chi paga per questa persona»*, cioe' il
+             * tenant. 📌 Da 3b-AH.8 i gettoni sono di chi li compra, e il nome
+             * del campo resta lo stesso: cambia di chi sono, non come si chiama.
+             */
             'ai_credits' => $this->portafoglio->saldo($utente),
 
             /*
