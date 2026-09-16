@@ -28,12 +28,14 @@ use Illuminate\Support\Facades\DB;
  *
  * 🚨 **Due filtri sovrapposti, e servono entrambi:**
  *  - il global scope della tenancy limita alla palestra;
- *  - `limitaAgliAssegnati()` limita il **trainer** ai propri iscritti (B3.5).
+ *  - 🆕 `limitaAgliAssegnati()` chiude fuori chi non è né gestore né trainer.
  *
- * Il primo protegge un cliente dall'altro, il secondo protegge il cliente dal
- * proprio personale: un trainer che se ne va non deve poter portare via
- * l'elenco completo. Sono due minacce diverse e nessuno dei due filtri copre
- * l'altra.
+ * 🆕 ⚠️ **Dal 16/09/2026 il secondo non limita più un trainer ai propri
+ * assegnati**: vede tutta la palestra, come già la vede nell'app. ⚖️ La
+ * protezione che B3.5 cercava — *un trainer che se ne va non porta via
+ * l'elenco clienti* — non era nella **vista** ma nel **poterci fare qualcosa**,
+ * e quella sta in `UserPolicy` (crea/modifica/cancella: solo il gestore) e in
+ * D4 (dal pannello non si assegna nessuna scheda a nessuno).
  *
  * C'e' un terzo filtro implicito: solo chi ha il ruolo `member`. Senza,
  * l'elenco degli iscritti conterrebbe anche i trainer e l'amministratore.

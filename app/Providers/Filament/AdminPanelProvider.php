@@ -7,6 +7,7 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\Login;
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\ResolveTenant;
+use App\Http\Middleware\SpazioDelPannello;
 use App\Support\Tenancy\PanelBranding;
 use App\Support\Tenancy\TenantContext;
 use Filament\Http\Middleware\Authenticate;
@@ -84,6 +85,16 @@ class AdminPanelProvider extends PanelProvider
                 // generale): Authenticate serve a **rifiutare** chi non è
                 // autenticato, non a renderlo disponibile.
                 ResolveTenant::class,
+
+                // 🆕 E subito dopo, la scelta di chi ha due cappelli — AH.1-quater.8.
+                //
+                // 🚨 Deve stare DOPO ResolveTenant, che deve poter sovrascrivere,
+                // e PRIMA di Authenticate, perché Filament chiama lì
+                // `canAccessPanel()` — che adesso guarda i ruoli nello spazio
+                // del contesto. Invertirli vorrebbe dire decidere chi entra
+                // guardando lo spazio sbagliato.
+                SpazioDelPannello::class,
+
                 Authenticate::class,
                 EnsureTenantActive::class,
             ]);

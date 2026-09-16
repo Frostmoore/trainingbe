@@ -120,32 +120,50 @@ class RoleScopingTest extends TestCase
     }
 
     /**
-     * 🚨 Il caso centrale: il trainer vede **solo i propri**.
+     * 🆕 ⚠️ **Il trainer vede tutta la SUA palestra** — 16/09/2026.
+     *
+     * ⛔ **Questo test diceva l'opposto**: *«il trainer vede solo i propri
+     * assegnati»*, la regola B3.5. 📌 Il committente l'ha cambiata: *«tutti in
+     * lettura, ma le schede e i piani entrano nel suo profilo personale, non
+     * può assegnarli dal server»*.
+     *
+     * 🚨 **La ragione del cambio**: dal 15/09 nell'app quello stesso trainer
+     * vede già **tutti** gli iscritti della palestra. Due risposte diverse alla
+     * stessa domanda, a seconda di dove si guardava.
+     *
+     * ⚖️ **E il confine vero resta dov'era**: un'altra palestra non si vede,
+     * e su questi non si può fare niente — vedi i due test qui sotto.
      */
     #[Test]
-    public function a_trainer_only_sees_their_own_members(): void
+    public function a_trainer_sees_every_member_of_their_gym(): void
     {
         $this->entraCome($this->trainerA);
 
         Livewire::test(ListMembers::class)
-            ->assertCanSeeTableRecords([$this->mioIscritto])
-            ->assertCanNotSeeTableRecords([$this->suoIscritto, $this->iscrittoBeta]);
+            ->assertCanSeeTableRecords([$this->mioIscritto, $this->suoIscritto])
+            ->assertCanNotSeeTableRecords([$this->iscrittoBeta]);
     }
 
     /**
-     * E non basta nascondere l'elenco: l'accesso diretto all'id deve dare 403.
+     * ⚖️ **Vederli sì, aprirli no** — e vale anche per i propri assegnati.
      *
-     * E' l'unico controllo che ferma chi digita un URL a mano — e in un pannello
-     * gli URL sono prevedibili.
+     * ⛔ **Questo test chiedeva un 404** sull'iscritto di un collega, e lo
+     * otteneva perché l'elenco lo nascondeva. 🆕 Adesso quella persona si vede,
+     * quindi la porta non è più «non esiste» ma «non è cosa tua»: la scheda di
+     * un iscritto la modifica **il gestore**, e `UserPolicy::update()` lo dice
+     * dal primo giorno.
+     *
+     * 🚨 **È la metà che rende accettabile l'allargamento della vista**: quello
+     * che B3.5 proteggeva davvero non era il vedere — in sala quelle persone il
+     * trainer le incontra tutte — ma il **poterci fare qualcosa**.
      */
     #[Test]
-    public function opening_the_id_of_an_unassigned_member_is_forbidden(): void
+    public function a_trainer_cannot_open_any_member_not_even_their_own(): void
     {
         $this->entraCome($this->trainerA);
 
-        $this
-            ->get("/admin/members/{$this->suoIscritto->id}/edit")
-            ->assertNotFound();
+        $this->get("/admin/members/{$this->suoIscritto->id}/edit")->assertForbidden();
+        $this->get("/admin/members/{$this->mioIscritto->id}/edit")->assertForbidden();
     }
 
     #[Test]

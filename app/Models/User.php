@@ -120,6 +120,16 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         'password_is_set' => true,
     ];
 
+    /**
+     * 🆕 Le risposte già date da `hasAppRole()`, per spazio e ruolo.
+     *
+     * 💡 Chiave `"<tenant_id>:<ruolo>"`. Vive quanto questo oggetto: chi cambia
+     * i ruoli di una persona ne ripesca una copia fresca.
+     *
+     * @var array<string, bool>
+     */
+    private array $ruoliPerSpazio = [];
+
     /** @return array<string, string> */
     protected function casts(): array
     {
@@ -676,16 +686,30 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     /**
      * I controlli di ruolo di palestra passano tutti da qui.
      *
-     * 🚨 **Valuta SEMPRE nella palestra dell'utente**, non in quella del
-     * contesto corrente.
+     * ══ 🆕 VALUTA NELLO SPAZIO IN CUI SI STA LAVORANDO — 16/09/2026 ═════════
      *
-     * In modalità teams `hasRole()` guarda il tenant impostato in quel momento.
-     * Ma i ruoli di una persona esistono solo dentro la sua palestra, quindi
-     * «è un trainer?» ha una risposta sola e non deve dipendere da uno stato
-     * ambientale. Lasciandolo al contesto, la stessa chiamata rispondeva `true`
-     * o `false` a seconda di dove veniva fatta — e il punto peggiore era
-     * proprio il login, dove `ResolveTenant` non è ancora passato: un
-     * amministratore veniva scambiato per un iscritto e rispedito fuori.
+     * ⛔ **Qui c'era scritto «valuta SEMPRE nella palestra dell'utente, non in
+     * quella del contesto corrente»**, e la ragione era buona: *«è un trainer?»
+     * ha una risposta sola e non deve dipendere da uno stato ambientale*.
+     *
+     * 🚨 **Da AH.1-quater quella premessa è falsa.** Una persona può essere
+     * `free_trainer` nel **proprio** spazio e `trainer` **dentro una palestra**
+     * — sono indipendenti, ed è il caso che il prodotto vuole. La domanda ha
+     * due risposte, e quella giusta dipende da **dove sto lavorando**.
+     *
+     * ⚠️ Col vincolo vecchio, un trainer con un giro suo apriva il pannello
+     * della palestra e non risultava un suo trainer: ogni scoping lo trattava
+     * come «nessuno dei due» e gli mostrava una stanza vuota. Nessun errore.
+     *
+     * ⚖️ **E la ragione vecchia resta soddisfatta**: quando un contesto non
+     * c'è — al login, in un comando, in un test — si ricade sul proprio spazio,
+     * che è esattamente ciò che si faceva prima. Per chi ha un cappello solo la
+     * risposta non cambia **mai**, perché il suo spazio e il contesto sono la
+     * stessa cosa.
+     *
+     * 🚨 **E il contesto non lo sceglie il client**: nell'API lo mette
+     * `ResolveTenant` leggendolo dall'utente; nel pannello `SpazioDelPannello`,
+     * che accetta solo uno spazio di cui la persona fa **parte davvero**.
      *
      * ⚠️ NON accetta `UserRole::SuperAdmin`: quello non è un ruolo spatie ma
      * la colonna `is_super_admin`. Passarlo qui darebbe sempre `false` in
@@ -699,17 +723,49 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             );
         }
 
-        $tenant = $this->tenant;
+        $contesto = app(TenantContext::class);
 
-        if ($tenant === null) {
+        /*
+         * ⚠️ **Il contesto, e solo se non c'è il proprio spazio.**
+         *
+         * 💡 Il ripiego copre i due casi in cui un contesto non esiste: il
+         * login — dove `ResolveTenant` non è ancora passato — e tutto ciò che
+         * gira fuori da una richiesta (comandi, code, test).
+         */
+        $spazio = $contesto->get() ?? $this->tenant;
+
+        if ($spazio === null) {
             // Nessuna palestra: nessun ruolo di palestra. È il caso del super
             // admin, che non ne ha e non deve averne.
             return false;
         }
 
-        return app(TenantContext::class)->runAs(
-            $tenant,
-            fn (): bool => $this->hasRole($role->value),
+        $chiave = $spazio->getKey().':'.$role->value;
+
+        /*
+         * 🚨 **La relazione `roles` si butta via prima e dopo.**
+         *
+         * ⚠️ Spatie, se `roles` è già caricata, risponde da quella **senza
+         * riguardare il tenant**: la stessa domanda fatta in due spazi diversi
+         * nella stessa richiesta darebbe due volte la prima risposta. Finché lo
+         * spazio era uno solo non poteva succedere; da adesso sì.
+         *
+         * 💡 Il costo è una query per (spazio, ruolo), non per chiamata: il
+         * pannello chiede `isGymAdmin()` decine di volte per pagina.
+         *
+         * ⚠️ E la memoria vive quanto **questo oggetto**: chi cambia i ruoli di
+         * una persona ne ripesca una copia fresca, come già fanno
+         * `EsciDaUnaPalestra` e `UnisciAUnaPalestra`.
+         */
+        return $this->ruoliPerSpazio[$chiave] ??= $contesto->runAs(
+            $spazio,
+            function () use ($role): bool {
+                $this->unsetRelation('roles');
+                $risposta = $this->hasRole($role->value);
+                $this->unsetRelation('roles');
+
+                return $risposta;
+            },
         );
     }
 

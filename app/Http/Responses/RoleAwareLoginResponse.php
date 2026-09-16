@@ -41,7 +41,23 @@ class RoleAwareLoginResponse implements LoginResponse
             return self::destinazione('god');
         }
 
-        if ($user->isGymAdmin() || $user->isTrainer()) {
+        /*
+         * ══ 🆕 E ANCHE IL TRAINER INDIPENDENTE — 16/09/2026 ══════════════════
+         *
+         * ⛔ **`isFreeTrainer()` mancava**, e il risultato era una porta aperta
+         * su un corridoio chiuso: `canAccessPanel()` lo fa entrare dal 13/08
+         * (F2), ma qui `urlFor()` rispondeva `null` — e `toResponse()`, per un
+         * utente senza destinazione, **lo slogga** e lo rimanda al login con
+         * scritto *«gli iscritti accedono dall'app, non da qui»*.
+         *
+         * 🚨 Cioè: gli si diceva che è un iscritto. Nessun errore, un messaggio
+         * sbagliato, e un pannello che risultava rotto invece che vietato.
+         *
+         * ⚠️ Colpiva anche chi ha **due cappelli**: al login il contesto è il
+         * suo spazio, dove è un `free_trainer` e non un trainer di palestra.
+         * Cioè proprio la persona per cui esiste `SpazioDelPannello`.
+         */
+        if ($user->isGymAdmin() || $user->isTrainer() || $user->isFreeTrainer()) {
             return self::destinazione('admin');
         }
 
