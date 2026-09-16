@@ -9,13 +9,16 @@ use App\Filament\Gym\Resources\Trainers\Pages\CreateTrainer;
 use App\Filament\Gym\Resources\Trainers\Pages\EditTrainer;
 use App\Filament\Gym\Resources\Trainers\Pages\ListTrainers;
 use App\Models\User;
+use App\Services\Tenancy\TogliUnTrainerDallaPalestra;
 use App\Support\Tenancy\TenantContext;
 use BackedEnum;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -140,7 +143,58 @@ class TrainerResource extends Resource
                     ->placeholder('mai')
                     ->toggleable(),
             ])
-            ->recordActions([EditAction::make()])
+            ->recordActions([
+                EditAction::make(),
+
+                /*
+                 * 🆕 🚪 **Congedare chi ha un giro suo** — 3b-AJ.6, 16/09/2026.
+                 *
+                 * ⛔ **Per questa persona gli altri due gesti non vanno bene.**
+                 * «Spegni» e «cancella» stanno sull'**account**, non sul rapporto
+                 * con questa palestra: la chiuderebbero fuori anche da casa
+                 * sua. ✅ `UserPolicy` glielo impedisce già — confronta i
+                 * `tenant_id` — ma il rovescio era che la palestra non poteva
+                 * **nemmeno mandarla via**.
+                 *
+                 * ⚠️ **Si vede solo a chi serve**: per un trainer che vive dentro
+                 * la palestra non c'è nessun posto dove tornare, e la strada
+                 * resta quella di sempre.
+                 */
+                Action::make('togliDallaPalestra')
+                    ->label('Togli dalla palestra')
+                    ->icon(Heroicon::OutlinedArrowRightStartOnRectangle)
+                    ->color('danger')
+                    ->visible(fn (User $r): bool => $r->tenant_id !== app(TenantContext::class)->id())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r): string => "Togliere {$r->name} dalla palestra?")
+                    /*
+                     * 💡 **La conferma dice cosa succede, non «sei sicuro?».**
+                     * ⚠️ Chi preme deve sapere che l'account resta in piedi e che
+                     * le schede se le porta via: sono le due cose che
+                     * sorprenderebbero dopo.
+                     */
+                    ->modalDescription(
+                        "Non allenera' piu' qui e non vedra' piu' gli iscritti di questa "
+                        .'palestra. Il suo account resta suo, insieme ai suoi allievi personali '
+                        ."e alle schede che ha scritto. Le schede gia' consegnate restano a chi "
+                        .'le ha ricevute.'
+                    )
+                    ->modalSubmitActionLabel('Togli dalla palestra')
+                    ->action(function (User $r): void {
+                        $palestra = app(TenantContext::class)->get();
+
+                        if ($palestra === null) {
+                            return;
+                        }
+
+                        app(TogliUnTrainerDallaPalestra::class)($r, $palestra);
+
+                        Notification::make()
+                            ->title("{$r->name} non fa piu' parte della palestra")
+                            ->success()
+                            ->send();
+                    }),
+            ])
             ->toolbarActions([
                 BulkActionGroup::make([DeleteBulkAction::make()]),
             ])
