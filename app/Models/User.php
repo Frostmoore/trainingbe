@@ -137,6 +137,19 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'email_verified_at' => 'datetime',
             // N22.2 — quando ha dichiarato l'albo, non se.
             'albo_dichiarato_il' => 'datetime',
+
+            /*
+             * 🆕 👥 **Quando ha accettato di avere piu' di un trainer** —
+             * AH.1-ter.5, 17/09/2026.
+             *
+             * 💡 Una data e non un booleano perche' la domanda che ci si fara'
+             * e' *«quando l'ha accettato?»*: il giorno che qualcuno contesta un
+             * secondo trainer, un `true` non dice niente.
+             *
+             * ⚠️ Fuori da `$fillable`: e' una dichiarazione della persona, e una
+             * dichiarazione non si assegna in massa da una richiesta HTTP.
+             */
+            'affiancamento_accettato_il' => 'datetime',
             'last_login_at' => 'datetime',
 
             /*

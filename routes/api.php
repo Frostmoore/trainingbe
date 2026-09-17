@@ -108,6 +108,17 @@ Route::prefix('v1')->group(function (): void {
      */
     Route::middleware('throttle:branding-lookup')->group(function (): void {
         Route::get('inviti-palestra/{token}', [InvitoInPalestraController::class, 'anteprima']);
+
+        /*
+         * 🆕 👀 **L'anteprima dell'invito di un TRAINER** — 17/09/2026.
+         *
+         * ⛔ Mancava, e con lei mancava tutta la strada: la pagina web diceva
+         * «apri l'app e tocca "Ho un invito"», e quel pulsante non esisteva.
+         *
+         * ⚠️ Pubblica come quella qui sopra, e per la stessa ragione: chi tocca
+         * il link spesso non ha ancora l'app.
+         */
+        Route::get('inviti/{token}', [InvitoController::class, 'anteprima']);
         Route::post('inviti-palestra/{token}/rifiuta', [InvitoInPalestraController::class, 'rifiuta']);
     });
 

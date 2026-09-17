@@ -32,6 +32,34 @@ class InvitoController extends Controller
     public function __construct(private readonly InvitiDelTrainer $inviti) {}
 
     /**
+     * 🆕 `GET /api/v1/inviti/{token}` — l'anteprima, **pubblica**.
+     *
+     * ⛔ **Mancava, e con lei mancava tutta la strada**: la pagina web diceva
+     * *«apri l'app e tocca "Ho un invito"»* e quel pulsante non esisteva. 🚨 I
+     * due endpoint che accettano un invito da trainer non li chiamava nessuno:
+     * l'intero giro viveva sul server senza un cliente.
+     *
+     * ⚠️ **Pubblica**, come quella della palestra: chi tocca il link spesso non
+     * ha ancora l'app, e chiedergli di accedere per **guardare** un invito
+     * sarebbe il muro che il link esiste per togliere.
+     *
+     * 💡 **404 per tutti i casi negativi** — scaduto, usato, revocato,
+     * inesistente: distinguerli permetterebbe di provare token a tappeto.
+     */
+    public function anteprima(string $token): JsonResponse
+    {
+        $dati = $this->inviti->anteprima($token);
+
+        if ($dati === null) {
+            return response()->json([
+                'message' => __('Questo invito non è più valido.'),
+            ], 404);
+        }
+
+        return response()->json(['data' => $dati]);
+    }
+
+    /**
      * `POST /api/v1/inviti/{token}/riscatta`
      *
      * 🚨 **Non chiede l'abbonamento**, ed e' la decisione del committente:
@@ -41,7 +69,20 @@ class InvitoController extends Controller
      */
     public function riscatta(Request $request, string $token): JsonResponse
     {
-        $utente = $this->inviti->riscattaPerChiEsiste($token, $request->user());
+        /*
+         * 🆕 👥 **`affianco`: «si', lo so che ne ho gia' uno»** — AH.1-ter.4.
+         *
+         * ⚠️ Di serie **falso**, ed e' il verso giusto: un client che non
+         * conosce questa regola riceve un 409 e si ferma, invece di creare la
+         * sovrapposizione senza dire niente a nessuno.
+         */
+        $dati = $request->validate(['affianco' => ['sometimes', 'boolean']]);
+
+        $utente = $this->inviti->riscattaPerChiEsiste(
+            $token,
+            $request->user(),
+            (bool) ($dati['affianco'] ?? false),
+        );
 
         $trainer = $utente->assignedTrainers()->orderByDesc('trainer_member.assigned_at')->first();
 

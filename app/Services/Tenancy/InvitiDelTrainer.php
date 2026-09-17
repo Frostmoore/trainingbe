@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
+use App\Services\Tenancy\Exceptions\HaiGiaUnTrainerException;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -229,6 +230,56 @@ class InvitiDelTrainer
      *
      * @throws ValidationException
      */
+    /**
+     * 🆕 👀 **L'anteprima di un invito, per chi ancora non è nessuno** —
+     * 17/09/2026.
+     *
+     * ⛔ **Mancava, e con lei mancava tutta la strada.** La pagina web diceva
+     * *«apri l'app e tocca "Ho un invito"»*, e quel pulsante non esisteva: i due
+     * endpoint che accettano un invito da trainer — `riscatta` e
+     * `register-with-invite` — non li chiamava **nessuno**. 🚨 L'intero giro
+     * viveva sul server senza un cliente.
+     *
+     * ⚠️ **Pubblica**, come quella della palestra e per la stessa ragione: chi
+     * tocca il link spesso non ha ancora l'app. Se l'anteprima chiedesse
+     * l'accesso, la prima cosa che vedrebbe sarebbe un modulo invece
+     * dell'invito che gli è stato mandato.
+     *
+     * ⛔ **E dice pochissimo**: il nome di chi invita e quando scade. Il token
+     * è una credenziale che gira nelle chat, e da un'anteprima pubblica non deve
+     * uscire niente su cui costruire un profilo di qualcun altro.
+     *
+     * 💡 `null` per scaduto, usato, revocato **e** inesistente: distinguerli
+     * permetterebbe di provare token a tappeto e sapere quali sono esistiti.
+     *
+     * @return array{trainer: ?string, scade_il: string}|null
+     */
+    public function anteprima(string $token): ?array
+    {
+        $invito = TrainerInvite::withoutGlobalScopes()->where('token', $token)->first();
+
+        if ($invito === null || ! $invito->eValido()) {
+            return null;
+        }
+
+        $trainer = User::query()->withoutGlobalScopes()->find($invito->trainer_id);
+
+        /*
+         * ⚠️ **Le stesse guardie di `riscatta()`**, e non e' un doppione: un
+         * invito di un trainer spento, o che ha perso il proprio spazio, non
+         * porta da nessuna parte. 💡 Mostrarlo come valido vorrebbe dire far
+         * toccare «accetto» a qualcuno per poi dirgli di no.
+         */
+        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
+            return null;
+        }
+
+        return [
+            'trainer' => $trainer->name,
+            'scade_il' => $invito->expires_at?->toIso8601String() ?? '',
+        ];
+    }
+
     public function riscatta(
         string $token,
         string $nome,
@@ -377,9 +428,13 @@ class InvitiDelTrainer
      * propri. In tutti e due i casi il rapporto si crea lo stesso — cambia solo
      * chi paga, che resta chi pagava prima.
      *
+     * @param  bool  $affianco  🆕 la persona **sa** di avere gia' un trainer e
+     *                          vuole comunque questo secondo — AH.1-ter.4
+     *
      * @throws ValidationException
+     * @throws HaiGiaUnTrainerException
      */
-    public function riscattaPerChiEsiste(string $token, User $utente): User
+    public function riscattaPerChiEsiste(string $token, User $utente, bool $affianco = false): User
     {
         $invito = TrainerInvite::withoutGlobalScopes()->where('token', $token)->first();
 
@@ -429,8 +484,31 @@ class InvitiDelTrainer
             $nonValido();
         }
 
-        return DB::transaction(function () use ($invito, $trainer, $utente): User {
+        /*
+         * 🆕 👥 **Chi ha gia' un trainer deve saperlo** — AH.1-ter.4.
+         *
+         * ⛔ Prima il secondo rapporto nasceva **in silenzio**, e da quel momento
+         * tutti e due vedevano gli allenamenti di questa persona, tutti e due le
+         * scrivevano, e tutti e due le tenevano occupato uno slot.
+         *
+         * ⚠️ **Fuori dalla transazione, e prima di toccare qualunque cosa**: e'
+         * una domanda, non un rimedio. Chiederla dopo aver gia' traslocato
+         * vorrebbe dire annullare a meta'.
+         */
+        $this->pretendiCheSappiaDellAltroTrainer($utente, $trainer, $affianco);
+
+        return DB::transaction(function () use ($invito, $trainer, $utente, $affianco): User {
             $this->traslocaSeHaUnoSpazioSuo($utente, $trainer);
+
+            /*
+             * 🆕 📌 **La risposta si ricorda** — AH.1-ter.5: *«per non
+             * richiederla ogni volta»*. 💡 Chi ha gia' detto di si' una volta sa
+             * come funziona, e rifargli la domanda a ogni invito sarebbe
+             * trattarlo come se non avesse capito.
+             */
+            if ($affianco && $utente->affiancamento_accettato_il === null) {
+                $utente->forceFill(['affiancamento_accettato_il' => now()])->save();
+            }
 
             $gia = $utente->assignedTrainers()->where('users.id', $trainer->getKey())->exists();
 
@@ -468,6 +546,53 @@ class InvitiDelTrainer
 
             return $utente;
         });
+    }
+
+    /**
+     * 🆕 👥 **Si ferma se questa persona ha gia' un trainer** — AH.1-ter.4,
+     * 17/09/2026.
+     *
+     * 📌 Dal piano: *«la modale della sovrapposizione, con "Lascia com'e'" in
+     * evidenza»*.
+     *
+     * 🚨 **Il server si ferma invece di fidarsi dell'app.** La modale la
+     * disegna l'app, ma se il permesso di procedere lo desse l'app, un client
+     * vecchio — o uno che non conosce questa regola — creerebbe la
+     * sovrapposizione senza chiedere niente a nessuno. ⛔ E non darebbe errore:
+     * funzionerebbe.
+     *
+     * ⚠️ **Solo i rapporti ancora in piedi.** Uno chiuso mesi fa non e' un
+     * trainer che segue: chiedere conferma per un rapporto finito vorrebbe dire
+     * far ricordare a qualcuno una cosa che ha gia' chiuso.
+     *
+     * ⛔ **E il trainer di questo invito non conta**, se per caso c'e' gia': non
+     * si e' in sovrapposizione con se' stessi.
+     *
+     * 💡 Chi ha gia' risposto una volta non se lo sente richiedere:
+     * `affiancamento_accettato_il` è la memoria di quella risposta (AH.1-ter.5).
+     *
+     * 🚨 **Gli iscritti di una palestra non ci finiscono dentro**, e sarebbe
+     * l'errore facile: loro vedono tutti i trainer della palestra per costruzione
+     * (`ChiSiVede`), senza nessuna riga in `trainer_member`. ⚠️ Chiedere
+     * «hai gia' un trainer?» a ogni iscritto di palestra vorrebbe dire una
+     * domanda che non c'entra, a tutti.
+     *
+     * @throws HaiGiaUnTrainerException
+     */
+    private function pretendiCheSappiaDellAltroTrainer(User $utente, User $nuovo, bool $affianco): void
+    {
+        if ($affianco || $utente->affiancamento_accettato_il !== null) {
+            return;
+        }
+
+        $altro = $utente->assignedTrainers()
+            ->whereKeyNot($nuovo->getKey())
+            ->wherePivotNull('disattivato_il')
+            ->first();
+
+        if ($altro !== null) {
+            throw new HaiGiaUnTrainerException($altro->name ?? '');
+        }
     }
 
     /**
