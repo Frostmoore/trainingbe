@@ -49,11 +49,11 @@ class ImagePreparerTest extends TestCase
         $jpeg = (string) ob_get_clean();
         imagedestroy($tela);
 
-        $firma = "Exif\x00\x00" . str_repeat("\x00", 20);
-        $app1 = "\xFF\xE1" . pack('n', strlen($firma) + 2) . $firma;
+        $firma = "Exif\x00\x00".str_repeat("\x00", 20);
+        $app1 = "\xFF\xE1".pack('n', strlen($firma) + 2).$firma;
 
         // Dopo i due byte di SOI, prima di tutto il resto.
-        return substr($jpeg, 0, 2) . $app1 . substr($jpeg, 2);
+        return substr($jpeg, 0, 2).$app1.substr($jpeg, 2);
     }
 
     #[Test]
@@ -63,7 +63,7 @@ class ImagePreparerTest extends TestCase
          * 🚨 **Il caso che prima falliva.** 800 px sta sotto la soglia di 1568,
          * quindi la vecchia versione restituiva il file cosi' com'era.
          */
-        $percorso = tempnam(sys_get_temp_dir(), 'exif') . '.jpg';
+        $percorso = tempnam(sys_get_temp_dir(), 'exif').'.jpg';
         file_put_contents($percorso, $this->jpegConExif(800));
 
         self::assertStringContainsString(
@@ -72,7 +72,7 @@ class ImagePreparerTest extends TestCase
             'il file di partenza deve avere l\'EXIF, o il test non prova niente',
         );
 
-        $preparata = (new ImagePreparer())->prepare($percorso, 'image/jpeg');
+        $preparata = (new ImagePreparer)->prepare($percorso, 'image/jpeg');
         unlink($percorso);
 
         self::assertStringNotContainsString(
@@ -87,10 +87,10 @@ class ImagePreparerTest extends TestCase
     {
         // ⚠️ Il ramo che gia' funzionava: va tenuto verde, o la correzione
         // avrebbe spostato il difetto invece di chiuderlo.
-        $percorso = tempnam(sys_get_temp_dir(), 'exif') . '.jpg';
+        $percorso = tempnam(sys_get_temp_dir(), 'exif').'.jpg';
         file_put_contents($percorso, $this->jpegConExif(2000));
 
-        $preparata = (new ImagePreparer())->prepare($percorso, 'image/jpeg');
+        $preparata = (new ImagePreparer)->prepare($percorso, 'image/jpeg');
         unlink($percorso);
 
         self::assertStringNotContainsString(
@@ -107,10 +107,10 @@ class ImagePreparerTest extends TestCase
          * correzione le ha separate: questo test tiene ferma la prima, che e'
          * la seconda delle tre leve di risparmio della piattaforma.
          */
-        $percorso = tempnam(sys_get_temp_dir(), 'exif') . '.jpg';
+        $percorso = tempnam(sys_get_temp_dir(), 'exif').'.jpg';
         file_put_contents($percorso, $this->jpegConExif(3000));
 
-        $preparata = (new ImagePreparer())->prepare($percorso, 'image/jpeg');
+        $preparata = (new ImagePreparer)->prepare($percorso, 'image/jpeg');
         unlink($percorso);
 
         $misure = getimagesizefromstring(

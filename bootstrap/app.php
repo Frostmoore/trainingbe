@@ -2,10 +2,10 @@
 
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\RequireAiConsent;
-use App\Http\Middleware\TettoAiGlobale;
-use App\Http\Middleware\VersioneMinima;
 use App\Http\Middleware\RequirePlanWithAi;
 use App\Http\Middleware\ResolveTenant;
+use App\Http\Middleware\TettoAiGlobale;
+use App\Http\Middleware\VersioneMinima;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;

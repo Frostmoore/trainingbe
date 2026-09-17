@@ -98,7 +98,7 @@ class NienteDiChiSiaTest extends TestCase
             [],
             $fuoriPosto,
             "Una riga usa \$ctx in un modo nuovo. Se sta mettendo l'utente o la ".
-            "palestra dentro il corpo di una richiesta, la promessa fatta nella ".
+            'palestra dentro il corpo di una richiesta, la promessa fatta nella '.
             'schermata del consenso non e\' piu\' vera: aggiornala prima, o non farlo.',
         );
     }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Billing\Stripe\ChiaviDiStripe;
+
 /*
 |------------------------------------------------------------------------------
 | 🚨 Stripe: quando si usano le chiavi VERE
@@ -20,7 +22,7 @@
 | 💡 Chiamare una classe da un file di configurazione si puo': `bootstrap/app.php`
 | registra l'autoloader **prima** di caricare la configurazione.
 */
-$stripeUsaChiaviVere = App\Services\Billing\Stripe\ChiaviDiStripe::usaChiaviVere(
+$stripeUsaChiaviVere = ChiaviDiStripe::usaChiaviVere(
     env('APP_ENV'),
     env('APP_DEBUG', true),
 );

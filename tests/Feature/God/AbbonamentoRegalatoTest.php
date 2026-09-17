@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\God;
 
+use App\Enums\TenantKind;
 use App\Enums\UserRole;
 use App\Filament\God\Resources\Users\Tables\UsersTable;
 use App\Models\Plan;
@@ -47,7 +48,7 @@ class AbbonamentoRegalatoTest extends TestCase
     private function persona(string $email = 'solo@test.it'): User
     {
         $tenant = $this->creaPalestra('Personale', 'personale-'.uniqid(), 'PERS'.random_int(1000, 9999));
-        $tenant->forceFill(['kind' => \App\Enums\TenantKind::Personal])->save();
+        $tenant->forceFill(['kind' => TenantKind::Personal])->save();
 
         // ⚠️ La palestra di prova nasce abbonata: qui si vuole una persona
         // **senza niente**, o il regalo non si distinguerebbe da quello che c'e'.

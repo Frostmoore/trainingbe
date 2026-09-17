@@ -121,7 +121,6 @@ final class QuandoLaSchedaECambiataTest extends TestCase
         $this->assertTrue($piano->fresh()->updated_at->greaterThan($prima));
     }
 
-
     /**
      * ⛔ **Chi manda ancora `base_updated_at` non prende un errore.**
      *
@@ -154,7 +153,6 @@ final class QuandoLaSchedaECambiataTest extends TestCase
 
         $this->assertSame('Quella che avevo io', $piano->fresh()->name);
     }
-
 
     private function pianoDi(): WorkoutPlan
     {
