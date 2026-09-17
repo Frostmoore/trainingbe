@@ -11,9 +11,9 @@ use App\Models\PlanSubscription;
 use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\ContoDegliIscritti;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -46,6 +46,7 @@ class InvitiInPalestra
         private readonly TenantContext $context,
         private readonly UnisciAUnaPalestra $unisci,
         private readonly CosaOttieniInPalestra $cosaOttieni,
+        private readonly ContoDegliIscritti $conto,
     ) {}
 
     /**
@@ -130,29 +131,23 @@ class InvitiInPalestra
     /**
      * Quante persone con questo ruolo stanno dentro la palestra.
      *
-     * ⚠️ **Si conta dai ruoli spatie**, non da `users.tenant_id` e basta: da
-     * `AH.1-quater` un trainer con un portfolio suo lavora nella palestra
-     * **senza** avere lì il proprio `tenant_id`, e contarlo dalla colonna lo
-     * lascerebbe fuori dal tetto che la palestra paga.
+     * 🆕 ⛔ **Il conteggio se n'è andato in `ContoDegliIscritti`** — AH.6.9,
+     * 17/09/2026. 🚨 Non è un riordino: la query che stava qui **non guardava
+     * mai `users`**, quindi contava anche gli iscritti spenti e quelli
+     * cancellati — righe di `model_has_roles` che
+     * `ChiEsceDallaPalestraOsservatore` non toglie, di proposito.
      *
-     * 🚨 `model_has_roles` si legge a mano e non con `hasAppRole()`: quello
-     * risponde sul tenant **della persona**, che per un trainer con portfolio è
-     * un altro — e direbbe di no a tutti, in silenzio.
+     * ⚠️ Una palestra da venti che nel tempo ha cancellato quindici persone si
+     * ritrovava **cinque posti**, e nel pannello quelle quindici non c'erano
+     * più: un limite che scatta senza nessuno da indicare.
+     *
+     * 💡 Adesso il numero è **uno solo**, e lo stesso che finirà sulla fattura
+     * del piano a consumo. ⛔ Due conteggi in due file divergono sempre, e qui
+     * divergere vuol dire che il pannello dice «38» e la fattura addebita «41».
      */
     private function quanteNePorta(Tenant $palestra, UserRole $ruolo): int
     {
-        return $this->context->runWithoutTenant(
-            fn (): int => (int) DB::table('model_has_roles as mhr')
-                ->join('roles as r', function ($join): void {
-                    $join->on('r.id', '=', 'mhr.role_id')
-                        ->on('r.tenant_id', '=', 'mhr.tenant_id');
-                })
-                ->where('mhr.tenant_id', $palestra->getKey())
-                ->where('mhr.model_type', (new User)->getMorphClass())
-                ->where('r.name', $ruolo->value)
-                ->distinct()
-                ->count('mhr.model_id'),
-        );
+        return $this->conto->quanti($palestra, $ruolo);
     }
 
     /**

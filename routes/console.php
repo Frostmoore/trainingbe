@@ -187,6 +187,29 @@ Schedule::command('abbonamenti:rinnova-i-regali')
     ->dailyAt('3:40')
     ->withoutOverlapping();
 
+/*
+ * ══ 💶 IL PIANO A CONSUMO SI FATTURA DA SOLO — 3b-AH.6.9, 17/09/2026 ══════
+ *
+ * 📌 Il committente, 13/09: *«Se una palestra sceglie il piano a consumo
+ * paghera' un tot per ogni iscritto a cui regala l'abbonamento, per un minimo
+ * di 100.»*
+ *
+ * ⛔ Dal 13/09 esistevano il prezzo, la soglia e il calcolo — e **nessuno che
+ * chiedesse i soldi**. 🚨 E' il difetto che per definizione non da' errore: un
+ * incasso che non arriva non lancia niente, non compare in nessun log, e si
+ * scopre guardando il conto.
+ *
+ * ⚠️ **Il primo del mese, e fattura il mese APPENA CHIUSO.** A consumo si paga
+ * quello che si e' consumato: finche' il mese e' aperto quel numero cambia
+ * ancora, e chiedere in anticipo sarebbe un canone — cioe' l'altro piano.
+ *
+ * 💡 Alle 4:20, dopo il rinnovo dei regali: se una palestra regala abbonamenti
+ * ai suoi iscritti, quel giro va fatto **prima** che si conti chi c'e' dentro.
+ */
+Schedule::command('fattura:il-consumo')
+    ->monthlyOn(1, '4:20')
+    ->withoutOverlapping();
+
 Schedule::command('queue:prune-failed --hours=24')
     ->dailyAt('4:05')
     ->withoutOverlapping(30)

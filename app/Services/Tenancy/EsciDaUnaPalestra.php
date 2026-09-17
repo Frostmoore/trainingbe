@@ -83,6 +83,7 @@ final class EsciDaUnaPalestra
      * | `audit_logs` | Registro della palestra, e serve proprio a ricostruire cose come questa |
      * | `campagne` · `profili_pubblici` | Schede del catalogo: appartengono a palestre e trainer, non agli iscritti |
      * | `conversations` · `media` | 🚨 I messaggi restano dove sono. Sono di **tutti e due**, e sono cifrati: la palestra non li legge comunque. Portarli via vorrebbe dire toglierli al trainer, che ne è l'altro autore |
+     * | `addebiti_mensili` | 💶 La fattura del piano a consumo: documento contabile **della palestra** |
      * | `exercises` | La libreria esercizi della palestra |
      * | `model_has_permissions` · `model_has_roles` · `roles` | I ruoli si rifanno, non si spostano — vedi `rifaiIRuoli()` |
      * | `plan_subscriptions` | Abbonamento della palestra alla piattaforma |
@@ -91,6 +92,20 @@ final class EsciDaUnaPalestra
      * | `workout_plan_imports` | Segue la scheda importata, non la persona |
      */
     public const RESTANO_ALLA_PALESTRA = [
+        /*
+         * 💶 **La fattura del piano a consumo** — 3b-AH.6.9, 17/09/2026.
+         *
+         * 🚨 E' un documento contabile **della palestra**, e chi esce non se ne
+         * porta via un pezzo. ⛔ Farla seguire la persona vorrebbe dire
+         * spostare in un tenant personale una riga che dice quanti iscritti
+         * aveva quella palestra — cioe' consegnare a un ex iscritto il numero
+         * che la palestra tiene piu' stretto.
+         *
+         * ⚠️ E il conteggio **non si ricalcola**: quel mese quella persona
+         * c'era davvero, e una fattura gia' emessa non cambia perche' qualcuno
+         * se n'e' andato dopo.
+         */
+        'addebiti_mensili',
         'ai_credit_movements',
         'ai_usage_logs',
         'audit_logs',
