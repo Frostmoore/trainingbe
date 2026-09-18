@@ -260,23 +260,39 @@ class AddebitoDelMese
             $stripe = $this->stripe();
 
             /*
-             * ⚠️ **La voce prima, la fattura dopo.** Stripe raccoglie le voci
-             * in sospeso del cliente e le chiude dentro la fattura che si crea
-             * subito dopo: invertire i due passi emette una fattura vuota e
-             * lascia la voce in giro, che finira' su quella del mese prossimo.
+             * ══ 🚨 PRIMA LA FATTURA, POI LA VOCE DENTRO — trovato nella sandbox,
+             *    18/09/2026 ══════════════════════════════════════════════════
+             *
+             * ⛔ **Qui prima c'era l'ordine opposto**, con un commento che diceva
+             * *«la voce prima, la fattura dopo: Stripe raccoglie le voci in
+             * sospeso del cliente dentro la fattura che si crea subito dopo»*.
+             * 🚨 **Non è vero, non più**: nelle versioni recenti dell'API
+             * `invoices->create` le voci in sospeso **non le prende** — il
+             * comportamento di serie è `exclude`.
+             *
+             * 🔬 **Provato su Stripe vero**, con la carta di test: la fattura
+             * nasceva e risultava pagata per **0,00 €, senza nessuna voce**. Le
+             * 599 € restavano sul cliente, in sospeso, ad accumularsi. ⚠️ Era su
+             * staging dal 17/09 (`v19.0.0`), e non aveva mai fatturato nessuno
+             * solo perché nessuna palestra aveva ancora un cliente Stripe.
+             *
+             * 💡 Adesso la voce si **aggancia esplicitamente** alla fattura
+             * (`invoice`): non dipende più da un comportamento di serie che
+             * Stripe può cambiare, e che ha già cambiato una volta.
              */
-            $stripe->invoiceItems->create([
-                'customer' => $cliente,
-                'currency' => 'eur',
-                'amount' => $addebito->importo_cent,
-                'description' => $this->descrizione($addebito),
-                'metadata' => $this->metadata($addebito),
-            ]);
-
             $fattura = $stripe->invoices->create([
                 'customer' => $cliente,
                 'collection_method' => 'charge_automatically',
                 'auto_advance' => true,
+                'metadata' => $this->metadata($addebito),
+            ]);
+
+            $stripe->invoiceItems->create([
+                'customer' => $cliente,
+                'invoice' => (string) $fattura->id,
+                'currency' => 'eur',
+                'amount' => $addebito->importo_cent,
+                'description' => $this->descrizione($addebito),
                 'metadata' => $this->metadata($addebito),
             ]);
 

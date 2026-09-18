@@ -501,6 +501,48 @@ final class StripeInTuttiGliScenariTest extends TestCase
     }
 
     /**
+     * 🚨 **La voce sta DENTRO la fattura** — trovato nella sandbox, 18/09/2026.
+     *
+     * ⛔ Prima si creava la voce e poi la fattura, contando sul fatto che Stripe
+     * raccogliesse le voci in sospeso. **Non lo fa più**: provato su Stripe vero,
+     * la fattura nasceva pagata per **0,00 €**, e le 599 € restavano sul cliente.
+     *
+     * 💡 Questo test ferma il ritorno di quell'errore **senza la sandbox**: la voce
+     * deve portare l'id della fattura appena creata.
+     */
+    #[Test]
+    public function la_voce_del_consumo_sta_dentro_la_fattura(): void
+    {
+        [$palestra] = $this->palestraConTitolare();
+
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $palestra->getKey(),
+            'plan_id' => $this->piano('gym_consumo')->getKey(),
+            'stripe_customer_id' => 'cus_consumo',
+            'starts_at' => now()->subYear(),
+        ]);
+
+        $servizio = app(AddebitoDelMese::class);
+        $addebito = $servizio->incassa($servizio->calcola($palestra, '2026-08'));
+
+        $voce = $this->stripe->ultima('invoiceItems.create')[0];
+
+        $this->assertArrayHasKey('invoice', $voce, 'la voce non e agganciata a nessuna fattura: la fattura esce da zero');
+        $this->assertSame((string) $addebito->stripe_invoice_id, $voce['invoice']);
+        $this->assertSame(100 * 599, $voce['amount']);
+
+        /*
+         * ⚠️ E l'ordine: prima la fattura, poi la voce. Al contrario, la voce non
+         * avrebbe una fattura a cui agganciarsi.
+         */
+        $percorsi = array_column($this->stripe->chiamate, 0);
+        $this->assertLessThan(
+            array_search('invoiceItems.create', $percorsi, true),
+            array_search('invoices.create', $percorsi, true),
+        );
+    }
+
+    /**
      * 🚨 **Una fattura emessa non si riemette.** Rilanciare il giro del mese
      * farebbe due fatture per lo stesso mese.
      */

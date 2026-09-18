@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\StripeClient;
 use Throwable;
 
@@ -181,6 +182,22 @@ class PianiInVendita
 
         $sessione = $this->stripe()->checkout->sessions->create([
             'mode' => 'setup',
+
+            /*
+             * 🚨 **Anche qui, e l'ha detto Stripe** — trovato nella sandbox il
+             * 18/09, non nei test.
+             *
+             * ⛔ Senza questa riga Stripe rifiuta la sessione: *«Invalid mode:
+             * setup. Managed Payments, which is enabled by default on your
+             * account, only supports mode: subscription or mode: payment»*.
+             *
+             * ⚠️ **I test col finto non potevano accorgersene**: il finto accetta
+             * qualunque cosa. È la stessa trappola di `Cassa` del 27/08, in una
+             * strada nuova — e il motivo per cui ogni richiesta nuova va fatta
+             * accettare a Stripe **vero**, non solo al finto.
+             */
+            'managed_payments' => ['enabled' => false],
+
             'customer' => $cliente,
             'payment_method_types' => ['card'],
             'metadata' => $meta,
@@ -388,7 +405,19 @@ class PianiInVendita
                     'currency' => 'eur',
                     'unit_amount' => (int) $nuovo->price_cents,
                     'recurring' => ['interval' => 'month'],
-                    'product_data' => ['name' => $nuovo->name],
+
+                    /*
+                     * 🚨 **`product` e non `product_data`, e l'ha detto Stripe**
+                     * — trovato nella sandbox il 18/09, non nei test.
+                     *
+                     * ⛔ *«Received unknown parameter:
+                     * items[0][price_data][product_data]. Did you mean
+                     * product?»* Nel **checkout** il prodotto si descrive al
+                     * volo; nell'API degli **abbonamenti** no: vuole l'id di un
+                     * prodotto che esiste. Col finto sarebbe passato, e il primo
+                     * trainer che cambiava piano avrebbe visto un errore.
+                     */
+                    'product' => $this->prodottoDel($nuovo),
                 ],
             ]],
 
@@ -527,6 +556,29 @@ class PianiInVendita
             }
 
             $riga->forceFill(['ends_at' => $quando, 'rinnova' => false])->save();
+        }
+    }
+
+    /**
+     * 🆕 **Il prodotto Stripe di questo piano**, stabile — trovato o creato.
+     *
+     * 💡 **Un prodotto per piano, con un id nostro** (`tcai_piano_<codice>`):
+     * la seconda volta si ritrova invece di crearne uno nuovo a ogni cambio. ⚠️ E
+     * così la fattura del mese dopo porta il nome del piano **nuovo**: riusare il
+     * prodotto dell'abbonamento di prima scriverebbe «5 allievi» su chi ne paga 15.
+     */
+    private function prodottoDel(Plan $piano): string
+    {
+        $id = 'tcai_piano_'.$piano->code;
+
+        try {
+            return (string) $this->stripe()->products->retrieve($id)->id;
+        } catch (InvalidRequestException) {
+            return (string) $this->stripe()->products->create([
+                'id' => $id,
+                'name' => $piano->name,
+                'metadata' => ['piano' => $piano->code],
+            ])->id;
         }
     }
 
