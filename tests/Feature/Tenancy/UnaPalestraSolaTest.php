@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WorkoutPlan;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\Exceptions\SeiGiaInUnaPalestraException;
 use App\Services\Tenancy\InvitiDelTrainer;
@@ -17,6 +18,7 @@ use App\Services\Tenancy\UnisciAUnaPalestra;
 use App\Support\Tenancy\TenantContext;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -187,6 +189,52 @@ final class UnaPalestraSolaTest extends TestCase
             ->assertOk();
 
         $this->assertSame($ares->getKey(), $allievo->fresh()->tenant_id);
+    }
+
+    /**
+     * 🚨 **Le schede scritte da una palestra restano alla palestra** — 8.5.1.c,
+     * 18/09/2026.
+     *
+     * 📌 Il committente: *«le schede restano sul telefono dell'allievo che le ha
+     * ricevute. Quelle del trainer restano al trainer e quelle delle palestre
+     * alle palestre. Le schede sul server non vengono proprio modificate da
+     * niente.»*
+     *
+     * ⚠️ **Questo test esiste perché è facile convincersi del contrario**: io
+     * stesso, il 18/09, avevo posto la domanda *«cambiando palestra l'allievo
+     * perde le schede?»* e ci avevo costruito sopra una migrazione. Non serviva:
+     * il codice faceva già la cosa giusta. 💡 Questo lo tiene fermo, così nessuno
+     * lo «aggiusta» per sbaglio.
+     */
+    #[Test]
+    public function cambiando_palestra_le_schede_della_palestra_restano_li(): void
+    {
+        [$olimpo, $capoOlimpo] = $this->palestra('Olimpo', 'olimpo', 'OLIM2345');
+        [$ares, $capoAres] = $this->palestra('Ares', 'ares', 'ARES2345');
+
+        $coach = $this->creaUtente($olimpo, UserRole::Trainer, 'coach-olimpo@esempio.test');
+        $iscritto = $this->creaUtente($olimpo, UserRole::Member, 'schede@esempio.test');
+
+        $dellaPalestra = $this->ctx()->runAs($olimpo, fn () => WorkoutPlan::create([
+            'tenant_id' => $olimpo->getKey(),
+            'member_id' => $iscritto->getKey(),
+            'created_by' => $coach->getKey(),
+            'name' => 'Scheda scritta dalla palestra',
+        ]));
+
+        app(InvitiInPalestra::class)->accetta(
+            $this->invito($ares, $capoAres),
+            $iscritto->fresh(),
+            lasciaLaPrecedente: true,
+        );
+
+        $this->assertSame($ares->getKey(), $iscritto->fresh()->tenant_id, 'non ha cambiato palestra');
+
+        $this->assertSame(
+            $olimpo->getKey(),
+            (int) DB::table('workout_plans')->where('id', $dellaPalestra->getKey())->value('tenant_id'),
+            'la scheda scritta da Olimpo e finita in unaltra palestra',
+        );
     }
 
     /**

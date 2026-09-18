@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\ChiSiVede;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -74,7 +76,31 @@ class SpazioDelPannello
 
         $scelto = (int) $request->session()->get(self::CHIAVE, 0);
 
-        if ($scelto === 0 || $scelto === $utente->tenant_id) {
+        /*
+         * ══ 🆕 🏠 SENZA UNA SCELTA, NELLA PALESTRA — decisione 2, 18/09/2026 ══
+         *
+         * 🚨 **Chi a casa non ha niente da fare deve atterrare dove lavora.**
+         * Da quando *«ogni trainer ha sempre uno spazio suo»*, un trainer di
+         * palestra ha come casa uno spazio personale **vuoto**: senza questo
+         * ramo, al primo accesso si ritrovava davanti un pannello senza iscritti,
+         * senza schede, senza niente — e avrebbe pensato che la migrazione gli
+         * avesse cancellato il lavoro.
+         *
+         * ⚠️ **Solo se a casa non ha un ruolo da pannello.** Un free trainer con
+         * un giro suo ha il suo lavoro lì, e deve partire da lì come prima: si
+         * sceglie la palestra solo quando la casa non offre niente.
+         */
+        if ($scelto === 0) {
+            $predefinita = $this->palestraDiChiNonHaNienteACasa($utente);
+
+            if ($predefinita !== null) {
+                $this->contesto->set($predefinita);
+            }
+
+            return $next($request);
+        }
+
+        if ($scelto === $utente->tenant_id) {
             return $next($request);
         }
 
@@ -113,5 +139,47 @@ class SpazioDelPannello
         $this->contesto->set($palestra);
 
         return $next($request);
+    }
+
+    /**
+     * 🆕 La palestra in cui far atterrare chi, a casa, non ha niente da fare.
+     *
+     * ⚠️ **Si legge `model_has_roles` a mano**, e non con `hasAppRole()`: quello
+     * mette in cache la risposta per spazio, e chiederlo qui — prima che il
+     * contesto sia deciso — la scriverebbe per lo spazio sbagliato.
+     *
+     * 💡 La **prima** palestra, in ordine di id: stabile fra un accesso e
+     * l'altro. Chi ne ha più d'una sceglie le altre da «Cambia spazio».
+     */
+    private function palestraDiChiNonHaNienteACasa(User $utente): ?Tenant
+    {
+        $haUnRuoloACasa = DB::table('model_has_roles as mhr')
+            ->join('roles as r', function ($join): void {
+                $join->on('r.id', '=', 'mhr.role_id')
+                    ->on('r.tenant_id', '=', 'mhr.tenant_id');
+            })
+            ->where('mhr.model_id', $utente->getKey())
+            ->where('mhr.model_type', $utente->getMorphClass())
+            ->where('mhr.tenant_id', $utente->tenant_id)
+            ->whereIn('r.name', [
+                UserRole::GymAdmin->value,
+                UserRole::Trainer->value,
+                UserRole::FreeTrainer->value,
+            ])
+            ->exists();
+
+        if ($haUnRuoloACasa) {
+            return null;
+        }
+
+        $prima = $this->chiSiVede->palestreDoveAllena($utente)->sort()->first();
+
+        if ($prima === null) {
+            return null;
+        }
+
+        $palestra = Tenant::withoutGlobalScopes()->find($prima);
+
+        return $palestra !== null && $palestra->isActive() ? $palestra : null;
     }
 }

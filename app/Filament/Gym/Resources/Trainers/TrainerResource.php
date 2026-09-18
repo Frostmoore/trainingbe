@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Filament\Gym\Resources\Trainers\Pages\CreateTrainer;
 use App\Filament\Gym\Resources\Trainers\Pages\EditTrainer;
 use App\Filament\Gym\Resources\Trainers\Pages\ListTrainers;
+use App\Models\Scopes\TenantScope;
 use App\Models\User;
 use App\Services\Tenancy\TogliUnTrainerDallaPalestra;
 use App\Support\Tenancy\TenantContext;
@@ -59,7 +60,24 @@ class TrainerResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->withoutGlobalScopes([SoftDeletingScope::class])
+            /*
+             * ══ 🆕 🚨 ANCHE IL `TenantScope`, O I TRAINER SPARISCONO — 18/09 ══
+             *
+             * ⛔ `User` usa `BelongsToTenant`, quindi di serie questa query
+             * guardava solo chi ha `users.tenant_id` = la palestra. 🚨 Un
+             * trainer con **la casa altrove** — cioè, dalla decisione 2, *ogni*
+             * trainer — **spariva dall'elenco**: la palestra non lo vedeva, non
+             * lo poteva aprire, e non lo poteva congedare.
+             *
+             * ⚠️ **E succedeva già prima**, per chi ha due cappelli (AH.1-quater):
+             * un trainer con un giro suo, che lavora anche qui, non compariva
+             * fra i trainer della palestra che lo paga.
+             *
+             * 💡 **Toglierlo non apre niente a nessuno**: l'isolamento lo fa già
+             * il filtro qui sotto, che pretende il ruolo `trainer` **dentro
+             * questa palestra**. Si vede chi lavora qui, e solo lui.
+             */
+            ->withoutGlobalScopes([SoftDeletingScope::class, TenantScope::class])
             ->whereIn('id', DB::table('model_has_roles')
                 ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
                 ->where('roles.name', UserRole::Trainer->value)

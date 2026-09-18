@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Scopes\TenantScope;
 use App\Observers\ChiEsceDallaPalestraOsservatore;
+use App\Services\Tenancy\ChiSiVede;
 use App\Support\Tempo\GiornoLocale;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
@@ -522,7 +523,26 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 
         return match ($panel->getId()) {
             'god' => $this->isSuperAdmin(),
-            'admin' => ($this->isGymAdmin() || $this->isTrainer() || $this->isFreeTrainer())
+
+            /*
+             * 🆕 🏠 **E chi allena in una palestra, anche se a casa non è
+             * nessuno** — decisione 2, 18/09/2026.
+             *
+             * 🚨 **Senza questa riga la migrazione avrebbe chiuso fuori dei
+             * trainer veri.** Da quando *«ogni trainer ha sempre uno spazio
+             * suo»*, un trainer di palestra ha come casa uno spazio personale
+             * dove è `free_user`. E `isTrainer()` risponde **nel contesto
+             * corrente**, che al login del pannello è proprio la casa: il
+             * trainer risultava non-trainer, e il pannello gli diceva di no.
+             *
+             * 🔬 Trovato **prima** di migrare, contando chi ne sarebbe stato
+             * toccato: su staging tre trainer, tutti e tre bloccati.
+             *
+             * 💡 Si chiede a `ChiSiVede`, che è la stessa regola che decide chi
+             * vede chi: una sola sorgente per «dove allena questa persona».
+             */
+            'admin' => ($this->isGymAdmin() || $this->isTrainer() || $this->isFreeTrainer()
+                    || $this->allenaInUnaPalestra())
                 && $this->tenant?->isActive() === true,
             default => false,
         };
@@ -844,6 +864,22 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     public function isFreeTrainer(): bool
     {
         return $this->hasAppRole(UserRole::FreeTrainer);
+    }
+
+    /**
+     * 🆕 🏠 **Allena in almeno una palestra?** — decisione 2, 18/09/2026.
+     *
+     * ⚠️ **Diverso da `isTrainer()`**, e la differenza è il motivo per cui
+     * esiste: `isTrainer()` risponde nel **contesto corrente**, questa in
+     * **tutti** gli spazi. Da quando ogni trainer ha una casa sua, le due
+     * risposte divergono proprio al login del pannello, quando il contesto è
+     * ancora la casa.
+     */
+    public function allenaInUnaPalestra(): bool
+    {
+        return app(ChiSiVede::class)
+            ->palestreDoveAllena($this)
+            ->isNotEmpty();
     }
 
     /**

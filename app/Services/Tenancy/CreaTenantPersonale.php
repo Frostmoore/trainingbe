@@ -177,4 +177,55 @@ final class CreaTenantPersonale
             });
         });
     }
+
+    /**
+     * 🆕 🏠 **Uno spazio personale per chi esiste già** — decisione 2, 18/09/2026.
+     *
+     * 📌 Il committente: *«ogni trainer ha sempre uno spazio suo»*.
+     *
+     * ⚠️ `__invoke()` crea **persona e spazio insieme**, ed è la strada di chi si
+     * registra. Qui la persona c'è già — un trainer che finora viveva dentro una
+     * palestra — e le serve solo la casa.
+     *
+     * 💡 **Stessi tre passi, nello stesso ordine**, e per questo sta in questa
+     * classe: i ruoli spatie creati **dentro** il tenant (in modalità teams
+     * `assignRole()` li cerca lì), il ruolo assegnato, e `proprietario_id`
+     * scritto per ultimo. ⛔ Due classi che creano spazi personali
+     * divergerebbero proprio su uno di questi tre.
+     *
+     * ⚠️ **Non cambia `users.tenant_id`, e non sposta niente**: lo decide chi
+     * chiama. Qui si costruisce la casa, il trasloco è un'altra cosa.
+     */
+    public function perChiEsisteGia(User $utente, UserRole $ruolo = UserRole::FreeUser): Tenant
+    {
+        return DB::transaction(function () use ($utente, $ruolo): Tenant {
+            $tenant = Tenant::create([
+                'name' => $utente->name,
+                'slug' => Tenant::generatePersonalSlug(),
+                'join_code' => Tenant::generateJoinCode(),
+                'kind' => TenantKind::Personal,
+                'status' => TenantStatus::Active,
+                'contact_email' => $utente->email,
+            ]);
+
+            $this->context->runAs($tenant, function () use ($tenant, $utente, $ruolo): void {
+                foreach (UserRole::tenantScoped() as $r) {
+                    Role::create([
+                        'name' => $r->value,
+                        'guard_name' => 'web',
+                        'tenant_id' => $tenant->id,
+                    ]);
+                }
+
+                $fresco = User::withoutGlobalScopes()->findOrFail($utente->getKey());
+                $fresco->unsetRelation('roles');
+                $fresco->assignRole($ruolo->value);
+                $fresco->unsetRelation('roles');
+            });
+
+            $tenant->forceFill(['proprietario_id' => $utente->getKey()])->save();
+
+            return $tenant;
+        });
+    }
 }
