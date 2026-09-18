@@ -443,6 +443,65 @@ class PianiInVendita
         ]);
     }
 
+    // ═════════════════════════════ IL LISTINO ════════════════════════════════
+
+    /**
+     * 🆕 **Cosa può comprare questa persona, e cosa ha già** — §9.6, 18/09/2026.
+     *
+     * 💡 **Sta qui, accanto alle regole di vendita**, e non nel controller: «chi
+     * può comprare cosa» è una regola sola, e se la leggessero due posti diversi
+     * — uno per mostrare, uno per vendere — il giorno che divergono l'app offre un
+     * piano che il server poi rifiuta.
+     *
+     * ⚠️ **Vuoto per chi non è titolare**: un iscritto non vede i piani della sua
+     * palestra, e non deve — non li può comprare.
+     *
+     * @return array{piani: list<array<string, mixed>>, piano_attuale: ?string, puo_cambiare: bool, pagamento_fallito_il: ?string}
+     */
+    public function listinoPer(User $utente): array
+    {
+        $vuoto = ['piani' => [], 'piano_attuale' => null, 'puo_cambiare' => false, 'pagamento_fallito_il' => null];
+
+        if (! Cassa::loPuoGestire($utente) || $utente->tenant === null) {
+            return $vuoto;
+        }
+
+        $tenant = $utente->tenant;
+        $tipo = $tenant->ePersonale() ? PlanKind::Trainer : PlanKind::Gym;
+
+        $attivo = PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->getKey())
+            ->attivi()
+            ->with('plan')
+            ->orderByDesc('starts_at')
+            ->first();
+
+        return [
+            'piani' => Plan::query()->pubblici()->diTipo($tipo)->orderBy('price_cents')->get()
+                ->map(fn (Plan $p): array => [
+                    'codice' => $p->code,
+                    'nome' => $p->name,
+                    'prezzo_cent' => (int) $p->price_cents,
+                    'posti' => $p->max_members,
+                    'posti_trainer' => $p->max_trainers,
+                    'a_consumo' => $p->aConsumo(),
+                    'prezzo_iscritto_cent' => $p->prezzo_iscritto_cent,
+                    'minimo_iscritti' => $p->minimo_iscritti,
+                ])->values()->all(),
+
+            /*
+             * ⚠️ **Solo se è della stessa famiglia**: il piano personale di un
+             * trainer non è «il suo piano da trainer», e marcarlo come attuale
+             * farebbe credere di averne già uno.
+             */
+            'piano_attuale' => $attivo?->plan?->kind === $tipo ? $attivo->plan->code : null,
+
+            'puo_cambiare' => $this->abbonamentoStripeAttivo($tenant) !== null,
+
+            'pagamento_fallito_il' => $attivo?->pagamento_fallito_il?->toDateString(),
+        ];
+    }
+
     // ═════════════════════════════ LE REGOLE ═════════════════════════════════
 
     /**

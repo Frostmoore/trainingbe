@@ -627,6 +627,79 @@ final class StripeInTuttiGliScenariTest extends TestCase
         app(PianiInVendita::class)->cambia($this->trainer(), 'trainer_30');
     }
 
+    // ═══════════════════════════ 9.6 — le superfici ═══════════════════════════
+
+    /**
+     * 💡 **Il listino mostra i piani giusti a chi li può comprare** — e solo a lui.
+     *
+     * ⚠️ Mostrare e vendere leggono la **stessa** regola: se divergessero, l'app
+     * offrirebbe un piano che il server poi rifiuta.
+     */
+    #[Test]
+    public function il_listino_mostra_i_piani_giusti_a_ognuno(): void
+    {
+        $coach = $this->trainer();
+        [$palestra, $titolare] = $this->palestraConTitolare();
+        $iscritto = $this->creaUtente($palestra, UserRole::Member, 'solo-iscritto@esempio.test');
+
+        $vendita = app(PianiInVendita::class);
+
+        $this->assertSame(
+            ['trainer_5', 'trainer_15', 'trainer_30'],
+            array_column($vendita->listinoPer($coach)['piani'], 'codice'),
+            'a un trainer non si mostrano i suoi piani',
+        );
+
+        $this->assertContains('gym_consumo', array_column($vendita->listinoPer($titolare)['piani'], 'codice'));
+        $this->assertNotContains('trainer_5', array_column($vendita->listinoPer($titolare)['piani'], 'codice'));
+
+        /*
+         * ⛔ **Un iscritto non vede niente**: non può comprare il piano della sua
+         * palestra, e mostrarglielo vorrebbe dire invitarlo a un rifiuto.
+         */
+        $this->assertSame([], $vendita->listinoPer($iscritto)['piani']);
+    }
+
+    /** 🚨 E dice il piano attuale, e il pagamento non riuscito. */
+    #[Test]
+    public function il_listino_dice_il_piano_e_il_pagamento_fallito(): void
+    {
+        $coach = $this->trainer();
+        $riga = $this->canoneStripe($coach->tenant, 'trainer_15');
+        $riga->forceFill(['pagamento_fallito_il' => now()->subDays(2)])->save();
+
+        $risposta = $this->actingAs($coach, 'sanctum')->getJson('/api/v1/billing/listino')->assertOk();
+
+        $risposta->assertJsonPath('data.piano_attuale', 'trainer_15');
+        $risposta->assertJsonPath('data.puo_cambiare', true);
+        $this->assertNotNull($risposta->json('data.pagamento_fallito_il'), 'il pagamento fallito non arriva allapp');
+    }
+
+    /** 💡 La pagina del pannello si apre al titolare della palestra. */
+    #[Test]
+    public function la_pagina_del_piano_si_apre_al_titolare(): void
+    {
+        [, $titolare] = $this->palestraConTitolare();
+
+        $this->actingAs($titolare)
+            ->get('/admin/il-tuo-piano')
+            ->assertOk()
+            ->assertSee('Il tuo piano')
+            ->assertSee('Palestra');
+    }
+
+    /**
+     * ⛔ **Un trainer dipendente non sceglie il piano della palestra che lo paga.**
+     */
+    #[Test]
+    public function la_pagina_del_piano_non_si_apre_a_chi_non_e_titolare(): void
+    {
+        [$palestra] = $this->palestraConTitolare();
+        $coach = $this->creaUtente($palestra, UserRole::Trainer, 'dipendente@esempio.test');
+
+        $this->actingAs($coach)->get('/admin/il-tuo-piano')->assertForbidden();
+    }
+
     /** 🔌 E la rotta risponde con il messaggio, non con un errore tecnico. */
     #[Test]
     public function la_rotta_del_cambio_risponde_con_il_messaggio(): void

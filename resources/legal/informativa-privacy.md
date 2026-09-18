@@ -1,6 +1,6 @@
 # Informativa privacy
 
-> **Ultimo aggiornamento:** 16 agosto 2026
+> **Ultimo aggiornamento:** 18 settembre 2026
 
 ---
 
@@ -11,10 +11,11 @@
 Sonno, battito, variabilità cardiaca, peso, misure e foto dei progressi **non stanno sui nostri
 server**: vivono nel telefono di chi li produce, in un archivio locale.
 
-⚠️ **Con una sola eccezione, e la diciamo subito**: se accendi «Sonno e recupero nel consiglio del
+⚠️ **Con due eccezioni, e le diciamo subito**: se accendi «Sonno e recupero nel consiglio del
 giorno», ore dormite, risvegli, fasi, variabilità e battito a riposo **partono verso Anthropic**
-insieme al resto del consiglio. Restano comunque fuori dai nostri server — passano, non si fermano.
-Senza quella casella non parte niente, e il consiglio funziona lo stesso.
+insieme al resto del consiglio; e **il peso** parte sempre con il consiglio del giorno (§3.4).
+Restano comunque fuori dai nostri server — passano, non si fermano.
+Senza quella casella del sonno non parte niente, e il consiglio funziona lo stesso.
 Non è una promessa organizzativa — è una proprietà del sistema, e le tabelle che li contenevano
 **sono state cancellate** (fasi S1-S5 di `plan_security_and_retention.md`).
 
@@ -62,7 +63,6 @@ due informative, o una con due sezioni.
 | Palestra di appartenenza, trainer assegnato | Erogazione del servizio | Art. 6(1)(b) |
 | Sesso, data di nascita, altezza, livello di attività, obiettivo | Calcolo del fabbisogno calorico | 🚨 **Art. 9(2)(a) — consenso esplicito** |
 | **Diario alimentare** | Registro di ciò che si mangia | 🚨 **Art. 9(2)(a)** — vedi §3.4 |
-| Allenamenti svolti, serie, ripetizioni | Storico dell'attività | Art. 6(1)(b) |
 | Schede **modello** della palestra | Patrimonio della palestra | Art. 6(1)(f) — legittimo interesse |
 | **Messaggi cifrati** | Recapito | Art. 6(1)(b) · ⚠️ **illeggibili per noi** |
 | Chiave **pubblica** di cifratura | Recapito dei messaggi | Art. 6(1)(b) |
@@ -98,7 +98,20 @@ che non contengono nessun nome.
   — 🚨 **salvo la casella «Sonno e recupero nel consiglio del giorno»**: se la accendi, questi dati
   vengono **trasmessi ad Anthropic** al momento del consiglio. Non li conserviamo noi, e senza il
   tuo consenso non partono
-- **Peso, massa grassa, circonferenze**
+- **Il battito durante il giorno** (un valore ogni pochi minuti) e **i passi della giornata**, da
+  Health Connect / HealthKit: servono a stimare lo sforzo e le calorie del movimento. Restano sul
+  telefono
+- **Le calorie bruciate con l'attività e gli allenamenti** registrati dall'orologio (tipo, durata,
+  distanza, passi). ⚠️ Con il consenso su sonno e recupero, di ogni allenamento della settimana
+  partono **giorno, minuti, tipo e calorie** dentro il consiglio (§3.4); distanza, passi e percorso
+  restano sul telefono
+- **Massa grassa, massa magra, circonferenze** — 🚨 la massa grassa è un dato sulla **composizione
+  del tuo corpo**, cioè sulla salute. **Non la misuriamo noi**: se colleghi la bilancia a Health
+  Connect / Apple Health, l'app la **legge da lì**, con un permesso a parte che puoi togliere da
+  solo. Non scriviamo niente in Health Connect, e da qui non parte mai
+- **Il peso** — letto da Health Connect o scritto da te. ⚠️ **Resta sul telefono, con
+  un'eccezione**: parte insieme al consiglio del giorno (§3.4)
+- **Gli allenamenti svolti**, con serie, ripetizioni e carichi — sul telefono dal 23 agosto 2026
 - **Foto dei progressi**
 - **Schede ricevute dal trainer** — 🚨 il *modello* resta sul server, ma **il legame fra la persona
   e il programma no**: da un programma post-infortunio si capisce cos'è successo a chi lo esegue
@@ -126,8 +139,14 @@ Anthropic PBC**, negli Stati Uniti.
 materiale dell'**art. 9**, e per questo il consenso è **separato** da tutti gli altri e si concede
 a parte. Senza, il server rifiuta la chiamata — non è un controllo dell'interfaccia.
 
-💡 **Quello che NON esce mai**: peso, misure, foto dei progressi. Esce il testo del diario e **un
-numero calcolato sul telefono** (il fabbisogno calorico), che il server inoltra senza conservarlo.
+💡 **Quello che NON esce mai**: misure, massa grassa, foto dei progressi. Esce il testo del diario e
+**un numero calcolato sul telefono** (il fabbisogno calorico), che il server inoltra senza
+conservarlo.
+
+🔴 **Il peso invece esce, dal 31 agosto 2026**: viaggia insieme al consiglio del giorno. Serve a
+dare senso all'obiettivo — 1.900 calorie su un consumo di 2.000 e su uno di 3.000 sono due cose
+opposte, e senza il peso il consiglio non può distinguerle. **Non lo conserviamo**: entra nella
+richiesta e finisce lì.
 
 ### 3.3-bis 🆕 Sonno e recupero — **solo se lo accendi tu**
 

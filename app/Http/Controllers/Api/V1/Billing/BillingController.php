@@ -106,6 +106,17 @@ class BillingController extends Controller
              * niente invece di inventare una data.
              */
             'abbonamento_attivo' => $this->abbonamentoAttivo($utente),
+
+            /*
+             * 🆕 💳 **I piani da trainer o da palestra** — §9.6, 18/09/2026.
+             *
+             * ⛔ Prima l'app non li conosceva: il listino mandava solo il piano
+             * personale e i gettoni, e un trainer non aveva da nessuna parte un
+             * pulsante per pagare il suo piano. `piani`, `piano_attuale`,
+             * `puo_cambiare` e `pagamento_fallito_il` vengono da
+             * `PianiInVendita::listinoPer()`, accanto alle regole di vendita.
+             */
+            ...app(PianiInVendita::class)->listinoPer($utente),
         ]]);
     }
 
