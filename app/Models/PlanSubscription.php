@@ -29,6 +29,9 @@ class PlanSubscription extends Model
     protected $fillable = [
         'tenant_id', 'plan_id', 'starts_at', 'ends_at',
         'stripe_subscription_id', 'stripe_customer_id', 'rinnova',
+
+        // 🆕 3b-AH 8.1.6 — la pausa di chi entra in una palestra.
+        'in_pausa_dal', 'in_pausa_per_tenant_id', 'restavano_giorni',
     ];
 
     protected function casts(): array
@@ -36,7 +39,20 @@ class PlanSubscription extends Model
         return [
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'in_pausa_dal' => 'datetime',
+            'restavano_giorni' => 'integer',
         ];
+    }
+
+    /**
+     * 🆕 ⏸️ **È fermo perché questa persona è entrata in una palestra?**
+     *
+     * ⚠️ Diverso da «scaduto»: un abbonamento in pausa **riprenderà**, e la
+     * data di fine non è stata toccata. Vedi `LaPausaDellAbbonamento`.
+     */
+    public function eInPausa(): bool
+    {
+        return $this->in_pausa_dal !== null;
     }
 
     public function plan(): BelongsTo
@@ -57,6 +73,18 @@ class PlanSubscription extends Model
     public function scopeAttivi(Builder $query): Builder
     {
         return $query
+            /*
+             * 🆕 🚨 **Un abbonamento in pausa NON è attivo** — 3b-AH 8.1.6.
+             *
+             * ⛔ Senza questa riga la pausa sarebbe solo decorativa: la persona
+             * entra in palestra, viene coperta dalla palestra, e **resta anche
+             * abbonata** — due coperture per la stessa cosa, e nessun errore.
+             *
+             * ⚠️ Sta **nello scope** e non nei chiamanti perché i chiamanti sono
+             * tanti — `PianoAttivo`, `AddebitoDelMese`, `InvitiInPalestra`,
+             * `Cassa` — e basterebbe dimenticarsene in uno.
+             */
+            ->whereNull('in_pausa_dal')
             ->where('starts_at', '<=', now())
             ->where(fn (Builder $q): Builder => $q
                 ->whereNull('ends_at')
@@ -66,6 +94,10 @@ class PlanSubscription extends Model
 
     public function eAttivo(): bool
     {
+        if ($this->eInPausa()) {
+            return false;
+        }
+
         if ($this->starts_at !== null && $this->starts_at->isFuture()) {
             return false;
         }

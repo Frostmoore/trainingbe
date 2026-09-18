@@ -10,6 +10,7 @@ use App\Enums\UserRole;
 use App\Models\Conversation;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\LaPausaDellAbbonamento;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -73,7 +74,11 @@ class UnisciAUnaPalestra
         'users',
     ];
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly LaPausaDellAbbonamento $pausa,
+        private readonly LoSlotDelTrainer $slot,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -126,6 +131,38 @@ class UnisciAUnaPalestra
         UserRole $ruolo = UserRole::Member,
         string $campo = 'gym',
     ): Tenant {
+        /*
+         * ══ 🆕 🚨 CHI VIENE DALLO SPAZIO DI UN TRAINER — AH.1-ter.6 ═════════
+         *
+         * ⛔ **Prima questo caso era impossibile, e nessuno se n'era accorto.**
+         * Un allievo che accetta l'invito di un free trainer viene traslocato
+         * nello spazio del trainer (`traslocaSeHaUnoSpazioSuo`). Da quel
+         * momento il suo spazio **non è più suo** e ha dentro altre persone:
+         * `pretendiUnoSpazioTuoEVuoto()` rispondeva *«Sei già iscritto a una
+         * palestra. Per cambiarla, parlane con loro.»*
+         *
+         * 🚨 Cioè: **l'allievo di un trainer indipendente non poteva entrare in
+         * NESSUNA palestra.** Ed è precisamente lo scenario che il committente
+         * ha chiesto di far funzionare — *«un allievo che successivamente si
+         * iscrive anche alla palestra dove lavora il trainer»*.
+         *
+         * ⚠️ Trovato con un test rosso scrivendo AH.1-ter.6, non leggendo.
+         *
+         * 💡 La soluzione non è allentare la guardia: è **estrarre le righe di
+         * una persona sola**, che è esattamente quello che sa fare
+         * `EsciDaUnaPalestra`. Il tenant del trainer resta in piedi con dentro
+         * gli altri suoi allievi.
+         */
+        $attuale = $utente->tenant;
+
+        if ($attuale !== null
+            && ! $attuale->is($destinazione)
+            && ! $attuale->eDi($utente)
+            && $attuale->ePersonale()
+        ) {
+            return $this->daLoSpazioDiUnTrainer($utente, $attuale, $destinazione, $ruolo, $campo);
+        }
+
         $vecchio = $this->pretendiUnoSpazioTuoEVuoto($utente, $campo);
 
         if ($destinazione->is($vecchio)) {
@@ -144,6 +181,81 @@ class UnisciAUnaPalestra
         }
 
         return $this->trasferisci($utente, $vecchio, $destinazione, $ruolo, $campo);
+    }
+
+    /**
+     * 🆕 **Entrare in una palestra venendo dallo spazio di un trainer** —
+     * AH.1-ter.6, 18/09/2026.
+     *
+     * ══ ⚠️ IN COSA DIFFERISCE DAL TRASLOCO NORMALE ════════════════════════
+     *
+     * | | Trasloco normale | Da uno spazio altrui |
+     * |---|---|---|
+     * | Cosa si sposta | **tutte** le righe del tenant | **solo le sue** |
+     * | Il tenant di partenza | sospeso e cancellato | ⛔ **resta in piedi**: dentro ci sono gli altri allievi |
+     * | Il legame col trainer | — | 🚨 **non si chiude**: si sospende, se quel trainer lavora qui |
+     *
+     * 🚨 **Il legame non si chiude, ed è il punto.** Uscire dallo spazio di un
+     * trainer per entrare in una palestra **non** vuol dire licenziare il
+     * trainer: se lui lavora lì, i due si ritrovano dentro la stessa palestra —
+     * ed è il caso per cui esiste `LoSlotDelTrainer`. ⛔ Chiuderlo qui
+     * renderebbe la domanda sullo slot una domanda su un rapporto già morto.
+     */
+    private function daLoSpazioDiUnTrainer(
+        User $utente,
+        Tenant $spazioDelTrainer,
+        Tenant $palestra,
+        UserRole $ruolo,
+        string $campo,
+    ): Tenant {
+        if (! $palestra->isActive()) {
+            throw ValidationException::withMessages([
+                $campo => __('Questo spazio non è attivo.'),
+            ]);
+        }
+
+        $giaPresente = User::withoutGlobalScopes()
+            ->where('tenant_id', $palestra->getKey())
+            ->where('email', $utente->email)
+            ->exists();
+
+        if ($giaPresente) {
+            throw ValidationException::withMessages([
+                $campo => __('In questa palestra esiste già un account con la tua email. Contattala.'),
+            ]);
+        }
+
+        return DB::transaction(function () use ($utente, $spazioDelTrainer, $palestra, $ruolo): Tenant {
+            $spostate = app(EsciDaUnaPalestra::class)
+                ->portaViaLeSueRighe($utente, $spazioDelTrainer, $palestra);
+
+            /*
+             * ⚠️ **Prima di cambiargli il tenant.** L'abbonamento da fermare è
+             * quello del suo spazio — e chi sta nello spazio di un trainer non
+             * ne ha uno suo, quindi qui di solito non c'è niente da fermare.
+             * 💡 Si chiama lo stesso: la guardia `eDi()` dentro il servizio
+             * risponde da sola, e il giorno in cui questo caso cambierà non
+             * bisognerà ricordarsi di aggiungere la chiamata.
+             */
+            $this->pausa->metti($utente, $spazioDelTrainer, $palestra);
+
+            $utente->forceFill(['tenant_id' => $palestra->getKey()])->save();
+
+            $this->rifaiIRuoli($utente, $spazioDelTrainer, $palestra, $ruolo);
+
+            $this->slot->sospendiPerIngressoInPalestra($utente, $palestra);
+
+            $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
+
+            Log::info('Utente passato dallo spazio di un trainer a una palestra', [
+                'user_id' => $utente->getKey(),
+                'da' => $spazioDelTrainer->getKey(),
+                'a' => $palestra->getKey(),
+                'righe_spostate' => $spostate,
+            ]);
+
+            return $palestra;
+        });
     }
 
     /**
@@ -249,9 +361,42 @@ class UnisciAUnaPalestra
         return DB::transaction(function () use ($utente, $vecchio, $palestra, $ruolo): Tenant {
             $spostate = $this->spostaLeRighe($vecchio, $palestra);
 
+            /*
+             * ══ 🆕 ⏸️ LA PAUSA DELL'ABBONAMENTO — 3b-AH 8.1.6, 18/09/2026 ════
+             *
+             * 📌 Il committente: *«Assicurati che l'abbonamento dell'allievo
+             * venga sospeso se si iscrive a una palestra, se era abbonato.»*
+             *
+             * 🚨 **Prima non succedeva niente**, e costava soldi veri: la riga
+             * restava su un tenant che qui sotto viene sospeso e cancellato, e
+             * **Stripe continuava ad addebitare** a una persona già coperta
+             * dalla palestra.
+             *
+             * ⚠️ **Prima di cambiargli il `tenant_id`**, e con `$vecchio` in
+             * mano: dopo non ci sarebbe più modo di sapere quale abbonamento
+             * fermare.
+             */
+            $this->pausa->metti($utente, $vecchio, $palestra);
+
             $utente->forceFill(['tenant_id' => $palestra->getKey()])->save();
 
             $this->rifaiIRuoli($utente, $vecchio, $palestra, $ruolo);
+
+            /*
+             * ══ 🆕 🎟️ GLI SLOT DEI SUOI TRAINER — AH.1-ter.6 ════════════════
+             *
+             * 🚨 **Dopo `rifaiIRuoli()`, non prima.** La sospensione riguarda i
+             * trainer che lavorano **in questa palestra**, e quell'elenco si
+             * legge dai ruoli: chiederlo prima che i ruoli siano a posto
+             * funzionerebbe lo stesso — i ruoli dei *trainer* non li tocca
+             * questa riga — ma l'ordine giusto è quello che regge anche il
+             * giorno in cui qualcuno cambia `rifaiIRuoli()`.
+             *
+             * ⛔ **Non chiude niente**: mette in sospeso e segna che al trainer
+             * va fatta una domanda. Liberare lo slot di default vorrebbe dire
+             * decidere al posto suo, nella direzione che gli toglie l'allievo.
+             */
+            $this->slot->sospendiPerIngressoInPalestra($utente, $palestra);
 
             $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
 

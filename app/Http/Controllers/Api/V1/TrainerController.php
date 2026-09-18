@@ -12,6 +12,7 @@ use App\Services\Billing\Exceptions\AbbonamentoTrainerScadutoException;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\ChiSiVede;
 use App\Services\Tenancy\InvitiDelTrainer;
+use App\Services\Tenancy\LoSlotDelTrainer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -256,6 +257,80 @@ class TrainerController extends Controller
         }
 
         return $utente;
+    }
+
+    /**
+     * 🆕 🎟️ **Le decisioni sullo slot che questo trainer deve ancora
+     * prendere** — AH.1-ter.6, 18/09/2026.
+     *
+     * 📌 Il committente aveva chiesto *«un modo di chiedere al trainer, che al
+     * momento del passaggio non e' presente»*: e' questo. L'app lo chiama
+     * all'apertura e mostra la modale se c'e' qualcosa.
+     *
+     * ⛔ **Non c'e' nessuna tabella di domande in sospeso**: le domande *sono*
+     * i rapporti sospesi senza risposta. Uno stato duplicato si disallinea da
+     * quello che descrive, e allora si chiede due volte o non si chiede.
+     */
+    public function slotDaDecidere(Request $request): JsonResponse
+    {
+        $trainer = $this->trainerOrAbort($request);
+
+        return response()->json([
+            'data' => app(LoSlotDelTrainer::class)->daDecidere($trainer)->map(
+                fn (object $r): array => [
+                    'member_id' => (int) $r->member_id,
+                    'nome' => $r->nome,
+                    'palestra' => $r->palestra,
+                    'sospeso_il' => $r->sospeso_il,
+                ],
+            )->values(),
+        ]);
+    }
+
+    /**
+     * 🆕 Il trainer risponde: **tengo** lo slot o lo **libero**.
+     *
+     * 📌 *«se il trainer decide di mantenere lo slot occupato, l'allievo passa
+     * alla palestra, poi se si dissocia dalla palestra torna al trainer. Se il
+     * trainer decide di liberare lo slot […] non torna al trainer.»*
+     *
+     * 🚨 **La scelta si dichiara sempre**, e non ha un valore di serie: e' una
+     * decisione che costa soldi in un verso e un allievo nell'altro, e un
+     * default sarebbe deciderla al posto suo.
+     */
+    public function decidiLoSlot(Request $request, int $member): JsonResponse
+    {
+        $trainer = $this->trainerOrAbort($request);
+
+        $dati = $request->validate([
+            'tengo_lo_slot' => ['required', 'boolean'],
+        ]);
+
+        $allievo = User::withoutGlobalScopes()->find($member);
+
+        if ($allievo === null) {
+            return response()->json(['message' => __('Questa persona non esiste.')], 404);
+        }
+
+        $fatto = app(LoSlotDelTrainer::class)->decidi(
+            $trainer,
+            $allievo,
+            (bool) $dati['tengo_lo_slot'],
+        );
+
+        if (! $fatto) {
+            /*
+             * ⚠️ **409 e non 404**: la persona esiste e il rapporto pure, ma non
+             * c'e' niente da decidere — o e' gia' stato deciso, o non e' mai
+             * stato sospeso. 💡 Un 404 farebbe cercare all'app una persona che
+             * c'e'.
+             */
+            return response()->json([
+                'message' => __('Su questa persona non ci sono scelte da fare.'),
+            ], 409);
+        }
+
+        return response()->json(['data' => ['deciso' => true]]);
     }
 
     /** @return array<int, string> i ruoli ammessi, per i test e per la documentazione */

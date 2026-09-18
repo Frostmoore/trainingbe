@@ -9,6 +9,7 @@ use App\Enums\TenantStatus;
 use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\LaPausaDellAbbonamento;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -145,7 +146,11 @@ final class EsciDaUnaPalestra
         'workout_plans',
     ];
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly LaPausaDellAbbonamento $pausa,
+        private readonly LoSlotDelTrainer $slot,
+    ) {}
 
     public function __invoke(User $utente): Tenant
     {
@@ -221,6 +226,35 @@ final class EsciDaUnaPalestra
 
             $this->rifaiIRuoli($utente, $palestra, $personale);
             $this->sciogliIlLegameConLaPalestra($utente, $palestra);
+
+            /*
+             * ══ 🆕 ⏸️ L'ABBONAMENTO RIPRENDE — 3b-AH 8.1.6, 18/09/2026 ══════
+             *
+             * 📌 *«…e che riprenda quando l'allievo torna libero.»*
+             *
+             * 🚨 **Dopo aver creato il tenant personale**, perché la riga
+             * dell'abbonamento ci si deve spostare sopra: il vecchio spazio è
+             * sospeso e cancellato, e lasciarcela sopra vorrebbe dire
+             * riattivare qualcosa che non troverà più nessuno. ⛔ È esattamente
+             * il motivo per cui prima non tornava niente.
+             *
+             * ⚠️ E chi **non era** abbonato esce non abbonato: qui non si crea
+             * niente, si riprende solo ciò che era stato messo in pausa.
+             */
+            $this->pausa->riprendi($utente, $palestra, $personale);
+
+            /*
+             * ══ 🆕 🎟️ E GLI SLOT TENUTI SI RIACCENDONO — AH.1-ter.6 ═════════
+             *
+             * 📌 *«se il trainer decide di mantenere lo slot occupato […] poi se
+             * si dissocia dalla palestra torna al trainer.»*
+             *
+             * ⛔ **Chi aveva liberato lo slot resta chiuso**, e non torna: quella
+             * riga ha `disattivato_il` valorizzato e il servizio non la guarda.
+             * 💡 È la metà della regola che dà senso all'altra — si pagava per
+             * prenotarsi il ritorno, e chi non ha pagato non lo ha prenotato.
+             */
+            $this->slot->riattivaPerUscitaDallaPalestra($utente, $palestra);
 
             Log::info('Un iscritto è uscito da una palestra', [
                 'user_id' => $utente->getKey(),
@@ -332,7 +366,18 @@ final class EsciDaUnaPalestra
     /**
      * @return array<string, int>
      */
-    private function portaViaLeSueRighe(User $utente, Tenant $da, Tenant $a): array
+    /**
+     * 🆕 **Pubblico da AH.1-ter.6** (18/09/2026): serve anche a
+     * `UnisciAUnaPalestra` quando una persona entra in una palestra venendo
+     * dallo spazio di un **trainer**.
+     *
+     * 🚨 Li' non si puo' spostare il tenant intero — dentro ci sono gli altri
+     * allievi di quel trainer — e serve esattamente questo: estrarre le righe
+     * di **una** persona. ⛔ Riscriverne una seconda versione vorrebbe dire due
+     * elenchi di tabelle da tenere allineati, e il giorno che qualcuno ne
+     * aggiorna uno solo la differenza non la segnala nessuno.
+     */
+    public function portaViaLeSueRighe(User $utente, Tenant $da, Tenant $a): array
     {
         $spostate = [];
         $id = $utente->getKey();

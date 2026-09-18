@@ -627,6 +627,16 @@ Route::prefix('v1')->group(function (): void {
         Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
 
         /*
+         * 🆕 🎟️ **Le scelte sullo slot** — AH.1-ter.6, 18/09/2026.
+         *
+         * 📌 Il committente aveva chiesto «un modo di chiedere al trainer, che
+         * al momento del passaggio non e' presente»: l'app chiede queste
+         * all'apertura, e se c'e' qualcosa mostra la modale.
+         */
+        Route::get('trainer/slot-da-decidere', [TrainerController::class, 'slotDaDecidere']);
+        Route::post('trainer/slot/{member}', [TrainerController::class, 'decidiLoSlot'])->whereNumber('member');
+
+        /*
          * ── I piani alimentari scritti da un trainer — G5.3 ───────────────
          *
          * 🚨 **Plurale**, e non e' un dettaglio: `/nutrition-plan` (singolare)
