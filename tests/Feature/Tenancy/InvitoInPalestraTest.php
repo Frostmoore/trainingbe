@@ -621,7 +621,25 @@ final class InvitoInPalestraTest extends TestCase
         });
 
         $this->assertTrue($dentro, 'doveva entrare come trainer');
-        $this->assertSame($this->palestra->getKey(), $coach->fresh()->tenant_id);
+
+        /*
+         * 🆕 ⛔ **Qui si pretendeva il contrario fino al 18/09**:
+         * `assertSame($palestra, $coach->tenant_id)` — cioè che il trainer
+         * **traslocasse** dentro la palestra.
+         *
+         * 📌 Il committente, 18/09: *«assicurati che un trainer possa lavorare
+         * per infinite palestre»* e, decisione, *«ogni trainer ha sempre uno
+         * spazio suo»*. Traslocato, un trainer lavora in **una** palestra sola:
+         * il suo spazio non è più suo, e la seconda lo rifiuta.
+         *
+         * 💡 Adesso il ruolo sta nella palestra e la casa resta la sua.
+         */
+        $this->assertSame(
+            $coach->tenant_id,
+            $coach->fresh()->tenant_id,
+            'il trainer e stato traslocato: non potra lavorare in una seconda palestra',
+        );
+        $this->assertNotSame($this->palestra->getKey(), $coach->fresh()->tenant_id);
     }
 
     /**

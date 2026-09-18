@@ -324,6 +324,24 @@ class RegistrazioneLiberaTest extends TestCase
         $r = $this->postJson('/api/v1/auth/register', $this->modulo())->assertCreated();
 
         $this->assertNull($r->json('branding.name'));
-        $this->assertNotNull($r->json('branding.colors.primary'), 'I colori servono comunque: l\'app si deve vestire.');
+
+        /*
+         * 🆕 ⛔ **Qui si pretendeva il contrario fino al 18/09**:
+         * `assertNotNull(colors.primary)` — *«I colori servono comunque: l'app
+         * si deve vestire»*.
+         *
+         * 📌 Il committente, regola 8.1.3: *«un free trainer non crea un
+         * "vestito" per l'app dei suoi allievi»*. 🚨 E i colori di un tenant
+         * personale erano **proprio** quello: da quando gli allievi di un trainer
+         * vivono nel suo spazio (AH.1), passavano logo e colori del trainer.
+         *
+         * 💡 **L'app si veste lo stesso**, ed è per questo che il vecchio motivo
+         * non regge più: ogni colore ha il suo `?? fallback…` in
+         * `GymBranding.fromJson`, quindi un `null` diventa il marchio di serie.
+         * ⚠️ E il colore d'accento che una persona sceglie per sé non passa di
+         * qui: sta in `LocalCache`, sul telefono.
+         */
+        $this->assertNull($r->json('branding.colors.primary'), 'uno spazio personale veste lapp');
+        $this->assertNull($r->json('branding.logo_url'));
     }
 }

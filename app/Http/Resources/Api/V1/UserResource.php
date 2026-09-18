@@ -6,6 +6,7 @@ namespace App\Http\Resources\Api\V1;
 
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
+use App\Services\Tenancy\ChiSiVede;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -53,7 +54,7 @@ class UserResource extends JsonResource
             'password_is_set' => (bool) $this->resource->password_is_set,
             'social' => $this->resource->socialIdentities
                 ->map(fn ($i): string => $i->provider->value)->values()->all(),
-            'roles' => $this->resource->getRoleNames()->values()->all(),
+            'roles' => $this->ruoli(),
 
             /*
              * 🚨 **Cosa comprende il piano** — F4, e il difetto riferito il
@@ -153,5 +154,41 @@ class UserResource extends JsonResource
                 'meal_hours' => $this->resource->profile->meal_hours,
             ],
         ];
+    }
+
+    /**
+     * 🆕 🏋️ **I ruoli, compreso quello di chi allena solo in palestra** —
+     * regola 8.1.1, 18/09/2026.
+     *
+     * ══ 🚨 IL DIFETTO CHE SAREBBE NATO SENZA ════════════════════════════
+     *
+     * ⛔ `getRoleNames()` risponde **nel tenant corrente**, che qui è lo spazio
+     * della persona. Finché ogni trainer di palestra viveva *dentro* la
+     * palestra andava bene: i suoi ruoli erano lì.
+     *
+     * 🚨 Ma il committente ha deciso *«ogni trainer ha sempre uno spazio
+     * suo»*, e le palestre diventano **solo ruoli**. Da quel momento un trainer
+     * che allena **solo** in palestra ha, a casa sua, **nessun** ruolo da
+     * trainer — e l'app, che decide `isTrainer` da questo elenco, lo
+     * tratterebbe come un utente qualunque: niente «I miei utenti», niente
+     * domanda sullo slot. ⚠️ Nessun errore: solo una sezione che sparisce.
+     *
+     * 💡 Quindi `trainer` si aggiunge se la persona allena **in almeno una**
+     * palestra, letto da `ChiSiVede` — la stessa regola che decide chi vede
+     * chi. Una sola sorgente per la stessa domanda.
+     *
+     * @return list<string>
+     */
+    private function ruoli(): array
+    {
+        $ruoli = $this->resource->getRoleNames()->values()->all();
+
+        if (! in_array('trainer', $ruoli, true)
+            && app(ChiSiVede::class)->palestreDoveAllena($this->resource)->isNotEmpty()
+        ) {
+            $ruoli[] = 'trainer';
+        }
+
+        return $ruoli;
     }
 }

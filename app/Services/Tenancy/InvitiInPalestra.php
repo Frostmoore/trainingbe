@@ -12,8 +12,10 @@ use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\ContoDegliIscritti;
+use App\Services\Tenancy\Exceptions\SeiGiaInUnaPalestraException;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -306,7 +308,7 @@ class InvitiInPalestra
      *
      * @throws ValidationException
      */
-    public function accetta(string $token, User $utente): Tenant
+    public function accetta(string $token, User $utente, bool $lasciaLaPrecedente = false): Tenant
     {
         $invito = $this->trova($token);
 
@@ -352,7 +354,25 @@ class InvitiInPalestra
          * `AH.1` esiste l'ingresso «per tenant», che serviva agli inviti dei
          * trainer, e questa chiamata diventa più diretta **e** porta il ruolo.
          */
-        $entrata = $this->unisci->dentroQuestoTenant($utente, $palestra, $ruolo, 'token');
+        /*
+         * ══ 🆕 🏋️ UN TRAINER NON TRASLOCA: PRENDE UN RUOLO — 8.1.1, 18/09 ════
+         *
+         * 📌 *«assicurati che un trainer possa lavorare per infinite palestre»*
+         * e, decisione del committente, *«ogni trainer ha sempre uno spazio
+         * suo»*.
+         *
+         * 🚨 **Prima anche il trainer passava dal trasloco**, che rifiuta
+         * chiunque abbia qualcun altro nel proprio spazio: un trainer con un
+         * solo allievo suo non poteva entrare in **nessuna** palestra, e uno
+         * già dentro una non poteva entrare nella seconda.
+         *
+         * 💡 Adesso resta a casa sua e guadagna un ruolo. ⚠️ Gli **iscritti**
+         * invece traslocano ancora, ed è giusto: un iscritto sta in **una**
+         * palestra, e quella palestra è la sua casa.
+         */
+        $entrata = $ruolo === UserRole::Trainer
+            ? $this->assumiSenzaTraslocare($utente, $palestra)
+            : $this->entraComeIscritto($utente, $palestra, $ruolo, $lasciaLaPrecedente);
 
         $invito->forceFill([
             'used_at' => now(),
@@ -360,6 +380,77 @@ class InvitiInPalestra
         ])->save();
 
         return $entrata;
+    }
+
+    /**
+     * 🆕 🏛️ **Un iscritto entra — e se è già in un'altra palestra, si chiede**
+     * — regola 8.1.4, 18/09/2026.
+     *
+     * 📌 *«Assicurati che un allievo possa essere iscritto a una sola palestra.
+     * Nel caso di invito a una seconda palestra, la pagina dell'invito gli deve
+     * chiedere se desidera lasciare la palestra precedente.»*
+     *
+     * ══ ⚠️ COSA CONTA COME «UN'ALTRA PALESTRA» ═══════════════════════════
+     *
+     * Solo uno spazio **non personale**. ⛔ Lo spazio di un trainer **non** è una
+     * palestra: il committente, 18/09, *«un allievo deve poter essere iscritto a
+     * infiniti free_trainer e una sola palestra, anche contemporaneamente»*.
+     * Chi viene da lì entra senza domande — ci pensa il ramo di
+     * `UnisciAUnaPalestra` che estrae le sue righe.
+     *
+     * ══ 🚨 LASCIARE + ENTRARE, IN UNA TRANSAZIONE SOLA ═══════════════════
+     *
+     * ⛔ Due transazioni separate vorrebbero dire che un errore a metà lascia la
+     * persona **fuori da tutte e due**: uscita dalla vecchia, non entrata nella
+     * nuova, con un invito ancora valido che non ha più dove portarla.
+     *
+     * 💡 E l'uscita passa da `EsciDaUnaPalestra`, che è quella vera: riprende
+     * l'abbonamento personale se era in pausa (8.1.6) e chiude le sovrapposizioni
+     * con i trainer di quella palestra (AH.1-ter.6). ⚠️ Poi l'ingresso le rimette
+     * in pausa e le riapre per la palestra nuova — che è giusto: è un altro
+     * posto, con altri trainer.
+     *
+     * @throws SeiGiaInUnaPalestraException se è in un'altra palestra e non ha detto di sì
+     */
+    private function entraComeIscritto(
+        User $utente,
+        Tenant $palestra,
+        UserRole $ruolo,
+        bool $lasciaLaPrecedente,
+    ): Tenant {
+        $attuale = $utente->tenant;
+
+        $eInUnAltraPalestra = $attuale !== null
+            && ! $attuale->is($palestra)
+            && ! $attuale->ePersonale();
+
+        if (! $eInUnAltraPalestra) {
+            return $this->unisci->dentroQuestoTenant($utente, $palestra, $ruolo, 'token');
+        }
+
+        if (! $lasciaLaPrecedente) {
+            throw new SeiGiaInUnaPalestraException((string) $attuale->name);
+        }
+
+        return DB::transaction(function () use ($utente, $palestra, $ruolo): Tenant {
+            app(EsciDaUnaPalestra::class)($utente);
+
+            return $this->unisci->dentroQuestoTenant($utente->fresh(), $palestra, $ruolo, 'token');
+        });
+    }
+
+    /**
+     * 🆕 Il trainer comincia a lavorare qui **restando a casa sua** — 8.1.1.
+     *
+     * ⚠️ Torna la **palestra**, come il ramo del trasloco: chi chiama riceve
+     * sempre «il tenant in cui sei entrato», e non deve sapere quale delle due
+     * strade è stata presa.
+     */
+    private function assumiSenzaTraslocare(User $utente, Tenant $palestra): Tenant
+    {
+        app(AllenareInUnaPalestra::class)->assumi($utente, $palestra);
+
+        return $palestra;
     }
 
     /**

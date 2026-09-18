@@ -61,7 +61,10 @@ use Illuminate\Validation\ValidationException;
  */
 final class TogliUnTrainerDallaPalestra
 {
-    public function __construct(private readonly TenantContext $contesto) {}
+    public function __construct(
+        private readonly TenantContext $contesto,
+        private readonly LoSlotDelTrainer $slot,
+    ) {}
 
     public function __invoke(User $trainer, Tenant $palestra): void
     {
@@ -71,6 +74,25 @@ final class TogliUnTrainerDallaPalestra
             $ruoli = $this->togliIRuoli($trainer, $palestra);
             $rapporti = $this->chiudiIRapportiDiQuellaPalestra($trainer, $palestra);
             $schede = $this->riportaACasaIlSuoLavoro($trainer, $palestra);
+
+            /*
+             * ══ 🆕 🎟️ E LE SOVRAPPOSIZIONI SI CHIUDONO — fase 8.3.6, 18/09 ═══
+             *
+             * 📌 *«il trainer lascia la palestra → se il trainer ha deciso di
+             * mantenere lo slot occupato l'allievo torni al trainer, altrimenti
+             * che l'allievo resti solo iscritto in palestra»*.
+             *
+             * 💡 **Tenuto lo slot**: il rapporto personale non si era mai
+             * interrotto, e adesso la sovrapposizione è finita — resta suo.
+             * ⛔ **Liberato**: quel rapporto era già chiuso quando ha scelto, e
+             * qui non si tocca; l'allievo resta solo della palestra.
+             *
+             * ⚠️ `chiudiIRapportiDiQuellaPalestra()` qui sopra chiude i rapporti
+             * **della palestra** (`tenant_id` = palestra); quelli personali del
+             * trainer vivono nel suo spazio e non li sfiora. Sono due cose
+             * diverse, ed è giusto che siano due chiamate.
+             */
+            $this->slot->chiudiLeSovrapposizioniDelTrainer($trainer, $palestra);
 
             $this->ricordaLaLibreria($trainer, $palestra);
 

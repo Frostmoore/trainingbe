@@ -130,6 +130,97 @@ class LoSlotDelTrainer
     }
 
     /**
+     * 🆕 **Il rovescio**: è il **trainer** che entra nella palestra dove i suoi
+     * allievi già sono — regola 8.1.1 e fase 8.3.3, 18/09/2026.
+     *
+     * 📌 *«assicurati che al trainer compaia la modale che mostra gli allievi
+     * che ha che sono anche iscritti in quella palestra (potrebbero essere più
+     * di uno)»*.
+     *
+     * ⚠️ **Stessa domanda, stesse colonne** di [segnalaLaSovrapposizione]: cambia
+     * solo chi si è mosso. 💡 Per questo sta qui e non in `AllenareInUnaPalestra`
+     * — due classi che scrivono le stesse colonne divergono.
+     *
+     * 🚨 **«Iscritti in quella palestra» si legge dal `tenant_id`**, non dai
+     * ruoli: un iscritto sta dentro la palestra, e la palestra è la sua casa.
+     * ⛔ Chi è solo allievo personale del trainer non ha la palestra come casa,
+     * e non va toccato — è la condizione che separa la regola da un danno.
+     *
+     * @return int quante sovrapposizioni sono state segnate
+     */
+    public function segnalaLeSovrapposizioniDelTrainer(User $trainer, Tenant $palestra): int
+    {
+        return $this->context->runWithoutTenant(function () use ($trainer, $palestra): int {
+            $iscrittiQui = DB::table('users')
+                ->where('tenant_id', $palestra->getKey())
+                ->whereNull('deleted_at')
+                ->pluck('id');
+
+            if ($iscrittiQui->isEmpty()) {
+                return 0;
+            }
+
+            $quanti = DB::table('trainer_member')
+                ->where('trainer_id', $trainer->getKey())
+                ->whereIn('member_id', $iscrittiQui->all())
+                ->whereNull('disattivato_il')
+                ->whereNull('sovrapposto_dal')
+                ->update([
+                    'sovrapposto_dal' => Carbon::now(),
+                    'sovrapposto_in_tenant_id' => $palestra->getKey(),
+                    'slot_deciso_il' => null,
+                    'updated_at' => Carbon::now(),
+                ]);
+
+            if ($quanti > 0) {
+                Log::info('Sovrapposizioni segnate: il trainer e\' entrato dove stanno i suoi allievi', [
+                    'trainer' => $trainer->getKey(),
+                    'palestra' => $palestra->getKey(),
+                    'quanti' => $quanti,
+                ]);
+            }
+
+            return $quanti;
+        });
+    }
+
+    /**
+     * 🆕 **Il trainer se ne va dalla palestra** — fase 8.3.6, 18/09/2026.
+     *
+     * 📌 *«il trainer lascia la palestra → verifica che (se il trainer ha deciso
+     * di mantenere lo slot occupato) l'allievo torni al trainer e questo non veda
+     * più gli allievi della palestra, altrimenti che l'allievo resti solo
+     * iscritto in palestra»*.
+     *
+     * 💡 **Tenuto lo slot**: la sovrapposizione si chiude, e l'allievo resta suo
+     * — il rapporto non si era mai interrotto. ⛔ **Liberato**: il rapporto era
+     * già chiuso quando ha scelto (`disattivato_il`), quindi qui non c'è niente
+     * da toccare e l'allievo resta solo della palestra.
+     *
+     * ⚠️ E le sovrapposizioni **ancora senza risposta** si chiudono lo stesso:
+     * la domanda non ha più senso, perché la sovrapposizione è finita. Il
+     * rapporto resta — che è il default che non toglie niente a nessuno.
+     *
+     * @return int quante sovrapposizioni sono state chiuse
+     */
+    public function chiudiLeSovrapposizioniDelTrainer(User $trainer, Tenant $palestra): int
+    {
+        return $this->context->runWithoutTenant(
+            fn (): int => DB::table('trainer_member')
+                ->where('trainer_id', $trainer->getKey())
+                ->where('sovrapposto_in_tenant_id', $palestra->getKey())
+                ->whereNotNull('sovrapposto_dal')
+                ->whereNull('disattivato_il')
+                ->update([
+                    'sovrapposto_dal' => null,
+                    'sovrapposto_in_tenant_id' => null,
+                    'slot_deciso_il' => null,
+                    'updated_at' => Carbon::now(),
+                ]),
+        );
+    }
+
+    /**
      * Le decisioni che questo trainer deve ancora prendere.
      *
      * ⛔ **Non c'è nessuna tabella di «domande in sospeso»**, ed è una scelta:

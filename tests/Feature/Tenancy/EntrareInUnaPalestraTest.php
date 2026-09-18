@@ -16,6 +16,7 @@ use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
+use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -232,26 +233,59 @@ class EntrareInUnaPalestraTest extends TestCase
     // ─────────────── I rifiuti ───────────────
 
     /**
-     * 🚨 **Solo da un tenant personale.**
+     * 🆕 🏛️ **Con un invito, a chi è già in una palestra si CHIEDE** — regola
+     * 8.1.4, 18/09/2026.
      *
-     * Spostare un iscritto da una palestra a un'altra è un'operazione
-     * commerciale, non una scelta dell'utente: vorrebbe dire che chiunque
-     * conosca il codice di un'altra palestra può portarsi via i propri dati
-     * dalla propria.
+     * ⛔ **Questo test diceva il contrario fino al 18/09**, e si chiamava
+     * `a_gym_member_cannot_move_themselves`: pretendeva un rifiuto secco (`422`)
+     * anche con un invito in mano, perché *«spostare un iscritto da una palestra
+     * a un'altra è un'operazione commerciale, non una scelta dell'utente»*.
+     *
+     * 📌 Il committente, 18/09, ha ribaltato quella regola: *«Nel caso di invito
+     * a una seconda palestra, la pagina dell'invito gli deve chiedere se
+     * desidera lasciare la palestra precedente»* — e ha detto che la regola
+     * nuova prevale.
+     *
+     * 💡 **Ha senso, ed è per questo che si ribalta senza chiedere**: qui c'è un
+     * invito, che la palestra nuova ha emesso apposta. Il codice digitato di
+     * nascosto resta rifiutato — lo tiene fermo il test qui sotto.
+     *
+     * ⚠️ E una domanda non è un trasloco: finché non dice di sì, resta dov'era.
      */
     #[Test]
-    public function a_gym_member_cannot_move_themselves(): void
+    public function a_gym_member_with_an_invite_is_asked_before_moving(): void
     {
         $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->creaPalestra('Beta', 'beta', 'BETA2345');
 
         $iscritto = $this->creaUtente($alfa, UserRole::Member, 'iscritto@alfa.test');
 
-        // 🆕 Anche con un invito in mano: il rifiuto non dipende dalla porta.
         $this->entraDaInvito($iscritto, Tenant::where('slug', 'beta')->firstOrFail())
-            ->assertStatus(422);
+            ->assertStatus(409)
+            ->assertJsonPath('code', 'sei_gia_in_una_palestra')
+            ->assertJsonPath('palestra_attuale', 'Alfa');
 
-        $this->assertSame($alfa->id, $iscritto->fresh()->tenant_id);
+        $this->assertSame($alfa->id, $iscritto->fresh()->tenant_id, 'la domanda lo ha gia spostato');
+    }
+
+    /**
+     * ⛔ **Col codice, invece, il rifiuto resta** — regola 8.1.4.f.
+     *
+     * 🚨 È la metà della vecchia regola che resta vera: chiunque conosca il codice
+     * di un'altra palestra potrebbe portarsi via da solo, senza che la palestra
+     * nuova lo abbia invitato. La domanda esiste **solo** sull'invito.
+     */
+    #[Test]
+    public function a_gym_member_cannot_move_with_a_join_code(): void
+    {
+        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Beta', 'beta', 'BETA2345');
+
+        $iscritto = $this->creaUtente($alfa, UserRole::Member, 'codice@alfa.test');
+
+        $this->expectException(ValidationException::class);
+
+        app(UnisciAUnaPalestra::class)($iscritto, 'BETA2345');
     }
 
     /**

@@ -70,7 +70,18 @@ class InvitoInPalestraController extends Controller
             return $this->nonValido();
         }
 
-        $palestra = $this->inviti->accetta($token, $utente);
+        /*
+         * 🆕 🏛️ **Il sì a lasciare la palestra di prima** — regola 8.1.4.
+         *
+         * ⚠️ Di serie `false`, e la direzione conta: un client vecchio, che non
+         * conosce la domanda, riceve il `409` invece di cambiare palestra senza
+         * averlo chiesto a nessuno.
+         */
+        $palestra = $this->inviti->accetta(
+            $token,
+            $utente,
+            $request->boolean('lascia_la_precedente'),
+        );
 
         return response()->json(['data' => [
             /*

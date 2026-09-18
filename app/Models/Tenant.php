@@ -252,12 +252,36 @@ class Tenant extends Model
              */
             'name' => $this->ePersonale() ? null : $this->name,
             'slug' => $this->slug,
-            'logo_url' => $this->logo_path ? url($this->logo_path) : null,
-            'colors' => [
-                'primary' => $this->color_primary,
-                'secondary' => $this->color_secondary,
-                'accent' => $this->color_accent,
-            ],
+
+            /*
+             * ══ 🆕 ⛔ UN TRAINER NON VESTE L'APP — regola 8.1.3, 18/09/2026 ═══
+             *
+             * 📌 Il committente: *«Assicurati che un trainer non convogli le
+             * personalizzazioni dell'app come le palestre. Cioè, un free
+             * trainer non crea un "vestito" per l'app dei suoi allievi.»*
+             *
+             * 🚨 **Il difetto era a metà, ed è il tipo peggiore.** Qui sopra
+             * si azzerava il **nome** di un tenant personale, con tanto di
+             * commento che spiegava perché — e poi logo e tre colori passavano
+             * lo stesso. Un free trainer che si metteva un logo vestiva l'app
+             * di **tutti** i suoi allievi: da quando stanno nel suo spazio
+             * (AH.1), `users.tenant_id` punta lì e `/auth/me` risponde con
+             * questo metodo.
+             *
+             * 💡 **Un tenant personale non è un marchio**, e non deve poterlo
+             * diventare: il vestito è della palestra, che è un'organizzazione.
+             * ⚠️ L'app regge i `null` da sempre — ogni colore ha il suo
+             * `?? fallback…` in `GymBranding.fromJson`, e il logo è nullable —
+             * quindi ricade sul marchio di serie invece di disegnare un buco.
+             */
+            'logo_url' => ! $this->ePersonale() && $this->logo_path ? url($this->logo_path) : null,
+            'colors' => $this->ePersonale()
+                ? ['primary' => null, 'secondary' => null, 'accent' => null]
+                : [
+                    'primary' => $this->color_primary,
+                    'secondary' => $this->color_secondary,
+                    'accent' => $this->color_accent,
+                ],
             'locale' => $this->locale,
 
             /*
