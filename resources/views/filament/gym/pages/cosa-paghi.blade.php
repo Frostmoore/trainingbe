@@ -90,8 +90,14 @@
                                 </td>
 
                                 <td class="py-2">
+                                    {{--
+                                        🆕 `emesso` — §9.4: la fattura è su Stripe ma non ancora
+                                        pagata. ⛔ Prima finiva nel ramo di serie e si leggeva
+                                        «Da emettere», su una fattura già emessa.
+                                    --}}
                                     @php($colore = match ($riga->stato) {
                                         \App\Models\AddebitoMensile::INCASSATO => 'success',
+                                        \App\Models\AddebitoMensile::EMESSO => 'warning',
                                         \App\Models\AddebitoMensile::FALLITO => 'danger',
                                         default => 'gray',
                                     })
@@ -99,6 +105,7 @@
                                     <x-filament::badge :color="$colore">
                                         {{ match ($riga->stato) {
                                             \App\Models\AddebitoMensile::INCASSATO => 'Pagato',
+                                            \App\Models\AddebitoMensile::EMESSO => 'In pagamento',
                                             \App\Models\AddebitoMensile::FALLITO => 'Non riuscito',
                                             \App\Models\AddebitoMensile::SENZA_CLIENTE => 'In attesa',
                                             default => 'Da emettere',

@@ -18,6 +18,7 @@ use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
 use Illuminate\Support\ServiceProvider;
+use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -33,6 +34,29 @@ class AppServiceProvider extends ServiceProvider
          * girano nello stesso worker devono comunque usare `runAs()`.
          */
         $this->app->singleton(TenantContext::class);
+
+        /*
+         * ══ 🆕 💳 STRIPE PASSA DA QUI — §9.1, 18/09/2026 ══════════════════════
+         *
+         * ⛔ **Prima ogni servizio si faceva il suo client**, con
+         * `new StripeClient(...)` dentro un metodo privato: `Cassa`,
+         * `LaPausaDellAbbonamento`, `AddebitoDelMese`. 🚨 Conseguenza: il lato
+         * **in uscita** verso Stripe — aprire un pagamento, creare un cliente,
+         * mettere in pausa, emettere una fattura — non si poteva provare in
+         * automatico. I test si fermavano ai rifiuti, e la strada buona non
+         * l'aveva mai percorsa nessuno fuori dalla produzione.
+         *
+         * 💡 Adesso il client sta nel container, e un test lo sostituisce con un
+         * finto che registra le chiamate.
+         *
+         * ⚠️ **`bind` e non `singleton`**: la chiave si legge ogni volta dalla
+         * configurazione, così un ambiente che la cambia al volo — i test che
+         * provano `ChiaviDiStripe` — non si ritrova con un client vecchio.
+         */
+        $this->app->bind(
+            StripeClient::class,
+            fn (): StripeClient => new StripeClient((string) config('services.stripe.secret')),
+        );
 
         /**
          * Le immagini del sito — 16/08/2026.

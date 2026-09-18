@@ -234,7 +234,14 @@ class AddebitoDelMese
      */
     public function incassa(AddebitoMensile $addebito): AddebitoMensile
     {
-        if ($addebito->stato === AddebitoMensile::INCASSATO) {
+        /*
+         * 🚨 **Anche `emesso` si salta**, non solo `incassato` — §9.4, 18/09.
+         *
+         * ⛔ Una fattura emessa **esiste già su Stripe**. Rilanciare il giro del
+         * mese — a mano, o dopo un errore — e riemetterla vorrebbe dire **due
+         * fatture per lo stesso mese**, tutte e due addebitate sulla carta.
+         */
+        if (in_array($addebito->stato, [AddebitoMensile::EMESSO, AddebitoMensile::INCASSATO], true)) {
             return $addebito;
         }
 
@@ -273,10 +280,18 @@ class AddebitoDelMese
                 'metadata' => $this->metadata($addebito),
             ]);
 
+            /*
+             * 🆕 ⛔ **`emesso`, non `incassato`** — §9.4, 18/09/2026.
+             *
+             * Prima qui c'era `incassato`: la fattura risultava pagata appena
+             * creata, e con la carta rifiutata il pannello della palestra diceva
+             * «Pagato» su una fattura mai pagata. 💡 Adesso `incassato` lo
+             * scrive solo `invoice.paid`, e `fallito` lo scrive
+             * `invoice.payment_failed` — in `Cassa`, dove arrivano gli eventi.
+             */
             $addebito->forceFill([
-                'stato' => AddebitoMensile::INCASSATO,
+                'stato' => AddebitoMensile::EMESSO,
                 'stripe_invoice_id' => (string) $fattura->id,
-                'incassato_il' => Carbon::now(),
                 'errore' => null,
             ])->save();
 
@@ -329,7 +344,12 @@ class AddebitoDelMese
             $addebito = $this->incassa($addebito);
 
             match ($addebito->stato) {
-                AddebitoMensile::INCASSATO => $esito['incassati']++,
+                /*
+                 * ⚠️ «emessi» conta come incassato per il riepilogo del giro:
+                 * la fattura è su Stripe, che la addebita da sé. Se poi fallisce
+                 * lo dice `invoice.payment_failed`, sulla riga.
+                 */
+                AddebitoMensile::EMESSO, AddebitoMensile::INCASSATO => $esito['incassati']++,
                 AddebitoMensile::SENZA_CLIENTE => $esito['senza_cliente']++,
                 AddebitoMensile::FALLITO => $esito['falliti']++,
                 default => null,
@@ -420,6 +440,6 @@ class AddebitoDelMese
 
     private function stripe(): StripeClient
     {
-        return new StripeClient((string) config('services.stripe.secret'));
+        return app(StripeClient::class);
     }
 }

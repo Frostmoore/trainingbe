@@ -259,6 +259,6 @@ class LaPausaDellAbbonamento
 
     private function stripe(): StripeClient
     {
-        return new StripeClient((string) config('services.stripe.secret'));
+        return app(StripeClient::class);
     }
 }

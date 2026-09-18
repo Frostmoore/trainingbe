@@ -41,6 +41,9 @@ class PlanSubscription extends Model
             'ends_at' => 'datetime',
             'in_pausa_dal' => 'datetime',
             'restavano_giorni' => 'integer',
+
+            // 🆕 §9.4 — la prima volta che un rinnovo è stato rifiutato.
+            'pagamento_fallito_il' => 'datetime',
         ];
     }
 

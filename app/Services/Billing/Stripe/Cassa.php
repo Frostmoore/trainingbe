@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
+use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -539,15 +540,24 @@ class Cassa
              * | `customer.subscription.updated` | ha disdetto, o ha ripreso |
              * | `customer.subscription.deleted` | e' finito davvero |
              *
-             * ⚠️ `invoice.payment_failed` **non c'e', ed e' voluto**: la carta
-             * rifiutata non toglie niente: Stripe riprova per giorni, e
+             * ⚠️ `invoice.payment_failed` **non spegne niente, ed e' voluto**:
+             * la carta rifiutata non toglie niente, Stripe riprova per giorni, e
              * l'abbonamento scade da solo se non ci riesce. 💡 Spegnerlo al
-             * primo tentativo fallito vorrebbe dire punire chi ha cambiato
-             * carta di venerdi'.
+             * primo tentativo fallito vorrebbe dire punire chi ha cambiato carta
+             * di venerdi'.
+             *
+             * 🆕 **Ma da §9.4 (18/09/2026) si SEGNA.** Prima questo evento era
+             * ignorato del tutto, e la ragione qui sopra — giusta — copriva un
+             * buco: chi paga non aveva **nessun modo di saperlo** finché il
+             * servizio non si spegneva. 🚨 E per il piano a consumo, che non e'
+             * un abbonamento, era l'**unico** segnale che una palestra non aveva
+             * pagato. Adesso si scrive quando e' fallito, e si toglie al primo
+             * pagamento riuscito: si avvisa, non si punisce.
              */
             match ($evento['type'] ?? null) {
                 'checkout.session.completed' => $this->primoPagamento($oggetto),
                 'invoice.paid' => $this->rinnovo($oggetto),
+                'invoice.payment_failed' => $this->pagamentoFallito($oggetto),
                 'customer.subscription.updated' => $this->abbonamentoCambiato($oggetto),
                 'customer.subscription.deleted' => $this->abbonamentoFinito($oggetto),
                 default => null,
@@ -579,6 +589,17 @@ class Cassa
         match ($meta['tipo'] ?? null) {
             self::GETTONI => $this->accreditaGettoni($utente, (int) ($meta['gettoni'] ?? 0), $sessione),
             self::ABBONAMENTO => $this->accendiLAbbonamento($utente, $sessione),
+
+            /*
+             * 🆕 💳 **I piani di trainer e palestre** — §9.2, 18/09/2026.
+             *
+             * ⚠️ Stanno in `PianiInVendita`, che tiene **tutte e due** le metà —
+             * chi apre e chi incassa — per la regola scritta in cima a questa
+             * classe: i `metadata` scritti all'apertura sono l'unica cosa che si
+             * ritrova qui, e due file che li scrivono e li leggono divergono.
+             */
+            PianiInVendita::TIPO => app(PianiInVendita::class)->accendi($sessione),
+
             default => Log::warning('Stripe: pagamento di tipo ignoto.', ['tipo' => $meta['tipo'] ?? null]),
         };
     }
@@ -596,6 +617,20 @@ class Cassa
      */
     private function rinnovo(array $fattura): void
     {
+        /*
+         * 🆕 💶 **La fattura del piano a consumo è pagata QUI** — §9.4, 18/09.
+         *
+         * ⛔ Prima `AddebitoDelMese` la segnava «incassata» appena **emessa**:
+         * con la carta rifiutata, il pannello della palestra diceva «Pagato» su
+         * una fattura mai pagata. Adesso l'emissione la segna `emesso`, e solo
+         * questo evento la fa diventare `incassato`.
+         */
+        if ($this->eUnAddebitoAConsumo($fattura)) {
+            $this->addebitoPagato($fattura);
+
+            return;
+        }
+
         $idAbbonamento = $this->idAbbonamento($fattura);
 
         if ($idAbbonamento === null) {
@@ -624,6 +659,13 @@ class Cassa
                 (bool) $riga->rinnova,
             ),
         ]);
+
+        /*
+         * 🆕 **Pagato: il segno del rifiuto se ne va** — §9.4. ⚠️ `forceFill`
+         * perché la colonna non è assegnabile in massa: la scrive solo Stripe,
+         * attraverso questa classe.
+         */
+        $riga->forceFill(['pagamento_fallito_il' => null])->save();
 
         Log::info('Stripe: abbonamento rinnovato.', [
             'subscription' => $idAbbonamento,
@@ -675,6 +717,87 @@ class Cassa
      *
      * @param  array<string, mixed>  $abbonamento
      */
+    /**
+     * 🆕 💳 **Un pagamento non è andato** — §9.4, 18/09/2026.
+     *
+     * ⚠️ **Si segna e basta**: non si spegne niente. Stripe riprova per giorni, e
+     * la fine vera arriva con `customer.subscription.deleted` se non ci riesce.
+     *
+     * 💡 Due casi, e il secondo era senza nessun altro segnale:
+     *
+     * | Fattura | Cosa si segna |
+     * |---|---|
+     * | di un abbonamento | `plan_subscriptions.pagamento_fallito_il` |
+     * | del piano a consumo | `addebiti_mensili.stato = fallito`, con l'errore |
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function pagamentoFallito(array $fattura): void
+    {
+        if ($this->eUnAddebitoAConsumo($fattura)) {
+            $addebito = $this->addebitoDellaFattura($fattura);
+
+            $addebito?->forceFill([
+                'stato' => AddebitoMensile::FALLITO,
+                'errore' => 'Il pagamento non è andato a buon fine. Stripe riproverà nei prossimi giorni.',
+            ])->save();
+
+            Log::warning('Stripe: addebito a consumo non pagato.', ['fattura' => $fattura['id'] ?? null]);
+
+            return;
+        }
+
+        $idAbbonamento = $this->idAbbonamento($fattura);
+        $riga = $idAbbonamento === null ? null : $this->abbonamentoDi($idAbbonamento);
+
+        if ($riga === null) {
+            return;
+        }
+
+        /*
+         * 💡 **Si tiene la PRIMA data di rifiuto**, non l'ultima: Stripe riprova
+         * più volte, e la domanda che conta è *«da quanto non paga?»*.
+         */
+        if ($riga->pagamento_fallito_il === null) {
+            $riga->forceFill(['pagamento_fallito_il' => now()])->save();
+        }
+
+        Log::warning('Stripe: pagamento di un abbonamento non riuscito.', ['subscription' => $idAbbonamento]);
+    }
+
+    /**
+     * 🆕 **È una fattura del piano a consumo?** La riconoscono i `metadata` che
+     * `AddebitoDelMese` scrive quando la emette.
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function eUnAddebitoAConsumo(array $fattura): bool
+    {
+        return ($fattura['metadata']['tipo'] ?? null) === 'addebito_a_consumo';
+    }
+
+    /** @param  array<string, mixed>  $fattura */
+    private function addebitoDellaFattura(array $fattura): ?AddebitoMensile
+    {
+        $id = $fattura['metadata']['addebito_id'] ?? null;
+
+        return $id === null ? null : AddebitoMensile::withoutGlobalScopes()->find($id);
+    }
+
+    /**
+     * 🆕 La fattura a consumo è pagata: adesso sì, `incassato`.
+     *
+     * @param  array<string, mixed>  $fattura
+     */
+    private function addebitoPagato(array $fattura): void
+    {
+        $this->addebitoDellaFattura($fattura)?->forceFill([
+            'stato' => AddebitoMensile::INCASSATO,
+            'incassato_il' => now(),
+            'errore' => null,
+        ])->save();
+    }
+
     private function abbonamentoFinito(array $abbonamento): void
     {
         $riga = $this->abbonamentoDi((string) ($abbonamento['id'] ?? ''));
@@ -836,6 +959,6 @@ class Cassa
 
     private function stripe(): StripeClient
     {
-        return new StripeClient((string) config('services.stripe.secret'));
+        return app(StripeClient::class);
     }
 }

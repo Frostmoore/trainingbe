@@ -11,6 +11,7 @@ use App\Services\Billing\Listino;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Billing\Stripe\Cassa;
+use App\Services\Billing\Stripe\PianiInVendita;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -226,6 +227,57 @@ class BillingController extends Controller
     }
 
     /**
+     * 🆕 💳 **Il piano di un trainer o di una palestra** — §9.2, 18/09/2026.
+     *
+     * ⚠️ Le regole — chi può comprare cosa, il prezzo dal listino, un secondo
+     * canone rifiutato — stanno tutte in `PianiInVendita`. Qui si traducono i
+     * suoi rifiuti in risposte: il messaggio è già scritto per chi lo leggerà.
+     */
+    private function apriIlPiano(Request $request, string $codice): JsonResponse
+    {
+        try {
+            $url = app(PianiInVendita::class)->apri($request->user(), $codice);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Il pagamento non si è aperto. Riprova fra poco.',
+            ], 502);
+        }
+
+        return response()->json(['data' => ['url' => $url]]);
+    }
+
+    /**
+     * 🆕 **Cambiare piano** — §9.5, 18/09/2026.
+     *
+     * 💡 Salire subito con il conguaglio di Stripe; scendere solo se nessuno resta
+     * senza posto. Le regole stanno in `PianiInVendita::cambia()`.
+     */
+    public function cambiaPiano(Request $request): JsonResponse
+    {
+        $dati = $request->validate([
+            'piano' => ['required', 'string', 'max:40'],
+        ]);
+
+        try {
+            app(PianiInVendita::class)->cambia($request->user(), (string) $dati['piano']);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'message' => 'Non sono riuscito a cambiare il piano. Riprova fra poco.',
+            ], 502);
+        }
+
+        return response()->json(['data' => ['piano' => $dati['piano']]]);
+    }
+
+    /**
      * Apre una sessione di pagamento e dice dove andare.
      *
      * ⚠️ **Il client sceglie COSA, non QUANTO.** Il taglio arriva da qui, il
@@ -234,7 +286,15 @@ class BillingController extends Controller
     public function checkout(Request $request): JsonResponse
     {
         $dati = $request->validate([
-            'tipo' => ['required', Rule::in([Cassa::ABBONAMENTO, Cassa::GETTONI])],
+            'tipo' => ['required', Rule::in([Cassa::ABBONAMENTO, Cassa::GETTONI, PianiInVendita::TIPO])],
+
+            /*
+             * 🆕 💳 **Il codice del piano, per trainer e palestre** — §9.2.
+             *
+             * ⚠️ Il client dice **quale** piano, mai quanto costa: il prezzo lo
+             * legge `PianiInVendita` dal listino.
+             */
+            'piano' => ['required_if:tipo,'.PianiInVendita::TIPO, 'string', 'max:40'],
 
             /*
              * 💡 `required_if` e non `nullable`: chiedere dei gettoni senza dire
@@ -246,6 +306,10 @@ class BillingController extends Controller
         ]);
 
         $tipo = $dati['tipo'];
+
+        if ($tipo === PianiInVendita::TIPO) {
+            return $this->apriIlPiano($request, (string) $dati['piano']);
+        }
 
         // ⛔ Non si vende due volte la stessa cosa.
         /*

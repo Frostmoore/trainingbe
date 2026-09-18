@@ -595,6 +595,16 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:10,1');
 
         /*
+         * 🆕 💳 **Cambiare piano** — §9.5, 18/09/2026.
+         *
+         * ⚠️ Un piano a canone già pagato si **cambia**, non se ne compra un
+         * secondo: un secondo checkout sarebbe un secondo abbonamento, e il primo
+         * continuerebbe a rinnovarsi da solo. `throttle` stretto: scrive su Stripe.
+         */
+        Route::post('billing/cambia-piano', [BillingController::class, 'cambiaPiano'])
+            ->middleware('throttle:10,1');
+
+        /*
          * 🔁 **Il rinnovo automatico** — 08/09/2026.
          *
          * 📌 *«si deve rinnovare automaticamente SE E SOLO SE l'utente flagga

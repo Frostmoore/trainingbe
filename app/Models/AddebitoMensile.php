@@ -30,7 +30,16 @@ class AddebitoMensile extends Model
     /** Calcolato, non ancora mandato a Stripe. */
     public const DA_INCASSARE = 'da_incassare';
 
-    /** Stripe ha la fattura. */
+    /**
+     * 🆕 **Stripe ha la fattura, ma non è ancora pagata** — §9.4, 18/09/2026.
+     *
+     * ⛔ Prima non esisteva: la fattura diventava `incassato` appena **emessa**,
+     * e con la carta rifiutata il pannello diceva «Pagato» su una fattura mai
+     * pagata. Adesso `incassato` lo scrive solo `invoice.paid`.
+     */
+    public const EMESSO = 'emesso';
+
+    /** Pagata davvero: lo dice `invoice.paid`. */
     public const INCASSATO = 'incassato';
 
     /**
