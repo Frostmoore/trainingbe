@@ -254,7 +254,7 @@ final class EsciDaUnaPalestra
              * 💡 È la metà della regola che dà senso all'altra — si pagava per
              * prenotarsi il ritorno, e chi non ha pagato non lo ha prenotato.
              */
-            $this->slot->riattivaPerUscitaDallaPalestra($utente, $palestra);
+            $this->slot->chiudiLaSovrapposizione($utente, $palestra);
 
             Log::info('Un iscritto è uscito da una palestra', [
                 'user_id' => $utente->getKey(),

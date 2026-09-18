@@ -47,7 +47,7 @@ use Tests\TestCase;
  *    persona avrebbe due coperture e nessuno se ne accorgerebbe;
  * 2. che i giorni già pagati **tornino**, e non si perdano né si raddoppino;
  * 3. che uno slot **tenuto** continui a contare, e uno **liberato** no;
- * 4. che si riattivi **solo** uscendo dalla palestra che aveva sospeso;
+ * 4. che la sovrapposizione si chiuda **solo** uscendo dalla palestra che l'aveva aperta;
  * 5. che un trainer che **non lavora** in quella palestra non venga toccato —
  *    è la condizione che separa la regola da un danno.
  */
@@ -123,11 +123,100 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
     }
 
     /**
+     * 🚨 **LA REGOLA, provata invece che affermata** — 18/09/2026.
+     *
+     * 📌 Il committente: *«un allievo deve poter essere iscritto a infiniti
+     * free_trainer e una sola palestra, anche contemporaneamente. L'unico caso
+     * limite è se un allievo di un free trainer si iscrive in una palestra in
+     * cui lavora quel free trainer.»*
+     *
+     * ⛔ Qui tre trainer, una palestra, e **uno solo** dei tre ci lavora. Alla
+     * fine:
+     *
+     * - tutti e tre vedono ancora il loro allievo — **nessun rapporto si rompe**;
+     * - l'allievo vede ancora tutti e tre;
+     * - **solo** quello che lavora lì riceve la domanda sullo slot.
+     */
+    #[Test]
+    public function infiniti_trainer_e_una_palestra_convivono_e_solo_chi_si_sovrappone_viene_interpellato(): void
+    {
+        $palestra = $this->creaPalestra();
+
+        $dentro = $this->trainerIndipendente('dentro@esempio.test');
+        $fuoriUno = $this->trainerIndipendente('fuori1@esempio.test');
+        $fuoriDue = $this->trainerIndipendente('fuori2@esempio.test');
+
+        $this->assumi($palestra, $dentro);
+
+        $allievo = $this->persona('tre-trainer@esempio.test');
+
+        foreach ([$dentro, $fuoriUno, $fuoriDue] as $t) {
+            app(InvitiDelTrainer::class)->riscattaPerChiEsiste(
+                app(TenantContext::class)->runAs(
+                    $t->tenant,
+                    fn () => app(InvitiDelTrainer::class)->invita($t),
+                )->token,
+                $allievo->fresh(),
+                affianco: true,
+            );
+        }
+
+        $this->assertCount(
+            3,
+            $allievo->fresh()->assignedTrainers()->get(),
+            'non si possono seguire tre trainer insieme',
+        );
+
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant(
+            $allievo->fresh(),
+            $palestra,
+            UserRole::Member,
+        );
+
+        /*
+         * 🚨 **La prova che il committente ha chiesto**: entrare in palestra non
+         * rompe niente. Tre trainer prima, tre trainer dopo.
+         */
+        $this->assertCount(
+            3,
+            $allievo->fresh()->assignedTrainers()->wherePivotNull('disattivato_il')->get(),
+            'entrando in palestra si e perso un trainer',
+        );
+
+        foreach ([$dentro, $fuoriUno, $fuoriDue] as $t) {
+            $this->assertTrue(
+                app(TenantContext::class)->runAs(
+                    $t->tenant,
+                    fn (): bool => User::withoutGlobalScopes()
+                        ->findOrFail($t->getKey())
+                        ->assignedMembers()
+                        ->where('users.id', $allievo->getKey())
+                        ->exists(),
+                ),
+                "il trainer {$t->email} non vede piu il suo allievo",
+            );
+        }
+
+        /*
+         * ⚠️ E la domanda sullo slot la riceve **uno solo**: quello che si
+         * ritrova l'allievo dentro la palestra dove lavora.
+         */
+        $this->assertCount(1, app(LoSlotDelTrainer::class)->daDecidere($dentro));
+        $this->assertEmpty(app(LoSlotDelTrainer::class)->daDecidere($fuoriUno));
+        $this->assertEmpty(app(LoSlotDelTrainer::class)->daDecidere($fuoriDue));
+
+        $this->assertNull(
+            $this->riga($fuoriUno, $allievo)->sovrapposto_dal,
+            'marcato un trainer che con quella palestra non centra niente',
+        );
+    }
+
+    /**
      * 🚨 **Il caso centrale**: l'allievo di un trainer entra nella palestra dove
      * quel trainer lavora.
      */
     #[Test]
-    public function entrando_in_palestra_lo_slot_si_sospende_e_il_trainer_va_interpellato(): void
+    public function entrando_dove_lavora_il_suo_trainer_il_trainer_viene_interpellato(): void
     {
         $palestra = $this->creaPalestra();
         $trainer = $this->trainerIndipendente();
@@ -151,8 +240,8 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
         $riga = $this->riga($trainer, $allievo);
 
         $this->assertNotNull($riga);
-        $this->assertNotNull($riga->sospeso_il, 'il rapporto non e stato sospeso');
-        $this->assertSame($palestra->getKey(), (int) $riga->sospeso_per_tenant_id);
+        $this->assertNotNull($riga->sovrapposto_dal, 'la sovrapposizione non e stata segnata');
+        $this->assertSame($palestra->getKey(), (int) $riga->sovrapposto_in_tenant_id);
         $this->assertNull($riga->slot_deciso_il, 'risulta gia deciso senza aver chiesto niente');
 
         /*
@@ -160,7 +249,7 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
          * decidere al posto del trainer, nella direzione che gli toglie
          * l'allievo.
          */
-        $this->assertNull($riga->disattivato_il, 'il rapporto e stato chiuso invece che sospeso');
+        $this->assertNull($riga->disattivato_il, 'il rapporto e stato chiuso: non doveva essere toccato');
 
         $daDecidere = app(LoSlotDelTrainer::class)->daDecidere($trainer);
 
@@ -171,9 +260,9 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
     /**
      * ⛔ **Un trainer che non lavora lì non viene toccato.**
      *
-     * 🚨 È la condizione che separa la regola da un danno: due cose separate,
-     * e sospendere il rapporto personale vorrebbe dire romperlo senza che
-     * nessuno l'abbia chiesto.
+     * 🚨 È la condizione che separa la regola da un danno: sono due cose
+     * separate, e fargli una domanda sullo slot vorrebbe dire chiedergli di
+     * decidere su una palestra con cui non c'entra niente.
      */
     #[Test]
     public function un_trainer_che_non_lavora_in_quella_palestra_non_si_tocca(): void
@@ -199,7 +288,7 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
         $riga = $this->riga($estraneo, $allievo);
 
         $this->assertNotNull($riga);
-        $this->assertNull($riga->sospeso_il, 'sospeso un rapporto che con quella palestra non centra');
+        $this->assertNull($riga->sovrapposto_dal, 'marcato un rapporto che con quella palestra non centra');
         $this->assertEmpty(app(LoSlotDelTrainer::class)->daDecidere($estraneo));
     }
 
@@ -222,8 +311,8 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
 
         $dopoLuscita = $this->riga($trainer, $allievo);
 
-        $this->assertNull($dopoLuscita->sospeso_il, 'il rapporto e rimasto sospeso');
-        $this->assertNull($dopoLuscita->sospeso_per_tenant_id);
+        $this->assertNull($dopoLuscita->sovrapposto_dal, 'la sovrapposizione e rimasta aperta');
+        $this->assertNull($dopoLuscita->sovrapposto_in_tenant_id);
         $this->assertNull($dopoLuscita->disattivato_il, 'lallievo non e tornato al trainer');
     }
 
@@ -261,7 +350,7 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
      * nessuno ha chiesto di riaprire.
      */
     #[Test]
-    public function si_riattiva_solo_uscendo_dalla_palestra_che_aveva_sospeso(): void
+    public function si_chiude_solo_uscendo_dalla_palestra_che_laveva_aperta(): void
     {
         [$palestra, $trainer, $allievo] = $this->giroCompleto('solo-quella@esempio.test');
 
@@ -271,11 +360,11 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
 
         $this->assertSame(
             0,
-            app(LoSlotDelTrainer::class)->riattivaPerUscitaDallaPalestra($allievo->fresh(), $altra),
-            'un rapporto si e riattivato uscendo da una palestra che non centra',
+            app(LoSlotDelTrainer::class)->chiudiLaSovrapposizione($allievo->fresh(), $altra),
+            'una sovrapposizione si e chiusa uscendo da una palestra che non centra',
         );
 
-        $this->assertNotNull($this->riga($trainer, $allievo)->sospeso_il);
+        $this->assertNotNull($this->riga($trainer, $allievo)->sovrapposto_dal);
     }
 
     /**

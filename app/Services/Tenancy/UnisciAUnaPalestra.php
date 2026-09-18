@@ -193,7 +193,7 @@ class UnisciAUnaPalestra
      * |---|---|---|
      * | Cosa si sposta | **tutte** le righe del tenant | **solo le sue** |
      * | Il tenant di partenza | sospeso e cancellato | ⛔ **resta in piedi**: dentro ci sono gli altri allievi |
-     * | Il legame col trainer | — | 🚨 **non si chiude**: si sospende, se quel trainer lavora qui |
+     * | Il legame col trainer | — | ⛔ **non si tocca**. Se quel trainer lavora qui si segna solo che c'è una domanda da fargli sullo **slot** |
      *
      * 🚨 **Il legame non si chiude, ed è il punto.** Uscire dallo spazio di un
      * trainer per entrare in una palestra **non** vuol dire licenziare il
@@ -243,7 +243,7 @@ class UnisciAUnaPalestra
 
             $this->rifaiIRuoli($utente, $spazioDelTrainer, $palestra, $ruolo);
 
-            $this->slot->sospendiPerIngressoInPalestra($utente, $palestra);
+            $this->slot->segnalaLaSovrapposizione($utente, $palestra);
 
             $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
 
@@ -396,7 +396,7 @@ class UnisciAUnaPalestra
              * va fatta una domanda. Liberare lo slot di default vorrebbe dire
              * decidere al posto suo, nella direzione che gli toglie l'allievo.
              */
-            $this->slot->sospendiPerIngressoInPalestra($utente, $palestra);
+            $this->slot->segnalaLaSovrapposizione($utente, $palestra);
 
             $this->sbloccaLeConversazioniConLaPalestra($utente, $palestra);
 

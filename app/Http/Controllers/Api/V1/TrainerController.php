@@ -281,7 +281,7 @@ class TrainerController extends Controller
                     'member_id' => (int) $r->member_id,
                     'nome' => $r->nome,
                     'palestra' => $r->palestra,
-                    'sospeso_il' => $r->sospeso_il,
+                    'sovrapposto_dal' => $r->sovrapposto_dal,
                 ],
             )->values(),
         ]);

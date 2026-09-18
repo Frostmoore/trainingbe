@@ -27,6 +27,26 @@ use Illuminate\Support\Facades\Log;
  * 💡 **Si paga per prenotarsi il ritorno.** Lo slot occupato non è una tassa, è
  * un'**opzione**: la si compra, o non la si compra.
  *
+ * ══ ⛔ QUESTA CLASSE NON SOSPENDE NESSUN RAPPORTO ═════════════════════════
+ *
+ * 🚨 **Va detto subito, perché il contrario è quello che sembra.** Nessun metodo
+ * qui dentro interrompe il legame fra allievo e trainer: `assignedMembers()` e
+ * `assignedTrainers()` non guardano `sovrapposto_dal`, quindi il trainer
+ * continua a vedere il suo allievo e l'allievo il suo trainer.
+ *
+ * 📌 Il committente, 18/09, correggendo esattamente questo fraintendimento —
+ * che era nato da un nome sbagliato che avevo dato a una colonna:
+ *
+ * > *«L'allievo di un free_trainer che si iscrive in una palestra non deve
+ * > avere il rapporto col free_trainer sospeso: un allievo deve poter essere
+ * > iscritto a infiniti free_trainer e una sola palestra, anche
+ * > contemporaneamente. L'unico caso limite è se un allievo di un free trainer
+ * > si iscrive in una palestra in cui lavora quel free trainer: allora il free
+ * > trainer deve ricevere la modale.»*
+ *
+ * 💡 **L'unica cosa in ballo sono i soldi**: chi paga il posto. Il rapporto non
+ * c'entra, e resta.
+ *
  * ══ 🚨 COSA C'ERA PRIMA ═══════════════════════════════════════════════════
  *
  * ⛔ Il posto lo pagavano **tutti e due**, e non l'aveva deciso nessuno: veniva
@@ -39,7 +59,7 @@ use Illuminate\Support\Facades\Log;
  * 🚨 **È la condizione che fa la differenza fra una regola e un danno.** Se un
  * allievo entra in una palestra dove il suo trainer **non** lavora, il rapporto
  * personale non c'entra niente e non si tocca: sono due cose separate, e
- * sospenderlo vorrebbe dire rompere un rapporto che nessuno ha chiuso.
+ * marcarlo vorrebbe dire fargli una domanda che non lo riguarda.
  *
  * 💡 La sovrapposizione esiste **solo** quando il trainer è dentro quella
  * palestra — ed è l'unico caso in cui il posto verrebbe pagato due volte.
@@ -52,17 +72,21 @@ class LoSlotDelTrainer
     ) {}
 
     /**
-     * L'allievo è appena entrato in una palestra: sospendi i rapporti con i
-     * trainer che **lavorano lì**, e segnati che vanno interpellati.
+     * L'allievo è appena entrato in una palestra: **segna la sovrapposizione**
+     * con i trainer che **lavorano lì**, e che vanno interpellati sullo slot.
      *
-     * ⚠️ **Non chiude niente e non toglie nessuno slot.** Fino a che il trainer
-     * non risponde, il posto resta suo: ⛔ liberarlo di default vorrebbe dire
-     * decidere al posto suo la cosa che costa — e nella direzione che gli toglie
-     * l'allievo.
+     * ⛔ **Non sospende, non chiude e non toglie nessuno slot.** Il rapporto
+     * resta esattamente com'era: quello che si scrive è solo *«questa persona è
+     * entrata in una palestra dove lavori anche tu, e c'è una domanda da farti
+     * sul posto che stai pagando»*.
      *
-     * @return int quanti rapporti sono stati sospesi
+     * ⚠️ Fino a che il trainer non risponde il posto resta suo: liberarlo di
+     * default vorrebbe dire decidere al posto suo la cosa che costa — e nella
+     * direzione che gli toglie l'allievo.
+     *
+     * @return int quante sovrapposizioni sono state segnate
      */
-    public function sospendiPerIngressoInPalestra(User $allievo, Tenant $palestra): int
+    public function segnalaLaSovrapposizione(User $allievo, Tenant $palestra): int
     {
         return $this->context->runWithoutTenant(function () use ($allievo, $palestra): int {
             $trainerDentro = $this->trainerDiQuestaPalestra($palestra);
@@ -75,10 +99,10 @@ class LoSlotDelTrainer
                 ->where('member_id', $allievo->getKey())
                 ->whereIn('trainer_id', $trainerDentro->all())
                 ->whereNull('disattivato_il')
-                ->whereNull('sospeso_il')
+                ->whereNull('sovrapposto_dal')
                 ->update([
-                    'sospeso_il' => Carbon::now(),
-                    'sospeso_per_tenant_id' => $palestra->getKey(),
+                    'sovrapposto_dal' => Carbon::now(),
+                    'sovrapposto_in_tenant_id' => $palestra->getKey(),
 
                     /*
                      * 🚨 **La decisione si azzera**, anche se c'era già.
@@ -94,7 +118,7 @@ class LoSlotDelTrainer
                 ]);
 
             if ($quanti > 0) {
-                Log::info('Slot sospesi per ingresso in palestra', [
+                Log::info('Sovrapposizione segnata: allievo entrato dove lavora il suo trainer', [
                     'allievo' => $allievo->getKey(),
                     'palestra' => $palestra->getKey(),
                     'quanti' => $quanti,
@@ -111,18 +135,18 @@ class LoSlotDelTrainer
      * ⛔ **Non c'è nessuna tabella di «domande in sospeso»**, ed è una scelta:
      * uno stato duplicato si disallinea da quello che descrive, e il giorno che
      * si disallinea si chiede due volte la stessa cosa o non si chiede affatto.
-     * 💡 Le domande **sono** le righe sospese senza risposta.
+     * 💡 Le domande **sono** le righe sovrapposte senza risposta.
      *
-     * @return Collection<int, object{member_id: int, nome: string, palestra: string, sospeso_il: string}>
+     * @return Collection<int, object{member_id: int, nome: string, palestra: string, sovrapposto_dal: string}>
      */
     public function daDecidere(User $trainer): Collection
     {
         return $this->context->runWithoutTenant(
             fn (): Collection => collect(DB::table('trainer_member as tm')
                 ->join('users as u', 'u.id', '=', 'tm.member_id')
-                ->leftJoin('tenants as t', 't.id', '=', 'tm.sospeso_per_tenant_id')
+                ->leftJoin('tenants as t', 't.id', '=', 'tm.sovrapposto_in_tenant_id')
                 ->where('tm.trainer_id', $trainer->getKey())
-                ->whereNotNull('tm.sospeso_il')
+                ->whereNotNull('tm.sovrapposto_dal')
                 ->whereNull('tm.slot_deciso_il')
                 ->whereNull('tm.disattivato_il')
                 /*
@@ -131,12 +155,12 @@ class LoSlotDelTrainer
                  */
                 ->whereNull('u.deleted_at')
                 ->where('u.is_active', true)
-                ->orderBy('tm.sospeso_il')
+                ->orderBy('tm.sovrapposto_dal')
                 ->get([
                     'tm.member_id',
                     'u.name as nome',
                     't.name as palestra',
-                    'tm.sospeso_il',
+                    'tm.sovrapposto_dal',
                 ])),
         );
     }
@@ -144,10 +168,10 @@ class LoSlotDelTrainer
     /**
      * Il trainer risponde: **tengo** lo slot, o lo **libero**.
      *
-     * 🚨 **Tenere lo slot non fa niente di visibile, e va bene così.** La riga
-     * resta sospesa e continua a contare il posto — `postiRimasti()` filtra su
-     * `disattivato_il`, non su `sospeso_il`. 💡 Quello che cambia è il
-     * **futuro**: uscendo dalla palestra quel rapporto si riaccende.
+     * 🚨 **Tenere lo slot non fa niente di visibile, e va bene così.** Il
+     * rapporto era già intero e resta intero, e continua a contare il posto — `postiRimasti()` filtra su
+     * `disattivato_il`, non su `sovrapposto_dal`. 💡 Quello che cambia è il
+     * **futuro**: uscendo dalla palestra quell'allievo resta suo.
      *
      * ⛔ **Liberarlo invece chiude il rapporto**, e non torna più: è
      * precisamente quello che il committente ha chiesto — *«se si dissocia da
@@ -161,7 +185,7 @@ class LoSlotDelTrainer
             $riga = DB::table('trainer_member')
                 ->where('trainer_id', $trainer->getKey())
                 ->where('member_id', $allievo->getKey())
-                ->whereNotNull('sospeso_il')
+                ->whereNotNull('sovrapposto_dal')
                 ->whereNull('slot_deciso_il')
                 ->whereNull('disattivato_il')
                 ->first();
@@ -193,36 +217,36 @@ class LoSlotDelTrainer
     }
 
     /**
-     * L'allievo ha lasciato la palestra: riaccendi i rapporti che erano stati
-     * sospesi **da quella** palestra.
+     * L'allievo ha lasciato la palestra: **chiudi la sovrapposizione** nata
+     * lì, e il rapporto torna a essere quello di prima.
      *
-     * ⚠️ **Solo da quella**, e l'ha imposto il vincolo di `sospeso_per_tenant_id`:
-     * riattivare tutto vorrebbe dire riaprire legami sospesi altrove, che
-     * nessuno ha chiesto di riaprire.
+     * ⚠️ **Solo da quella palestra**, e l'ha imposto `sovrapposto_in_tenant_id`:
+     * chiudere tutto vorrebbe dire rimettere in discussione slot decisi
+     * altrove, che nessuno ha toccato.
      *
      * ⛔ E si riaccendono **solo** quelli non chiusi: chi ha liberato lo slot ha
      * `disattivato_il` valorizzato, e resta chiuso. 💡 È la metà della regola
      * che dà senso all'altra.
      *
-     * @return int quanti rapporti sono tornati attivi
+     * @return int quante sovrapposizioni sono state chiuse
      */
-    public function riattivaPerUscitaDallaPalestra(User $allievo, Tenant $palestra): int
+    public function chiudiLaSovrapposizione(User $allievo, Tenant $palestra): int
     {
         return $this->context->runWithoutTenant(function () use ($allievo, $palestra): int {
             $quanti = DB::table('trainer_member')
                 ->where('member_id', $allievo->getKey())
-                ->where('sospeso_per_tenant_id', $palestra->getKey())
-                ->whereNotNull('sospeso_il')
+                ->where('sovrapposto_in_tenant_id', $palestra->getKey())
+                ->whereNotNull('sovrapposto_dal')
                 ->whereNull('disattivato_il')
                 ->update([
-                    'sospeso_il' => null,
-                    'sospeso_per_tenant_id' => null,
+                    'sovrapposto_dal' => null,
+                    'sovrapposto_in_tenant_id' => null,
                     'slot_deciso_il' => null,
                     'updated_at' => Carbon::now(),
                 ]);
 
             if ($quanti > 0) {
-                Log::info('Slot riattivati per uscita dalla palestra', [
+                Log::info('Sovrapposizione chiusa: allievo uscito dalla palestra', [
                     'allievo' => $allievo->getKey(),
                     'palestra' => $palestra->getKey(),
                     'quanti' => $quanti,
