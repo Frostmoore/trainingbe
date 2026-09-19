@@ -518,9 +518,13 @@ class Cassa
      * l'`event_id` gia' inserito e non riproverebbe **l'accredito**. 💡 Meglio
      * un errore nel log, che si vede e si rimedia a mano.
      *
+     * 🆕 19/09/2026: dice **com'è andata** — `true` se è stato elaborato (anche
+     * un evento che non ci riguarda: non c'era niente da fare, ed è fatto),
+     * `false` se è finito nel `catch`. Il webhook ci scrive `processed_at`.
+     *
      * @param  array<string, mixed>  $evento
      */
-    public function applica(array $evento): void
+    public function applica(array $evento): bool
     {
         try {
             $oggetto = $evento['data']['object'] ?? [];
@@ -562,11 +566,15 @@ class Cassa
                 'customer.subscription.deleted' => $this->abbonamentoFinito($oggetto),
                 default => null,
             };
+
+            return true;
         } catch (\Throwable $e) {
             Log::error('Stripe: incasso fallito.', [
                 'errore' => $e->getMessage(),
                 'evento' => $evento['id'] ?? null,
             ]);
+
+            return false;
         }
     }
 

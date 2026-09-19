@@ -6,7 +6,6 @@ namespace App\Services\Dashboard;
 
 use App\Models\User;
 use App\Services\Nutrition\DiaryService;
-use App\Services\Training\WorkoutCalorieService;
 use App\Support\Tempo\GiornoLocale;
 use Illuminate\Support\Carbon;
 
@@ -39,12 +38,8 @@ use Illuminate\Support\Carbon;
  */
 class DashboardService
 {
-    /** Quanti allenamenti recenti mostrare: quelli che si ricordano. */
-    private const ULTIMI_ALLENAMENTI = 5;
-
     public function __construct(
         private readonly DiaryService $diario,
-        private readonly WorkoutCalorieService $calorie,
     ) {}
 
     /**

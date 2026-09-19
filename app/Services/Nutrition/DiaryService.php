@@ -8,7 +8,6 @@ use App\Enums\MealType;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
 use App\Models\User;
-use App\Services\Training\WorkoutCalorieService;
 use App\Support\Tempo\GiornoLocale;
 
 /**
@@ -26,10 +25,6 @@ use App\Support\Tempo\GiornoLocale;
  */
 class DiaryService
 {
-    public function __construct(
-        private readonly WorkoutCalorieService $calorie,
-    ) {}
-
     /**
      * Tutto quello che serve per disegnare la giornata.
      *

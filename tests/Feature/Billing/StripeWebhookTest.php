@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Billing;
 
 use App\Models\StripeEvent;
+use App\Services\Billing\Stripe\Cassa;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
@@ -117,9 +118,26 @@ class StripeWebhookTest extends TestCase
         // viene contestato, quello che conta e' cosa ha detto Stripe.
         $this->assertSame('evt_123', $riga->payload['id']);
 
-        // 📌 Nessun flusso attaccato ancora: l'evento e' registrato e **non
-        // lavorato**, e le due cose devono restare distinguibili.
-        $this->assertNull($riga->processed_at);
+        // 🆕 19/09/2026: elaborato → `processed_at` scritto. Prima restava
+        // sempre nullo, e la colonna non distingueva niente.
+        $this->assertNotNull($riga->processed_at);
+    }
+
+    /**
+     * 🆕 ⚠️ **Un evento che non si riesce a elaborare resta «non elaborato».**
+     *
+     * È l'unico modo per ritrovarlo: la risposta a Stripe resta `200` (niente
+     * ritentativi per ore), e l'errore sta nel log — la colonna vuota dice
+     * quale riga guardare.
+     */
+    #[Test]
+    public function an_event_that_fails_stays_unprocessed(): void
+    {
+        $this->mock(Cassa::class, fn ($m) => $m->shouldReceive('applica')->once()->andReturn(false));
+
+        $this->mandaEvento('evt_fallito', 'invoice.paid')->assertOk();
+
+        $this->assertNull(StripeEvent::query()->sole()->processed_at);
     }
 
     /**

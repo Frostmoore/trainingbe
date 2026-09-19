@@ -75,7 +75,7 @@ class StripeWebhookController extends Controller
         }
 
         try {
-            StripeEvent::create([
+            $riga = StripeEvent::create([
                 'event_id' => $evento->id,
                 'type' => $evento->type,
                 'payload' => $evento->toArray(),
@@ -111,7 +111,17 @@ class StripeWebhookController extends Controller
          * ore su un evento che ha gia' registrato, e ogni ritentativo
          * troverebbe il doppione e uscirebbe **prima** di riprovare l'accredito.
          */
-        $this->cassa->applica($evento->toArray());
+        /*
+         * 🆕 **E si segna che è stato elaborato** — 19/09/2026.
+         *
+         * ⛔ Prima `processed_at` non lo scriveva nessuno: ogni evento risultava
+         * «non elaborato», anche quelli andati a buon fine, e quindi la colonna
+         * non distingueva niente. ⚠️ Solo se `applica()` è andata: un evento
+         * fallito resta con `processed_at` nullo, ed è così che si ritrova.
+         */
+        if ($this->cassa->applica($evento->toArray())) {
+            $riga->forceFill(['processed_at' => now()])->save();
+        }
 
         return response()->json(['message' => 'Ricevuto.']);
     }

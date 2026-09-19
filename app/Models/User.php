@@ -615,11 +615,6 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return $this->hasMany(WorkoutPlan::class, 'member_id');
     }
 
-    public function workoutSessions(): HasMany
-    {
-        return $this->hasMany(WorkoutSession::class);
-    }
-
     public function nutritionPlans(): HasMany
     {
         return $this->hasMany(NutritionPlan::class, 'member_id');
