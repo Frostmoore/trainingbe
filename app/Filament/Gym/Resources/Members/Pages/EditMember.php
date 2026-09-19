@@ -46,7 +46,7 @@ class EditMember extends EditRecord
                 ->visible(fn (): bool => auth()->user()?->isGymAdmin() === true)
                 ->requiresConfirmation()
                 ->modalHeading(fn (User $record): string => "Disiscrivere {$record->name}?")
-                ->modalDescription('Esce dalla palestra e torna nel suo spazio personale, con il suo account e i suoi dati. Per rientrare gli servira\' un nuovo invito.')
+                ->modalDescription('Esce dalla palestra e torna nel suo spazio personale, con il suo account e i suoi dati. Per rientrare gli servirà un nuovo invito.')
                 ->modalSubmitActionLabel('Disiscrivi')
                 ->action(function (User $record): void {
                     $palestra = $record->tenant_id;
@@ -60,7 +60,7 @@ class EditMember extends EditRecord
                         tenant: $palestra,
                     );
 
-                    Notification::make()->title("{$record->name} non e' piu' iscritto.")->success()->send();
+                    Notification::make()->title("{$record->name} non è più iscritto.")->success()->send();
 
                     $this->redirect(MemberResource::getUrl('index'));
                 }),

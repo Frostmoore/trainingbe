@@ -197,7 +197,23 @@ class ConversationController extends Controller
 
         $messaggi = $query->limit(min(100, (int) $request->integer('limit', 50)))->get();
 
+        /*
+         * 🆕 **Si dice PRIMA se si può scrivere** — 19/09/2026.
+         *
+         * ⛔ Visto sull'emulatore: dopo D9 una conversazione con chi non ti
+         * segue più resta leggibile, ma il campo per scrivere sembrava normale
+         * e il rifiuto arrivava **dopo** aver scritto e premuto invio. 🚨 Su
+         * una conversazione chiusa non è un dettaglio: si scrive un messaggio
+         * intero credendo che parta.
+         *
+         * 💡 La spiegazione la scrive il server, come per il rifiuto: l'app la
+         * mostra e basta.
+         */
+        $permesso = $this->cancello->puoScrivere($request->user(), $c);
+
         return response()->json([
+            'puoi_scrivere' => $permesso->consentito,
+            'motivo' => $permesso->spiegazione,
             /*
              * 🚨 **`toApiArray()` sa CHI sta guardando** — N16.
              *

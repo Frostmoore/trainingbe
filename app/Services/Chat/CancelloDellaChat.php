@@ -92,7 +92,7 @@ class CancelloDellaChat
         if ($this->canaleChiuso($c)) {
             return Permesso::no(
                 Permesso::CANALE_CHIUSO,
-                'Questa conversazione e\' stata chiusa.',
+                'Questa conversazione è stata chiusa.',
             );
         }
 
@@ -111,7 +111,7 @@ class CancelloDellaChat
         if (! $c->eDiInformazioni() && ! $this->ancoraLegati($c)) {
             return Permesso::no(
                 Permesso::CANALE_CHIUSO,
-                'Non vi seguite piu\': puoi rileggere la conversazione, ma non scrivere.',
+                'Non vi seguite più: puoi rileggere la conversazione, ma non scrivere.',
             );
         }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Models\FoodEntry;
 use App\Models\Tenant;
@@ -183,6 +184,28 @@ class EsciDallaPalestraTest extends TestCase
         $this->comeApp($this->trainer)
             ->postJson('/api/v1/account/leave-gym')
             ->assertStatus(422);
+    }
+
+    /**
+     * 🆕 🚨 **La rotta, nel caso che riesce** — 19/09/2026.
+     *
+     * ⛔ Fino a oggi si provavano solo i due rifiuti (422): il caso riuscito
+     * passava dal servizio, mai dalla rotta. E la rotta finiva **sempre** in
+     * un 500, dopo aver fatto uscire la persona: il registro voleva un
+     * `AuditAction` e riceveva una stringa. L'app restava sulla palestra.
+     */
+    #[Test]
+    public function uscire_dall_app_risponde_con_il_branding_nuovo_e_lascia_traccia(): void
+    {
+        $this->comeApp($this->mario)
+            ->postJson('/api/v1/account/leave-gym')
+            ->assertOk()
+            ->assertJsonStructure(['message', 'branding']);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => AuditAction::UscitoDallaPalestra->value,
+            'actor_id' => $this->mario->getKey(),
+        ]);
     }
 
     #[Test]

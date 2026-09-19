@@ -208,7 +208,7 @@ class TrainerResource extends Resource
                         app(TogliUnTrainerDallaPalestra::class)($r, $palestra);
 
                         Notification::make()
-                            ->title("{$r->name} non fa piu' parte della palestra")
+                            ->title("{$r->name} non fa più parte della palestra")
                             ->success()
                             ->send();
                     }),

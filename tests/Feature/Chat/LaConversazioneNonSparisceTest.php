@@ -51,14 +51,42 @@ class LaConversazioneNonSparisceTest extends TestCase
         }
 
         // 📖 E si rilegge.
-        $this->actingAs($fuori)
+        $risposta = $this->actingAs($fuori)
             ->getJson("/api/v1/conversations/{$c->id}/messages")
             ->assertOk()
             ->assertJsonCount(1, 'data');
 
+        /*
+         * 🆕 🚨 **E l'elenco lo dice PRIMA** — 19/09/2026.
+         *
+         * ⛔ Sull'emulatore il campo per scrivere sembrava normale, e il
+         * rifiuto arrivava dopo aver scritto il messaggio: la frase era già
+         * stata pensata e battuta. Adesso l'app sa subito di essere in sola
+         * lettura, e il motivo lo scrive il server.
+         */
+        $risposta->assertJsonPath('puoi_scrivere', false);
+        $this->assertStringContainsString('rileggere', (string) $risposta->json('motivo'));
+
         // 🔒 Ma non si scrive piu', da nessuna delle due parti.
         $this->scrivi($fuori, $c)->assertStatus(403);
         $this->scrivi($trainer, $c)->assertStatus(403);
+    }
+
+    /** ⚖️ E a chi puo' scrivere, l'elenco non racconta nessuna chiusura. */
+    #[Test]
+    public function chi_puo_scrivere_lo_legge_nell_elenco(): void
+    {
+        $palestra = $this->creaPalestra();
+        $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach2@esempio.test');
+        $iscritto = $this->creaUtente($palestra, UserRole::Member, 'luigi@esempio.test');
+
+        $c = Conversation::between($trainer, $iscritto);
+
+        $this->actingAs($iscritto)
+            ->getJson("/api/v1/conversations/{$c->id}/messages")
+            ->assertOk()
+            ->assertJsonPath('puoi_scrivere', true)
+            ->assertJsonPath('motivo', null);
     }
 
     /** ⚖️ Chi e' ancora legato scrive come prima: la regola nuova non chiude niente di vivo. */

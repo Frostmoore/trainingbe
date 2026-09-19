@@ -84,6 +84,17 @@ enum AuditAction: string
      */
     case IscrittoDisiscritto = 'user.disiscritto';
 
+    /**
+     * 🆕 La persona è **uscita da sola** dalla palestra, dall'app — 19/09/2026.
+     *
+     * 🚨 Il valore c'era già come **stringa** in `AccountController::leaveGym`
+     * dal 23/08, e `AuditLogger::log()` vuole un `AuditAction`: ogni uscita
+     * riuscita finiva in un `TypeError` **dopo** aver fatto il lavoro. L'app
+     * riceveva un 500 e continuava a mostrare la palestra. Trovato nel giro
+     * sull'emulatore del 19/09.
+     */
+    case UscitoDallaPalestra = 'account.left_gym';
+
     public function label(): string
     {
         return match ($this) {
@@ -103,6 +114,7 @@ enum AuditAction: string
             self::AbbonamentoRegalato => 'Abbonamento regalato',
             self::AbbonamentoPagatoDisdetto => 'Abbonamento pagato disdetto',
             self::IscrittoDisiscritto => 'Iscritto disiscritto',
+            self::UscitoDallaPalestra => 'Uscito dalla palestra',
         };
     }
 

@@ -87,7 +87,7 @@ class AccountController extends Controller
          * cui la palestra la fa. ⛔ Senza, l'unica risposta sarebbe «non lo
          * sappiamo».
          */
-        $this->audit->log('account.left_gym', $utente, ['gym' => $vecchia]);
+        $this->audit->log(AuditAction::UscitoDallaPalestra, $utente, ['gym' => $vecchia]);
 
         return response()->json([
             'message' => __('Sei uscito da :palestra.', ['palestra' => $vecchia ?? '—']),
