@@ -520,22 +520,11 @@ class UnisciAUnaPalestra
      */
     private function tabelleDaSpostare(): array
     {
-        $tabelle = [];
-
-        foreach (Schema::getTableListing() as $tabella) {
-            // ⚠️ Il nome può arrivare qualificato con lo schema su alcuni driver.
-            $nome = str_contains($tabella, '.') ? explode('.', $tabella)[1] : $tabella;
-
-            if (in_array($nome, self::RESTANO_INDIETRO, true)) {
-                continue;
-            }
-
-            if (Schema::hasColumn($nome, 'tenant_id')) {
-                $tabelle[] = $nome;
-            }
-        }
-
-        return $tabelle;
+        // ⚡ Una query sola, non una per tabella: vedi `EsciDaUnaPalestra::tabelleConTenant()`.
+        return array_values(array_diff(
+            EsciDaUnaPalestra::tabelleConTenant(),
+            self::RESTANO_INDIETRO,
+        ));
     }
 
     /**

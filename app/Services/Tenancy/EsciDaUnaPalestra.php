@@ -292,23 +292,34 @@ final class EsciDaUnaPalestra
         }
     }
 
-    /** @return list<string> */
+    /**
+     * Le tabelle che hanno `tenant_id`, in ordine alfabetico.
+     *
+     * ⚡ **Una query sola** — 19/09/2026. Prima era `Schema::getTableListing()`
+     * più un `Schema::hasColumn()` per ognuna delle ~50 tabelle: su MariaDB
+     * ogni `hasColumn` legge l'`information_schema`, e **entrare o uscire da una
+     * palestra costava ~10 secondi** — sul server come nei test (83 test su
+     * 1.398 si prendevano 647 dei 761 secondi della suite).
+     *
+     * ⚠️ È MySQL/MariaDB e basta, di proposito: è l'unico motore dell'app,
+     * anche nei test (vedi il commento in `phpunit.xml`).
+     *
+     * @return list<string>
+     */
     public static function tabelleConTenant(): array
     {
-        $tabelle = [];
-
-        foreach (Schema::getTableListing() as $tabella) {
-            // ⚠️ Il nome può arrivare qualificato con lo schema su alcuni driver.
-            $nome = str_contains($tabella, '.') ? explode('.', $tabella)[1] : $tabella;
-
-            if (Schema::hasColumn($nome, 'tenant_id')) {
-                $tabelle[] = $nome;
-            }
-        }
+        $tabelle = array_map(
+            static fn (object $riga): string => (string) $riga->tabella,
+            DB::select(
+                'select table_name as tabella from information_schema.columns '
+                .'where table_schema = database() and column_name = ?',
+                ['tenant_id'],
+            ),
+        );
 
         sort($tabelle);
 
-        return $tabelle;
+        return array_values(array_unique($tabelle));
     }
 
     /**
