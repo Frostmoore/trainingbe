@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use Illuminate\Broadcasting\BroadcastManager;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -28,5 +29,41 @@ abstract class TestCase extends BaseTestCase
      */
     public const FAKE_PASSWORD = 'not-a-secret-test-value-7';
 
-    //
+    /** Il DB di test di questo processo è stato registrato come aggiornato. */
+    private static bool $impronta = false;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        /*
+         * ⚡ **Il broadcast nei test si arrende subito** — 19/09/2026.
+         *
+         * Il driver resta `reverb` (vedi `phpunit.xml`: serve alla verifica
+         * vera dei canali), ma a `127.0.0.1:8081` non ascolta nessuno. Su
+         * Windows una connessione rifiutata impiega ~2 s a fallire, e
+         * `MessageSent::announce()` la inghiottiva: **2 s per ogni messaggio**
+         * scritto in un test, senza nessun errore visibile.
+         */
+        config(['broadcasting.connections.reverb.client_options' => [
+            'connect_timeout' => 0.05,
+            'timeout' => 0.1,
+        ]]);
+        // ⚠️ Il client è già stato creato all'avvio (le rotte dei canali):
+        // senza `purge` terrebbe le opzioni di prima. E il `purge` butta via
+        // anche i canali registrati su quello vecchio: si rileggono, o
+        // /broadcasting/auth risponde 403 a tutti (BroadcastAuthTest).
+        $this->app->make(BroadcastManager::class)->purge('reverb');
+        require base_path('routes/channels.php');
+
+        /*
+         * ⚡ Il DB di test è stato ricreato in questo processo, ed è andata
+         * bene: si registra l'impronta, e il prossimo lancio salta i ~16 s
+         * della ricreazione (vedi `tests/bootstrap.php`).
+         */
+        if (! self::$impronta && defined('IMPRONTA_DEL_DB_DI_TEST')) {
+            self::$impronta = true;
+            @file_put_contents(FILE_IMPRONTA_DEL_DB_DI_TEST, IMPRONTA_DEL_DB_DI_TEST);
+        }
+    }
 }

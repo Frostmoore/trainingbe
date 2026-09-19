@@ -19,7 +19,6 @@ use App\Services\Account\AccountEraser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\Concerns\ScriveBusteCifrate;
@@ -256,22 +255,18 @@ class AccountErasureSweepTest extends TestCase
             'password_reset_tokens', 'sessions', 'personal_access_tokens',
         ];
 
-        $trovate = [];
+        // ⚡ Una query sola, non un `hasColumn` per tabella: su MariaDB erano
+        // ~20 s per questo test (stesso difetto di `EsciDaUnaPalestra`, §95.4).
+        $trovate = array_map(
+            static fn (object $riga): string => (string) $riga->tabella,
+            DB::select(
+                'select table_name as tabella from information_schema.columns '
+                .'where table_schema = database() and column_name = ?',
+                ['user_id'],
+            ),
+        );
 
-        foreach (Schema::getTableListing() as $tabella) {
-            $nome = str_contains($tabella, '.')
-                ? substr($tabella, (int) strrpos($tabella, '.') + 1)
-                : $tabella;
-
-            if (in_array($nome, $infrastruttura, true)) {
-                continue;
-            }
-
-            if (Schema::hasColumn($nome, 'user_id')) {
-                $trovate[] = $nome;
-            }
-        }
-
+        $trovate = array_values(array_unique(array_diff($trovate, $infrastruttura)));
         sort($trovate);
 
         return $trovate;
