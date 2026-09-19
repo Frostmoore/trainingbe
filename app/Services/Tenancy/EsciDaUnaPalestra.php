@@ -70,7 +70,6 @@ final class EsciDaUnaPalestra
         'food_entries',
         'food_favorites',
         'importazioni_da_documento',
-        'profiles',
         'stime_cibo',
     ];
 

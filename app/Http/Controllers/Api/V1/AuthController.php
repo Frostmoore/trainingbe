@@ -182,7 +182,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load('profile');
+        $user = $request->user();
 
         return response()->json([
             'data' => new UserResource($user),
@@ -586,7 +586,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token->plainTextToken,
-            'data' => new UserResource($user->load('profile')),
+            'data' => new UserResource($user),
             'branding' => $tenant->branding(),
         ], $status);
     }

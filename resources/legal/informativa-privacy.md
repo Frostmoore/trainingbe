@@ -55,7 +55,6 @@ responsabile (art. 28 GDPR).
 | Password (conservata solo come hash) | Accesso | Art. 6(1)(b) |
 | Identificativo Google/Apple | Accesso con account esterno | Art. 6(1)(b) |
 | Palestra di appartenenza, trainer che ti seguono | Erogazione del servizio | Art. 6(1)(b) |
-| Le **note dello staff** della tua palestra su di te (per esempio un infortunio o una limitazione), se le scrive | Seguirti in palestra | [da definire con il legale] · ⚠️ possono riguardare la salute · le scrive la palestra, tu non le vedi |
 | Schede **modello** della palestra | Patrimonio della palestra | Art. 6(1)(f) — legittimo interesse |
 | **Messaggi cifrati** | Recapito | Art. 6(1)(b) · ⚠️ **illeggibili per noi** |
 | Chiave **pubblica** di cifratura | Recapito dei messaggi | Art. 6(1)(b) |

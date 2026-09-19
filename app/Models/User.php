@@ -22,7 +22,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -550,10 +549,11 @@ class User extends Authenticatable implements FilamentUser, HasMedia
 
     // ───────────────────────── relazioni ─────────────────────────
 
-    public function profile(): HasOne
-    {
-        return $this->hasOne(Profile::class);
-    }
+    /*
+     * 🆕 ⛔ Qui c'era `profile(): HasOne` — la tabella `profiles` non esiste piu'
+     * dal 19/09/2026 (`2026_09_19_180000_via_la_tabella_dei_profili`): il profilo
+     * sta sul telefono.
+     */
 
     /**
      * La citta' dichiarata — M1.2. `null` finche' non la si sceglie, e resta

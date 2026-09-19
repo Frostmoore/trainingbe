@@ -89,7 +89,8 @@ class DisiscrivereNonCancellaTest extends TestCase
             $pagina->assertFormFieldDoesNotExist("profile.{$campo}");
         }
 
-        $pagina->assertFormFieldExists('profile.notes');
+        // 🆕 19/09/2026: e nemmeno le note dello staff — via la tabella.
+        $pagina->assertFormFieldDoesNotExist('profile.notes');
     }
 
     /** ⛔ E «Elimina» non c'e' piu', ne' sulla scheda ne' in blocco. */

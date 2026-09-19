@@ -6,7 +6,6 @@ namespace App\Filament\Gym\Resources\Members\Pages;
 
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\Members\MemberResource;
-use App\Models\Profile;
 use App\Models\User;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -22,8 +21,6 @@ class CreateMember extends CreateRecord
     protected static string $resource = MemberResource::class;
 
     /** @var array<string, mixed> */
-    private array $profilo = [];
-
     /** @var list<int|string> */
     private array $trainer = [];
 
@@ -33,11 +30,9 @@ class CreateMember extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // 🆕 19/09: solo le note dello staff — i dati del corpo stanno sul
-        // telefono della persona.
-        $this->profilo = array_intersect_key($data['profile'] ?? [], ['notes' => true]);
         $this->trainer = $data['trainers'] ?? [];
 
+        // 🆕 19/09/2026: il profilo non sta piu' sul server (via `profiles`).
         unset($data['profile'], $data['trainers']);
 
         return $data;
@@ -49,13 +44,6 @@ class CreateMember extends CreateRecord
         $utente = $this->getRecord();
 
         $utente->assignRole(UserRole::Member->value);
-
-        if (array_filter($this->profilo, static fn ($v): bool => $v !== null && $v !== '') !== []) {
-            Profile::updateOrCreate(
-                ['user_id' => $utente->getKey()],
-                array_merge($this->profilo, ['tenant_id' => $utente->tenant_id]),
-            );
-        }
 
         if ($this->trainer !== []) {
             $utente->assignedTrainers()->sync($this->collegamenti());

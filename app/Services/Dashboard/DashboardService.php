@@ -179,7 +179,7 @@ class DashboardService
      *
      * ⚠️ Resta il **peso obiettivo**, ed e' voluto: e' una **preferenza** che
      * la persona ha dichiarato nel profilo, non una misura del suo corpo. Vive
-     * in `profiles` e ci resta.
+     * in `profiles` — fino al 19/09/2026, vedi sotto (e la tabella non c'e' piu').
      *
      * @return array<string, mixed>
      */

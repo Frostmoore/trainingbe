@@ -188,7 +188,8 @@ class CalorieCalculator
      * scritto «voglio dimagrire» si e' ritrovato un target di mantenimento.
      *
      * ⚠️ Per questo la conversione e' esplicita e in un posto solo: chi aggiunge
-     * un obiettivo tocca `GOAL_DELTA`, `MACRO_SPLIT` e `Profile::GOALS`, e i
+     * un obiettivo tocca `GOAL_DELTA`, `MACRO_SPLIT` e, nell'app, `obiettivi` in
+     * `profilo_sul_telefono.dart`, e i
      * test in `CalorieCalculatorTest` falliscono da soli se ne dimentica uno.
      */
     public static function normalizzaObiettivo(string $goal): string

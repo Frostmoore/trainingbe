@@ -144,7 +144,6 @@ class AccountEraser
         RecoveryKey::query()->where('user_id', $id)->delete();
         ChatKey::query()->where('user_id', $id)->delete();
 
-        $utente->profile()->delete();
     }
 
     /**

@@ -44,16 +44,16 @@ class ProfileApiTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
-    /** 🚨 Le colonne non esistono: non c'è niente da tenere, né da perdere. */
+    /**
+     * 🚨 **La tabella non esiste**: non c'è niente da tenere, né da perdere.
+     *
+     * 🆕 19/09/2026: prima via i dati del corpo, poi anche le note dello staff
+     * — 📌 *«non servono a molto sul server»*. Il profilo sta sul telefono.
+     */
     #[Test]
-    public function the_profiles_table_has_no_body_data(): void
+    public function the_profiles_table_is_gone(): void
     {
-        foreach (['sex', 'birthdate', 'height_cm', 'activity_level', 'goal', 'target_weight_kg', 'meal_hours'] as $colonna) {
-            $this->assertFalse(Schema::hasColumn('profiles', $colonna), "«{$colonna}» è ancora in profiles.");
-        }
-
-        // ⚠️ Le note dello staff restano: le scrive la palestra.
-        $this->assertTrue(Schema::hasColumn('profiles', 'notes'));
+        $this->assertFalse(Schema::hasTable('profiles'));
     }
 
     /** 💡 Un telefono che non ha traslocato trova un profilo vuoto, e chiude. */

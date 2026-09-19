@@ -6,10 +6,8 @@ namespace App\Filament\Gym\Resources\Members\Schemas;
 
 use App\Enums\UserRole;
 use App\Models\User;
-use App\Services\Nutrition\CalorieCalculator;
 use App\Support\Tenancy\TenantContext;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -91,26 +89,12 @@ class MemberForm
                 ]),
 
             /*
-             * 🆕 🚨 **I dati del corpo non stanno qui** — 19/09/2026.
-             *
-             * ⛔ Qui c'era la sezione «Dati per il calcolo del fabbisogno»:
-             * sesso, data di nascita, altezza, livello di attivita', obiettivo e
-             * peso obiettivo dell'iscritto, **leggibili e modificabili dalla
-             * palestra**. 📌 Il committente: *«assicurati che non ci scriva
-             * niente di personale (esattamente come peso altezza e data di
-             * nascita)»*. Stanno sul telefono della persona, e il fabbisogno lo
-             * calcola l'app.
-             *
-             * 💡 Restano le note dello staff: le scrive la palestra, non l'app.
+             * 🆕 ⛔ **Qui c'era il profilo dell'iscritto** — tolto il 19/09/2026.
+             * Prima i dati del corpo (sesso, data di nascita, altezza, attivita',
+             * obiettivo, peso obiettivo), poi anche le note dello staff:
+             * 📌 *«puoi togliere anche le note dello staff, non servono a molto
+             * sul server»*. Il profilo sta sul telefono della persona.
              */
-            Section::make('Note dello staff')
-                ->schema([
-                    Textarea::make('profile.notes')
-                        ->label('Note')
-                        ->rows(3)
-                        ->columnSpanFull()
-                        ->helperText('Infortuni, limitazioni, cose da ricordare. Le vede lo staff, non l\'iscritto.'),
-                ]),
         ]);
     }
 
@@ -136,11 +120,5 @@ class MemberForm
             ->orderBy('name')
             ->pluck('name', 'id')
             ->all();
-    }
-
-    /** Le opzioni di attivita' devono restare allineate al calcolatore. */
-    public static function livelliSupportati(): array
-    {
-        return array_keys(CalorieCalculator::ACTIVITY);
     }
 }

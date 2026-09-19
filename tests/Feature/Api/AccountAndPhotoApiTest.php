@@ -9,7 +9,6 @@ use App\Enums\UserRole;
 use App\Models\Conversation;
 use App\Models\FoodEntry;
 use App\Models\Message;
-use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Account\AccountEraser;
@@ -156,7 +155,6 @@ class AccountAndPhotoApiTest extends TestCase
         $id = $this->iscritto->getKey();
 
         $this->assertSame(0, FoodEntry::withoutGlobalScopes()->where('user_id', $id)->count());
-        $this->assertSame(0, Profile::withoutGlobalScopes()->where('user_id', $id)->count());
     }
 
     /**

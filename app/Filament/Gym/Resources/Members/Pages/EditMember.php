@@ -6,7 +6,6 @@ namespace App\Filament\Gym\Resources\Members\Pages;
 
 use App\Enums\AuditAction;
 use App\Filament\Gym\Resources\Members\MemberResource;
-use App\Models\Profile;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\EsciDaUnaPalestra;
@@ -17,9 +16,6 @@ use Filament\Resources\Pages\EditRecord;
 class EditMember extends EditRecord
 {
     protected static string $resource = MemberResource::class;
-
-    /** @var array<string, mixed> */
-    private array $profilo = [];
 
     /** @var list<int|string>|null */
     private ?array $trainer = null;
@@ -72,9 +68,9 @@ class EditMember extends EditRecord
     }
 
     /**
-     * Il profilo e i trainer stanno su altre tabelle: vanno caricati a mano nel
-     * modulo, altrimenti la pagina si apre vuota su quei campi e il primo
-     * salvataggio li cancella.
+     * I trainer stanno su un'altra tabella: vanno caricati a mano nel modulo,
+     * altrimenti la pagina si apre vuota su quel campo e il primo salvataggio
+     * li cancella.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
@@ -83,10 +79,6 @@ class EditMember extends EditRecord
     {
         /** @var User $utente */
         $utente = $this->getRecord();
-
-        // 🆕 19/09: solo le note dello staff. I dati del corpo stanno sul
-        // telefono della persona, e la palestra non li vede.
-        $data['profile'] = $utente->profile?->only(['notes']) ?? [];
 
         $data['trainers'] = $utente->assignedTrainers()->pluck('users.id')->all();
 
@@ -99,9 +91,6 @@ class EditMember extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        // ⚠️ Solo `notes`: un modulo manomesso non deve poter riscrivere i
-        // dati del corpo sul server.
-        $this->profilo = array_intersect_key($data['profile'] ?? [], ['notes' => true]);
         $this->trainer = $data['trainers'] ?? [];
 
         unset($data['profile'], $data['trainers']);
@@ -113,13 +102,6 @@ class EditMember extends EditRecord
     {
         /** @var User $utente */
         $utente = $this->getRecord();
-
-        if ($this->profilo !== []) {
-            Profile::updateOrCreate(
-                ['user_id' => $utente->getKey()],
-                array_merge($this->profilo, ['tenant_id' => $utente->tenant_id]),
-            );
-        }
 
         if ($this->trainer !== null) {
             $utente->assignedTrainers()->sync($this->collegamenti($utente));

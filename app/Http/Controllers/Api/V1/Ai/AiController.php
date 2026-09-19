@@ -2064,7 +2064,8 @@ class AiController extends Controller
              * modo** — S8.2.
              *
              * Da S5 il peso non sta piu' sul server, quindi
-             * `Profile::computedTargets()` non calcola piu' niente e
+             * il server non calcola piu' niente (e dal 19/09/2026 il
+             * profilo non c'e' proprio) e
              * `$giornata['targets']` e' **`null` per chiunque non abbia un
              * piano alimentare attivo**. Senza questo, il consiglio del giorno
              * era muto per tutti: il modello si ritrovava le calorie assunte

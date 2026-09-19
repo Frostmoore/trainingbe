@@ -498,7 +498,7 @@ class SocialAuthController extends Controller
 
         return response()->json([
             'token' => $token->plainTextToken,
-            'data' => new UserResource($user->load('profile')),
+            'data' => new UserResource($user),
             'branding' => $tenant->branding(),
         ], $status);
     }
