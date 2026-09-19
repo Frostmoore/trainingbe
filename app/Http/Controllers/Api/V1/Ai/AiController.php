@@ -2095,10 +2095,10 @@ class AiController extends Controller
             /*
              * 🆕 **L'obiettivo lo dice l'app** — 19/09/2026. Il profilo sta sul
              * telefono: il server lo **inoltra**, come il target e il peso, e
-             * non lo conserva. ⚠️ Il ripiego sul profilo di qui vale solo per
-             * chi non ha ancora fatto il trasloco (app vecchia).
+             * non lo conserva. Senza (app vecchia) il consiglio non ha
+             * l'obiettivo: meglio che un obiettivo inventato.
              */
-            'goal' => $this->obiettivoDallApp($request) ?? $utente->profile?->goalForFormula(),
+            'goal' => $this->obiettivoDallApp($request),
 
             /*
              * ══ 🍽️ I PASTI UNO PER UNO, E QUANDO SONO STATI SCRITTI ═══════

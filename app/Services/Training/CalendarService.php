@@ -183,8 +183,11 @@ class CalendarService
      */
     private function targetDiOggi(User $utente): ?int
     {
-        $t = $utente->profile?->computedTargets();
-
-        return $t['kcal'] ?? null;
+        /*
+         * 🆕 ⛔ Qui c'era `profile->computedTargets()`: senza peso rispondeva
+         * gia' `null`, e dal 19/09/2026 il profilo non c'e' piu' sul server.
+         * Il target lo calcola l'app.
+         */
+        return null;
     }
 }

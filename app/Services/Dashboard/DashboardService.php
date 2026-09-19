@@ -185,11 +185,12 @@ class DashboardService
      */
     private function corpo(User $utente): array
     {
-        return [
-            'target_weight_kg' => $utente->profile?->target_weight_kg === null
-                ? null
-                : (float) $utente->profile->target_weight_kg,
-        ];
+        /*
+         * 🆕 ⛔ **Dal 19/09/2026 nemmeno il peso obiettivo**: sta nel profilo
+         * sul telefono, e l'app lo legge da li'. La chiave resta, sempre
+         * `null`, perche' un'app vecchia la sa gia' leggere.
+         */
+        return ['target_weight_kg' => null];
     }
 
     /*

@@ -253,19 +253,10 @@ class AccountAndPhotoApiTest extends TestCase
     #[Test]
     public function me_does_not_send_the_profile_anymore(): void
     {
-        Profile::create([
-            'tenant_id' => $this->iscritto->tenant_id,
-            'user_id' => $this->iscritto->getKey(),
-            'sex' => 'm',
-            'birthdate' => '1988-04-12',
-            'height_cm' => 178,
-        ]);
-
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/auth/me')
             ->assertOk();
 
         $this->assertArrayNotHasKey('profile', $risposta->json('data'));
-        $this->assertStringNotContainsString('1988-04-12', $risposta->getContent());
     }
 }

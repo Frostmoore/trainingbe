@@ -379,7 +379,8 @@ class DiaryController extends Controller
 
         return $tipo ?? MealType::fromProfile(
             ($quando ?? Carbon::now())->copy()->setTimezone($utente->fusoOrario()),
-            $utente->profile?->meal_hours,
+            // 🆕 19/09/2026: gli orari scelti stanno sul telefono; qui valgono quelli di serie.
+            null,
         );
     }
 }

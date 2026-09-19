@@ -120,22 +120,12 @@ class DiaryService
             ];
         }
 
-        $calcolati = $user->profile?->computedTargets();
-
-        if ($calcolati === null) {
-            return null;
-        }
-
-        return [
-            'kcal' => $calcolati['kcal'] + $bruciate,
-            'kcal_base' => $calcolati['kcal'],
-            'protein_g' => $calcolati['protein_g'],
-            'carbs_g' => $calcolati['carbs_g'],
-            'fat_g' => $calcolati['fat_g'],
-            'source' => 'profile',
-            'bmr' => $calcolati['bmr'],
-            'tdee' => $calcolati['tdee'],
-        ];
+        /*
+         * 🆕 ⛔ Qui c'era il target calcolato dal profilo (`computedTargets()`):
+         * senza peso sul server rispondeva gia' sempre `null`, e dal 19/09/2026
+         * il profilo non c'e' piu'. Il target lo calcola l'app.
+         */
+        return null;
     }
 
     /**

@@ -166,7 +166,8 @@ class FoodFavoriteController extends Controller
         $pasto = (isset($dati['meal']) ? MealType::tryFrom($dati['meal']) : null)
             ?? MealType::fromProfile(
                 $quando->copy()->setTimezone($utente->fusoOrario()),
-                $utente->profile?->meal_hours,
+                // 🆕 19/09/2026: gli orari scelti stanno sul telefono; qui valgono quelli di serie.
+                null,
             );
 
         $voci = $preferito->addToDiary($pasto, $quando);

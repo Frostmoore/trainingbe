@@ -9,7 +9,6 @@ use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\FoodEntry;
 use App\Models\NutritionPlan;
-use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -191,26 +190,6 @@ class NutritionApiTest extends TestCase
             $p->forceFill(['published_at' => now()])->save();
 
             return $p;
-        });
-    }
-
-    private function profiloCompleto(): void
-    {
-        $this->ctx()->runAs($this->alfa, function (): void {
-            Profile::create([
-                'user_id' => $this->iscritto->id,
-                'sex' => 'm',
-                'birthdate' => now()->subYears(30)->toDateString(),
-                'height_cm' => 180,
-                'activity_level' => 'moderate',
-                'goal' => 'maintain',
-            ]);
-
-            /*
-             * ⚠️ Niente peso: da S5.5 il server non lo conosce piu' (D9-bis).
-             * Un profilo «completo» lato server e' completo di tutto TRANNE il
-             * peso, e per questo il target dal profilo non si calcola piu' qui.
-             */
         });
     }
 

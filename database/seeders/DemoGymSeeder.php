@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Enums\MealType;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
-use App\Models\Profile;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -58,34 +56,10 @@ class DemoGymSeeder extends Seeder
                 $trainer = $this->utente($tenant, "trainer@{$tenant->slug}.test",
                     'Tommaso Trainer', UserRole::Trainer);
 
-                // Un paio di iscritti, con profilo compilato: senza, il calcolo
-                // del fabbisogno calorico (B5) non avrebbe su cosa girare.
-                foreach ([
-                    ['Marco Iscritto', 'm', '1990-04-12', 178, 'moderate', 'lose_slow', 75.0],
-                    ['Giulia Iscritta', 'f', '1995-09-30', 165, 'light', 'maintain', 58.0],
-                ] as $k => [$nome, $sesso, $nascita, $altezza, $attivita, $obiettivo, $peso]) {
+                // Un paio di iscritti. 🆕 19/09/2026: niente profilo — sesso, eta',
+                // altezza e il resto stanno sul telefono, non sul server.
+                foreach (['Marco Iscritto', 'Giulia Iscritta'] as $k => $nome) {
                     $m = $this->utente($tenant, "iscritto{$k}@{$tenant->slug}.test", $nome, UserRole::Member);
-
-                    Profile::firstOrCreate(['user_id' => $m->id], [
-                        'tenant_id' => $tenant->id,
-                        'sex' => $sesso,
-                        'birthdate' => $nascita,
-                        'height_cm' => $altezza,
-                        'activity_level' => $attivita,
-                        'goal' => $obiettivo,
-                        'target_weight_kg' => $peso,
-                        // 🚨 Le chiavi sono i valori di `MealType`, non i nomi
-                        // italiani: erano `colazione`/`pranzo`/`cena` e non
-                        // corrispondevano a nessun pasto, quindi non avevano
-                        // alcun effetto — comparivano solo nella risposta di
-                        // `GET /profile`, facendo sembrare che ci fossero nove
-                        // pasti.
-                        'meal_hours' => [
-                            MealType::Breakfast->value => '08:00',
-                            MealType::Lunch->value => '13:00',
-                            MealType::Dinner->value => '20:00',
-                        ],
-                    ]);
 
                     // Il trainer segue entrambi: serve a provare lo scoping
                     // delle viste del trainer (B3.5).
