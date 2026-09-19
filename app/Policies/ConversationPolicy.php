@@ -156,8 +156,20 @@ class ConversationPolicy
          * non cambia niente. 💡 Il controllo vero resta `includes()`, qui
          * sopra: bisogna comunque **essere** uno dei due.
          */
-        return $conversazione->tenant_id === null
-            || app(ChiSiVede::class)->spaziDi($utente)->contains($conversazione->tenant_id);
+        /*
+         * ══ 🆕 🚨 E LA CINTURA SUI TENANT SE NE VA — D9, 19/09/2026 ═══════════
+         *
+         * ⛔ Era proprio questa riga a rendere **illeggibile** il filo con il
+         * trainer della palestra a chi ne era uscito: 404 sui messaggi, pur
+         * essendo uno dei due. 📌 Il committente: *«La conversazione non deve
+         * né sparire né nascondersi mai»*.
+         *
+         * 💡 Si puo' togliere senza aprire niente: la cintura serviva contro
+         * gli id progressivi indovinati, e `includes()` qui sopra li ferma gia'
+         * — bisogna **essere** uno dei due capi. Chi puo' **scrivere** lo
+         * decide `CancelloDellaChat`, non questa policy.
+         */
+        return true;
     }
 
     /**

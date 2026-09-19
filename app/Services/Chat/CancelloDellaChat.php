@@ -7,6 +7,7 @@ namespace App\Services\Chat;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
+use App\Services\Tenancy\ChiSiVede;
 use App\Support\Impersonation\Impersonator;
 use Illuminate\Support\Facades\DB;
 
@@ -92,6 +93,25 @@ class CancelloDellaChat
             return Permesso::no(
                 Permesso::CANALE_CHIUSO,
                 'Questa conversazione e\' stata chiusa.',
+            );
+        }
+
+        /*
+         * ══ 🆕 🔒 NON PIU' LEGATI: SI RILEGGE, NON SI SCRIVE — D9, 19/09 ═════
+         *
+         * 💡 Da D9 un filo resta visibile a chi ne fa parte anche dopo essere
+         * uscito dalla palestra (`Conversation::scopeForUser`). ⛔ Senza questa
+         * riga, un filo di tipo «iscritto» — che non ha limiti — avrebbe
+         * continuato ad accettare messaggi fra due persone che non hanno piu'
+         * niente in comune.
+         *
+         * 📌 *«al massimo non gli posso più scrivere ma i messaggi vecchi ce li
+         * devo avere»*.
+         */
+        if (! $c->eDiInformazioni() && ! $this->ancoraLegati($c)) {
+            return Permesso::no(
+                Permesso::CANALE_CHIUSO,
+                'Non vi seguite piu\': puoi rileggere la conversazione, ma non scrivere.',
             );
         }
 
@@ -203,6 +223,25 @@ class CancelloDellaChat
      * trainer, quindi letto dal contesto dell'utente non si troverebbe. Non e'
      * un bypass — la coppia di id e' gia' la chiave piu' stretta possibile.
      */
+    /**
+     * I due capi si vedono ancora? — D9.
+     *
+     * 💡 La stessa regola dell'elenco dei trainer (`ChiSiVede::trainerDi`): i
+     * suoi trainer personali, piu' i trainer della palestra in cui sta **ora**.
+     * Chi e' uscito dalla palestra non ci rientra per via di un filo vecchio.
+     */
+    private function ancoraLegati(Conversation $c): bool
+    {
+        $membro = User::query()->withoutGlobalScopes()->find($c->member_id);
+
+        if ($membro === null) {
+            return false;
+        }
+
+        return app(ChiSiVede::class)->trainerDi($membro)
+            ->contains(fn (User $t): bool => (int) $t->getKey() === (int) $c->trainer_id);
+    }
+
     private function canaleChiuso(Conversation $c): bool
     {
         return DB::table('trainer_member')

@@ -292,7 +292,17 @@ class InvitiInPalestra
              */
             'palestra' => $palestra->branding(),
             'descrizione' => $this->descrizioneDi($palestra),
-            'cosa_ottieni' => $this->cosaOttieni->per($palestra),
+            'cosa_ottieni' => $this->cosaOttieni->per($palestra, $invito->ruolo ?? UserRole::Member),
+
+            /*
+             * 🆕 **Per chi e' l'invito** — giro del 18/09/2026.
+             *
+             * ⛔ Senza, l'app mostrava a un trainer la conferma dell'iscritto:
+             * *«la palestra copre il tuo abbonamento, e ti vesti dei suoi
+             * colori»* — tutte e due false per chi allena (il trainer tiene il
+             * suo piano e non si veste della palestra).
+             */
+            'ruolo' => ($invito->ruolo ?? UserRole::Member)->value,
             'scade_il' => $invito->expires_at->toIso8601String(),
         ];
     }

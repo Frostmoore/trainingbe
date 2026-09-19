@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\Members\Tables;
 
+use App\Enums\AuditAction;
 use App\Filament\Support\VoceDiScheda;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
+use App\Services\Tenancy\EsciDaUnaPalestra;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
@@ -16,6 +19,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * L'elenco degli iscritti.
@@ -120,10 +124,12 @@ class MembersTable
                     ->query(fn (Builder $q): Builder => $q->whereDoesntHave('workoutPlans',
                         fn (Builder $p) => $p->where('status', 'published'))),
 
-                Filter::make('inattivi')
-                    ->label('Non si allena da 30 giorni')
-                    ->query(fn (Builder $q): Builder => $q->whereDoesntHave('workoutSessions',
-                        fn (Builder $s) => $s->where('started_at', '>=', now()->subDays(30)))),
+                /*
+                 * 🆕 ⛔ Qui c'era «Non si allena da 30 giorni», su
+                 * `workoutSessions` — una tabella che non esiste piu' dalla
+                 * FASE 11.6: sceglierlo dava un errore SQL. E non deve tornare:
+                 * 📌 *«Niente, nemmeno se si allena»* (16/08). Trovato il 19/09.
+                 */
 
                 TrashedFilter::make()->label('Cancellati'),
             ])
@@ -147,9 +153,40 @@ class MembersTable
                     ->button()
                     ->outlined(),
             ])
+            /*
+             * 🆕 🚨 **«Disiscrivi», non «Elimina»** — D4, 19/09/2026.
+             *
+             * ⛔ Qui c'era `DeleteBulkAction`: cancellava gli **account** di
+             * tutte le persone selezionate. 📌 *«Una palestra deve poter AL
+             * MASSIMO disiscrivere un allievo»*. 💡 Stessa strada della persona
+             * che se ne va da sola (`EsciDaUnaPalestra`), una alla volta.
+             */
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    BulkAction::make('disiscrivi')
+                        ->label('Disiscrivi')
+                        ->icon('heroicon-o-user-minus')
+                        ->color('danger')
+                        ->visible(fn (): bool => auth()->user()?->isGymAdmin() === true)
+                        ->requiresConfirmation()
+                        ->modalHeading('Disiscrivere le persone selezionate?')
+                        ->modalDescription('Escono dalla palestra e tornano nel loro spazio personale, con il loro account e i loro dati.')
+                        ->modalSubmitActionLabel('Disiscrivi')
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (Collection $persone): void {
+                            foreach ($persone as $persona) {
+                                $palestra = $persona->tenant_id;
+
+                                app(EsciDaUnaPalestra::class)($persona);
+
+                                app(AuditLogger::class)->log(
+                                    AuditAction::IscrittoDisiscritto,
+                                    $persona,
+                                    ['email' => $persona->email],
+                                    tenant: $palestra,
+                                );
+                            }
+                        }),
                 ]),
             ])
             ->defaultSort('name')

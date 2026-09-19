@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Tenancy;
 
+use App\Enums\UserRole;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
@@ -49,8 +50,12 @@ class CosaOttieniInPalestra
      *
      * @return list<array{icona: string, titolo: string, dettaglio: string}>
      */
-    public function per(Tenant $palestra): array
+    public function per(Tenant $palestra, UserRole $ruolo = UserRole::Member): array
     {
+        if ($ruolo === UserRole::Trainer) {
+            return $this->perUnTrainer();
+        }
+
         $righe = [
             [
                 /*
@@ -96,6 +101,37 @@ class CosaOttieniInPalestra
         }
 
         return $righe;
+    }
+
+    /**
+     * 🆕 **Le righe per chi entra ad allenare** — giro del 18/09/2026.
+     *
+     * ⛔ Prima un trainer leggeva le righe dell'iscritto: *«Le schede del tuo
+     * trainer»*, *«La chat con chi ti segue»*. 💡 Per lui cambiano due cose, e
+     * una resta: vede gli iscritti, e il suo giro non si tocca (regola 8.1.1,
+     * decisione 2 del 18/09).
+     *
+     * @return list<array{icona: string, titolo: string, dettaglio: string}>
+     */
+    private function perUnTrainer(): array
+    {
+        return [
+            [
+                'icona' => 'group',
+                'titolo' => 'Gli iscritti della palestra',
+                'dettaglio' => 'Li trovi tutti fra i tuoi utenti, e puoi scrivere a ciascuno.',
+            ],
+            [
+                'icona' => 'fitness_center',
+                'titolo' => 'Le schede per loro',
+                'dettaglio' => 'Le scrivi come sempre e gliele mandi dalla chat.',
+            ],
+            [
+                'icona' => 'lock',
+                'titolo' => 'Il tuo giro resta tuo',
+                'dettaglio' => 'Il tuo spazio, il tuo piano e i tuoi allievi non cambiano: alleni anche qui, in più.',
+            ],
+        ];
     }
 
     /**

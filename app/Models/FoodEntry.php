@@ -8,10 +8,8 @@ use App\Enums\FoodSource;
 use App\Enums\MealType;
 use App\Exceptions\MassaIncoerenteException;
 use App\Models\Concerns\BelongsToTenant;
-use App\Observers\FoodEntryObserver;
 use App\Services\Nutrition\FoodUnit;
 use App\Support\Tempo\GiornoLocale;
-use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,8 +22,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * scritto; i grammi sono cio' su cui si calcola. Il modello li deriva da solo
  * quando mancano — vedi il boot — cosi' nessun chiamante puo' salvare una voce
  * senza il dato che serve alle somme.
+ *
+ * 🆕 ⛔ **Non alimenta piu' il catalogo condiviso** — D7, 19/09/2026. Qui c'era
+ * `#[ObservedBy(FoodEntryObserver::class)]`, che registrava ogni alimento
+ * scritto da una persona nel catalogo di tutti (privato fino alla seconda
+ * persona). 📌 Il committente: *«gli alimenti di un utente restano i suoi e li
+ * vede solo lui perché stanno sul suo telefono»*. L'osservatore e' stato tolto.
  */
-#[ObservedBy(FoodEntryObserver::class)]
 class FoodEntry extends Model
 {
     use BelongsToTenant;

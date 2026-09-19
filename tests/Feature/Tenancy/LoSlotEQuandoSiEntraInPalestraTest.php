@@ -554,6 +554,84 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
     }
 
     /**
+     * 🆕 🔁 **Riaccettare un trainer che aveva liberato il posto riapre il
+     * rapporto** — D5, giro del 18/09/2026.
+     *
+     * ⛔ Prima la riga restava chiusa: `$gia` era vero e il riscatto non faceva
+     * niente, mentre l'app diceva «fatto». 📌 *«il loro rapporto deve
+     * riprendere da dove si era fermato»*.
+     */
+    #[Test]
+    public function riaccettare_un_trainer_che_aveva_liberato_il_posto_riapre_il_rapporto(): void
+    {
+        [$palestra, $trainer, $allievo] = $this->giroCompleto('riapre@esempio.test');
+
+        app(LoSlotDelTrainer::class)->decidi($trainer, $allievo, false);
+        $this->assertNotNull($this->riga($trainer, $allievo)->disattivato_il, 'premessa: chiuso');
+
+        $idPrima = $this->riga($trainer, $allievo)->id;
+
+        app(InvitiDelTrainer::class)->riscattaPerChiEsiste(
+            app(TenantContext::class)->runAs(
+                $trainer->tenant,
+                fn () => app(InvitiDelTrainer::class)->invita($trainer),
+            )->token,
+            $allievo->fresh(),
+        );
+
+        $dopo = $this->riga($trainer, $allievo);
+
+        $this->assertNull($dopo->disattivato_il, 'Il rapporto doveva riaprirsi.');
+        $this->assertSame($idPrima, $dopo->id, 'Stessa riga, non una nuova.');
+
+        // 💡 L'allievo e' ancora in una palestra dove il trainer lavora: la
+        // domanda sul posto torna al trainer.
+        $this->assertSame($palestra->getKey(), $dopo->sovrapposto_in_tenant_id);
+        $this->assertNull($dopo->slot_deciso_il);
+    }
+
+    /**
+     * 🆕 🚨 **I giorni pagati tornano da qualunque tenant** — D1, giro del 18/09.
+     *
+     * ⛔ Il percorso di `mepippo`: abbonato, accetta un trainer indipendente
+     * (finisce nel suo spazio: pausa), entra in palestra, esce. La ripresa
+     * cercava solo la pausa **di quella palestra**, e lui tornava «scaduto».
+     *
+     * 📌 *«quando torna individuale non può avere l'abbonamento scaduto,
+     * l'ha pagato»*.
+     */
+    #[Test]
+    public function chi_segue_un_trainer_poi_entra_ed_esce_da_una_palestra_ritrova_i_giorni_pagati(): void
+    {
+        $palestra = $this->creaPalestra();
+        $trainer = $this->trainerIndipendente('coach-d1@esempio.test');
+        $allievo = $this->persona('pagante@esempio.test', now()->addDays(20));
+
+        app(InvitiDelTrainer::class)->riscattaPerChiEsiste(
+            app(TenantContext::class)->runAs(
+                $trainer->tenant,
+                fn () => app(InvitiDelTrainer::class)->invita($trainer),
+            )->token,
+            $allievo,
+        );
+
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($allievo->fresh(), $palestra, UserRole::Member);
+
+        $tornato = User::withoutGlobalScopes()->findOrFail($allievo->getKey());
+        app(EsciDaUnaPalestra::class)($tornato);
+        $tornato = $tornato->fresh();
+
+        $riga = PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tornato->tenant_id)
+            ->whereHas('plan', fn ($q) => $q->where('code', Plan::PLUS))
+            ->first();
+
+        $this->assertNotNull($riga, 'L\'abbonamento doveva seguirlo nello spazio nuovo.');
+        $this->assertNull($riga->in_pausa_dal, 'Doveva riprendere.');
+        $this->assertEqualsWithDelta(20, now()->diffInDays($riga->ends_at), 1, 'I giorni pagati sono quelli.');
+    }
+
+    /**
      * Il giro completo: palestra, trainer che ci lavora, allievo suo che entra.
      *
      * @return array{0: Tenant, 1: User, 2: User}

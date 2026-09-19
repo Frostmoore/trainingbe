@@ -1,6 +1,6 @@
 # Informativa privacy
 
-> **Ultimo aggiornamento:** 18 settembre 2026
+> **Ultimo aggiornamento:** 19 settembre 2026
 
 ---
 
@@ -8,8 +8,8 @@
 
 **La maggior parte dei dati di cui questa informativa parla non sta sui nostri server.**
 
-Sonno, battito, variabilità cardiaca, peso, misure, allenamenti e foto dei progressi vivono **sul
-tuo telefono**, in un archivio locale. Non è una promessa organizzativa: è come è costruito il
+Diario alimentare, sonno, battito, variabilità cardiaca, peso, misure, allenamenti e foto dei
+progressi vivono **sul tuo telefono**, in un archivio locale. Non è una promessa organizzativa: è come è costruito il
 sistema, e le tabelle che un tempo li contenevano sono state cancellate.
 
 ⚠️ **Due eccezioni, e te le diciamo subito:**
@@ -56,7 +56,6 @@ responsabile (art. 28 GDPR).
 | Identificativo Google/Apple | Accesso con account esterno | Art. 6(1)(b) |
 | Palestra di appartenenza, trainer che ti seguono | Erogazione del servizio | Art. 6(1)(b) |
 | Sesso, data di nascita, altezza, livello di attività, obiettivo | Calcolo del fabbisogno calorico | 🚨 **Art. 9(2)(a) — consenso esplicito** |
-| **Diario alimentare**, comprese le calorie bruciate che scrivi tu | Registro di ciò che mangi | 🚨 **Art. 9(2)(a)** — vedi §3.6 |
 | Schede **modello** della palestra | Patrimonio della palestra | Art. 6(1)(f) — legittimo interesse |
 | **Messaggi cifrati** | Recapito | Art. 6(1)(b) · ⚠️ **illeggibili per noi** |
 | Chiave **pubblica** di cifratura | Recapito dei messaggi | Art. 6(1)(b) |
@@ -80,6 +79,10 @@ Salvo le eccezioni dette al §1, e ripetute qui accanto a ogni voce:
   quello che può partire, con la casella di §3.5, è il battito **a riposo**, un numero al giorno
 - **I passi della giornata**, per stimare le calorie del movimento quotidiano
 - **Le calorie bruciate con l'attività e gli allenamenti registrati dall'orologio** — vedi §3.4
+- **Il diario alimentare**, comprese le calorie bruciate che scrivi tu — 🚨 da ciò che mangi si
+  capisce qualcosa sulla tua salute (§3.6): per questo sta qui. Parte verso l'intelligenza
+  artificiale solo quello descritto in §3.6
+- **Gli alimenti e gli esercizi che ti inventi**: li vedi solo tu, e non arrivano ai nostri server
 - **Gli allenamenti che fai con l'app**, con serie, ripetizioni e carichi
 - **Massa grassa, massa magra, circonferenze** — 🚨 la massa grassa è un dato sulla
   **composizione del tuo corpo**, cioè sulla salute. **Non la misuriamo noi**: se colleghi la
@@ -111,6 +114,9 @@ cifrato con la tua **password di recupero**: noi non possiamo aprirlo.
 
 🚨 **Nemmeno con un accesso da amministratore, nemmeno leggendo il database.** Non è una regola
 del programma: la chiave non esiste sui nostri server.
+
+**Una conversazione non sparisce.** Se esci da una palestra, o il rapporto con un trainer si
+chiude, la conversazione resta: puoi sempre rileggerla, ma non si può più scrivere.
 
 **Vale anche per le foto.** Una foto mandata in chat viene cifrata sul telefono prima di partire, e
 la chiave per aprirla viaggia dentro il messaggio, a sua volta cifrato.

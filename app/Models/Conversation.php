@@ -8,7 +8,6 @@ use App\Enums\TipoConversazione;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
 use App\Models\Scopes\TenantOrGlobalScope;
 use App\Models\Scopes\TenantScope;
-use App\Services\Tenancy\ChiSiVede;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -196,29 +195,32 @@ class Conversation extends Model
      * persona fa parte** — il suo, più le palestre dove ha il ruolo di trainer,
      * più i fili di nessuno (`NULL`, quelli nati dal catalogo).
      *
-     * ⚖️ **E chi esce da una palestra continua a non vederle.** Era già così, e
-     * deve restarci: uscendo perde il ruolo e cambia tenant, quindi quel
-     * `tenant_id` non è più in nessuno dei due elenchi. 💡 La regola vecchia
-     * («il tenant corrente») e questa danno lo stesso risultato per tutti
-     * tranne che per chi porta due cappelli — cioè il caso per cui esiste.
+     * ══ 🆕 🚨 E ADESSO NEMMENO QUELLO: CHI NE FA PARTE LA VEDE — D9, 19/09 ══
+     *
+     * ⛔ **Qui c'era scritto «chi esce da una palestra continua a non vederle,
+     * e deve restarci».** Il filtro sui tenant lo faceva: uscendo, il filo con
+     * il trainer della palestra spariva dall'elenco — e aprendolo per id dava
+     * 404. Il testo della dissociazione lo diceva pure: *«la conversazione
+     * resta alla palestra»*.
+     *
+     * 📌 Il committente, 19/09: *«La conversazione non deve né sparire né
+     * nascondersi mai. Se io mi disiscrivo da un trainer, al massimo non gli
+     * posso più scrivere ma i messaggi vecchi ce li devo avere»*.
+     *
+     * 💡 Quindi il filtro e' **uno solo: farne parte**. Il tenant del filo
+     * dice dove e' nato, non chi puo' rileggerlo. ⚠️ **Scrivere e' un'altra
+     * cosa**, e lo decide `CancelloDellaChat::puoScrivere()`: se i due non sono
+     * piu' legati, il filo e' in sola lettura.
+     *
+     * ⚖️ Non si allarga niente a nessun altro: `trainer_id` o `member_id` deve
+     * essere quella persona, come prima.
      */
     public function scopeForUser(Builder $query, User|int $utente): Builder
     {
-        $persona = $utente instanceof User
-            ? $utente
-            : User::withoutGlobalScopes()->find($utente);
-
         $id = $utente instanceof User ? $utente->getKey() : $utente;
-
-        $suoi = $persona === null
-            ? collect()
-            : app(ChiSiVede::class)->spaziDi($persona);
 
         return $query
             ->withoutGlobalScopes([TenantOrGlobalScope::class])
-            ->where(fn (Builder $q) => $q
-                ->whereNull('tenant_id')
-                ->orWhereIn('tenant_id', $suoi->all()))
             ->where(fn (Builder $q) => $q->where('trainer_id', $id)->orWhere('member_id', $id));
     }
 

@@ -9,8 +9,9 @@ use App\Filament\Gym\Resources\Members\MemberResource;
 use App\Models\Profile;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\RestoreAction;
+use App\Services\Tenancy\EsciDaUnaPalestra;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 
 class EditMember extends EditRecord
@@ -23,18 +24,50 @@ class EditMember extends EditRecord
     /** @var list<int|string>|null */
     private ?array $trainer = null;
 
+    /**
+     * ══ 🆕 🚨 «DISISCRIVI», NON «ELIMINA» — D4, 19/09/2026 ═══════════════
+     *
+     * ⛔ **Qui c'era `DeleteAction`**, e cancellava l'account della persona:
+     * niente ritorno al trainer, niente ripresa dell'abbonamento, e una
+     * palestra poteva far sparire chi prima di iscriversi era un utente libero
+     * con i suoi dati. Trovato nel giro del 18/09.
+     *
+     * 📌 Il committente: *«Una palestra deve poter AL MASSIMO disiscrivere un
+     * allievo! Non deve poter cancellare del tutto il suo account, anche
+     * perche' l'account personale non dipende in alcun modo dalla palestra»*.
+     *
+     * 💡 Disiscrivere e' **la stessa cosa che fa la persona** con «Dissocia
+     * palestra»: passa da `EsciDaUnaPalestra`, quindi torna nel suo spazio,
+     * ritrova l'abbonamento sospeso e il trainer che aveva tenuto il posto.
+     */
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make()
+            Action::make('disiscrivi')
+                ->label('Disiscrivi')
+                ->icon('heroicon-o-user-minus')
+                ->color('danger')
                 ->visible(fn (): bool => auth()->user()?->isGymAdmin() === true)
-                ->after(fn (User $record) => app(AuditLogger::class)->log(
-                    AuditAction::UserDeleted,
-                    $record,
-                    ['email' => $record->email],
-                    tenant: $record->tenant_id,
-                )),
-            RestoreAction::make(),
+                ->requiresConfirmation()
+                ->modalHeading(fn (User $record): string => "Disiscrivere {$record->name}?")
+                ->modalDescription('Esce dalla palestra e torna nel suo spazio personale, con il suo account e i suoi dati. Per rientrare gli servira\' un nuovo invito.')
+                ->modalSubmitActionLabel('Disiscrivi')
+                ->action(function (User $record): void {
+                    $palestra = $record->tenant_id;
+
+                    app(EsciDaUnaPalestra::class)($record);
+
+                    app(AuditLogger::class)->log(
+                        AuditAction::IscrittoDisiscritto,
+                        $record,
+                        ['email' => $record->email],
+                        tenant: $palestra,
+                    );
+
+                    Notification::make()->title("{$record->name} non e' piu' iscritto.")->success()->send();
+
+                    $this->redirect(MemberResource::getUrl('index'));
+                }),
         ];
     }
 

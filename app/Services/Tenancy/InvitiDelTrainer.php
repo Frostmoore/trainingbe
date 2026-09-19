@@ -512,6 +512,22 @@ class InvitiDelTrainer
 
             $gia = $utente->assignedTrainers()->where('users.id', $trainer->getKey())->exists();
 
+            /*
+             * ══ 🆕 🔁 IL RAPPORTO RIPRENDE DA DOVE SI ERA FERMATO — D5, 19/09 ══
+             *
+             * ⛔ **Prima non succedeva niente**: la riga c'era (chiusa, perche'
+             * il trainer aveva liberato il posto o chiuso la conversazione),
+             * `$gia` era vero e il riscatto finiva qui. L'app diceva «fatto» e
+             * il rapporto restava chiuso. Trovato nel giro del 18/09.
+             *
+             * 📌 Il committente: *«il loro rapporto deve riprendere da dove si
+             * era fermato»*. 💡 Si riapre **la stessa riga** — la stessa
+             * conversazione, lo stesso storico — e non se ne crea un'altra.
+             */
+            if ($gia) {
+                $this->riapriSeChiuso($trainer, $utente);
+            }
+
             if (! $gia) {
                 /*
                  * 🚨 `trainer_member.tenant_id` e' quello del **trainer** — F6.1:
@@ -655,6 +671,44 @@ class InvitiDelTrainer
         $utente->assignedTrainers()->updateExistingPivot($trainer->getKey(), [
             'disattivato_il' => null,
         ]);
+    }
+
+    /**
+     * 🆕 Riapre un rapporto chiuso quando l'allievo riaccetta un invito — D5.
+     *
+     * ⚠️ **La sovrapposizione vecchia si toglie e si rifà.** Quella scritta
+     * riguardava una scelta gia' presa («lo libero»): lasciarla vorrebbe dire
+     * che il trainer non viene piu' interpellato. 💡 Se l'allievo sta **ora**
+     * in una palestra dove quel trainer lavora, la si segna di nuovo, e al
+     * trainer ricompare la domanda sul posto.
+     */
+    private function riapriSeChiuso(User $trainer, User $utente): void
+    {
+        $riga = DB::table('trainer_member')
+            ->where('trainer_id', $trainer->getKey())
+            ->where('member_id', $utente->getKey())
+            ->first();
+
+        if ($riga === null || $riga->disattivato_il === null) {
+            return;
+        }
+
+        DB::table('trainer_member')
+            ->where('trainer_id', $trainer->getKey())
+            ->where('member_id', $utente->getKey())
+            ->update([
+                'disattivato_il' => null,
+                'sovrapposto_dal' => null,
+                'sovrapposto_in_tenant_id' => null,
+                'slot_deciso_il' => null,
+                'updated_at' => now(),
+            ]);
+
+        $dove = $utente->fresh()?->tenant;
+
+        if ($dove !== null && ! $dove->ePersonale()) {
+            app(LoSlotDelTrainer::class)->segnalaLaSovrapposizione($utente, $dove);
+        }
     }
 
     /** Il piano di questo trainer prevede un limite di utenti? */

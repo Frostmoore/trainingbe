@@ -231,6 +231,30 @@ final class InvitoInPalestraTest extends TestCase
     }
 
     /**
+     * 🆕 🚨 **Un invito da trainer dice che e' da trainer** — giro del 18/09.
+     *
+     * ⛔ L'app mostrava a un trainer «Le schede del tuo trainer», «La chat con
+     * chi ti segue» e una conferma da iscritto («la palestra copre il tuo
+     * abbonamento»). 💡 Il server dice il ruolo, e le righe giuste.
+     */
+    #[Test]
+    public function l_anteprima_di_un_invito_da_trainer_parla_a_un_trainer(): void
+    {
+        $invito = $this->inviti()->invita($this->palestra, $this->gestore, null, UserRole::Trainer);
+
+        $dati = $this->inviti()->anteprima($invito->token);
+        $titoli = array_column($dati['cosa_ottieni'], 'titolo');
+
+        $this->assertSame('trainer', $dati['ruolo']);
+        $this->assertContains('Gli iscritti della palestra', $titoli);
+        $this->assertContains('Il tuo giro resta tuo', $titoli);
+        $this->assertNotContains('Le schede del tuo trainer', $titoli);
+
+        // E un invito da iscritto resta quello di prima.
+        $this->assertSame('member', $this->inviti()->anteprima($this->unInvito()->token)['ruolo']);
+    }
+
+    /**
      * 🚨 **L'anteprima NON consuma l'invito** — V.2.1.
      *
      * ⛔ La gente apre i link, li chiude e li riapre da un altro telefono. Un

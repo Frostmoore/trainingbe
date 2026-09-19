@@ -74,6 +74,16 @@ enum AuditAction: string
      */
     case AbbonamentoPagatoDisdetto = 'user.abbonamento_pagato_disdetto';
 
+    /**
+     * 🆕 La palestra ha **disiscritto** un iscritto — D4, 19/09/2026.
+     *
+     * ⛔ Prima il pannello aveva solo «Elimina»: cancellava l'**account** della
+     * persona. 📌 Il committente: *«Una palestra deve poter AL MASSIMO
+     * disiscrivere un allievo… l'account personale non dipende in alcun modo
+     * dalla palestra»*.
+     */
+    case IscrittoDisiscritto = 'user.disiscritto';
+
     public function label(): string
     {
         return match ($this) {
@@ -92,6 +102,7 @@ enum AuditAction: string
             self::AiQuotaChanged => 'Quota AI modificata',
             self::AbbonamentoRegalato => 'Abbonamento regalato',
             self::AbbonamentoPagatoDisdetto => 'Abbonamento pagato disdetto',
+            self::IscrittoDisiscritto => 'Iscritto disiscritto',
         };
     }
 

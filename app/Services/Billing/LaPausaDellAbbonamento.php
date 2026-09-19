@@ -147,9 +147,26 @@ class LaPausaDellAbbonamento
     public function riprendi(User $utente, Tenant $palestra, Tenant $spazioNuovo): bool
     {
         return $this->context->runWithoutTenant(function () use ($utente, $palestra, $spazioNuovo): bool {
+            /*
+             * ══ 🆕 🚨 QUALUNQUE PAUSA, NON SOLO QUELLA DI QUESTA PALESTRA — D1 ══
+             *
+             * ⛔ Qui si filtrava `in_pausa_per_tenant_id = $palestra`. Ma la
+             * pausa puo' nascere altrove: chi accetta un trainer indipendente
+             * viene portato nel suo spazio, e li' paga il trainer — la pausa
+             * porta il suo tenant. Uscito poi da una palestra, la ripresa non
+             * trovava niente: 🚨 **un abbonato pagante tornava «scaduto»**, e
+             * Stripe restava in pausa per sempre. Visto nel giro del 18/09.
+             *
+             * 📌 Il committente: *«se uno ha pagato l'abbonamento, poi passa a
+             * un tenant che paga l'abbonamento per lui, quando torna
+             * individuale non può avere l'abbonamento scaduto, l'ha pagato»*.
+             *
+             * 💡 Si torna individuali solo passando da qui (`EsciDaUnaPalestra`
+             * crea sempre uno spazio **suo**): quindi qualunque pausa di questa
+             * persona riprende adesso.
+             */
             $riga = PlanSubscription::withoutGlobalScopes()
                 ->whereNotNull('in_pausa_dal')
-                ->where('in_pausa_per_tenant_id', $palestra->getKey())
                 ->whereIn(
                     'tenant_id',
                     Tenant::withoutGlobalScopes()
@@ -165,6 +182,9 @@ class LaPausaDellAbbonamento
             }
 
             $ora = Carbon::now();
+            // 💡 Letti prima di azzerarli: dopo il salvataggio il log scriverebbe `null`.
+            $pausaPer = $riga->in_pausa_per_tenant_id;
+            $giorni = $riga->restavano_giorni;
 
             $riga->forceFill([
                 'tenant_id' => $spazioNuovo->getKey(),
@@ -186,7 +206,9 @@ class LaPausaDellAbbonamento
             Log::info('Abbonamento personale ripreso', [
                 'utente' => $utente->getKey(),
                 'abbonamento' => $riga->getKey(),
-                'giorni_riconosciuti' => $riga->restavano_giorni,
+                'uscito_da' => $palestra->getKey(),
+                'messo_in_pausa_per' => $pausaPer,
+                'giorni_riconosciuti' => $giorni,
             ]);
 
             return true;
