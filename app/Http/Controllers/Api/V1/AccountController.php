@@ -8,6 +8,7 @@ use App\Enums\AuditAction;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Account\AccountEraser;
+use App\Services\Account\EsportaIDatiDellaPersona;
 use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\EsciDaUnaPalestra;
 use Illuminate\Http\JsonResponse;
@@ -133,6 +134,18 @@ class AccountController extends Controller
              */
             'iscritto_dal' => $request->user()?->created_at?->toDateString(),
         ]]);
+    }
+
+    /**
+     * 📦 **I miei dati** — artt. 15 e 20 GDPR, 19/09/2026.
+     *
+     * Tutto quello che il server sa della persona, in JSON: l'app ci aggiunge
+     * l'archivio del telefono e ne fa un file solo. Vedi
+     * `EsportaIDatiDellaPersona` per cosa resta fuori e perché.
+     */
+    public function esporta(Request $request, EsportaIDatiDellaPersona $esporta): JsonResponse
+    {
+        return response()->json(['data' => $esporta($request->user())]);
     }
 
     /**

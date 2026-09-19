@@ -270,6 +270,11 @@ Route::prefix('v1')->group(function (): void {
         // falsa il giorno che il server cambia politica.
         Route::get('account/deletion-preview', [AccountController::class, 'preview']);
 
+        // 🆕 📦 I miei dati — artt. 15 e 20, 19/09/2026. ⚠️ Pochi al minuto:
+        // è la richiesta più pesante che un utente può fare, e non serve spesso.
+        Route::get('account/export', [AccountController::class, 'esporta'])
+            ->middleware('throttle:3,1');
+
         /*
          * 🆕 **Un utente senza palestra entra in una palestra** — requisito B4.
          *
