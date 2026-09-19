@@ -243,16 +243,29 @@ class AccountAndPhotoApiTest extends TestCase
             ->assertJsonPath('data.username', 'mario.alfa');
     }
 
+    /**
+     * 🆕 🚨 **`/me` non manda più il profilo** — 19/09/2026.
+     *
+     * ⛔ Qui si pretendeva la chiave `profile` sempre presente (C7.2): dentro
+     * c'erano sesso, data di nascita, età e altezza, a ogni accesso. 📌 *«assicurati
+     * che non ci scriva niente di personale»*: il profilo sta sul telefono.
+     */
     #[Test]
-    public function me_always_has_the_profile_key_even_when_there_is_no_profile(): void
+    public function me_does_not_send_the_profile_anymore(): void
     {
+        Profile::create([
+            'tenant_id' => $this->iscritto->tenant_id,
+            'user_id' => $this->iscritto->getKey(),
+            'sex' => 'm',
+            'birthdate' => '1988-04-12',
+            'height_cm' => 178,
+        ]);
+
         $risposta = $this->comeApp($this->iscritto)
             ->getJson('/api/v1/auth/me')
             ->assertOk();
 
-        // La chiave c'è sempre: `null` significa «non c'è un profilo», non
-        // «non te l'ho mandato». Due casi che richiedono schermate diverse.
-        $this->assertArrayHasKey('profile', $risposta->json('data'));
-        $this->assertNull($risposta->json('data.profile'));
+        $this->assertArrayNotHasKey('profile', $risposta->json('data'));
+        $this->assertStringNotContainsString('1988-04-12', $risposta->getContent());
     }
 }

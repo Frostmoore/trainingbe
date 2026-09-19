@@ -33,7 +33,9 @@ class CreateMember extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $this->profilo = $data['profile'] ?? [];
+        // 🆕 19/09: solo le note dello staff — i dati del corpo stanno sul
+        // telefono della persona.
+        $this->profilo = array_intersect_key($data['profile'] ?? [], ['notes' => true]);
         $this->trainer = $data['trainers'] ?? [];
 
         unset($data['profile'], $data['trainers']);

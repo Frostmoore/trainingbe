@@ -67,6 +67,31 @@ class DisiscrivereNonCancellaTest extends TestCase
         $this->assertTrue($dopo->tenant->eDi($dopo), 'Doveva tornare in uno spazio suo.');
     }
 
+    /**
+     * 🆕 🚨 **La palestra non vede i dati del corpo** — 19/09/2026.
+     *
+     * ⛔ La scheda dell'iscritto mostrava e faceva modificare sesso, data di
+     * nascita, altezza, livello di attivita', obiettivo e peso obiettivo. 📌
+     * *«assicurati che non ci scriva niente di personale»*: stanno sul telefono.
+     */
+    #[Test]
+    public function la_scheda_dell_iscritto_non_ha_i_dati_del_corpo(): void
+    {
+        [$palestra, $titolare, $persona] = $this->palestraConIscritto();
+
+        filament()->setCurrentPanel('admin');
+        $this->actingAs($titolare);
+        app(TenantContext::class)->set($palestra);
+
+        $pagina = Livewire::test(EditMember::class, ['record' => $persona->getKey()]);
+
+        foreach (['sex', 'birthdate', 'height_cm', 'activity_level', 'goal', 'target_weight_kg'] as $campo) {
+            $pagina->assertFormFieldDoesNotExist("profile.{$campo}");
+        }
+
+        $pagina->assertFormFieldExists('profile.notes');
+    }
+
     /** ⛔ E «Elimina» non c'e' piu', ne' sulla scheda ne' in blocco. */
     #[Test]
     public function elimina_non_c_e_piu(): void

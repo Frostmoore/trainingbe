@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\Members\Schemas;
 
 use App\Enums\UserRole;
-use App\Models\Profile;
 use App\Models\User;
 use App\Services\Nutrition\CalorieCalculator;
 use App\Support\Tenancy\TenantContext;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -92,43 +90,21 @@ class MemberForm
                         ->columnSpanFull(),
                 ]),
 
-            Section::make('Dati per il calcolo del fabbisogno')
-                ->description('Senza questi campi il target calorico non si puo\' calcolare, e l\'app non ne mostra nessuno.')
-                ->columns(3)
+            /*
+             * 🆕 🚨 **I dati del corpo non stanno qui** — 19/09/2026.
+             *
+             * ⛔ Qui c'era la sezione «Dati per il calcolo del fabbisogno»:
+             * sesso, data di nascita, altezza, livello di attivita', obiettivo e
+             * peso obiettivo dell'iscritto, **leggibili e modificabili dalla
+             * palestra**. 📌 Il committente: *«assicurati che non ci scriva
+             * niente di personale (esattamente come peso altezza e data di
+             * nascita)»*. Stanno sul telefono della persona, e il fabbisogno lo
+             * calcola l'app.
+             *
+             * 💡 Restano le note dello staff: le scrive la palestra, non l'app.
+             */
+            Section::make('Note dello staff')
                 ->schema([
-                    Select::make('profile.sex')
-                        ->label('Sesso')
-                        ->options(['m' => 'Uomo', 'f' => 'Donna'])
-                        ->native(false),
-
-                    DatePicker::make('profile.birthdate')
-                        ->label('Data di nascita')
-                        ->maxDate(now()),
-
-                    TextInput::make('profile.height_cm')
-                        ->label('Altezza (cm)')
-                        ->numeric()
-                        ->minValue(100)
-                        ->maxValue(250),
-
-                    // Le opzioni vengono dal modello, non da un elenco scritto qui:
-                    // vedi la nota su `Profile::ACTIVITY_LEVELS`.
-                    Select::make('profile.activity_level')
-                        ->label('Livello di attivita')
-                        ->options(Profile::ACTIVITY_LEVELS)
-                        ->native(false),
-
-                    Select::make('profile.goal')
-                        ->label('Obiettivo')
-                        ->options(Profile::GOALS)
-                        ->native(false),
-
-                    TextInput::make('profile.target_weight_kg')
-                        ->label('Peso obiettivo (kg)')
-                        ->numeric()
-                        ->minValue(20)
-                        ->maxValue(400),
-
                     Textarea::make('profile.notes')
                         ->label('Note')
                         ->rows(3)

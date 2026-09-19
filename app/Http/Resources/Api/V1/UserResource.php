@@ -135,24 +135,11 @@ class UserResource extends JsonResource
             'chi_pagava' => app(PianoAttivo::class)->chiPaga($this->resource),
             'tier' => app(PianoAttivo::class)->livello($this->resource),
             /*
-             * C7.2 — il profilo c'è **sempre**, anche vuoto.
-             *
-             * 🚨 Con `whenLoaded` la chiave spariva del tutto quando la
-             * relazione non era caricata o non esisteva, e l'app non poteva
-             * distinguere «profilo assente» da «profilo non chiesto»: due casi
-             * che richiedono schermate diverse. Una chiave che a volte c'è e a
-             * volte no costringe il client a un ramo in più per ogni campo.
+             * 🆕 ⛔ **Qui c'era `profile`** — sesso, data di nascita, eta',
+             * altezza, livello di attivita', obiettivo, peso obiettivo, orari —
+             * mandato a ogni accesso (C7.2). Tolto il 19/09/2026: il profilo sta
+             * sul telefono, e l'app non lo leggeva da qui.
              */
-            'profile' => $this->resource->profile === null ? null : [
-                'sex' => $this->resource->profile->sex,
-                'birthdate' => $this->resource->profile->birthdate?->toDateString(),
-                'age' => $this->resource->profile->age(),
-                'height_cm' => $this->resource->profile->height_cm,
-                'activity_level' => $this->resource->profile->activity_level,
-                'goal' => $this->resource->profile->goal,
-                'target_weight_kg' => $this->resource->profile->target_weight_kg,
-                'meal_hours' => $this->resource->profile->meal_hours,
-            ],
         ];
     }
 

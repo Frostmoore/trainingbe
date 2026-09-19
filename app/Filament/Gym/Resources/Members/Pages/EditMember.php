@@ -84,9 +84,9 @@ class EditMember extends EditRecord
         /** @var User $utente */
         $utente = $this->getRecord();
 
-        $data['profile'] = $utente->profile?->only([
-            'sex', 'birthdate', 'height_cm', 'activity_level', 'goal', 'target_weight_kg', 'notes',
-        ]) ?? [];
+        // 🆕 19/09: solo le note dello staff. I dati del corpo stanno sul
+        // telefono della persona, e la palestra non li vede.
+        $data['profile'] = $utente->profile?->only(['notes']) ?? [];
 
         $data['trainers'] = $utente->assignedTrainers()->pluck('users.id')->all();
 
@@ -99,7 +99,9 @@ class EditMember extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $this->profilo = $data['profile'] ?? [];
+        // ⚠️ Solo `notes`: un modulo manomesso non deve poter riscrivere i
+        // dati del corpo sul server.
+        $this->profilo = array_intersect_key($data['profile'] ?? [], ['notes' => true]);
         $this->trainer = $data['trainers'] ?? [];
 
         unset($data['profile'], $data['trainers']);

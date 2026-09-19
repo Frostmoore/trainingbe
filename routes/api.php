@@ -258,6 +258,8 @@ Route::prefix('v1')->group(function (): void {
 
         Route::get('profile', [ProfileController::class, 'show']);
         Route::patch('profile', [ProfileController::class, 'update']);
+        // 🆕 19/09: il profilo sta sul telefono; questa toglie quello rimasto qui.
+        Route::delete('profile', [ProfileController::class, 'destroy']);
 
         // ── Eliminazione dell'account (C6) ───────────────────────────────
         //

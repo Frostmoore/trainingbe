@@ -17,7 +17,8 @@ use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
 /**
- * C1 — il profilo scritto dall'app.
+ * C1 — il profilo scritto dall'app. 🆕 **Dal 19/09/2026 non piu'**: sta sul
+ * telefono, e il server lo lascia solo leggere (per il trasloco) e cancellare.
  *
  * Fino alla fase C il profilo si modificava **solo** dal pannello della
  * palestra: nell'app non c'era modo di impostare altezza, eta' e obiettivo, e
@@ -41,124 +42,74 @@ class ProfileApiTest extends TestCase
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
-    // ───────────────────────── scrittura ─────────────────────────
+    // ─────────────── 🆕 il profilo sta sul telefono — 19/09/2026 ───────────────
 
     /**
-     * 🚨 **Il profilo si salva, ma `derived` resta `null`** — S5.5.
+     * 🚨 **Il server non accetta piu' il profilo.** 📌 Il committente:
+     * *«assicurati che non ci scriva niente di personale (esattamente come peso
+     * altezza e data di nascita)»*. ⛔ Qui c'erano sette test che salvavano
+     * sesso, data di nascita e altezza con `PATCH /profile`.
      *
-     * Non e' una regressione: il server **non conosce piu' il peso** (decisione
-     * D9-bis), e senza peso non c'e' BMI, ne' BMR, ne' TDEE, ne' target.
-     *
-     * ⚠️ E il server **non inventa un peso di ripiego** per riempire il campo:
-     * un target calorico costruito su un peso finto non e' un numero storto,
-     * e' una dieta storta. Meglio `null`, che l'app sa gia' leggere.
-     *
-     * 💡 I valori li calcola l'app con `CalcolatoreCalorie` (S5.1), che ha il
-     * peso nel proprio archivio. La prova che le due formule coincidono sta nei
-     * test Dart, che usano **gli stessi valori attesi** del test PHP.
+     * 💡 410 e non un «ok» che ignora: un'app vecchia deve sapere che non ha
+     * salvato niente.
      */
     #[Test]
-    public function it_saves_the_profile_but_leaves_the_derived_values_to_the_app(): void
+    public function the_server_no_longer_accepts_the_profile(): void
     {
         $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', [
-                'sex' => 'm',
-                'birthdate' => '1988-04-12',
-                'height_cm' => 178,
-                'activity_level' => 'moderate',
-                'goal' => 'lose_slow',
-            ])
+            ->patchJson('/api/v1/profile', ['sex' => 'm', 'birthdate' => '1988-04-12', 'height_cm' => 178])
+            ->assertStatus(410)
+            ->assertJsonPath('code', 'profilo_sul_telefono');
+
+        $this->assertDatabaseMissing('profiles', ['user_id' => $this->iscritto->getKey(), 'height_cm' => 178]);
+    }
+
+    /**
+     * 📦 **Il trasloco: prima si legge, poi si cancella.** `GET` resta per
+     * portare a casa quello che c'era; `DELETE` toglie i dati personali e
+     * lascia le note dello staff, che le scrive la palestra.
+     */
+    #[Test]
+    public function after_the_move_the_personal_fields_leave_the_server(): void
+    {
+        Profile::create([
+            'tenant_id' => $this->alfa->id,
+            'user_id' => $this->iscritto->getKey(),
+            'sex' => 'm',
+            'birthdate' => '1988-04-12',
+            'height_cm' => 178,
+            'activity_level' => 'moderate',
+            'goal' => 'lose_slow',
+            'target_weight_kg' => 75,
+            'meal_hours' => ['dinner' => '19:00'],
+            'notes' => 'Spalla destra delicata',
+        ]);
+
+        $this->comeApp($this->iscritto)
+            ->getJson('/api/v1/profile')
             ->assertOk()
-            ->assertJsonPath('data.sex', 'm')
-            ->assertJsonPath('data.height_cm', 178)
-            // ⚠️ Il peso resta l'unica cosa che manca, e manchera' sempre:
-            // e' l'app a saperlo.
-            ->assertJsonPath('data.missing', ['weight_kg'])
-            ->assertJsonPath('data.derived', null);
+            ->assertJsonPath('data.height_cm', 178);
+
+        $this->comeApp($this->iscritto)->deleteJson('/api/v1/profile')->assertOk();
 
         $this->assertDatabaseHas('profiles', [
             'user_id' => $this->iscritto->getKey(),
-            'tenant_id' => $this->alfa->id,
-            'height_cm' => 178,
-            'goal' => 'lose_slow',
+            'sex' => null,
+            'birthdate' => null,
+            'height_cm' => null,
+            'activity_level' => null,
+            'goal' => null,
+            'target_weight_kg' => null,
+            'meal_hours' => null,
+            'notes' => 'Spalla destra delicata',
         ]);
     }
 
+    /** 💡 Chi non ha mai avuto un profilo sul server: niente da togliere, e nessun errore. */
     #[Test]
-    public function a_patch_does_not_erase_the_fields_it_does_not_mention(): void
+    public function deleting_a_profile_that_does_not_exist_is_fine(): void
     {
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['height_cm' => 180, 'goal' => 'maintain'])
-            ->assertOk();
-
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['sex' => 'f'])
-            ->assertOk()
-            // L'altezza mandata prima e' ancora li': una PATCH che azzera cio'
-            // che non nomina farebbe perdere i dati a chi salva un campo per
-            // volta mentre compila.
-            ->assertJsonPath('data.height_cm', 180)
-            ->assertJsonPath('data.goal', 'maintain')
-            ->assertJsonPath('data.sex', 'f');
-    }
-
-    // ───────────────────────── rifiuti ─────────────────────────
-
-    #[Test]
-    public function an_unknown_goal_is_rejected(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['goal' => 'dimagrire'])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('goal');
-    }
-
-    #[Test]
-    public function an_unknown_activity_level_is_rejected(): void
-    {
-        // `athlete` e' il vocabolario del CALCOLATORE, non del profilo (qui si
-        // chiama `very_active`). Accettarlo lo farebbe tradurre in `sedentary`
-        // da `activityForFormula()`, abbassando il fabbisogno **in silenzio**.
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['activity_level' => 'athlete'])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('activity_level');
-    }
-
-    #[Test]
-    public function a_birthdate_in_the_future_is_rejected(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['birthdate' => now()->addYear()->toDateString()])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('birthdate');
-    }
-
-    #[Test]
-    public function a_malformed_meal_hour_is_rejected(): void
-    {
-        // Salvarlo non darebbe errore: farebbe sbagliare il pasto a ogni
-        // inserimento di cibo, e nessuno collegherebbe le due cose.
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['meal_hours' => ['dinner' => '25:99']])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('meal_hours.dinner');
-    }
-
-    #[Test]
-    public function an_unknown_meal_hour_key_is_dropped_without_failing_the_save(): void
-    {
-        // Un'app vecchia che manda una chiave in piu' non deve vedersi
-        // rifiutare altezza e obiettivo per un campo secondario.
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', [
-                'height_cm' => 175,
-                'meal_hours' => ['dinner' => '19:00', 'merenda_serale' => '23:00'],
-            ])
-            ->assertOk()
-            ->assertJsonPath('data.height_cm', 175)
-            ->assertJsonPath('data.meal_hours.dinner', '19:00')
-            ->assertJsonMissingPath('data.meal_hours.merenda_serale');
+        $this->comeApp($this->iscritto)->deleteJson('/api/v1/profile')->assertOk();
     }
 
     // ───────────────────────── cosa manca ─────────────────────────
@@ -171,19 +122,6 @@ class ProfileApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.derived', null)
             ->assertJsonPath('data.missing', ['weight_kg', 'sex', 'birthdate', 'height_cm']);
-    }
-
-    #[Test]
-    public function the_missing_list_shrinks_as_the_fields_arrive(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['sex' => 'm', 'height_cm' => 180])
-            ->assertOk()
-            ->assertJsonPath('data.derived', null)
-            // Resta la data di nascita — che l'app puo' chiedere invece di
-            // dire genericamente che manca qualcosa — e il peso, che il server
-            // non conoscera' mai piu' (S5.5).
-            ->assertJsonPath('data.missing', ['weight_kg', 'birthdate']);
     }
 
     // ───────────────────── gli orari dei pasti ─────────────────────
@@ -202,9 +140,13 @@ class ProfileApiTest extends TestCase
     #[Test]
     public function custom_meal_hours_change_which_meal_a_food_lands_in(): void
     {
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['meal_hours' => ['dinner' => '18:30']])
-            ->assertOk();
+        // 🆕 19/09: il profilo non si scrive piu' via API — gli orari li ha chi
+        // non ha ancora fatto il trasloco.
+        Profile::create([
+            'tenant_id' => $this->alfa->id,
+            'user_id' => $this->iscritto->getKey(),
+            'meal_hours' => ['dinner' => '18:30'],
+        ]);
 
         $this->comeApp($this->iscritto)
             ->postJson('/api/v1/food-entries', [
@@ -236,8 +178,14 @@ class ProfileApiTest extends TestCase
     #[Test]
     public function the_six_meal_hours_are_always_returned_defaults_included(): void
     {
+        Profile::create([
+            'tenant_id' => $this->alfa->id,
+            'user_id' => $this->iscritto->getKey(),
+            'meal_hours' => ['lunch' => '12:15'],
+        ]);
+
         $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['meal_hours' => ['lunch' => '12:15']])
+            ->getJson('/api/v1/profile')
             ->assertOk()
             ->assertJsonPath('data.meal_hours.lunch', '12:15')
             // Gli altri cinque ci sono lo stesso: l'app disegna il modulo senza
@@ -276,43 +224,21 @@ class ProfileApiTest extends TestCase
 
     // ───────────────────────── isolamento ─────────────────────────
 
+    /** Nessun id nelle rotte: si toglie solo il proprio, mai quello di un altro. */
     #[Test]
-    public function each_member_only_ever_touches_their_own_profile(): void
+    public function each_member_only_ever_clears_their_own_profile(): void
     {
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
 
-        $this->comeApp($this->iscritto)
-            ->patchJson('/api/v1/profile', ['height_cm' => 190])
-            ->assertOk();
-
-        // Nessun id nelle rotte: l'unico profilo raggiungibile e' il proprio, e
-        // quello dell'altro non e' stato sfiorato.
-        $this->comeApp($altro)
-            ->getJson('/api/v1/profile')
-            ->assertOk()
-            ->assertJsonPath('data.height_cm', null);
-    }
-
-    #[Test]
-    public function the_profile_of_another_gym_is_never_reachable(): void
-    {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
-        $estraneo = $this->creaUtente($beta, UserRole::Member, 'anna@beta.test');
-
-        $this->comeApp($estraneo)
-            ->patchJson('/api/v1/profile', ['height_cm' => 165])
-            ->assertOk();
-
-        $this->assertDatabaseHas('profiles', [
-            'user_id' => $estraneo->getKey(),
-            'tenant_id' => $beta->id,
-        ]);
-
-        // Il profilo nasce nella palestra di chi lo scrive, mai in un'altra.
-        $this->assertDatabaseMissing('profiles', [
-            'user_id' => $estraneo->getKey(),
+        Profile::create([
             'tenant_id' => $this->alfa->id,
+            'user_id' => $altro->getKey(),
+            'height_cm' => 190,
         ]);
+
+        $this->comeApp($this->iscritto)->deleteJson('/api/v1/profile')->assertOk();
+
+        $this->assertDatabaseHas('profiles', ['user_id' => $altro->getKey(), 'height_cm' => 190]);
     }
 
     #[Test]
@@ -320,6 +246,7 @@ class ProfileApiTest extends TestCase
     {
         $this->getJson('/api/v1/profile')->assertUnauthorized();
         $this->patchJson('/api/v1/profile', ['height_cm' => 180])->assertUnauthorized();
+        $this->deleteJson('/api/v1/profile')->assertUnauthorized();
     }
 
     // ───────────────────── il vocabolario resta unico ─────────────────────

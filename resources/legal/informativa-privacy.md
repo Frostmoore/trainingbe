@@ -55,7 +55,7 @@ responsabile (art. 28 GDPR).
 | Password (conservata solo come hash) | Accesso | Art. 6(1)(b) |
 | Identificativo Google/Apple | Accesso con account esterno | Art. 6(1)(b) |
 | Palestra di appartenenza, trainer che ti seguono | Erogazione del servizio | Art. 6(1)(b) |
-| Sesso, data di nascita, altezza, livello di attività, obiettivo | Calcolo del fabbisogno calorico | 🚨 **Art. 9(2)(a) — consenso esplicito** |
+| Le **note dello staff** della tua palestra su di te (per esempio un infortunio o una limitazione), se le scrive | Seguirti in palestra | [da definire con il legale] · ⚠️ possono riguardare la salute · le scrive la palestra, tu non le vedi |
 | Schede **modello** della palestra | Patrimonio della palestra | Art. 6(1)(f) — legittimo interesse |
 | **Messaggi cifrati** | Recapito | Art. 6(1)(b) · ⚠️ **illeggibili per noi** |
 | Chiave **pubblica** di cifratura | Recapito dei messaggi | Art. 6(1)(b) |
@@ -82,6 +82,7 @@ Salvo le eccezioni dette al §1, e ripetute qui accanto a ogni voce:
 - **Il diario alimentare**, comprese le calorie bruciate che scrivi tu — 🚨 da ciò che mangi si
   capisce qualcosa sulla tua salute (§3.6): per questo sta qui. Parte verso l'intelligenza
   artificiale solo quello descritto in §3.6
+- **Sesso, data di nascita, altezza, livello di attività, obiettivo, peso obiettivo e orari dei pasti** — servono a calcolare il tuo fabbisogno, e il calcolo lo fa il telefono. Fino al 19 settembre 2026 stavano sui nostri server: al primo avvio dell'app aggiornata vengono copiati sul telefono e poi cancellati da noi
 - **Gli alimenti e gli esercizi che ti inventi**: li vedi solo tu, e non arrivano ai nostri server
 - **Gli allenamenti che fai con l'app**, con serie, ripetizioni e carichi
 - **Massa grassa, massa magra, circonferenze** — 🚨 la massa grassa è un dato sulla
@@ -224,7 +225,7 @@ senza di esso il nostro server rifiuta la richiesta: non è solo un controllo de
 |---|---|
 | Il **testo** che scrivi per farti stimare un alimento, così come l'hai scritto | Quando lo chiedi tu |
 | La **foto** di un pasto, ricodificata: posizione GPS, modello del telefono e data di scatto non partono | Quando la mandi tu |
-| I **totali** della giornata — calorie, macronutrienti, obiettivo, fabbisogno calcolato dal telefono | Col consiglio del giorno |
+| I **totali** della giornata — calorie, macronutrienti, il tuo obiettivo (per esempio «dimagrimento graduale»), fabbisogno calcolato dal telefono | Col consiglio del giorno |
 | 🔴 **Il tuo peso** | Col consiglio del giorno: senza, 1.900 calorie su un consumo di 2.000 e su uno di 3.000 sembrerebbero la stessa cosa |
 
 ⛔ **Non parte mai chi sei**: né il tuo nome, né la tua email, né l'identificativo del tuo account,

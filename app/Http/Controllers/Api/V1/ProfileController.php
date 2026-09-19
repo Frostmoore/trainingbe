@@ -6,7 +6,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\MealType;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Models\Profile;
 use App\Models\User;
 use App\Services\Nutrition\CalorieCalculator;
@@ -37,27 +36,50 @@ class ProfileController extends Controller
         return response()->json(['data' => $this->rappresenta($request->user())]);
     }
 
-    public function update(UpdateProfileRequest $request): JsonResponse
+    /**
+     * ══ 🆕 🚨 IL PROFILO NON SI SCRIVE PIU' QUI — 19/09/2026 ══════════════
+     *
+     * ⛔ Qui si salvavano sesso, data di nascita, altezza, livello di
+     * attivita', obiettivo, peso obiettivo e orari dei pasti. 📌 Il
+     * committente: *«assicurati che non ci scriva niente di personale
+     * (esattamente come peso altezza e data di nascita)»*. Da `fe v18.1.0`
+     * stanno sul telefono (`ProfiloSulTelefono`).
+     *
+     * 💡 **410 e non un «ok» che ignora i campi**: un'app vecchia che salva
+     * crederebbe di aver salvato, e alla prossima apertura ritroverebbe i
+     * campi vuoti senza sapere perche'. Cosi' invece lo dice.
+     */
+    public function update(Request $request): JsonResponse
     {
-        $utente = $request->user();
-        $dati = $request->validated();
+        return response()->json([
+            'message' => __('Il profilo adesso resta sul tuo telefono: aggiorna l\'app.'),
+            'code' => 'profilo_sul_telefono',
+        ], 410);
+    }
 
-        $profilo = $utente->profile ?? new Profile([
-            'tenant_id' => $utente->tenant_id,
-            'user_id' => $utente->getKey(),
-        ]);
+    /**
+     * 🆕 **Toglie dal server i dati personali del profilo** — 19/09/2026.
+     *
+     * 💡 La chiama l'app **dopo** averli copiati sul telefono e riletti
+     * (`TraslocoDelProfilo`): prima si sposta, poi si cancella, mai il
+     * contrario.
+     *
+     * ⚠️ Restano le note dello staff (`notes`): le scrive la palestra, non la
+     * persona.
+     */
+    public function destroy(Request $request): JsonResponse
+    {
+        $request->user()?->profile?->forceFill([
+            'sex' => null,
+            'birthdate' => null,
+            'height_cm' => null,
+            'activity_level' => null,
+            'goal' => null,
+            'target_weight_kg' => null,
+            'meal_hours' => null,
+        ])->save();
 
-        // `tenant_id` esplicito anche in aggiornamento: il profilo esiste gia'
-        // filtrato dal global scope, ma un profilo senza palestra sfuggirebbe a
-        // ogni conteggio e alla cancellazione di un cliente.
-        $profilo->fill($dati);
-        $profilo->tenant_id = $utente->tenant_id;
-        $profilo->user_id = $utente->getKey();
-        $profilo->save();
-
-        $utente->setRelation('profile', $profilo);
-
-        return response()->json(['data' => $this->rappresenta($utente)]);
+        return response()->json(['message' => __('Tolti dal server.')]);
     }
 
     /**

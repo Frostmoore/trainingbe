@@ -24,6 +24,7 @@ use App\Services\Billing\Exceptions\GettoniEsauritiException;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Dashboard\DashboardService;
+use App\Services\Nutrition\CalorieCalculator;
 use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\FasciaDelConsiglio;
 use App\Support\Tenancy\TenantContext;
@@ -1370,6 +1371,19 @@ class AiController extends Controller
         return $fuori;
     }
 
+    /**
+     * L'obiettivo mandato dall'app, se e' uno di quelli che la formula conosce.
+     *
+     * ⚠️ Un elenco chiuso (`CalorieCalculator::GOAL_DELTA`): quello che finisce
+     * nel prompt e' una chiave nostra, non testo libero scritto da qualcuno.
+     */
+    private function obiettivoDallApp(Request $request): ?string
+    {
+        $goal = $request->input('goal');
+
+        return is_string($goal) && isset(CalorieCalculator::GOAL_DELTA[$goal]) ? $goal : null;
+    }
+
     private function targetDallApp(Request $request): ?array
     {
         $dati = $request->validate([
@@ -2078,7 +2092,13 @@ class AiController extends Controller
              * copia e' quella che diverge.
              */
             'meals_logged' => count($cibo['meals']),
-            'goal' => $utente->profile?->goalForFormula(),
+            /*
+             * 🆕 **L'obiettivo lo dice l'app** — 19/09/2026. Il profilo sta sul
+             * telefono: il server lo **inoltra**, come il target e il peso, e
+             * non lo conserva. ⚠️ Il ripiego sul profilo di qui vale solo per
+             * chi non ha ancora fatto il trasloco (app vecchia).
+             */
+            'goal' => $this->obiettivoDallApp($request) ?? $utente->profile?->goalForFormula(),
 
             /*
              * ══ 🍽️ I PASTI UNO PER UNO, E QUANDO SONO STATI SCRITTI ═══════
