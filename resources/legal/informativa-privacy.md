@@ -391,10 +391,10 @@ che non esiste più**: byte casuali accanto a un segnaposto.
 
 | Diritto | Come |
 |---|---|
-| **Accesso** (art. 15) | Al contatto privacy. I dati che stanno sul telefono li vedi già nell'app |
+| **Accesso** (art. 15) | **Profilo → Backup e dati → Scarica i miei dati**: un file con quello che sta sui nostri server e quello che sta sul tuo telefono. Oppure al contatto privacy |
 | **Rettifica** (art. 16) | Dal profilo, subito |
 | **Cancellazione** (art. 17) | **Profilo → Elimina account**, dall'app, senza scrivere a nessuno |
-| **Portabilità** (art. 20) | Al contatto privacy per i dati sui nostri server. Per quelli sul telefono c'è il **file di backup**, esportabile dall'app |
+| **Portabilità** (art. 20) | Lo stesso file: è **JSON**, un formato che qualunque altra app o programma sa leggere. ⚠️ Non è protetto da codice: conservalo con cura |
 | **Revoca del consenso** (art. 7(3)) | **Profilo → Privacy e consensi.** Togliere costa quanto mettere |
 | **Opposizione** (art. 21) | Al contatto privacy |
 | **Reclamo** | **Garante per la protezione dei dati personali** — garanteprivacy.it |
