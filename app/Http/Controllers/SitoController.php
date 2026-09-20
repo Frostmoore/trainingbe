@@ -26,34 +26,43 @@ class SitoController extends Controller
     /**
      * La home.
      *
-     * ── 🚨 Non riceve `Listino`, ed e' voluto ─────────────────────────────
+     * ── 🔄 Adesso riceve `Listino`, e fino al 19/09 era vietato ────────────
      *
-     * Perche' **sulla home non c'e' nessun prezzo**. La versione del 16/08
-     * mattina spiegava, nel terzo passo di «come funziona», che una palestra
-     * puo' rivendere un posto a 10 € e tenersene la meta'.
+     * Dal 16/08 questo metodo **non riceveva il listino apposta**: la home di
+     * quel mattino spiegava, nel terzo passo di «come funziona», che una
+     * palestra può rivendere un posto e tenersi la metà della differenza. ⚠️ È
+     * vero, ed era la cosa sbagliata da dire lì — chi sta valutando se
+     * scaricare un'app leggeva di essere la merce.
      *
-     * ⚠️ E' vero, ed e' la cosa sbagliata da dire li': chi sta valutando se
-     * scaricare un'app legge che e' un prodotto costruito per essere rivenduto
-     * addosso a lui, e chiude. Quei numeri stanno su `/prezzi`, che e' la
-     * pagina dove una palestra li sta cercando apposta.
+     * 🎯 **Il 20/09 il committente ha chiesto il contrario**: *«deve mettere
+     * bene in mostra tutte le funzionalità dell'app spiegando il piano gratuito
+     * e quello su abbonamento in un punto specifico della pagina … spingiamo
+     * comunque gli utenti ad abbonarsi, è così che guadagno»*.
      *
-     * 💡 Non avere il listino iniettato **e' il modo di renderlo difficile da
-     * rimettere**: chi volesse riscriverci un prezzo dovrebbe prima cambiare
-     * questa firma, e a quel punto legge il perche'.
+     * 💡 **Le due cose non si contraddicono**, e la differenza è chi legge:
+     * «il Plus costa 8 € al mese» è un'informazione che serve a chi la paga;
+     * «rivendilo a 8 e tieniti il resto» è un discorso fra noi e chi compra, e
+     * quello resta fuori da qui. 🚨 Il test
+     * `the_home_does_not_pitch_the_reseller_margin` continua a vietare il
+     * secondo, parola per parola.
      */
-    public function home(): View
+    public function home(Listino $listino): View
     {
-        return view('sito.home');
+        return view('sito.home', [
+            'formatta' => $this->formattatore(),
+            'prezzoSingolo' => $listino->singolo(),
+            'chiamateMensili' => $listino->chiamateMensili(),
+
+            /*
+             * 💡 «Da X al mese»: si prende il **primo piano** di ogni platea,
+             * non un numero scritto a mano. Il giorno che nasce un piano più
+             * piccolo, la frase lo segue da sola.
+             */
+            'daTrainer' => $listino->piani('trainer')[0]['prezzo'],
+            'daPalestra' => $listino->piani('palestre')[0]['prezzo'],
+        ]);
     }
 
-    /**
-     * La pagina dei prezzi — 16/08/2026.
-     *
-     * 🚨 **Ogni numero arriva da `Listino`, nessuno e' scritto nella vista.** Un
-     * prezzo in un template e' un prezzo che un giorno dira' una cosa diversa
-     * da quella che il sistema fattura, e lo si scopre da un cliente arrabbiato
-     * invece che da un test.
-     */
     /**
      * Per palestre e trainer — 20/09/2026.
      *
@@ -64,29 +73,100 @@ class SitoController extends Controller
     public function professionisti(Listino $listino): View
     {
         return view('sito.professionisti', [
-            'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
+            'formatta' => $this->formattatore(),
             'listino' => $listino,
+            'daTrainer' => $listino->piani('trainer')[0]['prezzo'],
+            'daPalestra' => $listino->piani('palestre')[0]['prezzo'],
         ]);
     }
 
+    /**
+     * Lo smistamento dei prezzi — 20/09/2026.
+     *
+     * ── 📌 Perché tre pagine e non una ────────────────────────────────────
+     *
+     * Il committente: *«Prezzi deve essere un menù a tendina con Individuale,
+     * trainer e palestra con tre pagine diverse»*.
+     *
+     * 💡 Ed è come lo fanno tutti: le tre platee comprano **cose diverse con
+     * unità diverse** — una persona compra un abbonamento, un trainer compra
+     * posti per i suoi allievi, una palestra compra posti e istruttori.
+     * Metterle sulla stessa pagina obbliga ognuna a scorrere oltre i prezzi
+     * degli altri due.
+     *
+     * ⚠️ `/prezzi` resta e **non muore**: chi ci arriva da un link vecchio o da
+     * un motore di ricerca trova lo smistamento, non un 404.
+     */
     public function prezzi(Listino $listino): View
     {
         return view('sito.prezzi', [
-            'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
-            'listino' => $listino,
+            'formatta' => $this->formattatore(),
+            'prezzoSingolo' => $listino->singolo(),
+            'daTrainer' => $listino->piani('trainer')[0]['prezzo'],
+            'daPalestra' => $listino->piani('palestre')[0]['prezzo'],
+        ]);
+    }
+
+    /** I prezzi di chi si allena: gratis, Plus, gettoni. */
+    public function prezziIndividuale(Listino $listino): View
+    {
+        return view('sito.prezzi-individuale', [
+            'formatta' => $this->formattatore(),
             'prezzoSingolo' => $listino->singolo(),
             'chiamateMensili' => $listino->chiamateMensili(),
             'pacchetti' => $listino->pacchettiGettoni(),
-            'esempio' => $listino->esempio(),
+        ]);
+    }
 
-            /*
-             * 📣 M5.7 — anche questi due passano dal `Listino`, non dalla vista.
-             * Un prezzo scritto in un template è un prezzo che un giorno dirà
-             * una cosa diversa da quella che il sistema addebita.
-             */
+    /** I prezzi di un trainer indipendente. */
+    public function prezziTrainer(Listino $listino): View
+    {
+        return $this->listinoDiUnaPlatea($listino, 'trainer');
+    }
+
+    /** I prezzi di una palestra. */
+    public function prezziPalestra(Listino $listino): View
+    {
+        return $this->listinoDiUnaPlatea($listino, 'palestre');
+    }
+
+    /**
+     * Le due pagine a posti, che sono **la stessa pagina con altri numeri**.
+     *
+     * 🚨 Due viste copiate divergono al primo ritocco, e la divergenza si vede
+     * solo mettendo le due pagine una accanto all'altra — cioè mai. ⚠️ Quello
+     * che cambia davvero è il **vocabolario** (allievi/iscritti) e il fatto che
+     * una palestra ha anche il tetto dei trainer: sta tutto in questo array.
+     */
+    private function listinoDiUnaPlatea(Listino $listino, string $platea): View
+    {
+        $piani = $listino->piani($platea);
+
+        return view('sito.prezzi-a-posti', [
+            'formatta' => $this->formattatore(),
+            'platea' => $platea,
+            'piani' => $piani,
+            'suMisura' => $listino->suMisura($platea),
+            'costoAlMinimo' => $listino->costoSuMisura($platea, $listino->suMisura($platea)['minimo']),
+            'piuGrande' => $piani[count($piani) - 1],
+            'prezzoSingolo' => $listino->singolo(),
+            'chiamateMensili' => $listino->chiamateMensili(),
+            'esempio' => $listino->esempio($platea),
             'costoVisualizzazione' => $listino->costoVisualizzazione() / 100,
             'budgetMinimo' => $listino->budgetMinimoPubblicita() / 100,
         ]);
+    }
+
+    /**
+     * 💡 Il formattatore dei prezzi, uno solo per tutte le pagine.
+     *
+     * ⚠️ Era copiato in ogni metodo: quattro copie della stessa `number_format`,
+     * e il giorno che si volesse scrivere «8 €» invece di «8,00 €» bisognerebbe
+     * trovarle tutte.
+     */
+    private function formattatore(): \Closure
+    {
+        return static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €';
     }
 
     /**

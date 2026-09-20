@@ -237,12 +237,21 @@ return [
     | 20 € e l'iscritto scopre che da solo lo pagherebbe 8, la lamentela torna
     | indietro a noi.
     |
-    | 💡 10 € su un costo di 6 (Basic: 60 € per 10 allievi) lascia alla palestra
-    | quattro euro a persona, e all'iscritto costa **due euro più** di quanto
-    | pagherebbe da solo: il margine c'è, e il prezzo resta difendibile davanti a
-    | chi lo paga.
+    | 🆕 **8,00 € dal 20/09/2026**, cioè **esattamente quanto costa il piano
+    | individuale**. 📌 Il committente, vedendo l'esempio a 10: *«il piano
+    | individuale costa 8… metti 8, anche se è solo un esempio»*.
+    |
+    | 💡 Ed è la cifra giusta per una ragione che vale più dell'esempio: a 8 €
+    | l'iscritto paga **quello che pagherebbe da solo**, quindi non c'è niente da
+    | spiegare e niente da scoprire — il giorno che apre l'app e legge il prezzo
+    | del Plus, trova lo stesso numero. ⚠️ Sopra quella cifra la palestra sta
+    | rivendendo a più del prezzo di listino, e quello lo scopre l'iscritto, non
+    | noi.
+    |
+    | 📌 Il margine resta: su Advanced (130 € per 30 iscritti, cioè 4,33 a testa)
+    | la palestra tiene **3,67 € a persona** — 240 € incassati contro 130 pagati.
     */
-    'rivendita_suggerita_cent' => 1000,
+    'rivendita_suggerita_cent' => 800,
 
     /** Il pacchetto su cui è costruito l'esempio del sito. */
     'esempio_posti' => 30,

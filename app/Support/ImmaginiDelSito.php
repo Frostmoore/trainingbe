@@ -49,7 +49,40 @@ class ImmaginiDelSito
         'eroe' => [
             'larghezza' => 1600,
             'altezza' => 1200,
-            'cosa' => 'Lo sfondo dietro il telefono, in apertura della home',
+            'cosa' => "L'apertura della home, a tutta pagina dietro il titolo",
+        ],
+
+        /*
+         * 🆕 **Le schermate dell'app** — 20/09/2026.
+         *
+         * 🚨 Non sono fotografie: sono **catture dall'emulatore**, e vanno
+         * rifatte quando la schermata cambia davvero. ⚠️ Un sito che mostra
+         * un'interfaccia che l'app non ha più è peggio di un sito senza
+         * schermate: chi scarica si aspetta quella.
+         *
+         * 📌 Finché non ci sono, `<x-sito.telefono>` disegna il telaio del
+         * telefono col riempimento dentro — che sembra un mockup, non un
+         * errore. Le misure sono quelle di un 1080 × 2400 dimezzato.
+         */
+        'app-oggi' => [
+            'larghezza' => 540,
+            'altezza' => 1200,
+            'cosa' => "La schermata «Oggi» dell'app — apertura e sezione «la tua giornata»",
+        ],
+        'app-diario' => [
+            'larghezza' => 540,
+            'altezza' => 1200,
+            'cosa' => 'Il diario alimentare con i pasti del giorno',
+        ],
+        'app-allenamento' => [
+            'larghezza' => 540,
+            'altezza' => 1200,
+            'cosa' => 'Una seduta in corso: serie, carichi e cronometro',
+        ],
+        'app-chat' => [
+            'larghezza' => 540,
+            'altezza' => 1200,
+            'cosa' => 'La chat cifrata col trainer, con una scheda ricevuta',
         ],
         'platea-palestra' => [
             'larghezza' => 800,
@@ -74,8 +107,42 @@ class ImmaginiDelSito
         'prezzi' => [
             'larghezza' => 1600,
             'altezza' => 700,
-            'cosa' => 'La fascia in apertura della pagina dei prezzi',
+            'cosa' => 'La fascia in apertura delle pagine dei prezzi',
         ],
+        'pannello' => [
+            'larghezza' => 1600,
+            'altezza' => 1000,
+            'cosa' => 'Il pannello di una palestra, nella pagina per palestre e trainer',
+        ],
+    ];
+
+    /**
+     * 🚨 **Quelle che ANCORA non ci sono, e si sa.**
+     *
+     * ── ⚠️ Perché questa costante esiste ───────────────────────────────────
+     *
+     * Perché `ATTESE` è la lista di quello che le pagine **chiedono**, e
+     * `all_seven_images_are_actually_on_disk` pretendeva che ci fossero tutte.
+     * ⛔ Con quella regola, aggiungere una schermata al sito prima di averla
+     * catturata vuol dire **un test rosso** — e un test rosso che si impara a
+     * ignorare smette di servire a qualcosa.
+     *
+     * 💡 Qui invece si dichiara il buco: il test confronta `mancanti()` con
+     * questa lista. Se ne sparisce una che c'era → **rosso**. Se ne arriva una
+     * di queste e nessuno aggiorna la lista → **rosso lo stesso**. L'unico modo
+     * di stare verdi è dire la verità.
+     *
+     * 📌 Il committente, 20/09: *«per ora sulle immagini metti dei
+     * segnaposto»*. Queste sono quelle.
+     *
+     * @var list<string>
+     */
+    public const ANCORA_DA_PRODURRE = [
+        'app-oggi',
+        'app-diario',
+        'app-allenamento',
+        'app-chat',
+        'pannello',
     ];
 
     /**

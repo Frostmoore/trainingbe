@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\IscrizioneController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Responses\RoleAwareLoginResponse;
@@ -19,13 +20,49 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [SitoController::class, 'home'])->name('sito.home');
 
 /*
-| I prezzi — 16/08/2026.
+| I prezzi — 16/08/2026, divisi in tre il 20/09/2026.
 |
 | 🚨 Pagina propria e non un'ancora nella home: e' il documento che una palestra
 | apre, guarda e rimanda a qualcun altro. Un indirizzo che finisce con `#prezzi`
 | e' un indirizzo che qualcuno incolla male.
+|
+| 📌 *«Prezzi deve essere un menu' a tendina con Individuale, trainer e palestra
+| con tre pagine diverse»*. Le tre platee comprano cose diverse con unita'
+| diverse, e su una pagina sola ognuna deve scorrere oltre i prezzi degli altri.
+|
+| ⚠️ `/prezzi` **resta** e fa da bivio: chi ci arriva da un link vecchio o da un
+| motore di ricerca trova tre porte, non un 404.
 */
 Route::get('/prezzi', [SitoController::class, 'prezzi'])->name('sito.prezzi');
+Route::get('/prezzi/individuale', [SitoController::class, 'prezziIndividuale'])->name('sito.prezzi.individuale');
+Route::get('/prezzi/trainer', [SitoController::class, 'prezziTrainer'])->name('sito.prezzi.trainer');
+Route::get('/prezzi/palestra', [SitoController::class, 'prezziPalestra'])->name('sito.prezzi.palestra');
+
+/*
+| L'iscrizione dal sito — 20/09/2026.
+|
+| 📌 *«ci deve essere un modo per permettere alle palestre e ai trainers di
+| abbonarsi direttamente dal sito»*. ⛔ Prima non c'era: il listino mostrava i
+| prezzi e finiva li'.
+|
+| 🚨 **Il codice del piano non e' vincolato qui ma nel controller**
+| (`IscrizioneDalSito::pianoComprabile()`), e non e' una dimenticanza: l'elenco
+| dei piani comprabili e' una **regola commerciale** — niente piano individuale,
+| niente su misura, niente piani ritirati — e vive dove si puo' spiegare. Un
+| `whereIn` in questo file sarebbe una seconda copia di quella regola, muta.
+|
+| ⚠️ `throttle` sul POST: e' una rotta che **crea account** senza autenticazione.
+| Sei tentativi al minuto per indirizzo IP bastano a chiunque stia comprando
+| davvero, e tolgono di mezzo chi ci prova in automatico.
+*/
+Route::get('/iscriviti/{piano}', [IscrizioneController::class, 'modulo'])
+    ->where('piano', '[a-z0-9_]{2,40}')
+    ->name('sito.iscriviti');
+
+Route::post('/iscriviti/{piano}', [IscrizioneController::class, 'iscrivi'])
+    ->where('piano', '[a-z0-9_]{2,40}')
+    ->middleware('throttle:6,1')
+    ->name('sito.iscriviti.invia');
 
 /*
 | I documenti legali.
@@ -174,22 +211,8 @@ Route::get('/impersonation/stop', function (Impersonator $impersonator) {
 | webhook potrebbe non essere ancora arrivato, e promettere un saldo che non
 | c'e' ancora farebbe ricaricare la schermata dell'app per niente.
 */
-Route::get('/pagamento/ok', fn () => response(
-    '<!doctype html><meta charset="utf-8">'
-    .'<meta name="viewport" content="width=device-width,initial-scale=1">'
-    .'<title>Pagamento ricevuto</title>'
-    .'<div style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:0 1.5rem;text-align:center">'
-    .'<h1 style="font-size:1.4rem">Pagamento ricevuto</h1>'
-    .'<p>Puoi tornare all\'app: fra qualche secondo trovi tutto al suo posto.</p>'
-    .'</div>',
-))->name('pagamento.ok');
+Route::get('/pagamento/ok', fn () => view('sito.pagamento', ['riuscito' => true]))
+    ->name('pagamento.ok');
 
-Route::get('/pagamento/annullato', fn () => response(
-    '<!doctype html><meta charset="utf-8">'
-    .'<meta name="viewport" content="width=device-width,initial-scale=1">'
-    .'<title>Pagamento annullato</title>'
-    .'<div style="font:16px system-ui;max-width:32rem;margin:20vh auto;padding:0 1.5rem;text-align:center">'
-    .'<h1 style="font-size:1.4rem">Non hai pagato niente</h1>'
-    .'<p>Puoi tornare all\'app e riprovare quando vuoi.</p>'
-    .'</div>',
-))->name('pagamento.annullato');
+Route::get('/pagamento/annullato', fn () => view('sito.pagamento', ['riuscito' => false]))
+    ->name('pagamento.annullato');

@@ -1,22 +1,29 @@
 {{--
-    Il guscio del sito pubblico — F9, ridisegnato il 16/08/2026.
+    Il guscio del sito pubblico — rifatto il 20/09/2026 (la terza versione).
 
-    🚨 **Niente CDN, niente build.** Il backend gira su un server condiviso con
-    altri due siti, e ogni dipendenza esterna in più è una cosa che può cadere
-    portandosi dietro la pagina che dovrebbe vendere il prodotto. Lo stile è
-    inline: è più lungo di prima, e continua a non valere una catena di build.
+    ── 📌 Perché è stato rifatto ──────────────────────────────────────────────
 
-    ── 💡 Da dove viene questo disegno ────────────────────────────────────────
+    Il committente, davanti alla versione del mattino: *«La home fa schifo ar
+    cazzo, non mi piace per niente l'hero, deve essere un'immagine a piena
+    pagina … vatti a vedere su internet come sono fatti i siti dei competitors
+    e fallo come i loro più o meno»*.
 
-    Guardando come si presentano i prodotti dello stesso settore (Trainerize,
-    TrueCoach): navigazione corta con una sola azione, un'affermazione grande in
-    apertura, sezioni alternate testo/immagine, i prezzi in tre schede con una
-    evidenziata, le domande frequenti in fondo, un piè di pagina a colonne.
+    ── 💡 Cosa dicono i siti guardati (Hevy, Trainerize, Yazio) ───────────────
 
-    ⚠️ **Una cosa che loro hanno e noi no: le prove sociali.** Loro mettono i
-    loghi dei clienti e i numeri («400K trainer»). Noi non abbiamo né gli uni né
-    gli altri, e **inventarli sarebbe una bugia** — quindi quella fascia qui non
-    c'è. Al suo posto si dice cosa siamo davvero: un prodotto in prova.
+    | Cosa | Come lo fanno tutti e tre |
+    |---|---|
+    | Apertura | **Immagine a tutta pagina**, titolo di tre parole, una riga sotto, i due pulsanti degli store |
+    | Subito dopo | Le **schermate dell'app** dentro un telefono, una funzione per riga |
+    | Prezzi | ⚠️ **Non sulla home**: una pagina per platea, raggiunta da una tendina |
+    | Iscrizione | Trainerize la mette **in apertura**: nome, email, password, e si è dentro |
+    | Prove sociali | Loghi e numeri — ⛔ noi non ne abbiamo e **non se ne inventano** |
+
+    🚨 **Niente CDN, niente build, niente JavaScript.** Il backend gira su un
+    server condiviso con altri due siti, e ogni dipendenza esterna è una cosa che
+    può cadere portandosi dietro la pagina che dovrebbe vendere il prodotto. Lo
+    stile è incorporato: è lungo, e continua a non valere una catena di build.
+    ⚠️ E i **commenti qui dentro finiscono nella pagina** (stanno in un `<style>`):
+    `the_home_does_not_pitch_the_reseller_margin` li legge come testo.
 --}}
 <!DOCTYPE html>
 <html lang="it">
@@ -24,22 +31,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('titolo', 'Training Companion')</title>
-    <meta name="description" content="@yield('descrizione', 'L\'app per chi si allena, gratis. L\'AI è un supplemento che la palestra accende a chi la vuole.')">
+    <meta name="description" content="@yield('descrizione', 'L\'app per allenarsi e mangiare con la testa. Gratis, con i tuoi dati sul telefono.')">
     <meta name="theme-color" content="#0F766E">
 
     {{--
-        🚨 **L'anteprima quando il link viene condiviso.**
-
-        Fino al 16/08 non c'era: mandare l'indirizzo su WhatsApp mostrava un
-        riquadro grigio con dentro il dominio. ⚠️ È il primo posto in cui il
-        prodotto si presenta a qualcuno che non lo conosce, e presentarsi con un
-        riquadro vuoto è peggio che non farsi condividere.
+        🚨 **L'anteprima quando il link viene condiviso.** È il primo posto in cui
+        il prodotto si presenta a chi non lo conosce, e presentarsi con un
+        riquadro grigio è peggio che non farsi condividere.
     --}}
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Training Companion">
     <meta property="og:locale" content="it_IT">
     <meta property="og:title" content="@yield('titolo', 'Training Companion')">
-    <meta property="og:description" content="@yield('descrizione', 'L\'app per chi si allena, gratis.')">
+    <meta property="og:description" content="@yield('descrizione', 'L\'app per allenarsi e mangiare con la testa. Gratis.')">
     <meta property="og:url" content="{{ url()->current() }}">
 
     @php($anteprima = app(\App\Support\ImmaginiDelSito::class)->url('og'))
@@ -57,13 +61,8 @@
     @endif
 
     {{--
-        L'icona della scheda.
-
-        💡 **È lo stesso file del marchio**, non una seconda immagine da tenere
-        allineata: due file che devono restare uguali finiscono sempre per non
-        esserlo più. Finché il marchio non c'è resta il quadratino disegnato
-        qui dentro — duecento byte incorporati, nessuna richiesta al server e
-        nessun file da ricordarsi di caricare.
+        L'icona della scheda. 💡 **È lo stesso file del marchio**: due file che
+        devono restare uguali finiscono sempre per non esserlo più.
     --}}
     @php($segnoIcona = app(\App\Support\ImmaginiDelSito::class)->marchio())
     <link rel="icon" href="{{ $segnoIcona ?? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F766E'/%3E%3Crect x='9' y='9' width='14' height='14' rx='4' fill='%23ECFDF5'/%3E%3C/svg%3E" }}">
@@ -78,6 +77,7 @@
             --bordo: #E5E7EB;
             --sfondo: #FFFFFF;
             --superficie: #F9FAFB;
+            --scuro: #0B1220;
 
             --sp-1: 8px;  --sp-2: 16px; --sp-3: 24px;
             --sp-4: 40px; --sp-5: 64px; --sp-6: 96px;
@@ -100,7 +100,6 @@
         }
 
         * { box-sizing: border-box; }
-
         html { scroll-behavior: smooth; }
 
         body {
@@ -112,205 +111,21 @@
             -webkit-font-smoothing: antialiased;
         }
 
-        .contenitore { max-width: 1080px; margin: 0 auto; padding: 0 var(--sp-3); }
+        .contenitore { max-width: 1120px; margin: 0 auto; padding: 0 var(--sp-3); }
         .stretto { max-width: 760px; }
-
-        /* ───────────────────────── figure ─────────────────────────
-
-           🚨 Ogni figura ha il suo rapporto scritto in `aspect-ratio`, quindi
-           **occupa il suo spazio prima di essersi caricata**. Senza, la pagina
-           salta mentre le immagini arrivano e chi sta leggendo perde il segno.
-        */
-
-        .figura {
-            width: 100%;
-            border-radius: var(--raggio);
-            overflow: hidden;
-            background: var(--superficie);
-            border: 1px solid var(--bordo);
-        }
-
-        .figura img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-        /* ── ⚠️ Tolto il 16/08, quando le fotografie sono arrivate ────────
-           C'era `brightness(.86)` per il tema scuro, scritto **prima di
-           averle**, immaginandole in luce piena. Sono uscite tutte scure e in
-           controluce: abbassarle ancora le trasformava in rettangoli neri.
-           💡 Si adattano al tema scuro da sole, ed e' la ragione per cui non
-           c'e' niente qui. */
-
-        /*
-           💡 Il posto vuoto quando l'immagine non è ancora stata caricata.
-           Non dice «manca un'immagine»: mette il segno del prodotto su una
-           sfumatura dei suoi colori, e sembra una scelta.
-        */
-        .figura-vuota {
-            width: 100%; height: 100%;
-            display: grid; place-items: center;
-            background:
-                radial-gradient(120% 90% at 20% 0%, var(--accento-tenue) 0%, transparent 60%),
-                linear-gradient(140deg, var(--superficie) 0%, var(--sfondo) 100%);
-        }
-
-        .figura-vuota .punto {
-            width: 22px; height: 22px; border-radius: 7px;
-            background: var(--accento);
-            opacity: .30;
-        }
-
-        /* ── ⛔ Tolti il 20/09/2026: `.figura-eroe` e `.velo-eroe` ────────
-           Servivano a mettere la fotografia **sotto un telefono disegnato in
-           CSS**, in posizione assoluta e con un velo sopra per raccordarla.
-           L'apertura riscritta mette la fotografia in una colonna della
-           griglia, accanto al testo: niente sovrapposizione, niente velo, e
-           una regola in meno da ritarare ogni volta che l'immagine cambia. */
-
-        /* La figura in cima a una scheda: senza bordo proprio e senza angoli
-           in basso, perché è incollata alla scheda che la contiene. */
-        .scheda > .figura:first-child {
-            border: 0;
-            border-radius: 0;
-            margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-3);
-            width: auto;
-        }
-
-        /* ── ⛔ Tolto il 20/09/2026: il carosello dei prezzi ──────────────
-
-           Erano tre **ante affiancate** con `scroll-snap`, tre linguette e un
-           numero grande sopra ogni passo. ⚠️ Non è stato tolto perché
-           funzionasse male — funzionava, e senza una riga di JavaScript — ma
-           perché nascondeva due terzi del listino: chi non capiva che si
-           scorreva di lato vedeva **una platea sola** e se ne andava
-           convinto di aver visto i prezzi.
-
-           💡 Il listino riscritto (20/09) mette le tre platee **una sotto
-           l'altra**, nell'ordine in cui arrivano: chi si allena da solo, i
-           trainer, le palestre. Si scorre come tutto il resto della pagina, e
-           gli agganci `#da-solo`, `#trainer`, `#palestre` continuano a
-           funzionare — sono sezioni vere. */
-
-        /* 🚨 L'aggancio deve fermare la sezione sotto la barra fissa in alto,
-           non sotto il suo bordo superiore: senza, il titolo finisce coperto. */
-        section[id] { scroll-margin-top: 80px; }
-
-        .tabella-prezzi { width: 100%; border-collapse: collapse; font-size: 16px; }
-        .tabella-prezzi th { text-align: left; padding: 14px var(--sp-3); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
-        .tabella-prezzi td { padding: 14px var(--sp-3); border-bottom: 1px solid var(--bordo); }
-        .tabella-prezzi tr:last-child td { border-bottom: 0; }
-
-        /* ───────────────── il listino ────────────────
-
-           🚨 **La gerarchia visiva deve dire cosa guardare per primo**: il
-           nome del piano, il prezzo grande, cosa comprende, e in fondo il
-           prezzo unitario. Una pagina di prezzi che non si scorre in tre
-           secondi non si legge affatto.
-
-           ⛔ **Tolti il 20/09**: `.offerta-principale`, `.offerta-prezzo` e
-           `.prezzo-grande`. Erano l'abbonamento singolo messo in una riga
-           larga, diverso da tutto il resto. Col listino vero le platee sono
-           tre e ognuna ha le sue schede: una riga con un disegno tutto suo
-           faceva sembrare le altre due un ripensamento. */
-
-        /* La griglia dei pacchetti: colonne uguali, schede della stessa altezza.
-           💡 `align-items: stretch` e il pulsante spinto in fondo con
-           `margin-top: auto` — senza, i pulsanti ballano e le schede sembrano
-           storte anche quando i prezzi sono allineati. */
-        .griglia-pacchetti {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: var(--sp-2);
-            align-items: stretch;
-        }
-
-        .griglia-pacchetti .scheda { display: flex; flex-direction: column; }
-
-        /* 💡 La riga in fondo alla scheda — «4,33 a iscritto» — sta spinta giù
-           da `margin-top: auto` nel markup: così le note si allineano fra loro
-           anche quando i testi sopra hanno lunghezze diverse. */
-
-        /* La scheda scelta si stacca in altezza, non solo di colore.
-           ⚠️ Niente `transform: scale()`: su una griglia sfalsa gli
-           allineamenti e su schermo piccolo esce dal contenitore. */
-        .scheda.scelta {
-            border-color: var(--accento);
-            border-width: 2px;
-            box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 14%, transparent);
-        }
-
-        /* ⛔ Tolti il 20/09: `.scheda.evidenziata` e `.conti`. L'esempio dei
-           conti di una palestra non è più tre numeri grandi affiancati ma una
-           **tabella di tre righe**. 💡 Una tabella si legge in colonna e regge
-           lo schermo stretto senza una regola apposta.
-
-           ⚠️ E i commenti qui dentro finiscono **nella pagina**: stanno in un
-           `<style>` incorporato. Un test guarda che sulla home non compaia
-           vocabolario commerciale, e ci è già cascato una volta un commento
-           che parlava di occupare spazio. */
-
-        /* ───────────────────────── navigazione ───────────────────────── */
-
-        .navbar {
-            position: sticky; top: 0; z-index: 50;
-            background: color-mix(in srgb, var(--sfondo) 88%, transparent);
-            backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--bordo);
-        }
-
-        .navbar .contenitore {
-            display: flex; align-items: center; gap: var(--sp-3);
-            height: 64px;
-        }
-
-        .marchio {
-            font-weight: 800; font-size: 18px; letter-spacing: -0.02em;
-            color: var(--testo); text-decoration: none;
-            display: flex; align-items: center; gap: 8px;
-        }
-
-        .marchio .punto {
-            width: 10px; height: 10px; border-radius: 3px;
-            background: var(--accento); display: inline-block;
-        }
-
-        .nav-voci { display: flex; gap: var(--sp-3); margin-left: auto; align-items: center; }
-        .nav-voci a { color: var(--testo-tenue); text-decoration: none; font-size: 15px; font-weight: 500; }
-        .nav-voci a:hover { color: var(--testo); }
-
-        /* ⚠️ Sotto i 640 px le voci spariscono e resta l'azione: un menù a
-           panino per tre link è più lavoro per chi legge, non meno. */
-        @media (max-width: 640px) { .nav-voci .solo-grande { display: none; } }
-
-        /* ───────────────────────── bottoni ───────────────────────── */
-
-        .bottone {
-            display: inline-flex; align-items: center; justify-content: center;
-            gap: 8px; padding: 11px 20px; border-radius: 10px;
-            font-weight: 600; font-size: 15px; text-decoration: none;
-            border: 1px solid transparent; cursor: pointer;
-            transition: transform .06s ease, background .15s ease;
-        }
-        .bottone:active { transform: translateY(1px); }
-        .bottone-pieno { background: var(--accento); color: #fff; }
-        .bottone-pieno:hover { background: var(--accento-scuro); }
-        .bottone-vuoto { border-color: var(--bordo); color: var(--testo); background: var(--sfondo); }
-        .bottone-vuoto:hover { border-color: var(--testo-tenue); }
-        .bottone-grande { padding: 14px 26px; font-size: 16px; }
 
         /* ───────────────────────── tipografia ───────────────────────── */
 
         h1 {
-            font-size: clamp(34px, 6vw, 56px); line-height: 1.08;
-            letter-spacing: -0.03em; margin: 0 0 var(--sp-2); font-weight: 800;
+            font-size: clamp(36px, 6.4vw, 60px); line-height: 1.04;
+            letter-spacing: -0.035em; margin: 0 0 var(--sp-2); font-weight: 800;
         }
         h2 {
-            font-size: clamp(26px, 3.4vw, 34px); line-height: 1.2;
-            letter-spacing: -0.02em; margin: 0 0 var(--sp-2); font-weight: 750;
+            font-size: clamp(27px, 3.6vw, 38px); line-height: 1.16;
+            letter-spacing: -0.025em; margin: 0 0 var(--sp-2); font-weight: 750;
         }
         h3 { font-size: 19px; margin: 0 0 6px; letter-spacing: -0.01em; font-weight: 700; }
+        a { color: var(--accento); }
 
         .occhiello {
             text-transform: uppercase; letter-spacing: .08em;
@@ -323,61 +138,317 @@
 
         section { padding: var(--sp-6) 0; }
 
-        /* 🚨 **Il nome dice cosa fa**: una sezione su due ha lo sfondo pieno,
-           e il contrasto è l'unica cosa che divide una pagina lunga in blocchi
-           leggibili. ⚠️ Fino al 20/09 si chiamava `section.tenue`, cioè come
-           `.scheda.tenue` che è un'altra cosa: due significati sullo stesso
-           nome, e nessuno che se ne accorgesse finché non serviva cambiarne
-           uno. */
+        /* 🚨 **Il nome dice cosa fa**: una sezione su due ha lo sfondo pieno, e
+           il contrasto è l'unica cosa che divide una pagina lunga in blocchi
+           leggibili. */
         section.alternata { background: var(--superficie); border-block: 1px solid var(--bordo); }
+
+        /* L'aggancio deve fermare la sezione sotto la barra fissa in alto, non
+           sotto il suo bordo superiore: senza, il titolo finisce coperto. */
+        section[id] { scroll-margin-top: 76px; }
+
+        /* ───────────────────────── bottoni ───────────────────────── */
+
+        .bottone {
+            display: inline-flex; align-items: center; justify-content: center;
+            gap: 8px; padding: 11px 20px; border-radius: 10px;
+            font-weight: 600; font-size: 15px; text-decoration: none;
+            border: 1px solid transparent; cursor: pointer;
+            font-family: inherit;
+            transition: transform .06s ease, background .15s ease, border-color .15s ease;
+        }
+        .bottone:active { transform: translateY(1px); }
+        .bottone-pieno { background: var(--accento); color: #fff; }
+        .bottone-pieno:hover { background: var(--accento-scuro); }
+        .bottone-vuoto { border-color: var(--bordo); color: var(--testo); background: var(--sfondo); }
+        .bottone-vuoto:hover { border-color: var(--testo-tenue); }
+        .bottone-grande { padding: 14px 26px; font-size: 16px; }
+
+        /* Sopra una fotografia il bordo grigio sparisce: qui è bianco. */
+        .su-foto .bottone-vuoto { border-color: rgba(255,255,255,.55); color: #fff; background: rgba(255,255,255,.10); }
+        .su-foto .bottone-vuoto:hover { background: rgba(255,255,255,.20); }
+
+        .fila-bottoni { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+        .fila-bottoni.centrata { justify-content: center; }
+
+        /* ───────────────────────── navigazione ───────────────────────── */
+
+        .navbar {
+            position: sticky; top: 0; z-index: 50;
+            background: color-mix(in srgb, var(--sfondo) 88%, transparent);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--bordo);
+        }
+
+        .navbar .contenitore { display: flex; align-items: center; gap: var(--sp-3); height: 64px; }
+
+        .marchio {
+            font-weight: 800; font-size: 18px; letter-spacing: -0.02em;
+            color: var(--testo); text-decoration: none;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .marchio .punto { width: 10px; height: 10px; border-radius: 3px; background: var(--accento); display: inline-block; }
+
+        .nav-voci { display: flex; gap: var(--sp-3); margin-left: auto; align-items: center; }
+        .nav-voci > a { color: var(--testo-tenue); text-decoration: none; font-size: 15px; font-weight: 500; }
+        .nav-voci > a:hover { color: var(--testo); }
+
+        /*
+           La tendina dei prezzi — 📌 chiesta così: *«Prezzi deve essere un menù
+           a tendina con Individuale, trainer e palestra con tre pagine
+           diverse»*.
+
+           🚨 **`<details>`, non JavaScript.** Apre al clic e dalla tastiera, si
+           chiude con Esc, e su un telefono si comporta come si aspetta chi lo
+           usa. ⚠️ Con un menù fatto a mano servirebbero JavaScript, la gestione
+           del fuoco e `aria-expanded` scritto a mano: tre cose che si rompono
+           in silenzio, per avere lo stesso risultato.
+        */
+        .tendina { position: relative; }
+        .tendina > summary {
+            list-style: none; cursor: pointer;
+            color: var(--testo-tenue); font-size: 15px; font-weight: 500;
+            display: inline-flex; align-items: center; gap: 5px;
+        }
+        .tendina > summary::-webkit-details-marker { display: none; }
+        .tendina > summary::after { content: "▾"; font-size: 11px; }
+        .tendina[open] > summary, .tendina > summary:hover { color: var(--testo); }
+
+        .tendina-voci {
+            position: absolute; top: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+            min-width: 230px; padding: var(--sp-1);
+            background: var(--sfondo); border: 1px solid var(--bordo);
+            border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.12);
+        }
+        .tendina-voci a {
+            display: block; padding: 9px 12px; border-radius: 8px;
+            color: var(--testo); text-decoration: none; font-size: 15px;
+        }
+        .tendina-voci a:hover { background: var(--accento-tenue); color: var(--accento); }
+        .tendina-voci small { display: block; color: var(--testo-tenue); font-size: 12.5px; line-height: 1.35; }
+
+        /* ⚠️ Sotto i 720 px le voci spariscono e resta l'azione: un menù a
+           panino per quattro link è più lavoro per chi legge, non meno. La
+           tendina resta, perché è l'unica strada verso i prezzi. */
+        @media (max-width: 720px) {
+            .nav-voci .solo-grande { display: none; }
+            .navbar .contenitore { gap: var(--sp-2); }
+            .tendina-voci { left: auto; right: 0; transform: none; }
+        }
+
+        /* ───────────────────────── l'apertura ─────────────────────────
+
+           📌 *«deve essere un'immagine a piena pagina»*. La fotografia sta
+           **sotto** al testo, non accanto: è il disegno di tutti e tre i siti
+           guardati, ed è l'unico che regge sia su uno schermo largo sia su un
+           telefono senza due versioni diverse.
+        */
+
+        .eroe {
+            position: relative; isolation: isolate;
+            min-height: min(86vh, 780px);
+            display: grid; align-items: center;
+            padding: var(--sp-6) 0 var(--sp-5);
+            color: #fff;
+            overflow: hidden;
+        }
+
+        .eroe-sfondo { position: absolute; inset: 0; z-index: -2; }
+        .eroe-sfondo .figura { width: 100%; height: 100%; border: 0; border-radius: 0; }
+        .eroe-sfondo img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* 🚨 Il velo non è estetica: senza, il titolo bianco su una fotografia
+           chiara diventa **illeggibile**, e non si scopre finché qualcuno non
+           carica l'immagine sbagliata. Va scuro abbastanza da reggere qualunque
+           immagine ci finisca sotto. */
+        .eroe-velo {
+            position: absolute; inset: 0; z-index: -1;
+            background:
+                linear-gradient(180deg, rgba(4,12,20,.55) 0%, rgba(4,12,20,.72) 100%),
+                radial-gradient(90% 70% at 15% 20%, rgba(15,118,110,.45) 0%, transparent 70%);
+        }
+
+        .eroe h1 { color: #fff; max-width: 15ch; }
+        .eroe .guida { color: rgba(255,255,255,.88); font-size: clamp(18px, 2.2vw, 21px); max-width: 52ch; }
+        .eroe .pillola { background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.3); }
+
+        /* La striscia in fondo all'apertura: tre fatti, non tre slogan. */
+        .eroe-fatti {
+            display: flex; flex-wrap: wrap; gap: var(--sp-3);
+            margin-top: var(--sp-5); padding-top: var(--sp-3);
+            border-top: 1px solid rgba(255,255,255,.22);
+            color: rgba(255,255,255,.9); font-size: 15px;
+        }
+        .eroe-fatti span { display: inline-flex; align-items: center; gap: 8px; }
+
+        /* ───────────────────────── figure e telefono ─────────────────────────
+
+           🚨 Ogni figura ha il suo rapporto in `aspect-ratio`, quindi **occupa
+           il suo spazio prima di essersi caricata**: senza, la pagina salta
+           mentre le immagini arrivano e chi legge perde il segno.
+        */
+
+        .figura {
+            width: 100%;
+            border-radius: var(--raggio);
+            overflow: hidden;
+            background: var(--superficie);
+            border: 1px solid var(--bordo);
+        }
+        .figura img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        /* 💡 Il posto vuoto non dice «manca un'immagine»: mette il segno del
+           prodotto su una sfumatura dei suoi colori, e sembra una scelta. */
+        .figura-vuota {
+            width: 100%; height: 100%;
+            display: grid; place-items: center;
+            background:
+                radial-gradient(120% 90% at 20% 0%, var(--accento-tenue) 0%, transparent 60%),
+                linear-gradient(140deg, var(--superficie) 0%, var(--sfondo) 100%);
+        }
+        .figura-vuota .punto { width: 22px; height: 22px; border-radius: 7px; background: var(--accento); opacity: .30; }
+
+        /* La figura in cima a una scheda: senza bordo proprio e senza angoli in
+           basso, perché è incollata alla scheda che la contiene. */
+        .scheda > .figura:first-child {
+            border: 0; border-radius: 0;
+            margin: calc(var(--sp-3) * -1) calc(var(--sp-3) * -1) var(--sp-3);
+            width: auto;
+        }
+
+        /*
+           Il telaio del telefono intorno a una schermata.
+
+           💡 **Serve anche quando la schermata non c'è**: con il telaio, il
+           riempimento vuoto si legge come un mockup; senza, come un rettangolo
+           grigio in mezzo alla pagina. ⚠️ È il modo in cui il sito resta
+           presentabile mentre le catture dall'emulatore non sono ancora state
+           fatte.
+        */
+        .telefono {
+            width: 100%; max-width: 268px; margin: 0 auto;
+            border: 9px solid #0F172A; border-radius: 34px;
+            background: #0F172A; overflow: hidden;
+            box-shadow: 0 26px 60px rgba(2,10,20,.30);
+            position: relative;
+        }
+        .telefono .figura { border: 0; border-radius: 26px; }
+        .telefono::before {
+            content: ""; position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+            width: 74px; height: 6px; border-radius: 99px; background: rgba(255,255,255,.35); z-index: 2;
+        }
+        .telefoni-affiancati { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+        .telefoni-affiancati .telefono { max-width: 232px; }
 
         /* ───────────────────────── griglie e schede ───────────────────────── */
 
         .griglia { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
         .griglia-2 { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: center; }
 
+        /* Una funzione per riga: testo da una parte, schermata dall'altra.
+           `.rovescia` scambia le due colonne — ⚠️ solo da 860 px in su, perché
+           su un telefono l'ordine visivo deve restare quello del documento
+           (prima il titolo, poi l'immagine). */
+        .riga-funzione { display: grid; gap: var(--sp-4); align-items: center; grid-template-columns: 1fr; }
+        @media (min-width: 860px) {
+            .riga-funzione { grid-template-columns: 1.05fr .95fr; }
+            .riga-funzione.rovescia > *:first-child { order: 2; }
+        }
+        .riga-funzione + .riga-funzione { margin-top: var(--sp-6); }
+
         .scheda {
             border: 1px solid var(--bordo); border-radius: var(--raggio);
             padding: var(--sp-3); background: var(--sfondo);
         }
         .scheda.tenue { background: var(--superficie); }
-
-        .scheda-prezzo { display: flex; flex-direction: column; }
-        .scheda-prezzo.scelta { border-color: var(--accento); border-width: 2px; }
-
-        /* ⛔ Tolti il 20/09: `.etichetta` (il cartellino «consigliato» appeso
-           sopra il bordo) e `.prezzo`. Il piano consigliato si riconosce dal
-           bordo colorato, che non copre niente e non ha bisogno di una parola
-           in più per essere capito. */
-
-        .elenco { list-style: none; padding: 0; margin: var(--sp-2) 0 0; font-size: 15px; }
-        .elenco li { padding: 5px 0 5px 26px; position: relative; }
-        .elenco li::before {
-            content: "✓"; position: absolute; left: 0; top: 5px;
-            color: var(--accento); font-weight: 800;
-        }
-        .elenco li.no { color: var(--testo-tenue); }
-        .elenco li.no::before { content: "—"; color: var(--testo-tenue); }
+        .scheda h3 { display: flex; align-items: center; gap: 9px; }
 
         .pillola {
             display: inline-block; padding: 5px 12px; border-radius: 999px;
             background: var(--accento-tenue); color: var(--accento);
-            font-size: 13px; font-weight: 700; border: 1px solid color-mix(in srgb, var(--accento) 25%, transparent);
+            font-size: 13px; font-weight: 700;
+            border: 1px solid color-mix(in srgb, var(--accento) 25%, transparent);
+        }
+
+        .elenco { list-style: none; padding: 0; margin: var(--sp-2) 0 0; font-size: 15px; }
+        .elenco li { padding: 5px 0 5px 26px; position: relative; }
+        .elenco li::before { content: "✓"; position: absolute; left: 0; top: 5px; color: var(--accento); font-weight: 800; }
+        .elenco li.no { color: var(--testo-tenue); }
+        .elenco li.no::before { content: "—"; color: var(--testo-tenue); }
+
+        /* ───────────────────────── il listino ───────────────────────── */
+
+        .griglia-pacchetti {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: var(--sp-2);
+            align-items: stretch;
+        }
+        .griglia-pacchetti .scheda { display: flex; flex-direction: column; }
+
+        .scheda-prezzo { display: flex; flex-direction: column; }
+        /* La scheda consigliata si stacca in altezza, non solo di colore.
+           ⚠️ Niente `transform: scale()`: su una griglia sfalsa gli allineamenti
+           e su schermo piccolo esce dal contenitore. */
+        .scheda-prezzo.scelta {
+            border-color: var(--accento); border-width: 2px;
+            box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 14%, transparent);
+        }
+
+        .cifra { font-size: clamp(30px, 4vw, 38px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; margin: var(--sp-1) 0 2px; }
+        .cifra small { font-size: 15px; font-weight: 500; color: var(--testo-tenue); letter-spacing: 0; }
+        .sotto-cifra { margin: 0 0 var(--sp-2); font-size: 14px; color: var(--testo-tenue); }
+        .in-fondo { margin-top: auto; padding-top: var(--sp-3); }
+
+        .tabella-prezzi { width: 100%; border-collapse: collapse; font-size: 16px; }
+        .tabella-prezzi th { text-align: left; padding: 13px var(--sp-2); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
+        .tabella-prezzi td { padding: 13px var(--sp-2); border-bottom: 1px solid var(--bordo); vertical-align: top; }
+        .tabella-prezzi tr:last-child td { border-bottom: 0; }
+        .tabella-prezzi .si { color: var(--accento); font-weight: 700; }
+        .tabella-prezzi .no { color: var(--testo-tenue); }
+
+        /* Il confronto gratis / Plus: due colonne, e si legge in tre secondi. */
+        .confronto { overflow-x: auto; border: 1px solid var(--bordo); border-radius: var(--raggio); background: var(--sfondo); }
+        .confronto table { width: 100%; border-collapse: collapse; min-width: 520px; }
+        .confronto th, .confronto td { padding: 13px var(--sp-2); text-align: left; border-bottom: 1px solid var(--bordo); }
+        .confronto thead th { background: var(--superficie); font-size: 14px; }
+        .confronto thead th:last-child { color: var(--accento); }
+        .confronto tbody tr:last-child td { border-bottom: 0; }
+        .confronto td:first-child { font-weight: 600; }
+
+        /* ───────────────────────── moduli ───────────────────────── */
+
+        .modulo { display: grid; gap: var(--sp-2); max-width: 520px; }
+        .campo { display: grid; gap: 5px; }
+        .campo label { font-size: 14px; font-weight: 600; }
+        .campo input[type="text"], .campo input[type="email"], .campo input[type="password"] {
+            padding: 11px 13px; border: 1px solid var(--bordo); border-radius: 10px;
+            background: var(--sfondo); color: var(--testo); font: inherit; font-size: 16px;
+            width: 100%;
+        }
+        .campo input:focus { outline: 2px solid var(--accento); outline-offset: 1px; border-color: var(--accento); }
+        .campo .aiuto { font-size: 13px; color: var(--testo-tenue); }
+        .campo-spunta { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; }
+        .campo-spunta input { margin-top: 4px; }
+        .errore { color: #B91C1C; font-size: 13.5px; margin: 0; }
+        @media (prefers-color-scheme: dark) { .errore { color: #FCA5A5; } }
+        .avviso {
+            border: 1px solid color-mix(in srgb, #B91C1C 35%, transparent);
+            background: color-mix(in srgb, #B91C1C 8%, transparent);
+            border-radius: 12px; padding: var(--sp-2); margin-bottom: var(--sp-3);
         }
 
         /* ───────────────────────── domande frequenti ───────────────────────── */
 
-        details {
-            border-bottom: 1px solid var(--bordo); padding: var(--sp-2) 0;
-        }
-        details summary {
+        details.domanda { border-bottom: 1px solid var(--bordo); padding: var(--sp-2) 0; }
+        details.domanda summary {
             cursor: pointer; font-weight: 650; font-size: 17px;
             list-style: none; display: flex; justify-content: space-between; gap: var(--sp-2);
         }
-        details summary::-webkit-details-marker { display: none; }
-        details summary::after { content: "+"; color: var(--accento); font-weight: 800; }
-        details[open] summary::after { content: "−"; }
-        details p { color: var(--testo-tenue); margin: var(--sp-1) 0 0; max-width: 68ch; }
+        details.domanda summary::-webkit-details-marker { display: none; }
+        details.domanda summary::after { content: "+"; color: var(--accento); font-weight: 800; }
+        details.domanda[open] summary::after { content: "−"; }
+        details.domanda p { color: var(--testo-tenue); margin: var(--sp-1) 0 0; max-width: 68ch; }
 
         /* ───────────────────────── documenti ───────────────────────── */
 
@@ -411,8 +482,6 @@
         .colonne-pie a:hover { color: var(--accento); }
         .chiusura-pie { margin-top: var(--sp-4); padding-top: var(--sp-2); border-top: 1px solid var(--bordo); color: var(--testo-tenue); font-size: 14px; }
 
-        a { color: var(--accento); }
-
         /* 💡 Chi ha chiesto meno animazioni le ottiene: non è un dettaglio di
            gusto, per qualcuno è mal di testa. */
         @media (prefers-reduced-motion: reduce) {
@@ -427,8 +496,7 @@
     <div class="contenitore">
         {{-- 💡 Il nome resta **testo vero**, sempre: un marchio con dentro le
              lettere sarebbe illeggibile agli screen reader e ai motori di
-             ricerca, e sfocato sugli schermi che non gli piacciono. Il file
-             disegnato sostituisce solo il **segno**. --}}
+             ricerca, e sfocato sugli schermi che non gli piacciono. --}}
         @php($segno = app(\App\Support\ImmaginiDelSito::class)->marchio())
         <a href="/" class="marchio">
             @if ($segno !== null)
@@ -438,11 +506,31 @@
             @endif
             Training Companion
         </a>
+
         <div class="nav-voci">
-            <a href="/#come-funziona" class="solo-grande">Come funziona</a>
-            <a href="/professionisti" class="solo-grande">Palestre e trainer</a>
-            <a href="/prezzi" class="solo-grande">Prezzi</a>
+            <a href="/#funzioni" class="solo-grande">Funzioni</a>
+
+            <details class="tendina">
+                <summary>Prezzi</summary>
+                <div class="tendina-voci">
+                    <a href="/prezzi/individuale">
+                        Individuale
+                        <small>Per chi si allena, da solo o seguito</small>
+                    </a>
+                    <a href="/prezzi/trainer">
+                        Trainer
+                        <small>Per chi segue allievi suoi</small>
+                    </a>
+                    <a href="/prezzi/palestra">
+                        Palestra
+                        <small>Per una sala con più istruttori</small>
+                    </a>
+                </div>
+            </details>
+
+            <a href="/professionisti" class="solo-grande">Per chi allena</a>
             <a href="/admin/login" class="bottone bottone-vuoto solo-grande">Pannello</a>
+
             {{-- 💡 Quando l'app sarà sugli store, questo diventa il pulsante
                  principale della barra senza toccare niente. --}}
             <x-sito.scarica />
@@ -457,10 +545,22 @@
         <div class="colonne-pie">
             <div>
                 <h4>Prodotto</h4>
-                <a href="/#come-funziona">Come funziona</a>
-                <a href="/prezzi">Prezzi</a>
-                <a href="/professionisti">Palestre e trainer</a>
+                <a href="/#funzioni">Funzioni</a>
+                <a href="/#gratis-o-plus">Gratis o Plus</a>
+                <a href="/#dati">I tuoi dati</a>
                 <a href="/#domande">Domande frequenti</a>
+            </div>
+            <div>
+                <h4>Prezzi</h4>
+                <a href="/prezzi/individuale">Individuale</a>
+                <a href="/prezzi/trainer">Trainer</a>
+                <a href="/prezzi/palestra">Palestra</a>
+            </div>
+            <div>
+                <h4>Chi allena</h4>
+                <a href="/professionisti">Palestre e trainer</a>
+                <a href="/liberatoria-palestra">Liberatoria palestre</a>
+                <a href="/liberatoria-trainer">Liberatoria trainer</a>
             </div>
             <div>
                 <h4>Documenti</h4>
@@ -468,15 +568,12 @@
                      pagina prometteva l'informativa e rispondeva 404. --}}
                 <a href="/privacy">Informativa privacy</a>
                 <a href="/condizioni">Condizioni d'uso</a>
-            </div>
-            <div>
-                <h4>Accesso</h4>
                 <a href="/admin/login">Pannello palestra</a>
             </div>
         </div>
 
         <div class="chiusura-pie">
-            Training Companion · Diario, allenamenti e schede. Gratis, per sempre.
+            Training Companion · Diario, allenamenti e schede. L'app è gratis, e i tuoi dati restano sul tuo telefono.
         </div>
     </div>
 </footer>

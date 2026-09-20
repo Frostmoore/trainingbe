@@ -32,10 +32,17 @@
                     sapevi di avere.
                 </p>
 
-                <div style="display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3);">
-                    <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Quanto costa</a>
+                <div class="fila-bottoni" style="margin-top: var(--sp-3);">
+                    <a href="/prezzi/trainer" class="bottone bottone-pieno bottone-grande">Piani trainer</a>
+                    <a href="/prezzi/palestra" class="bottone bottone-pieno bottone-grande">Piani palestra</a>
                     <a href="#responsabilita" class="bottone bottone-vuoto bottone-grande">Cosa firmi</a>
                 </div>
+
+                <p class="nota" style="margin-top: var(--sp-2);">
+                    Da {{ $formatta($daTrainer) }} al mese per un trainer, da
+                    {{ $formatta($daPalestra) }} per una palestra. Ci si abbona da qui, in
+                    due minuti.
+                </p>
             </div>
 
             <x-sito.figura
@@ -152,7 +159,14 @@
             <p class="occhiello">Il pannello</p>
             <h2>Quello che vedi, e che ti serve davvero.</h2>
 
-            <div class="griglia" style="margin-top: var(--sp-3);">
+            <div style="margin-top: var(--sp-3); margin-bottom: var(--sp-3);">
+                <x-sito.figura
+                    nome="pannello"
+                    alt="Il pannello di una palestra: elenco degli iscritti, trainer e schede modello"
+                />
+            </div>
+
+            <div class="griglia">
                 <div class="scheda">
                     <h3>👥 Gli iscritti</h3>
                     <p>Nome, email, da quando sono con te, chi li segue. Inviti e disiscrizioni con un tocco.</p>
@@ -243,10 +257,14 @@
                 numeri diventano grandi.
             </p>
 
-            <div style="display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; margin-top: var(--sp-3);">
-                <a href="/prezzi" class="bottone bottone-pieno bottone-grande">Vai ai prezzi</a>
-                <a href="/admin/login" class="bottone bottone-vuoto bottone-grande">Entra nel pannello</a>
+            <div class="fila-bottoni centrata" style="margin-top: var(--sp-3);">
+                <a href="/prezzi/trainer" class="bottone bottone-pieno bottone-grande">Sono un trainer</a>
+                <a href="/prezzi/palestra" class="bottone bottone-pieno bottone-grande">Siamo una palestra</a>
             </div>
+
+            <p class="nota" style="margin-top: var(--sp-2);">
+                Hai già un account? <a href="/admin/login">Entra nel pannello</a>.
+            </p>
         </div>
     </section>
 
