@@ -1,30 +1,28 @@
 {{--
-    La home — rifatta il 20/09/2026 (seconda volta in un giorno).
+    La home — terza stesura, 20/09/2026 notte.
 
-    ── 📌 Cosa aveva detto il committente ─────────────────────────────────────
+    ── 📌 Perché di nuovo ────────────────────────────────────────────────────
 
-    *«La home fa schifo ar cazzo, non mi piace per niente l'hero, deve essere
-    un'immagine a piena pagina … ci deve essere uno screen della schermata oggi
-    dell'app da qualche parte … deve mettere bene in mostra tutte le
-    funzionalità dell'app spiegando il piano gratuito e quello su abbonamento in
-    un punto specifico della pagina … l'app è gratis ok ma spingiamo comunque
-    gli utenti ad abbonarsi, è così che guadagno»*.
+    Il committente, leggendo la tabella «gratis o Plus»: *«Certo che li leggiamo
+    i passi … E i vantaggi dell'abbonamento sono anche altri, tipo un sacco di
+    cards della schermata home sono bloccate senza abbonamento. Adesso ti leggi
+    per bene tutte le views del codice, una per una, e tutte le relazioni per
+    capire cosa è incluso nel piano gratuito e cosa è dietro il gate
+    dell'abbonamento. Poi rifai tutto il sito basandoti su quelle
+    informazioni»*.
 
-    ── 🚨 La regola della home è CAMBIATA, e va detto ─────────────────────────
+    ✅ **Fatto**: il gate è stato letto nell'app, file per file, e la tabella
+    che ne è uscita sta in `codebase_reference_trainingbe.md` §103.1 — con
+    accanto a ogni riga il file che la decide. 🚨 Quella è la fonte: questa
+    pagina la racconta, non la reinventa.
 
-    Dal 16/08 c'era una regola: **sulla home non si parla di soldi**, con un
-    test che faceva fallire qualunque cifra in euro
-    (`the_home_does_not_pitch_the_reseller_margin`). ⚠️ Non era una regola sui
-    prezzi: era una regola su **chi legge**. La home di quel mattino spiegava a
-    chi si allena che una palestra può rivenderglielo addosso e tenersi la
-    metà — cioè gli si raccontava il modello di business di cui lui è la merce.
+    ── ⛔ Gli errori delle due stesure precedenti ────────────────────────────
 
-    ✅ **Quella parte resta vietata**, e il test continua a vietarla: nessuna
-    rivendita, nessun margine, nessun «posto» qui dentro.
-    🆕 **Il prezzo del Plus invece adesso si dice**, in un blocco suo
-    (`#gratis-o-plus`), perché chi arriva qui deve poter capire in tre secondi
-    cosa è gratis e cosa no. ⛔ Tenerlo nascosto non è pudore: è il sospetto che
-    ci sia una fregatura più avanti.
+    | Diceva | Verità |
+    |---|---|
+    | «sonno e passi» (1ª), poi «i passi non si leggono» (2ª) | I passi **si leggono**, e in «Oggi» c'è una barra a dieci tacche verso l'obiettivo |
+    | Il Plus = «assistente automatico e schede» | Sono **cinque card della schermata «Oggi»**, sei valori dell'intestazione, la settimana programmata, i progressi, il colore dell'app, gli allenamenti senza limite |
+    | «Allenamenti: tutto» nel gratuito | ⛔ **Un allenamento al giorno**, 3 schede, solo di un giorno |
 --}}
 @extends('sito.layout')
 
@@ -83,23 +81,28 @@
                     <h2>Tutta la giornata in una schermata.</h2>
 
                     <p class="guida">
-                        «Oggi» è la prima cosa che vedi quando apri l'app: quante calorie hai
-                        messo insieme e quante ne avevi in programma, l'allenamento di oggi con
-                        i suoi esercizi, il peso se l'hai segnato, e lo spunto dell'assistente
-                        se lo hai acceso.
+                        «Oggi» è la prima cosa che vedi quando apri l'app: quanto hai mangiato e
+                        quanto ne avevi in programma, quanto hai bruciato, i passi, il peso,
+                        l'allenamento. Sotto, una card per ogni cosa che l'app sa di te.
                     </p>
 
                     <ul class="elenco">
-                        <li>Le calorie del giorno, confrontate col tuo obiettivo</li>
-                        <li>La seduta di oggi, pronta da cominciare</li>
-                        <li>Un tocco per segnare un pasto o aprire la scheda</li>
-                        <li>Se colleghi Health Connect, ci finiscono anche sonno e calorie bruciate</li>
+                        <li>Calorie mangiate e <strong>obiettivo del giorno</strong>, con le bruciate già dentro</li>
+                        <li>I <strong>passi</strong> verso il tuo obiettivo, su una barra a dieci tacche</li>
+                        <li>Il peso, con il grafico nel tempo</li>
+                        <li>Un tasto <strong>+</strong> che aggiunge pasto, peso o allenamento senza cercare dove</li>
                     </ul>
+
+                    <p class="nota" style="margin-top: var(--sp-2);">
+                        💡 Cinque card qui dentro — sonno, carico, recupero, composizione,
+                        allenamento — <strong>si accendono con l'abbonamento</strong>:
+                        <a href="#gratis-o-plus">qui sotto c'è la riga per riga</a>.
+                    </p>
                 </div>
 
                 <x-sito.telefono
                     nome="app-oggi"
-                    alt="La schermata Oggi: calorie del giorno, allenamento in programma e peso"
+                    alt="La schermata Oggi: calorie del giorno, passi, peso e allenamento"
                 />
             </div>
         </div>
@@ -112,7 +115,7 @@
             <h2>Quello che serve per allenarsi con la testa.</h2>
             <p class="guida" style="margin-bottom: var(--sp-5);">
                 Niente che si spegne dopo trenta giorni, niente che ti obbliga a pagare per
-                vedere quello che hai già scritto.
+                rivedere quello che hai già scritto.
             </p>
 
             <div class="riga-funzione rovescia">
@@ -125,12 +128,13 @@
                     <p class="occhiello">Diario alimentare</p>
                     <h2>Segni cosa mangi, in pochi secondi.</h2>
                     <p class="guida">
-                        Un catalogo con oltre un milione di alimenti, i tuoi piatti ricorrenti
-                        fra i preferiti, e le porzioni che ti ricordi una volta sola.
+                        Un catalogo con oltre un milione di alimenti, le cose che mangi spesso
+                        fra i preferiti, e le porzioni che imposti una volta sola.
+                        🚨 <strong>Tutto questo è gratis</strong>, senza tetti e senza contatori.
                     </p>
                     <ul class="elenco">
                         <li>Colazione, pranzo, cena e spuntini, con calorie e macro</li>
-                        <li>Le cose che mangi spesso fra i <strong>preferiti</strong>, a un tocco</li>
+                        <li>Le sezioni si chiudono: a metà giornata guardi solo quello che ti serve</li>
                         <li>Gli alimenti che ti scrivi tu restano tuoi: non finiscono nell'archivio di nessun altro</li>
                     </ul>
                 </div>
@@ -149,6 +153,7 @@
                         <li>Segni il peso e le ripetute mentre le fai</li>
                         <li>Lo storico di ogni esercizio, per sapere dove eri la volta prima</li>
                         <li>Esercizi tuoi, se ne inventi: li vedi solo tu</li>
+                        <li class="no">Senza abbonamento: <strong>un allenamento al giorno</strong> e le 3 schede più recenti</li>
                     </ul>
                 </div>
 
@@ -174,9 +179,9 @@
                         server.
                     </p>
                     <ul class="elenco">
+                        <li>Con chi ti allena si scrive quanto si vuole, anche senza abbonamento</li>
                         <li>Quello che ti ha mandato resta tuo, anche se cambi palestra</li>
                         <li>Nessuno può leggere i messaggi: né noi, né la palestra</li>
-                        <li>Hai una scheda su carta o in PDF? La fotografi e l'app la trascrive</li>
                     </ul>
                 </div>
             </div>
@@ -184,12 +189,18 @@
             {{-- Le funzioni che non meritano una riga intera, ma esistono e vanno dette. --}}
             <div class="griglia" style="margin-top: var(--sp-6);">
                 <div class="scheda">
-                    <h3>📈 Peso e misure</h3>
-                    <p>Li segni quando vuoi e li vedi nel tempo, con le foto dei progressi se ti va. 🚨 Stanno <strong>solo</strong> sul telefono.</p>
+                    <h3>🚶 Passi e calorie bruciate</h3>
+                    <p>
+                        Colleghi Health Connect e l'app legge passi, calorie attive, sonno e
+                        battito. Le bruciate entrano nell'obiettivo del giorno.
+                    </p>
                 </div>
                 <div class="scheda">
-                    <h3>😴 Sonno e recupero</h3>
-                    <p>Colleghi Health Connect e l'app somma sonno, battito e calorie bruciate alla giornata.</p>
+                    <h3>⚖️ Peso e misure</h3>
+                    <p>
+                        Li segni quando vuoi e li vedi nel tempo, con le foto dei progressi se
+                        ti va. 🚨 Stanno <strong>solo</strong> sul telefono.
+                    </p>
                 </div>
                 <div class="scheda">
                     <h3>📄 Import da PDF o foto</h3>
@@ -217,18 +228,20 @@
 
     {{-- ═══════════════════ gratis o Plus — il punto dei soldi ═══════════════════
 
-         🚨 **È il «punto specifico della pagina»** chiesto il 20/09. Sta qui, e
-         non in fondo, perché è la domanda che una persona si fa **dopo** aver
-         visto cosa fa l'app e **prima** di scaricarla. --}}
+         🚨 **È il «punto specifico della pagina»** chiesto il 20/09, e la
+         tabella viene dal gate letto nell'app (atlante §103.1). ⛔ Ogni riga qui
+         dentro ha un file dietro: se non ce l'ha, non si scrive. --}}
     <section id="gratis-o-plus">
         <div class="contenitore">
             <p class="occhiello">Gratis o Plus</p>
-            <h2>L'app è gratis. Si paga solo l'assistente.</h2>
+            <h2>Cosa è gratis, e cosa fa l'abbonamento.</h2>
 
             <p class="guida">
-                Diario, peso, misure e chat non costano niente e non scadono. L'abbonamento
-                toglie i <strong>limiti sulle schede</strong> e accende l'assistente
-                <strong>automatico</strong>, quello che lavora senza che tu chieda niente.
+                Il diario, i passi, il peso e la chat sono gratis e non scadono. L'abbonamento
+                toglie i limiti sugli allenamenti e <strong>apre le letture dei tuoi
+                dati</strong>: spunto di oggi, carico e carica, recupero, com'è fatto, e i tuoi
+                allenamenti. 💡 I dati restano tuoi comunque — l'abbonamento apre le letture,
+                non i numeri.
             </p>
 
             <div class="confronto" style="margin-top: var(--sp-3);">
@@ -242,14 +255,19 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Diario alimentare, catalogo, preferiti</td>
+                            <td>Diario alimentare, catalogo, preferiti, macro</td>
                             <td class="si">✓ tutto</td>
                             <td class="si">✓ tutto</td>
                         </tr>
                         <tr>
-                            <td>Peso, misure, foto, copia di sicurezza, esporta i dati</td>
-                            <td class="si">✓ tutto</td>
-                            <td class="si">✓ tutto</td>
+                            <td>Calorie, bruciate e <strong>passi</strong> del giorno</td>
+                            <td class="si">✓</td>
+                            <td class="si">✓</td>
+                        </tr>
+                        <tr>
+                            <td>Peso, misure, foto, grafici</td>
+                            <td class="si">✓</td>
+                            <td class="si">✓</td>
                         </tr>
                         <tr>
                             <td>Chat con chi ti allena</td>
@@ -257,13 +275,38 @@
                             <td class="si">✓ senza limite</td>
                         </tr>
                         <tr>
-                            <td>Quante schede puoi usare</td>
-                            <td class="no">le <strong>3</strong> più recenti</td>
-                            <td class="si">tutte</td>
+                            <td>Copia di sicurezza, esporta i dati, cancella l'account</td>
+                            <td class="si">✓</td>
+                            <td class="si">✓</td>
                         </tr>
                         <tr>
-                            <td>Schede su più giorni</td>
-                            <td class="no">no, solo di un giorno</td>
+                            <td><strong>Allenamenti avviati dall'app</strong></td>
+                            <td class="no">uno al giorno</td>
+                            <td class="si">quanti vuoi</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Schede utilizzabili</strong></td>
+                            <td class="no">le 3 più recenti, solo di un giorno</td>
+                            <td class="si">tutte, anche su più giorni</td>
+                        </tr>
+                        <tr>
+                            <td>Settimana programmata</td>
+                            <td class="no">—</td>
+                            <td class="si">✓</td>
+                        </tr>
+                        <tr>
+                            <td>L'andamento di ogni esercizio, coi primati</td>
+                            <td class="no">—</td>
+                            <td class="si">✓</td>
+                        </tr>
+                        <tr>
+                            <td>Sonno, recupero, carico e carica, «com'è fatto» il tuo peso</td>
+                            <td class="no">card sfumate</td>
+                            <td class="si">✓ aperte</td>
+                        </tr>
+                        <tr>
+                            <td>Sonno, HRV, battito e prontezza in cima a «Oggi»</td>
+                            <td class="no">—</td>
                             <td class="si">✓</td>
                         </tr>
                         <tr>
@@ -277,12 +320,17 @@
                             <td class="si">✓</td>
                         </tr>
                         <tr>
+                            <td>Il colore dell'app</td>
+                            <td class="no">—</td>
+                            <td class="si">✓</td>
+                        </tr>
+                        <tr>
                             <td>Scrivere a un trainer che non ti segue</td>
                             <td class="no">3 messaggi</td>
                             <td class="si">✓ senza limite</td>
                         </tr>
                         <tr>
-                            <td>Scrivere un pasto a parole, fotografarlo, trascrivere un PDF</td>
+                            <td>Foto del piatto, pasto da una frase, trascrizione di un PDF</td>
                             <td class="no">a gettoni</td>
                             <td class="no">a gettoni</td>
                         </tr>
@@ -292,20 +340,20 @@
 
             <div class="griglia-2" style="margin-top: var(--sp-4);">
                 <div>
-                    <h3>La differenza vera</h3>
+                    <h3>L'ultima riga, detta prima</h3>
                     <p class="guida">
-                        🚨 <strong>Quello che chiedi tu si paga a gettoni in tutti e due i
-                        casi</strong>, e lo diciamo qui invece di fartelo scoprire dopo: una
-                        stima da una frase, una foto del piatto o la trascrizione di una scheda
-                        costano perché costano a noi, a ogni chiamata.
+                        🚨 <strong>Quello che chiedi tu all'assistente si paga a gettoni in
+                        tutti e due i casi</strong>: la foto del piatto, il pasto scritto a
+                        parole, la trascrizione di una scheda. Costano a noi nel momento in cui
+                        le fai, e preferiamo dirlo qui invece che dopo il pagamento.
                     </p>
                     <p class="guida" style="margin-top: var(--sp-2);">
-                        💡 Quello che il Plus aggiunge è l'assistente che <strong>lavora da
-                        solo</strong> — il consiglio del giorno, l'analisi della scheda dopo
-                        l'allenamento — e le schede senza limiti.
+                        💡 Quello che l'abbonamento accende è l'app che <strong>lavora sui tuoi
+                        dati da sola</strong> — il consiglio del giorno, il recupero, il carico,
+                        i progressi — e gli allenamenti senza limiti.
                     </p>
                     <div class="fila-bottoni" style="margin-top: var(--sp-3);">
-                        <a href="/prezzi/individuale" class="bottone bottone-pieno">Cosa comprende il Plus</a>
+                        <a href="/prezzi/individuale" class="bottone bottone-pieno">Tutto quello che comprende</a>
                     </div>
                 </div>
 
@@ -318,8 +366,8 @@
                     </p>
                     <p style="margin-bottom: 0;">
                         💡 Se ti allena una palestra o un trainer, l'abbonamento
-                        <strong>può regalartelo</strong>: in quel caso hai il Plus senza pagare
-                        niente tu.
+                        <strong>può regalartelo</strong>: in quel caso hai il Plus intero senza
+                        pagare niente tu.
                     </p>
                 </div>
             </div>
@@ -341,7 +389,7 @@
                     </p>
 
                     <ul class="elenco" style="margin-top: var(--sp-2);">
-                        <li><strong>Sul telefono</strong>: peso, misure, foto, diario, allenamenti, sonno</li>
+                        <li><strong>Sul telefono</strong>: peso, misure, foto, diario, allenamenti, sonno, passi</li>
                         <li><strong>Cifrato fra i due telefoni</strong>: i messaggi con chi ti allena</li>
                         <li><strong>Da noi</strong>: il tuo account, chi ti allena, e le buste da recapitare</li>
                         <li>Server nell'Unione Europea, e nessun profilo venduto a nessuno</li>
@@ -409,9 +457,10 @@
             <h2>C'è un pannello, e ci sono i piani per lavorarci.</h2>
 
             <p class="guida">
-                Regali l'app ai tuoi allievi, scrivi le schede e gliele mandi in chat. La parte
-                delicata — peso, diario, messaggi — non passa né da te né da noi, e questo ti
-                toglie una responsabilità invece di dartene una.
+                Regali l'app ai tuoi allievi — <strong>col Plus intero, non una versione
+                ridotta</strong> — scrivi le schede e gliele mandi in chat. La parte delicata
+                (peso, diario, messaggi) non passa né da te né da noi, e questo ti toglie una
+                responsabilità invece di dartene una.
             </p>
 
             <div class="griglia-2" style="margin-top: var(--sp-3);">
@@ -456,9 +505,21 @@
                 <details class="domanda">
                     <summary><strong>È davvero gratis?</strong></summary>
                     <p>
-                        Sì, e non c'è un periodo di prova che scade. Si paga solo l'assistente
-                        con l'intelligenza artificiale, che è una cosa a parte e si accende
-                        quando vuoi.
+                        Sì, e non c'è un periodo di prova che scade. Diario, passi, peso,
+                        allenamenti e chat funzionano senza pagare niente. L'abbonamento toglie
+                        i limiti e accende le analisi: <a href="#gratis-o-plus">qui sopra c'è la
+                        riga per riga</a>.
+                    </p>
+                </details>
+
+                <details class="domanda">
+                    <summary><strong>Cosa perdo se non mi abbono?</strong></summary>
+                    <p>
+                        Niente di quello che hai già scritto. Puoi far partire <strong>un
+                        allenamento al giorno</strong> e usare le 3 schede più recenti (di un
+                        giorno solo); le card di sonno, recupero, carico e composizione le vedi
+                        sfumate, e il consiglio del giorno non arriva. 💡 Le schede che ti hanno
+                        mandato restano tutte lì: quando ti abboni le ritrovi.
                     </p>
                 </details>
 
@@ -484,15 +545,8 @@
                     <p>
                         No. Le schede che hai ricevuto restano sul tuo telefono, e anche gli
                         esercizi che ti hanno insegnato. Quello che finisce è il rapporto, non
-                        la tua roba.
-                    </p>
-                </details>
-
-                <details class="domanda">
-                    <summary><strong>Posso disdire il Plus quando voglio?</strong></summary>
-                    <p>
-                        Sì, dall'app, senza scrivere a nessuno. Resta attivo fino alla fine del
-                        mese già pagato, e quello che hai segnato non sparisce.
+                        la tua roba. ⚠️ Finisce anche l'abbonamento che ti regalava la palestra:
+                        torni al gratuito, con tutto quello che avevi scritto al suo posto.
                     </p>
                 </details>
 
@@ -502,16 +556,6 @@
                         No: non compriamo e non vendiamo profili, e dentro l'app non c'è
                         pubblicità di nessun tipo. ⚠️ E non potremmo nemmeno volendo: peso,
                         diario e allenamenti sui nostri server non ci sono.
-                    </p>
-                </details>
-
-                <details class="domanda">
-                    <summary><strong>Cosa perdo se non mi abbono?</strong></summary>
-                    <p>
-                        Niente di quello che hai già scritto. Senza abbonamento usi le
-                        <strong>3 schede più recenti</strong> e solo quelle di un giorno, e
-                        l'assistente non lavora da solo. 💡 Le schede che ti hanno mandato
-                        restano tutte lì: quando ti abboni le ritrovi.
                     </p>
                 </details>
             </div>

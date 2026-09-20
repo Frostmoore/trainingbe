@@ -1,46 +1,45 @@
 {{--
-    I prezzi di chi si allena — rifatta il 20/09/2026 sera, sui fatti del codice.
+    I prezzi di chi si allena — terza stesura, 20/09/2026 notte.
 
-    ── 🚨 Perché è stata rifatta ──────────────────────────────────────────────
+    ── 🚨 La fonte è il codice, non la memoria ────────────────────────────────
 
-    Perché la prima stesura **raccontava un prodotto che non esiste**. Il
-    committente, riga per riga:
+    Ogni riga di questa pagina viene dal **gate dell'abbonamento letto nell'app,
+    file per file**, e riassunto in `codebase_reference_trainingbe.md` §103.1.
+    Le due stesure precedenti si erano inventate mezza pagina:
 
-    | Diceva | La verità nel codice |
+    | Dicevano | Verità |
     |---|---|
-    | «Gratis: allenamenti, schede, storico» | ⛔ Senza abbonamento si usano **le 3 schede più recenti** e **solo di un giorno** (`limiti_delle_schede.dart`) |
-    | «Plus: scrivi il pasto e lo conta lei» come cosa inclusa | ⛔ Le richieste fatte a mano **si pagano a gettoni sempre**, abbonati o no (`CancelloDeiGettoni`, 31/08) |
-    | «150 elaborazioni incluse» | ⛔ Quella quota copre **solo l'automatico**, e il numero non si pubblica |
-    | Niente sulle chiamate automatiche del non abbonato | ⛔ Non partono: senza abbonamento non c'è nessuna quota inclusa |
+    | «Gratis: allenamenti e schede, tutto» | ⛔ **Un allenamento al giorno**, 3 schede, solo di un giorno |
+    | Niente sulle card bloccate | ⛔ Sono cinque in «Oggi» — sonno, carico, recupero, composizione, allenamento — più sei valori nell'intestazione |
+    | Niente su settimana e progressi | ⛔ Dietro il gate tutti e due |
+    | «i passi non si leggono» | ⛔ Si leggono, e c'è una barra a dieci tacche verso l'obiettivo |
 
-    💡 **La divisione vera è una sola, e regge tutta la pagina**: quello che
-    parte **da solo** lo paga l'abbonamento; quello che **chiedi tu** lo pagano i
-    gettoni. 🚨 Dirlo prima è l'unico modo onesto di far spendere qualcuno.
+    💡 **La divisione che regge tutto**: quello che parte **da solo** lo paga
+    l'abbonamento; quello che **chiedi tu** lo pagano i gettoni — abbonati o no.
 
-    ── 🚨 E i numeri non si scrivono qui dentro ───────────────────────────────
-
-    Vengono da `config/listino.php` attraverso `Listino`. Un prezzo copiato a
-    mano è un prezzo che un giorno dirà una cosa diversa da quella che il
-    sistema incassa.
+    🚨 E i numeri vengono da `config/listino.php` attraverso `Listino`: un prezzo
+    copiato a mano è un prezzo che un giorno dirà una cosa diversa da quella che
+    il sistema incassa.
 --}}
 @extends('sito.layout')
 
 @section('titolo', 'Prezzi per chi si allena — Training Companion')
-@section('descrizione', 'L\'app è gratis e non scade. Il Plus costa 8 € al mese: toglie i limiti sulle schede e accende l\'assistente automatico.')
+@section('descrizione', 'L\'app è gratis e non scade. Il Plus costa 8 € al mese: allenamenti senza limiti, schede su più giorni, sonno, recupero, carico e progressi.')
 
 @section('contenuto')
 
     <section style="padding-bottom: var(--sp-4);">
         <div class="contenitore">
             <span class="pillola">Individuale</span>
-            <h1 style="margin-top: var(--sp-2);">Gratis si usa davvero.<br>Il Plus toglie i limiti.</h1>
+            <h1 style="margin-top: var(--sp-2);">Gratis si usa davvero.<br>Il Plus apre il resto.</h1>
 
             <div class="griglia-2" style="margin-top: var(--sp-3);">
                 <p class="guida">
-                    Diario, peso, misure, chat e copia di sicurezza non costano niente e non
-                    scadono. L'abbonamento fa due cose: toglie i <strong>limiti sulle
-                    schede</strong> e accende l'assistente <strong>automatico</strong>, quello
-                    che lavora senza che tu chieda niente.
+                    Diario, passi, peso, chat e copia di sicurezza non costano niente e non
+                    scadono. L'abbonamento toglie i limiti sugli allenamenti e accende la metà
+                    dell'app che <strong>legge i tuoi dati</strong>: spunto di oggi, carico e
+                    carica, recupero, com'è fatto, e i tuoi allenamenti. 💡 I dati restano tuoi
+                    comunque: l'abbonamento apre le letture, non i numeri.
                 </p>
 
                 <x-sito.figura
@@ -60,13 +59,16 @@
                     <p class="sotto-cifra">nessun periodo di prova, nessuna carta</p>
 
                     <ul class="elenco">
-                        <li>Diario alimentare, catalogo completo e preferiti</li>
-                        <li>Peso, misure, foto dei progressi</li>
+                        <li>Diario alimentare, catalogo completo, preferiti, macro</li>
+                        <li>Calorie del giorno, bruciate e <strong>passi</strong> con la loro barra</li>
+                        <li>Peso, misure, foto dei progressi e grafici</li>
                         <li>Chat con chi ti allena, senza limite</li>
-                        <li>Copia di sicurezza cifrata, ed esporta i tuoi dati</li>
-                        <li>Allenamenti col cronometro e lo storico degli esercizi</li>
-                        <li class="no"><strong>Solo le 3 schede più recenti</strong>, e solo di un giorno</li>
-                        <li class="no">L'assistente non lavora da solo</li>
+                        <li>Cronometro, storico degli esercizi, esercizi tuoi</li>
+                        <li>Copia di sicurezza cifrata, «scarica i miei dati», elimina account</li>
+                        <li class="no"><strong>Un allenamento al giorno</strong> avviato dall'app</li>
+                        <li class="no"><strong>Le 3 schede più recenti</strong>, e solo di un giorno</li>
+                        <li class="no">Sonno, recupero, carico e composizione: card sfumate</li>
+                        <li class="no">Niente settimana programmata, niente progressi</li>
                     </ul>
 
                     <div class="in-fondo">
@@ -81,11 +83,16 @@
 
                     <ul class="elenco">
                         <li><strong>Tutto quello che c'è nel gratis</strong></li>
-                        <li><strong>Schede senza limiti</strong>, anche su più giorni</li>
-                        <li>Il <strong>consiglio del giorno</strong>, che arriva da solo fino a tre volte</li>
+                        <li><strong>Allenamenti senza limiti</strong>, e tutte le tue schede</li>
+                        <li>Schede su <strong>più giorni</strong>, e la settimana programmata</li>
+                        <li>L'<strong>andamento di ogni esercizio</strong>, coi primati</li>
+                        <li><strong>Recupero e sonno</strong>: com'è andata la notte, e cosa farne</li>
+                        <li><strong>Carico e carica</strong>: quanto hai speso e quanto ti resta</li>
+                        <li><strong>Com'è fatto</strong> il peso che hai perso o messo</li>
+                        <li>Sonno, HRV, battito e prontezza in cima a «Oggi»</li>
+                        <li>Il <strong>consiglio del giorno</strong>, che arriva da solo</li>
                         <li>L'<strong>analisi della scheda</strong> dopo l'allenamento</li>
-                        <li>L'andamento di un esercizio nel tempo, letto dall'assistente</li>
-                        <li>Scrivere senza limite anche a chi non ti segue</li>
+                        <li>Il <strong>colore dell'app</strong>, e scrivere senza limite a chi non ti segue</li>
                     </ul>
 
                     <div class="in-fondo">
@@ -155,11 +162,23 @@
                 <details class="domanda">
                     <summary><strong>Cosa cambia davvero fra gratis e Plus?</strong></summary>
                     <p>
-                        Due cose. Senza abbonamento puoi usare <strong>le 3 schede più
-                        recenti</strong> e solo quelle di un giorno, e l'assistente non parte
-                        mai da solo. Col Plus le schede sono tutte, anche su più giorni, e
-                        l'assistente ti scrive il consiglio del giorno e legge l'andamento
-                        delle tue sedute.
+                        Tre cose. <strong>Gli allenamenti</strong>: senza abbonamento ne fai
+                        partire uno al giorno e usi le 3 schede più recenti, solo di un giorno.
+                        <strong>Le analisi</strong>: sonno, recupero, carico e carica,
+                        composizione, progressi e settimana programmata sono dietro
+                        l'abbonamento — le card le vedi, sfumate.
+                        <strong>L'assistente automatico</strong>: il consiglio del giorno e
+                        l'analisi della scheda arrivano da soli solo se sei abbonato.
+                    </p>
+                </details>
+
+                <details class="domanda">
+                    <summary><strong>Cosa resta gratis, per sempre?</strong></summary>
+                    <p>
+                        Il diario alimentare intero, col catalogo e i preferiti; le calorie del
+                        giorno, le bruciate e i passi; il peso con i suoi grafici; la chat con
+                        chi ti allena; il cronometro e lo storico degli esercizi; la copia di
+                        sicurezza e l'esportazione dei tuoi dati.
                     </p>
                 </details>
 
@@ -197,9 +216,9 @@
                     <summary><strong>Me lo può pagare la mia palestra?</strong></summary>
                     <p>
                         Sì. Palestre e trainer comprano dei <strong>posti</strong> e li regalano
-                        a chi vogliono: chi lo riceve ha esattamente il Plus, senza pagare
-                        niente. Se lascia la palestra il regalo finisce, ma i suoi dati e le sue
-                        schede restano suoi.
+                        a chi vogliono: chi lo riceve ha <strong>esattamente il Plus</strong>,
+                        senza pagare niente. Se lascia la palestra il regalo finisce, ma i suoi
+                        dati e le sue schede restano suoi.
                     </p>
                 </details>
 

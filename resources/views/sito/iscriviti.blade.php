@@ -129,8 +129,8 @@
                         @if ($piano->max_trainers !== null)
                             <li><strong>{{ $piano->max_trainers }} trainer</strong> al lavoro</li>
                         @endif
-                        <li>Ognuno riceve <strong>il piano Plus</strong>: schede senza limiti e assistente automatico</li>
-                        <li>Schede e piani illimitati, chat cifrata con ognuno</li>
+                        <li>Ognuno riceve <strong>il piano Plus intero</strong>: allenamenti e schede senza limiti, sonno, recupero, progressi</li>
+                        <li>Tu scrivi schede e piani senza limiti, con una chat cifrata per ognuno</li>
                         @if ($ePalestra)
                             <li>L'app vestita coi colori e il logo della palestra</li>
                         @endif

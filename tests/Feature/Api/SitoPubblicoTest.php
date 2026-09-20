@@ -494,7 +494,11 @@ class SitoPubblicoTest extends TestCase
 
         $prezzi->assertSee('3 schede più recenti', escape: false)
             ->assertSee('solo di un giorno', escape: false)
-            ->assertSee('assistente non lavora da solo', escape: false);
+            // 🚨 Il limite scoperto leggendo l'app il 20/09 notte: senza
+            // abbonamento si fa partire **un allenamento al giorno**.
+            ->assertSee('Un allenamento al giorno', escape: false)
+            // 💡 E le card che restano sfumate: sono la metà dell'offerta.
+            ->assertSee('card sfumate', escape: false);
 
         /*
          * ⛔ **E non si promette come incluso quello che si paga a gettoni.**

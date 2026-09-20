@@ -51,10 +51,10 @@
             </h1>
 
             <p class="guida">
-                Un <strong>posto</strong> è un abbonamento completo regalato a
-                un{{ $diPalestra ? ' tuo iscritto' : ' tuo allievo' }}: lui non paga niente e
-                ha l'assistente automatico, come se lo pagasse da sé
-                ({{ $formatta($prezzoSingolo) }} al mese).
+                Un <strong>posto</strong> è il piano <strong>Plus intero</strong> regalato a
+                un{{ $diPalestra ? ' tuo iscritto' : ' tuo allievo' }}: quello che da solo
+                pagherebbe {{ $formatta($prezzoSingolo) }} al mese. ⛔ Non è una versione
+                ridotta — è lo stesso piano, con dentro tutto.
                 @if ($diPalestra)
                     🚨 Ogni piano dice anche quanti <strong>trainer</strong> possono lavorare:
                     valgono tutti e due i tetti.
@@ -149,12 +149,14 @@
             <div class="griglia" style="margin-top: var(--sp-3);">
                 <div class="scheda">
                     <h3>👤 Per chi lo riceve</h3>
-                    <p>
-                        <strong>Esattamente il piano Plus</strong>: schede senza limiti anche
-                        su più giorni, il consiglio del giorno e l'analisi della scheda dopo
-                        l'allenamento. Non paga niente e non gli si chiede una carta.
-                    </p>
-                    <p class="nota" style="margin: var(--sp-1) 0 0;">
+                    <ul class="elenco" style="margin-top: 0;">
+                        <li>Allenamenti senza limiti (senza posto: <strong>uno al giorno</strong>)</li>
+                        <li>Tutte le sue schede, anche su più giorni, e la settimana programmata</li>
+                        <li>L'andamento di ogni esercizio, coi primati</li>
+                        <li>Sonno, recupero, carico e carica, composizione del peso</li>
+                        <li>Il consiglio del giorno e l'analisi della scheda, che arrivano da soli</li>
+                    </ul>
+                    <p class="nota" style="margin: var(--sp-2) 0 0;">
                         ⚠️ Quello che <em>chiede lui</em> all'assistente — la foto del piatto,
                         la trascrizione di un PDF — resta a gettoni, come per tutti.
                     </p>

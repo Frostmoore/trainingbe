@@ -63,9 +63,10 @@
                 <div class="scheda">
                     <h3>1. Scegli il piano</h3>
                     <p>
-                        Ogni piano ha un numero di <strong>posti</strong>. Un posto è un
-                        abbonamento completo regalato a una persona: chi lo riceve ha
-                        l'assistente automatico come se lo pagasse da sé.
+                        Ogni piano ha un numero di <strong>posti</strong>. Un posto è il piano
+                        <strong>Plus intero</strong> regalato a una persona: allenamenti e
+                        schede senza limiti, sonno e recupero, progressi, e il consiglio che
+                        arriva da solo. ⛔ Non una versione ridotta.
                     </p>
                 </div>
 
