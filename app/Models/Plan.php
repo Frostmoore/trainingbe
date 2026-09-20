@@ -63,7 +63,7 @@ class Plan extends Model
         'max_trainers',
 
         // 🆕 3b-AH.6 — il piano a consumo: si paga a iscritto, con un minimo.
-        'prezzo_iscritto_cent', 'minimo_iscritti',
+        'prezzo_iscritto_cent', 'canone_cent', 'minimo_iscritti',
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
     ];
 
@@ -88,6 +88,7 @@ class Plan extends Model
             'price_cents' => 'integer',
             'max_trainers' => 'integer',
             'prezzo_iscritto_cent' => 'integer',
+            'canone_cent' => 'integer',
             'minimo_iscritti' => 'integer',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
@@ -176,6 +177,15 @@ class Plan extends Model
             return null;
         }
 
-        return max($iscrittiAbbonati, $this->minimo_iscritti ?? 0) * $this->prezzo_iscritto_cent;
+        /*
+         * 🆕 **Il canone si somma, e si paga anche a zero iscritti** — 20/09/2026.
+         *
+         * 📌 Il listino del committente: *«2,80€/mese per allievo + 10€/mese»*
+         * (trainer) e *«+ 15€/mese»* (palestra). 🚨 Il canone non è un balzello:
+         * il servizio costa anche il mese in cui non si regala niente — i dati
+         * restano, le chat restano, il server gira.
+         */
+        return (int) ($this->canone_cent ?? 0)
+            + max($iscrittiAbbonati, $this->minimo_iscritti ?? 0) * $this->prezzo_iscritto_cent;
     }
 }

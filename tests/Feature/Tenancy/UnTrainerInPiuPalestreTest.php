@@ -76,7 +76,7 @@ final class UnTrainerInPiuPalestreTest extends TestCase
 
         PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $palestra->getKey())
-            ->update(['plan_id' => Plan::query()->where('code', 'gym_50')->firstOrFail()->id]);
+            ->update(['plan_id' => Plan::query()->where('code', 'gym_30')->firstOrFail()->id]);
 
         $capo = $this->creaUtente($palestra, UserRole::GymAdmin, "capo-{$slug}@esempio.test");
 

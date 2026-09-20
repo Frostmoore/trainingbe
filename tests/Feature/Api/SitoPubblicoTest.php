@@ -34,17 +34,58 @@ class SitoPubblicoTest extends TestCase
         $this->seed(PlanSeeder::class);
     }
 
+    /**
+     * 🚨 **La home parla a chi si allena, e dice i tre modi di usarla.**
+     *
+     * ── ⚠️ Ha sostituito `the_home_page_speaks_to_the_three_audiences` ─────
+     *
+     * Fino al 19/09 la home aveva tre schede — «Per chi si allena da solo»,
+     * «Per i trainer indipendenti», «Per le palestre» — cioè **tre inviti a
+     * comprare** messi davanti a chi era arrivato per scaricare un'app.
+     *
+     * 🆕 Dal 20/09 il discorso a chi compra sta tutto su `/professionisti`,
+     * che è una pagina sola e sua. La home resta di chi si allena e dice, in
+     * fondo, i tre modi in cui la stessa app lo riguarda: da solo, con un
+     * trainer, in palestra. 💡 L'ultima riga manda i professionisti dove
+     * devono andare, invece di occupare la pagina con la loro metà.
+     */
     #[Test]
-    public function the_home_page_speaks_to_the_three_audiences(): void
+    public function the_home_page_speaks_to_the_person_who_trains(): void
     {
         $r = $this->get('/')->assertOk();
 
-        // F9.1 — tre percorsi: persone, trainer indipendenti, palestre.
-        $r->assertSee('Per chi si allena da solo')
-            ->assertSee('Per i trainer indipendenti')
-            ->assertSee('Per le palestre');
+        $r->assertSee('Ti alleni da solo')
+            ->assertSee('Ti allena un trainer')
+            ->assertSee('Vai in palestra');
+
+        // 🚨 E chi compra ha una pagina sua, raggiungibile da qui.
+        $r->assertSee('href="/professionisti"', escape: false);
 
         $r->assertDontSee('Laravel', escape: false);
+    }
+
+    /**
+     * 🚨 **La pagina di chi compra esiste, e dice per prima cosa cosa NON
+     * potrà vedere.**
+     *
+     * ⚠️ È l'informazione che una palestra scoprirebbe altrimenti **dopo**
+     * aver pagato — «come sarebbe che non vedo il peso dei miei iscritti?» —
+     * e scoperta in quel momento è una richiesta di rimborso. Scritta prima,
+     * è il motivo per sceglierci: dati che non hai non puoi perderli.
+     */
+    #[Test]
+    public function the_professionals_page_says_what_they_cannot_see(): void
+    {
+        $r = $this->get('/professionisti')->assertOk();
+
+        $r->assertSee('Cosa non potrai vedere', escape: false)
+            ->assertSee('Peso, misure, foto dei progressi', escape: false)
+            ->assertSee('Il diario alimentare', escape: false);
+
+        // 📌 E dice che si firma una liberatoria, con i testi pubblici.
+        $r->assertSee('art. 28', escape: false)
+            ->assertSee('href="/liberatoria-palestra"', escape: false)
+            ->assertSee('href="/liberatoria-trainer"', escape: false);
     }
 
     /**
@@ -123,14 +164,22 @@ class SitoPubblicoTest extends TestCase
     #[Test]
     public function the_site_does_not_promise_assignment(): void
     {
-        $r = $this->get('/')->assertOk();
+        // ⚠️ Tutte e due le pagine, dal 20/09: il discorso a chi compra si è
+        // spostato, e una promessa sbagliata si sposta con lui.
+        foreach (['/', '/professionisti'] as $pagina) {
+            $this->get($pagina)->assertOk()->assertDontSee('li assegni');
+        }
 
-        $r->assertDontSee('li assegni');
-
-        // 💡 E dice la cosa che al trainer interessa davvero sapere prima di
-        // pagare: R8 — un programma consegnato non gli si può togliere. Dal
-        // 16/08 sta fra le domande frequenti, che è dove uno se lo chiede.
-        $r->assertSee('restano tuoi', escape: false);
+        /*
+         * 💡 E la home dice la cosa che interessa davvero sapere prima di
+         * cominciare: R8 — un programma consegnato non si può più togliere.
+         *
+         * 🆕 **«restano tue»** dal 20/09, non più «restano tuoi»: il soggetto
+         * della frase sono le **schede**. ⚠️ Cambia una vocale e non cambia
+         * niente della regola, ma il test cerca una stringa: se resta quella
+         * vecchia, diventa verde solo perché la frase non c'è più.
+         */
+        $this->get('/')->assertOk()->assertSee('restano tue', escape: false);
     }
 
     // ═══════════════════ il sito ridisegnato — 16/08/2026 ═══════════════════
@@ -150,20 +199,37 @@ class SitoPubblicoTest extends TestCase
         $this->get('/condizioni')->assertOk()->assertSee('Condizioni', escape: false);
     }
 
+    /**
+     * 🚨 **Ogni link del sito porta a una pagina che esiste** — tutte e tre
+     * le pagine, non solo il piè di pagina della home.
+     *
+     * ── ⚠️ Perché è stato allargato il 20/09/2026 ──────────────────────────
+     *
+     * Perché guardava **solo la home**, e intanto la pagina dei prezzi aveva
+     * un pulsante «Iscriviti ora» che puntava a `/registrati`: una rotta che
+     * non è mai esistita. 🚨 Il pulsante principale della pagina che deve
+     * vendere rispondeva **404**, e nessun test se ne accorgeva perché
+     * nessuno guardava quella pagina.
+     *
+     * 💡 Chi preme un pulsante e finisce su una pagina d'errore non ne prova
+     * un altro: se ne va, e non scrive per dirlo.
+     */
     #[Test]
-    public function the_footer_only_promises_pages_that_exist(): void
+    public function every_link_on_the_site_leads_somewhere_that_exists(): void
     {
-        $home = $this->get('/')->assertOk()->getContent();
+        foreach (['/', '/prezzi', '/professionisti'] as $pagina) {
+            $html = $this->get($pagina)->assertOk()->getContent();
 
-        preg_match_all('~href="(/[a-z-]*)"~', $home, $trovati);
+            preg_match_all('~href="(/[a-z0-9-]*)"~', $html, $trovati);
 
-        foreach (array_unique($trovati[1]) as $percorso) {
-            // 💡 Si saltano le rotte del pannello, che rimandano al login.
-            if (str_starts_with($percorso, '/admin')) {
-                continue;
+            foreach (array_unique($trovati[1]) as $percorso) {
+                // 💡 Si saltano le rotte del pannello, che rimandano al login.
+                if (str_starts_with($percorso, '/admin')) {
+                    continue;
+                }
+
+                $this->get($percorso)->assertOk("{$pagina} manda su {$percorso}, che non risponde");
             }
-
-            $this->get($percorso)->assertOk();
         }
     }
 
@@ -246,44 +312,60 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
-     * 🚨 **Il pulsante dice «Iscriviti ora», non «Entra nel pannello».**
+     * 🚨 **La pagina dei prezzi non manda via chi la sta leggendo.**
      *
-     * ⚠️ «Entra nel pannello» e' quello che fa chi è **gia' cliente**: su una
-     * pagina di prezzi manda via proprio chi la stava leggendo per decidere.
+     * ── ⚠️ Ha sostituito `the_pricing_page_asks_you_to_sign_up` ────────────
+     *
+     * Quello pretendeva un pulsante «Iscriviti ora», ed era la cosa giusta da
+     * volere: «Entra nel pannello» è quello che fa chi è **già cliente**.
+     * ⛔ Il guaio è che quel pulsante puntava a `/registrati`, che non
+     * esiste: il test verificava che ci fosse la **parola**, non che
+     * portasse da qualche parte.
+     *
+     * 🆕 Dal 20/09 non si finge un'iscrizione che sul sito non si può fare:
+     * chi si allena scarica l'app, chi compra passa da `/professionisti`.
+     * 💡 La parte che restava vera — non mandare al login chi sta ancora
+     * decidendo — è rimasta, e `every_link_on_the_site_leads_somewhere_that_exists`
+     * copre il resto.
      */
     #[Test]
-    public function the_pricing_page_asks_you_to_sign_up(): void
+    public function the_pricing_page_does_not_send_the_reader_to_the_login(): void
     {
         $prezzi = $this->get('/prezzi')->assertOk();
 
-        $prezzi->assertSee('Iscriviti ora', escape: false);
         $prezzi->assertDontSee('Entra nel pannello', escape: false);
+
+        // 💡 Manda invece dove si decide: l'app, o la pagina di chi compra.
+        $prezzi->assertSee('href="/professionisti"', escape: false);
     }
 
     /**
-     * 🚨 **Tre sezioni, e tre unità di misura diverse.**
+     * 🚨 **Tre platee, tre sezioni, e tre unità di misura diverse.**
      *
      * ⚠️ Palestre e trainer comprano **persone**, chi si allena da solo compra
      * **gettoni**. Metterle nella stessa tabella farebbe confrontare due
      * grandezze che non si confrontano.
+     *
+     * 🆕 20/09: le sezioni sono `#da-solo`, `#trainer`, `#palestre` — una
+     * sotto l'altra, non più tre ante di un carosello.
      */
     #[Test]
     public function the_pricing_page_is_split_into_three(): void
     {
         $r = $this->get('/prezzi')->assertOk();
 
-        $r->assertSee('id="palestre"', escape: false)
+        $r->assertSee('id="da-solo"', escape: false)
             ->assertSee('id="trainer"', escape: false)
-            ->assertSee('id="solo"', escape: false);
+            ->assertSee('id="palestre"', escape: false);
 
-        $r->assertSee('Sei una palestra', escape: false)
-            ->assertSee('Sei un trainer indipendente', escape: false)
-            ->assertSee('Ti alleni da solo', escape: false);
-
-        // 💡 E i due minimi sono diversi: è la sola differenza fra il listino
-        // di una palestra e quello di un trainer, e va detta.
-        $r->assertSee('minimo '.config('listino.palestre.minimo'), escape: false)
-            ->assertSee('minimo '.config('listino.trainer.minimo'), escape: false);
+        /*
+         * 💡 E i due minimi del piano su misura sono diversi — 30 allievi per
+         * un trainer, 60 iscritti per una palestra. ⚠️ Vanno detti dove si
+         * mostra il prezzo: chi fa il conto con dieci allievi e legge il
+         * prezzo di trenta, senza la spiegazione, pensa a un errore.
+         */
+        $r->assertSee('da '.config('listino.trainer.a_consumo.minimo_iscritti').' allievi in su', escape: false)
+            ->assertSee('da '.config('listino.palestre.a_consumo.minimo_iscritti').' iscritti in su', escape: false);
     }
 
     /**
@@ -295,45 +377,69 @@ class SitoPubblicoTest extends TestCase
      * l'ordine che conta.
      */
     #[Test]
-    public function the_carousel_opens_on_the_person_not_on_the_gym(): void
+    public function the_pricing_page_starts_from_the_person_not_from_the_gym(): void
     {
         $pagina = $this->get('/prezzi')->assertOk()->getContent();
 
-        $solo = strpos($pagina, 'id="solo"');
+        $solo = strpos($pagina, 'id="da-solo"');
         $trainer = strpos($pagina, 'id="trainer"');
         $palestre = strpos($pagina, 'id="palestre"');
 
-        $this->assertLessThan($trainer, $solo, 'la prima anta non è chi si allena da solo');
+        /*
+         * ⚠️ `assertIsInt` prima di confrontare: `strpos` torna `false` se
+         * l'ancora non c'è, e `false < 100` è **vero**. 🚨 La versione
+         * precedente di questo test confrontava tre `false` e passava
+         * tranquilla su una pagina che non aveva più nessuna di quelle
+         * ancore.
+         */
+        foreach (['da-solo' => $solo, 'trainer' => $trainer, 'palestre' => $palestre] as $nome => $dove) {
+            $this->assertIsInt($dove, "la sezione #{$nome} non c'e'");
+        }
+
+        $this->assertLessThan($trainer, $solo, 'la prima sezione non è chi si allena da solo');
         $this->assertLessThan($palestre, $trainer, 'il trainer non viene prima della palestra');
     }
 
     /**
-     * 💡 **Il carosello non ha bisogno di JavaScript.**
+     * 💡 **Il sito non ha una riga di JavaScript, e nemmeno una richiesta a
+     * un dominio che non è il nostro.**
      *
-     * ⚠️ Le linguette sono link veri e lo scorrimento è del browser
-     * (`scroll-snap`): con una libreria, chi ha JavaScript bloccato vedrebbe
-     * tre pannelli impilati **senza modo di raggiungerli**.
+     * 🚨 Il backend gira su un server condiviso con altri due siti: ogni
+     * dipendenza esterna è una cosa che può cadere portandosi dietro la
+     * pagina che dovrebbe vendere il prodotto. ⚠️ E un carattere preso da un
+     * CDN è l'indirizzo IP di chi legge, regalato a qualcun altro, su una
+     * pagina che parla di non raccogliere dati.
      */
     #[Test]
-    public function the_carousel_needs_no_javascript(): void
+    public function the_site_needs_no_javascript_and_no_cdn(): void
     {
-        $pagina = $this->get('/prezzi')->assertOk()->getContent();
+        foreach (['/', '/prezzi', '/professionisti', '/privacy'] as $percorso) {
+            $pagina = $this->get($percorso)->assertOk()->getContent();
 
-        $this->assertStringNotContainsString('<script', $pagina);
-        $this->assertStringContainsString('href="#solo"', $pagina);
-        $this->assertStringContainsString('scroll-snap-type', $pagina);
+            $this->assertStringNotContainsString('<script', $pagina, "{$percorso} ha del JavaScript");
+            $this->assertStringNotContainsString('https://cdn', $pagina, "{$percorso} chiama un CDN");
+            $this->assertStringNotContainsString('fonts.googleapis', $pagina, "{$percorso} chiama un font esterno");
+        }
     }
 
     /** 💡 I gettoni sono la scala di prezzo di chi si allena da solo. */
     #[Test]
     public function the_solo_section_is_priced_in_tokens(): void
     {
+        /*
+         * 🆕 **`nome` dal 20/09/2026**: i tagli si chiamano «Prova», «Serie»,
+         * «Blocco», «Stagione». ⚠️ Non è facoltativo e non ha un ripiego: un
+         * `?? $gettoni.' gettoni'` nella vista farebbe passare in silenzio un
+         * listino configurato a metà, e il nome comparirebbe sbagliato sulla
+         * pagina invece che rosso in un test.
+         */
         config()->set('listino.pacchetti', [
-            ['gettoni' => 42, 'prezzo_cent' => 1234, 'nota' => 'finto'],
+            ['nome' => 'Finto', 'gettoni' => 42, 'prezzo_cent' => 1234, 'nota' => 'finto'],
         ]);
 
         $this->get('/prezzi')
             ->assertOk()
+            ->assertSee('Finto', escape: false)
             ->assertSee('42 gettoni', escape: false)
             ->assertSee('12,34 €', escape: false);
     }
@@ -467,35 +573,76 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
-     * 💡 **E il piano a consumo costa piu' del pacchetto piu' piccolo.**
+     * 🚨 **Il su misura è il piano dei numeri grandi, e il minimo è quello
+     * che tiene fuori i numeri piccoli.**
      *
-     * E' il prezzo della flessibilita'. ⚠️ Senza quella differenza il
-     * pacchetto non converrebbe a nessuno e sarebbe li' per finta.
+     * ── ⚠️ Ha ROVESCIATO `paying_as_you_go_costs_more_than_the_smallest_bundle`
+     *
+     * Fino al 19/09 il piano a consumo costava **di più** a persona: era il
+     * prezzo della flessibilità, e il test difendeva quella differenza perché
+     * senza di essa i pacchetti non sarebbero convenuti a nessuno.
+     *
+     * 🎯 Col listino vero (20/09) il su misura è un'altra cosa: **2,80 a
+     * persona**, meno di ogni piano a canone, più un fisso. Non è il piano di
+     * chi vuole flessibilità, è il piano di chi ha tanta gente — e a tanta
+     * gente si fa uno sconto, non un sovrapprezzo.
+     *
+     * 💡 Quello che tiene in piedi i piani a canone non è più il prezzo
+     * unitario ma il **minimo**: sotto 30 allievi (o 60 iscritti) il su
+     * misura costa molto di più del piano che quelle persone le copre. Chi è
+     * piccolo non può sbagliare scelta a proprio danno, ed è questo che il
+     * test difende.
+     *
+     * ── 📌 Una sovrapposizione nota, e voluta ──────────────────────────────
+     *
+     * ⚠️ **Al minimo esatto il su misura costa meno del piano più grande**:
+     * un trainer con 30 allievi paga 94 € su misura e 100 € col Pro; una
+     * palestra con 60 iscritti paga 183 € contro 200 €. 💡 Non è una svista:
+     * è il punto in cui si vuole che chi ha toccato il tetto **salga** invece
+     * di andarsene, e sale trovando anche i trainer illimitati. Il listino
+     * l'ha deciso il committente il 20/09/2026, con i prezzi finali.
      */
     #[Test]
-    public function paying_as_you_go_costs_more_than_the_smallest_bundle(): void
+    public function the_custom_plan_is_for_the_big_numbers_and_the_minimum_keeps_the_small_ones_out(): void
     {
         $listino = app(Listino::class);
 
-        /*
-         * 🆕 **Solo le palestre hanno il piano a consumo** — 13/09/2026.
-         *
-         * ⛔ Prima ce l'aveva anche il trainer. Per lui non ha senso: i suoi
-         * allievi sono pochi e li conosce per nome, e un minimo di cento
-         * iscritti sarebbe venti volte il suo piano più grande.
-         */
-        $consumo = $listino->aConsumo('palestre');
+        foreach (['palestre', 'trainer'] as $platea) {
+            $misura = $listino->suMisura($platea);
+            $piani = $listino->piani($platea);
 
-        $this->assertNotNull($consumo, 'le palestre devono avere un piano a consumo');
-        $this->assertNull($listino->aConsumo('trainer'), 'un trainer non ha un piano a consumo');
+            // 1. A persona il su misura costa meno di **ogni** piano a canone.
+            foreach ($piani as $piano) {
+                $this->assertLessThan(
+                    $piano['perSlot'],
+                    $misura['perSlot'],
+                    "{$platea}: il su misura non fa sconto rispetto a {$piano['codice']}",
+                );
+            }
 
-        $piuPiccolo = $listino->piani('palestre')[0];
+            // 2. Ma sotto il minimo si paga il minimo, canone compreso...
+            $this->assertSame(
+                $misura['canone'] + $misura['minimo'] * $misura['perSlot'],
+                $listino->costoSuMisura($platea, 1),
+                "{$platea}: sotto il minimo non si sta pagando il minimo",
+            );
 
-        $this->assertGreaterThan(
-            $piuPiccolo['perSlot'],
-            $consumo['prezzo_iscritto_cent'],
-            'a consumo costa quanto o meno del piano piu\' piccolo',
-        );
+            // 3. ...e quel minimo costa più di ogni piano che ci sta dentro:
+            //    chi è piccolo non risparmia passando al su misura.
+            //    ⚠️ Solo quelli **sotto** il minimo: al minimo esatto il su
+            //    misura costa meno, ed è la sovrapposizione voluta di sopra.
+            foreach ($piani as $piano) {
+                if ($piano['slot'] >= $misura['minimo']) {
+                    continue;
+                }
+
+                $this->assertGreaterThan(
+                    $piano['prezzo'],
+                    $listino->costoSuMisura($platea, $piano['slot']),
+                    "{$platea}: con {$piano['slot']} persone il su misura costa meno di {$piano['codice']}",
+                );
+            }
+        }
     }
 
     #[Test]
@@ -571,7 +718,9 @@ class SitoPubblicoTest extends TestCase
             ->assertOk()
             ->assertSee('Scarichi ed entri', escape: false)
             ->assertSee('Segni cosa mangi', escape: false)
-            ->assertSee('Ricevi le schede dal tuo trainer', escape: false);
+            // 🆕 20/09: «di chi ti segue», non «dal tuo trainer» — può essere
+            // la palestra, e chi ce l'ha non si riconoscerebbe nell'altra.
+            ->assertSee('Ricevi le schede di chi ti segue', escape: false);
     }
 
     /**
@@ -743,6 +892,52 @@ class SitoPubblicoTest extends TestCase
     public function all_seven_images_are_actually_on_disk(): void
     {
         $this->assertSame([], (new ImmaginiDelSito)->mancanti());
+    }
+
+    /**
+     * 🚨 **Ogni immagine attesa è usata davvero da una pagina.**
+     *
+     * ── ⚠️ Il buco che questo test chiude — 20/09/2026 ─────────────────────
+     *
+     * `all_seven_images_are_actually_on_disk` guarda **il disco**. La
+     * riscrittura del sito del 20/09 ha rifatto home, prezzi e la pagina dei
+     * professionisti senza rimettere nemmeno un `<x-sito.figura>`: sette
+     * fotografie vere, generate e caricate a mano, restate su disco senza che
+     * nessuna pagina le mostrasse. ⛔ **La suite era tutta verde.**
+     *
+     * 💡 Qui si svuota la cartella apposta: senza i file, ogni figura lascia
+     * il suo riempimento con dentro `data-attesa="<nome>"`, e quello dice
+     * quali immagini le pagine **chiedono** — che è la cosa da controllare.
+     * `og` è a parte: sta nel `<head>`, non nel corpo.
+     */
+    #[Test]
+    public function every_expected_image_is_actually_used_on_a_page(): void
+    {
+        $this->svuotaLeImmagini();
+
+        $chieste = [];
+
+        foreach (['/', '/prezzi', '/professionisti'] as $percorso) {
+            preg_match_all(
+                '~data-attesa="([a-z-]+)"~',
+                $this->get($percorso)->assertOk()->getContent(),
+                $trovate,
+            );
+
+            $chieste = array_merge($chieste, $trovate[1]);
+        }
+
+        $chieste = array_unique($chieste);
+        sort($chieste);
+
+        $attese = array_values(array_diff(array_keys(ImmaginiDelSito::ATTESE), ['og']));
+        sort($attese);
+
+        $this->assertSame(
+            $attese,
+            $chieste,
+            'ci sono immagini attese che nessuna pagina mostra, o viceversa',
+        );
     }
 
     /**

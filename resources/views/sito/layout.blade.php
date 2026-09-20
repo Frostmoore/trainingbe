@@ -162,26 +162,12 @@
             opacity: .30;
         }
 
-        /* La figura in apertura: sta sotto al telefono disegnato, quindi non
-           deve reggere da sola l'attenzione. */
-        .figura-eroe { position: absolute; inset: 0; z-index: 0; }
-        .figura-eroe .figura, .figura-eroe img { height: 100%; border-radius: var(--raggio); }
-
-        /* Il velo sopra la fotografia dell'apertura.
-           ── ⚠️ Tarato il 16/08, quando le fotografie sono arrivate ────────
-           Prima era 55% → 82%, scelto **senza avere le immagini**. Sono uscite
-           tutte scure e in controluce: un velo bianco così forte le riduceva a
-           un rettangolo grigio, cioè cancellava proprio quello che erano lì a
-           fare. 💡 Restano leggere perché il telefono disegnato è chiaro e su
-           una foto scura si stacca da solo — il velo serve solo a raccordare
-           l'immagine alla pagina, non a fare contrasto. */
-        .velo-eroe {
-            position: absolute; inset: 0; z-index: 1;
-            border-radius: var(--raggio);
-            background: linear-gradient(160deg,
-                color-mix(in srgb, var(--sfondo) 14%, transparent) 0%,
-                color-mix(in srgb, var(--sfondo) 38%, transparent) 100%);
-        }
+        /* ── ⛔ Tolti il 20/09/2026: `.figura-eroe` e `.velo-eroe` ────────
+           Servivano a mettere la fotografia **sotto un telefono disegnato in
+           CSS**, in posizione assoluta e con un velo sopra per raccordarla.
+           L'apertura riscritta mette la fotografia in una colonna della
+           griglia, accanto al testo: niente sovrapposizione, niente velo, e
+           una regola in meno da ritarare ogni volta che l'immagine cambia. */
 
         /* La figura in cima a una scheda: senza bordo proprio e senza angoli
            in basso, perché è incollata alla scheda che la contiene. */
@@ -192,89 +178,24 @@
             width: auto;
         }
 
-        /* Il numero grande in cima ai tre passi di «come funziona».
-           💡 Un numero invece di «1 ·» nel titolo: si vede da lontano che sono
-           passi in ordine, che è l'unica cosa che quella sezione deve dire
-           prima ancora di essere letta. */
-        .numero-passo {
-            width: 34px; height: 34px; border-radius: 10px;
-            display: grid; place-items: center;
-            background: var(--accento-tenue); color: var(--accento);
-            font-weight: 800; font-size: 17px;
-            margin-bottom: var(--sp-2);
-        }
+        /* ── ⛔ Tolto il 20/09/2026: il carosello dei prezzi ──────────────
 
-        /* ───────────────────────── il carosello dei prezzi ─────────────────
+           Erano tre **ante affiancate** con `scroll-snap`, tre linguette e un
+           numero grande sopra ogni passo. ⚠️ Non è stato tolto perché
+           funzionasse male — funzionava, e senza una riga di JavaScript — ma
+           perché nascondeva due terzi del listino: chi non capiva che si
+           scorreva di lato vedeva **una platea sola** e se ne andava
+           convinto di aver visto i prezzi.
 
-           🚨 **Nessuna libreria, e nemmeno una riga di JavaScript.** Un
-           carosello è scorrimento più agganci: il browser sa già farli
-           entrambi (`scroll-snap`), e gli agganci sono link veri. ⚠️ Con una
-           libreria, chi ha JavaScript bloccato vedrebbe tre pannelli
-           impilati senza modo di raggiungerli; così invece si scorre lo
-           stesso, col dito o con la barra.
+           💡 Il listino riscritto (20/09) mette le tre platee **una sotto
+           l'altra**, nell'ordine in cui arrivano: chi si allena da solo, i
+           trainer, le palestre. Si scorre come tutto il resto della pagina, e
+           gli agganci `#da-solo`, `#trainer`, `#palestre` continuano a
+           funzionare — sono sezioni vere. */
 
-           💡 Le tre linguette sono `<a href="#...">`: premerle sposta il
-           **contenitore**, non la pagina, perché il browser scorre l'antenato
-           scorrevole più vicino.
-        */
-
-        .carosello {
-            display: grid;
-            grid-auto-flow: column;
-            grid-auto-columns: 100%;
-            gap: var(--sp-3);
-            overflow-x: auto;
-            scroll-snap-type: x mandatory;
-            scroll-behavior: smooth;
-            /* ⚠️ Spazio sotto per la barra di scorrimento, che su Windows
-               occupa posto e altrimenti mangia il bordo dell'ultima scheda. */
-            padding-bottom: var(--sp-2);
-            /* 💡 Nasconde la barra dove si può: il carosello ha già le sue
-               linguette, e una barra grigia in mezzo alla pagina sembra un
-               difetto. */
-            scrollbar-width: none;
-        }
-
-        .carosello::-webkit-scrollbar { display: none; }
-
-        .carosello > .anta {
-            scroll-snap-align: start;
-            /* ⚠️ `min-width: 0` o il contenuto largo (le tabelle) allarga la
-               colonna invece di scorrere dentro di sé. */
-            min-width: 0;
-        }
-
-        /* Le linguette sopra il carosello. */
-        .linguette {
-            display: flex; gap: var(--sp-1); flex-wrap: wrap;
-            margin-bottom: var(--sp-3);
-        }
-
-        .linguette a {
-            flex: 1 1 200px;
-            text-align: center;
-            text-decoration: none;
-            color: var(--testo);
-            border: 1px solid var(--bordo);
-            border-radius: var(--raggio);
-            padding: 12px var(--sp-2);
-            background: var(--sfondo);
-            transition: border-color .15s, background .15s;
-        }
-
-        .linguette a:hover { border-color: var(--accento); background: var(--accento-tenue); }
-
-        /* 💡 `:target` accende la linguetta di ciò che si sta guardando, senza
-           una riga di JavaScript: l'ancora nell'indirizzo è già l'informazione,
-           bastava dirlo al foglio di stile. */
-        .linguette a:target,
-        .anta:target ~ * .linguette a { border-color: var(--accento); }
-        .linguette a strong { display: block; font-size: 15px; }
-        .linguette a span { font-size: 13px; color: var(--testo-tenue); }
-
-        /* 🚨 L'aggancio deve fermare la colonna a sinistra del contenitore, non
-           sotto la barra fissa in alto. */
-        .anta { scroll-margin-top: 80px; }
+        /* 🚨 L'aggancio deve fermare la sezione sotto la barra fissa in alto,
+           non sotto il suo bordo superiore: senza, il titolo finisce coperto. */
+        section[id] { scroll-margin-top: 80px; }
 
         .tabella-prezzi { width: 100%; border-collapse: collapse; font-size: 16px; }
         .tabella-prezzi th { text-align: left; padding: 14px var(--sp-3); background: var(--superficie); border-bottom: 1px solid var(--bordo); }
@@ -283,43 +204,16 @@
 
         /* ───────────────── il listino ────────────────
 
-           🚨 **La gerarchia visiva deve dire cosa guardare per primo.**
-           Prima le schede erano tutte uguali e il prezzo grande stava in mezzo
-           al testo: l'occhio non trovava un punto d'appoggio, e una pagina di
-           prezzi che non si scorre in tre secondi non si legge affatto.
-        */
+           🚨 **La gerarchia visiva deve dire cosa guardare per primo**: il
+           nome del piano, il prezzo grande, cosa comprende, e in fondo il
+           prezzo unitario. Una pagina di prezzi che non si scorre in tre
+           secondi non si legge affatto.
 
-        /* L'offerta principale: una riga sola, larga, con il prezzo staccato. */
-        .offerta-principale {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: var(--sp-4);
-            align-items: center;
-            padding: var(--sp-4);
-            border-radius: var(--raggio);
-            border: 2px solid var(--accento);
-            background:
-                radial-gradient(120% 140% at 100% 0%, var(--accento-tenue) 0%, transparent 55%),
-                var(--sfondo);
-            box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 12%, transparent);
-        }
-
-        /* ⚠️ Sotto i 720 px il prezzo va sotto, non di fianco: affiancato
-           schiaccerebbe l'elenco a due parole per riga. */
-        @media (max-width: 720px) {
-            .offerta-principale { grid-template-columns: 1fr; gap: var(--sp-3); }
-            .offerta-prezzo { text-align: left; }
-        }
-
-        .offerta-prezzo { text-align: right; white-space: nowrap; }
-
-        .prezzo-grande {
-            font-size: clamp(38px, 6vw, 52px);
-            font-weight: 800;
-            line-height: 1;
-            letter-spacing: -0.03em;
-            color: var(--accento);
-        }
+           ⛔ **Tolti il 20/09**: `.offerta-principale`, `.offerta-prezzo` e
+           `.prezzo-grande`. Erano l'abbonamento singolo messo in una riga
+           larga, diverso da tutto il resto. Col listino vero le platee sono
+           tre e ognuna ha le sue schede: una riga con un disegno tutto suo
+           faceva sembrare le altre due un ripensamento. */
 
         /* La griglia dei pacchetti: colonne uguali, schede della stessa altezza.
            💡 `align-items: stretch` e il pulsante spinto in fondo con
@@ -334,12 +228,9 @@
 
         .griglia-pacchetti .scheda { display: flex; flex-direction: column; }
 
-        .per-posto {
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--accento);
-            margin: 2px 0 var(--sp-2);
-        }
+        /* 💡 La riga in fondo alla scheda — «4,33 a iscritto» — sta spinta giù
+           da `margin-top: auto` nel markup: così le note si allineano fra loro
+           anche quando i testi sopra hanno lunghezze diverse. */
 
         /* La scheda scelta si stacca in altezza, non solo di colore.
            ⚠️ Niente `transform: scale()`: su una griglia sfalsa gli
@@ -350,25 +241,15 @@
             box-shadow: 0 10px 30px color-mix(in srgb, var(--accento) 14%, transparent);
         }
 
-        .scheda.evidenziata {
-            background: var(--accento-tenue);
-            border-color: color-mix(in srgb, var(--accento) 25%, transparent);
-        }
+        /* ⛔ Tolti il 20/09: `.scheda.evidenziata` e `.conti`. L'esempio dei
+           conti di una palestra non è più tre numeri grandi affiancati ma una
+           **tabella di tre righe**. 💡 Una tabella si legge in colonna e regge
+           lo schermo stretto senza una regola apposta.
 
-        /* I tre numeri dell'esempio: paghi / incassi / ti resta. */
-        .conti {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--sp-2);
-            margin-top: var(--sp-2);
-        }
-
-        .conti strong { display: block; font-size: clamp(20px, 3.4vw, 26px); font-weight: 800; }
-        .conti .risalta { color: var(--accento); }
-
-        @media (max-width: 520px) {
-            .conti { grid-template-columns: 1fr; gap: var(--sp-1); }
-        }
+           ⚠️ E i commenti qui dentro finiscono **nella pagina**: stanno in un
+           `<style>` incorporato. Un test guarda che sulla home non compaia
+           vocabolario commerciale, e ci è già cascato una volta un commento
+           che parlava di occupare spazio. */
 
         /* ───────────────────────── navigazione ───────────────────────── */
 
@@ -441,8 +322,14 @@
         .nota { color: var(--testo-tenue); font-size: 14px; }
 
         section { padding: var(--sp-6) 0; }
-        section.tenue { background: var(--superficie); border-block: 1px solid var(--bordo); }
-        .intestazione-sezione { margin-bottom: var(--sp-4); }
+
+        /* 🚨 **Il nome dice cosa fa**: una sezione su due ha lo sfondo pieno,
+           e il contrasto è l'unica cosa che divide una pagina lunga in blocchi
+           leggibili. ⚠️ Fino al 20/09 si chiamava `section.tenue`, cioè come
+           `.scheda.tenue` che è un'altra cosa: due significati sullo stesso
+           nome, e nessuno che se ne accorgesse finché non serviva cambiarne
+           uno. */
+        section.alternata { background: var(--superficie); border-block: 1px solid var(--bordo); }
 
         /* ───────────────────────── griglie e schede ───────────────────────── */
 
@@ -455,18 +342,13 @@
         }
         .scheda.tenue { background: var(--superficie); }
 
-        .scheda-prezzo { display: flex; flex-direction: column; position: relative; }
+        .scheda-prezzo { display: flex; flex-direction: column; }
         .scheda-prezzo.scelta { border-color: var(--accento); border-width: 2px; }
 
-        .etichetta {
-            position: absolute; top: -12px; left: var(--sp-3);
-            background: var(--accento); color: #fff;
-            font-size: 12px; font-weight: 700; letter-spacing: .04em;
-            padding: 4px 10px; border-radius: 999px;
-        }
-
-        .prezzo { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin: var(--sp-2) 0 2px; }
-        .prezzo small { font-size: 15px; font-weight: 500; color: var(--testo-tenue); letter-spacing: 0; }
+        /* ⛔ Tolti il 20/09: `.etichetta` (il cartellino «consigliato» appeso
+           sopra il bordo) e `.prezzo`. Il piano consigliato si riconosce dal
+           bordo colorato, che non copre niente e non ha bisogno di una parola
+           in più per essere capito. */
 
         .elenco { list-style: none; padding: 0; margin: var(--sp-2) 0 0; font-size: 15px; }
         .elenco li { padding: 5px 0 5px 26px; position: relative; }
@@ -558,6 +440,7 @@
         </a>
         <div class="nav-voci">
             <a href="/#come-funziona" class="solo-grande">Come funziona</a>
+            <a href="/professionisti" class="solo-grande">Palestre e trainer</a>
             <a href="/prezzi" class="solo-grande">Prezzi</a>
             <a href="/admin/login" class="bottone bottone-vuoto solo-grande">Pannello</a>
             {{-- 💡 Quando l'app sarà sugli store, questo diventa il pulsante
@@ -576,6 +459,7 @@
                 <h4>Prodotto</h4>
                 <a href="/#come-funziona">Come funziona</a>
                 <a href="/prezzi">Prezzi</a>
+                <a href="/professionisti">Palestre e trainer</a>
                 <a href="/#domande">Domande frequenti</a>
             </div>
             <div>

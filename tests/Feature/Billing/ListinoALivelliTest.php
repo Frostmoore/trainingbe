@@ -59,9 +59,9 @@ final class ListinoALivelliTest extends TestCase
     #[Test]
     public function un_piano_palestra_ha_due_tetti(): void
     {
-        $palestra = $this->piano('gym_20');
+        $palestra = $this->piano('gym_10');
 
-        $this->assertSame(20, $palestra->max_members, 'gli iscritti non sono contati');
+        $this->assertSame(10, $palestra->max_members, 'gli iscritti non sono contati');
         $this->assertSame(5, $palestra->max_trainers, 'i trainer non sono contati');
     }
 
@@ -73,9 +73,19 @@ final class ListinoALivelliTest extends TestCase
      * un massimo — *«se una palestra ha 50 trainer non mi sta bene che paghi
      * soltanto per 10-20 iscritti»*.
      *
-     * ⚠️ Il test prova il **rapporto**, non i numeri: quelli sono segnaposto e
-     * cambieranno. Il giorno in cui qualcuno mettesse un trainer ogni due
-     * iscritti, il listino smetterebbe di essere quello deciso.
+     * ⚠️ Il test prova il **rapporto**, non i numeri.
+     *
+     * 🆕 **20/09/2026, coi prezzi veri**: la soglia era «almeno tre iscritti per
+     * trainer» e il listino nuovo non la rispetta più — il Basic ha 10 iscritti
+     * e 5 trainer, cioè due. ⛔ Non è una svista del listino: una palestra
+     * piccola ha **pochi abbonamenti regalati e tutti i suoi istruttori**, ed è
+     * il caso che quel piano serve.
+     *
+     * 💡 La regola vera, quella che il listino rispetta davvero, è l'altra
+     * faccia della stessa cosa: **i posti trainer non sono mai meno di un terzo
+     * dei posti iscritto**. Con 10/5, 30/10 e 60/20 regge, e regge anche il
+     * giorno che i numeri cambiano — se un giorno non reggesse, sarebbe una
+     * palestra costretta a lasciare fuori i propri istruttori.
      */
     #[Test]
     public function i_trainer_sono_proporzionalmente_piu_generosi_degli_iscritti(): void
@@ -86,9 +96,9 @@ final class ListinoALivelliTest extends TestCase
             }
 
             $this->assertGreaterThanOrEqual(
-                3,
-                $piano->max_members / $piano->max_trainers,
-                "{$piano->code}: un trainer ogni meno di tre iscritti",
+                $piano->max_members / 3,
+                $piano->max_trainers,
+                "{$piano->code}: troppo pochi posti trainer per gli iscritti che vende",
             );
         }
     }
@@ -125,31 +135,40 @@ final class ListinoALivelliTest extends TestCase
         $this->assertTrue($consumo->aConsumo());
         $this->assertNull($consumo->max_members, 'un piano a consumo non ha tetti');
         $this->assertNull($consumo->max_trainers);
-        $this->assertSame(0, $consumo->price_cents, 'un piano a consumo non ha canone');
+        $this->assertSame(0, $consumo->price_cents, 'un piano a consumo non ha un canone di listino');
 
         $minimo = $consumo->minimo_iscritti;
         $prezzo = $consumo->prezzo_iscritto_cent;
 
-        // Sotto il minimo si paga il minimo.
-        $this->assertSame($minimo * $prezzo, $consumo->costoDelMese(40));
-        $this->assertSame($minimo * $prezzo, $consumo->costoDelMese($minimo));
+        /*
+         * 🆕 **Il canone, dal 20/09/2026.** 📌 *«2,80€/mese per allievo +
+         * 15€/mese»*: `price_cents` resta 0 — non è un piano a canone di
+         * listino — e il fisso sta in `canone_cent`, che si somma sempre.
+         */
+        $canone = $consumo->canone_cent;
+
+        $this->assertGreaterThan(0, $canone, 'il su misura ha un canone');
+
+        // Sotto il minimo si paga il minimo (più il canone).
+        $this->assertSame($canone + $minimo * $prezzo, $consumo->costoDelMese(40));
+        $this->assertSame($canone + $minimo * $prezzo, $consumo->costoDelMese($minimo));
 
         // Sopra, si paga quello che si usa.
-        $this->assertSame(($minimo + 30) * $prezzo, $consumo->costoDelMese($minimo + 30));
+        $this->assertSame($canone + ($minimo + 30) * $prezzo, $consumo->costoDelMese($minimo + 30));
     }
 
     /** ⛔ E un piano a canone non risponde a quella domanda: il prezzo e' fisso. */
     #[Test]
     public function un_piano_a_canone_non_ha_un_costo_a_iscritto(): void
     {
-        $this->assertFalse($this->piano('gym_20')->aConsumo());
-        $this->assertNull($this->piano('gym_20')->costoDelMese(999));
+        $this->assertFalse($this->piano('gym_10')->aConsumo());
+        $this->assertNull($this->piano('gym_10')->costoDelMese(999));
     }
 
     #[Test]
     public function the_photo_cap_is_a_sub_limit_of_the_general_one(): void
     {
-        foreach ([Plan::PLUS, 'trainer_5', Plan::TRAINER_30, 'gym_20', 'gym_100'] as $codice) {
+        foreach ([Plan::PLUS, 'trainer_5', 'trainer_30', 'gym_10', 'gym_60'] as $codice) {
             $piano = $this->piano($codice);
 
             $this->assertNotNull($piano->chiamateAlMese(), "{$codice} senza tetto di chiamate");
@@ -230,7 +249,7 @@ final class ListinoALivelliTest extends TestCase
         $this->assertNotContains(Plan::GYM_15, $pubblici);
 
         $this->assertContains('trainer_5', $pubblici);
-        $this->assertContains('gym_20', $pubblici);
+        $this->assertContains('gym_10', $pubblici);
     }
 
     #[Test]

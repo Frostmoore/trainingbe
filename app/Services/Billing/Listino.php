@@ -52,9 +52,16 @@ class Listino
     {
         return array_map(
             static fn (array $p): array => [
+                // 🆕 20/09/2026: i tagli hanno un **nome** («Prova», «Serie»,
+                // «Blocco», «Stagione»), che è come li chiama chi li compra.
+                'nome' => $p['nome'],
                 'gettoni' => $p['gettoni'],
                 'prezzo' => $p['prezzo_cent'],
                 'nota' => $p['nota'],
+
+                // 💡 Il prezzo unitario lo calcola il listino, non la pagina:
+                // serve uguale nell'app e sul sito.
+                'centPerGettone' => $p['prezzo_cent'] / $p['gettoni'],
             ],
             config('listino.pacchetti'),
         );
@@ -154,7 +161,13 @@ class Listino
 
         return [
             'slot' => $slot,
+
+            // 🆕 20/09/2026: anche **quale** piano, non solo quanto costa. La
+            // pagina dei prezzi lo nomina, e senza sarebbe l'unico numero senza
+            // un'etichetta accanto.
+            'piano' => $scelto,
             'costo' => $scelto['prezzo'],
+            'rivendita' => (int) config('listino.rivendita_suggerita_cent'),
             'ricavo' => $ricavo,
             'margine' => $ricavo - $scelto['prezzo'],
         ];
@@ -182,5 +195,70 @@ class Listino
     public function budgetMinimoPubblicita(): int
     {
         return (int) config('listino.pubblicita.budget_minimo_cent', 1000);
+    }
+
+    /**
+     * 🆕 **Il piano su misura** — 20/09/2026.
+     *
+     * 📌 *«Personalizzato (min. 30 allievi): 2,80€/mese per allievo +
+     * 10€/mese»* per i trainer, *«min. 60 … + 15€/mese con trainer
+     * illimitati»* per le palestre.
+     *
+     * 💡 Torna anche `trainerIllimitati`, che è la cosa che quel piano **vende**
+     * a una palestra: non è un dettaglio del prezzo, è il motivo per sceglierlo.
+     *
+     * @return array{codice: string, nome: string, perSlot: int, canone: int, minimo: int, trainerIllimitati: bool}
+     */
+    public function suMisura(string $platea = 'palestre'): array
+    {
+        $p = (array) config("listino.{$platea}.a_consumo");
+
+        return [
+            'codice' => (string) $p['codice'],
+            'nome' => (string) $p['nome'],
+            'perSlot' => (int) $p['prezzo_iscritto_cent'],
+            'canone' => (int) ($p['canone_cent'] ?? 0),
+            'minimo' => (int) $p['minimo_iscritti'],
+
+            // ⚠️ `array_key_exists` e non `?? null`: la chiave c'è **e vale
+            // `null`** proprio quando i trainer sono illimitati.
+            'trainerIllimitati' => array_key_exists('trainer', $p) && $p['trainer'] === null,
+        ];
+    }
+
+    /**
+     * Quanto costa il su misura con tanti allievi, in centesimi.
+     *
+     * 🚨 **Sotto il minimo si paga il minimo**, e va detto dove si mostra il
+     * numero: chi fa il conto con dieci allievi e legge il prezzo di trenta
+     * pensa a un errore, se nessuno glielo spiega.
+     */
+    public function costoSuMisura(string $platea, int $slot): int
+    {
+        $misura = $this->suMisura($platea);
+
+        return $misura['canone'] + max($slot, $misura['minimo']) * $misura['perSlot'];
+    }
+
+    /**
+     * Da quanti allievi conviene il su misura, o `null` se non conviene mai.
+     *
+     * 💡 È la domanda vera di chi sta scegliendo — «da quando mi conviene?» — e
+     * rispondere con una tabella di prezzi lascia il conto da fare a lui.
+     *
+     * 🚨 Col listino del 20/09 la risposta è **il minimo stesso**: un trainer
+     * con 30 allievi paga 94 € su misura e 100 € col Pro. ⚠️ Non è un caso ed è
+     * il motivo per cui il minimo è quello: sotto, il su misura sarebbe solo un
+     * modo più caro di comprare il piano piccolo.
+     */
+    public function quandoConvieneIlSuMisura(string $platea): ?int
+    {
+        $piani = $this->piani($platea);
+        $piuGrande = $piani[count($piani) - 1];
+        $misura = $this->suMisura($platea);
+
+        return $this->costoSuMisura($platea, $misura['minimo']) < $piuGrande['prezzo']
+            ? $misura['minimo']
+            : null;
     }
 }

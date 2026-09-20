@@ -54,6 +54,21 @@ class SitoController extends Controller
      * da quella che il sistema fattura, e lo si scopre da un cliente arrabbiato
      * invece che da un test.
      */
+    /**
+     * Per palestre e trainer — 20/09/2026.
+     *
+     * 💡 Riceve il listino perché la pagina cita **due numeri** (il piano più
+     * piccolo di ognuno) e non devono essere scritti a mano: un prezzo copiato
+     * è un prezzo che un giorno sarà diverso da quello vero.
+     */
+    public function professionisti(Listino $listino): View
+    {
+        return view('sito.professionisti', [
+            'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
+            'listino' => $listino,
+        ]);
+    }
+
     public function prezzi(Listino $listino): View
     {
         return view('sito.prezzi', [

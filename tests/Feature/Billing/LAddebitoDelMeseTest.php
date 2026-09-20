@@ -153,7 +153,7 @@ final class LAddebitoDelMeseTest extends TestCase
         $fuori = $this->creaUtente($palestra, UserRole::Member, 'fuori@esempio.test');
         $fuori->delete();
 
-        $piano = Plan::query()->where('code', 'gym_20')->firstOrFail();
+        $piano = Plan::query()->where('code', 'gym_10')->firstOrFail();
 
         PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $palestra->getKey())
@@ -162,7 +162,7 @@ final class LAddebitoDelMeseTest extends TestCase
         $rimasti = app(InvitiInPalestra::class)->postiRimasti($palestra->fresh());
 
         $this->assertSame(
-            20 - 3,
+            $piano->max_members - 3,
             $rimasti,
             'i posti contano anche chi e stato cancellato',
         );
@@ -186,8 +186,8 @@ final class LAddebitoDelMeseTest extends TestCase
 
         $this->assertNotNull($addebito);
         $this->assertSame(4, $addebito->iscritti_contati);
-        $this->assertSame(100, $addebito->iscritti_fatturati, 'il minimo non e stato applicato');
-        $this->assertSame(100 * 599, $addebito->importo_cent);
+        $this->assertSame($piano->minimo_iscritti, $addebito->iscritti_fatturati, 'il minimo non e stato applicato');
+        $this->assertSame($piano->costoDelMese(0), $addebito->importo_cent);
         $this->assertTrue($addebito->haPagatoIlMinimo());
         $this->assertSame($piano->getKey(), $addebito->plan_id);
     }
@@ -213,7 +213,7 @@ final class LAddebitoDelMeseTest extends TestCase
 
         $this->assertNotNull($addebito);
         $this->assertSame(7, $addebito->iscritti_fatturati);
-        $this->assertSame(7 * 599, $addebito->importo_cent);
+        $this->assertSame($piano->costoDelMese(7), $addebito->importo_cent);
         $this->assertFalse($addebito->haPagatoIlMinimo());
     }
 
@@ -397,7 +397,7 @@ final class LAddebitoDelMeseTest extends TestCase
     public function senza_cliente_stripe_la_riga_resta_e_lo_dice(): void
     {
         $palestra = $this->creaPalestra();
-        $this->aConsumo($palestra);
+        $piano = $this->aConsumo($palestra);
         $this->iscritti($palestra, 3);
 
         $servizio = app(AddebitoDelMese::class);
@@ -407,7 +407,7 @@ final class LAddebitoDelMeseTest extends TestCase
         $this->assertSame(AddebitoMensile::SENZA_CLIENTE, $addebito->stato);
         $this->assertNull($addebito->stripe_invoice_id);
         $this->assertNotNull($addebito->errore);
-        $this->assertSame(100 * 599, $addebito->importo_cent, 'l importo non e stato calcolato lo stesso');
+        $this->assertSame($piano->costoDelMese(0), $addebito->importo_cent, 'l importo non e stato calcolato lo stesso');
     }
 
     /**
@@ -517,7 +517,7 @@ final class LAddebitoDelMeseTest extends TestCase
     public function senza_incasso_calcola_e_basta(): void
     {
         $palestra = $this->creaPalestra();
-        $this->aConsumo($palestra);
+        $piano = $this->aConsumo($palestra);
         $this->iscritti($palestra, 3);
 
         $this->artisan('fattura:il-consumo', [
@@ -531,6 +531,6 @@ final class LAddebitoDelMeseTest extends TestCase
             ->firstOrFail();
 
         $this->assertSame(AddebitoMensile::DA_INCASSARE, $riga->stato);
-        $this->assertSame(100 * 599, $riga->importo_cent);
+        $this->assertSame($piano->costoDelMese(0), $riga->importo_cent);
     }
 }

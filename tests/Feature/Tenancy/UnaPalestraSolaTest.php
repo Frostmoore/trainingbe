@@ -57,7 +57,7 @@ final class UnaPalestraSolaTest extends TestCase
 
         PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $p->getKey())
-            ->update(['plan_id' => Plan::query()->where('code', 'gym_50')->firstOrFail()->id]);
+            ->update(['plan_id' => Plan::query()->where('code', 'gym_30')->firstOrFail()->id]);
 
         return [$p->fresh(), $this->creaUtente($p, UserRole::GymAdmin, "capo-{$slug}@esempio.test")];
     }

@@ -178,12 +178,12 @@ final class StripeInTuttiGliScenariTest extends TestCase
     {
         [$palestra, $titolare] = $this->palestraConTitolare();
 
-        app(PianiInVendita::class)->apri($titolare, 'gym_50');
+        app(PianiInVendita::class)->apri($titolare, 'gym_30');
 
         $meta = $this->stripe->ultima('checkout.sessions.create')[0]['metadata'];
 
         $this->assertSame((string) $palestra->getKey(), $meta['tenant_id']);
-        $this->assertSame('gym_50', $meta['piano']);
+        $this->assertSame('gym_30', $meta['piano']);
     }
 
     /**
@@ -197,7 +197,7 @@ final class StripeInTuttiGliScenariTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(PianiInVendita::class)->apri($iscritto, 'gym_20');
+        app(PianiInVendita::class)->apri($iscritto, 'gym_10');
     }
 
     /** ⛔ I piani si comprano dallo spazio giusto. */
@@ -206,7 +206,7 @@ final class StripeInTuttiGliScenariTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        app(PianiInVendita::class)->apri($this->trainer(), 'gym_20');
+        app(PianiInVendita::class)->apri($this->trainer(), 'gym_10');
     }
 
     /**
@@ -366,7 +366,7 @@ final class StripeInTuttiGliScenariTest extends TestCase
     public function dal_canone_al_consumo_si_passa_a_fine_periodo(): void
     {
         [$palestra, $titolare] = $this->palestraConTitolare();
-        $canone = $this->canoneStripe($palestra, 'gym_50', 'sub_canone');
+        $canone = $this->canoneStripe($palestra, 'gym_30', 'sub_canone');
 
         $this->pagato($titolare, $palestra, 'gym_consumo', [
             'mode' => 'setup',
@@ -514,10 +514,11 @@ final class StripeInTuttiGliScenariTest extends TestCase
     public function la_voce_del_consumo_sta_dentro_la_fattura(): void
     {
         [$palestra] = $this->palestraConTitolare();
+        $piano = $this->piano('gym_consumo');
 
         PlanSubscription::withoutGlobalScopes()->create([
             'tenant_id' => $palestra->getKey(),
-            'plan_id' => $this->piano('gym_consumo')->getKey(),
+            'plan_id' => $piano->getKey(),
             'stripe_customer_id' => 'cus_consumo',
             'starts_at' => now()->subYear(),
         ]);
@@ -529,7 +530,8 @@ final class StripeInTuttiGliScenariTest extends TestCase
 
         $this->assertArrayHasKey('invoice', $voce, 'la voce non e agganciata a nessuna fattura: la fattura esce da zero');
         $this->assertSame((string) $addebito->stripe_invoice_id, $voce['invoice']);
-        $this->assertSame(100 * 599, $voce['amount']);
+        // 💡 Nessun iscritto abbonato: si paga il minimo, canone compreso.
+        $this->assertSame($piano->costoDelMese(0), $voce['amount']);
 
         /*
          * ⚠️ E l'ordine: prima la fattura, poi la voce. Al contrario, la voce non
@@ -600,16 +602,16 @@ final class StripeInTuttiGliScenariTest extends TestCase
     public function scendere_si_rifiuta_se_lascia_fuori_qualcuno(): void
     {
         [$palestra, $titolare] = $this->palestraConTitolare();
-        $this->canoneStripe($palestra, 'gym_50', 'sub_scende');
+        $this->canoneStripe($palestra, 'gym_30', 'sub_scende');
 
-        $this->piano('gym_20')->forceFill(['max_members' => 2])->save();
+        $this->piano('gym_10')->forceFill(['max_members' => 2])->save();
 
         foreach (['a', 'b', 'c'] as $i) {
             $this->creaUtente($palestra, UserRole::Member, "iscritto-{$i}@esempio.test");
         }
 
         try {
-            app(PianiInVendita::class)->cambia($titolare, 'gym_20');
+            app(PianiInVendita::class)->cambia($titolare, 'gym_10');
             $this->fail('si e sceso lasciando fuori un iscritto');
         } catch (InvalidArgumentException $e) {
             $this->assertStringContainsString('3 iscritti', $e->getMessage());
@@ -644,8 +646,19 @@ final class StripeInTuttiGliScenariTest extends TestCase
 
         $vendita = app(PianiInVendita::class);
 
+        /*
+         * 🆕 **`trainer_consumo` dal 20/09/2026**: il su misura ce l'hanno
+         * tutte e due le platee, e sta in testa perché l'ordinamento è per
+         * `price_cents` e il suo canone di listino è 0 — il prezzo vero lo fa
+         * il conto a persona.
+         *
+         * ⚠️ **In cima all'elenco, ma non nella schermata**: l'app filtra i
+         * piani a consumo (`scelta_del_piano.dart`, `where((p) => !p.aConsumo)`)
+         * perché non si comprano con un tocco, si concordano. Lo stesso valeva
+         * già per `gym_consumo`.
+         */
         $this->assertSame(
-            ['trainer_5', 'trainer_15', 'trainer_30'],
+            ['trainer_consumo', 'trainer_5', 'trainer_15', 'trainer_30'],
             array_column($vendita->listinoPer($coach)['piani'], 'codice'),
             'a un trainer non si mostrano i suoi piani',
         );

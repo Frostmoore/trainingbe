@@ -117,7 +117,7 @@ class PlanSeeder extends Seeder
      */
     private function trainer(): array
     {
-        return array_map(
+        $piani = array_map(
             fn (array $p): array => [
                 'code' => $p['codice'],
                 'name' => $p['nome'],
@@ -138,6 +138,40 @@ class PlanSeeder extends Seeder
             ],
             config('listino.trainer.piani'),
         );
+
+        /*
+         * 🆕 **Anche i trainer hanno il loro «su misura»** — 20/09/2026.
+         *
+         * 📌 *«Pacchetto Personalizzato (min. 30 allievi): 2,80€/mese per
+         * allievo + 10€/mese»*. ⛔ Prima esisteva solo per le palestre.
+         */
+        $misura = config('listino.trainer.a_consumo');
+
+        $piani[] = [
+            'code' => $misura['codice'],
+            'name' => $misura['nome'],
+            'kind' => PlanKind::Trainer,
+            'ai_enabled' => true,
+            'max_members' => null,
+            'max_trainers' => null,
+
+            /*
+             * 🚨 `price_cents = 0` **non vuol dire gratis**: il canone fisso sta
+             * in `canone_cent`, e quello che si paga davvero dipende da quanti
+             * allievi si seguono. Chi mostra un prezzo chiede prima
+             * `Plan::aConsumo()`.
+             */
+            'price_cents' => 0,
+            'prezzo_iscritto_cent' => $misura['prezzo_iscritto_cent'],
+            'canone_cent' => $misura['canone_cent'],
+            'minimo_iscritti' => $misura['minimo_iscritti'],
+
+            'ai_monthly_calls_per_member' => self::CHIAMATE,
+            'ai_monthly_photo_calls_per_member' => self::CHIAMATE_FOTO,
+            'is_public' => true,
+        ];
+
+        return $piani;
     }
 
     /**
@@ -195,6 +229,7 @@ class PlanSeeder extends Seeder
              */
             'price_cents' => 0,
             'prezzo_iscritto_cent' => $consumo['prezzo_iscritto_cent'],
+            'canone_cent' => $consumo['canone_cent'],
             'minimo_iscritti' => $consumo['minimo_iscritti'],
 
             'ai_monthly_calls_per_member' => self::CHIAMATE,

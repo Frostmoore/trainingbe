@@ -51,6 +51,15 @@ Route::get('/prezzi', [SitoController::class, 'prezzi'])->name('sito.prezzi');
 */
 Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
 
+/*
+| Per palestre e trainer - 20/09/2026.
+|
+| # Pagina propria e non una sezione della home: chi si allena e chi compra
+|   leggono due cose diverse, e mescolarle fa smettere di leggere tutti e due.
+*/
+Route::get('/professionisti', [SitoController::class, 'professionisti'])
+    ->name('sito.professionisti');
+
 Route::get('/{quale}', [SitoController::class, 'documento'])
     ->whereIn('quale', ['privacy', 'condizioni', 'liberatoria-palestra', 'liberatoria-trainer'])
     ->name('sito.documento');
