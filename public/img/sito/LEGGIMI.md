@@ -84,5 +84,30 @@ restano sfumate), col tema blu, e una giornata dentro l'archivio locale
 e questa macchina no, e le righe finiscono nel giorno sbagliato senza dare
 errore.
 
-⏳ **Mancano ancora** `app-chat` (serve un secondo account: la chat è cifrata fra
-due telefoni, non si può riempire da fuori) e `pannello`.
+| `app-chat.webp` | 540 × 1200 | La chat con una trainer, sulla home |
+| `pannello.webp` | 1600 × 1000 | L'elenco degli iscritti nel pannello palestra, su `/professionisti` |
+
+✅ **Ci sono tutte e dodici** dal 20/09/2026 sera.
+
+### La chat
+
+⚠️ Serve un **destinatario con una chiave**: la chat è cifrata fra due telefoni,
+e senza la chiave pubblica dell'altro l'app dice «questa persona non ha ancora
+una chiave». Per la foto è bastata una trainer con una scheda pubblica e una
+chiave finta a database — i messaggi restano illeggibili per sempre, e per una
+foto va bene.
+
+### Il pannello
+
+💡 Fatto **dal browser**, non dall'emulatore: è una pagina web, e a 1600 × 1000
+si vede la barra laterale insieme all'elenco. Si entra dal modulo di accesso con
+la palestra dimostrativa (`admin@palestra-demo.test`, password in
+`DEMO_USER_PASSWORD`). ⛔ **Nessuna rotta che fa entrare senza password**,
+nemmeno temporanea.
+
+🚨 Edge headless si comanda da PowerShell e ci si aggancia con puppeteer:
+
+```
+msedge --headless=new --disable-gpu --remote-debugging-port=9222        --user-data-dir=%TMP%\edge-cdp2 --window-size=1600,1000 about:blank
+node foto_pannello.mjs /admin/members pannello.png
+```

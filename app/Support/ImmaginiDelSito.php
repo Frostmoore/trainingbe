@@ -139,19 +139,19 @@ class ImmaginiDelSito
      */
     public const ANCORA_DA_PRODURRE = [
         /*
-         * ✅ **Catturate il 20/09/2026 sera**: `app-oggi`, `app-diario` e
-         * `app-allenamento` sono uscite dall'emulatore con dentro una giornata
-         * vera — un abbonato, col tema **blu**, 1.400 kcal, 8.432 passi e una
-         * seduta in corso.
+         * ✅ **Vuoto dal 20/09/2026 sera**: ci sono tutte e dodici.
          *
-         * 🚨 **L'app vuota non si fotografa**: dal 19/09 diario, peso,
-         * allenamenti e passi stanno sul telefono, quindi un account appena
-         * creato mostra schermate a zero. I dati sono stati scritti
-         * direttamente nell'archivio locale (`salute.sqlite`) — a mano
-         * dall'interfaccia costa un'ora e sbaglia.
+         * Le quattro schermate dell'app sono catture dall'emulatore con dentro
+         * una giornata vera — un abbonato col tema **blu**, 1.400 kcal, 8.432
+         * passi, una seduta in corso e una conversazione cifrata. Il pannello
+         * è la lista degli iscritti della palestra dimostrativa, fotografata
+         * dal browser.
+         *
+         * 🚨 **La costante resta, e resta vuota.** È il posto in cui si
+         * dichiara un buco il giorno che se ne apre uno: una pagina nuova che
+         * chiede un'immagine che non c'è ancora si scrive qui, e il test dice
+         * subito se la lista e la realtà divergono.
          */
-        'app-chat',
-        'pannello',
     ];
 
     /**
