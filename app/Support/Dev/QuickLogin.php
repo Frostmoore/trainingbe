@@ -29,9 +29,22 @@ use App\Support\Tenancy\TenantContext;
  */
 final class QuickLogin
 {
+    /**
+     * 🆕 ⛔ **Solo in locale, dal 20/09/2026.**
+     *
+     * 🚨 Prima bastava «non produzione», e su **staging** i tre pulsanti si
+     * vedevano: staging è raggiungibile da internet, quindi chiunque ne
+     * conoscesse l'indirizzo entrava nel pannello come super admin, senza
+     * password. Trovato nel giro del 19/09 (U5 del referto).
+     *
+     * 📌 Il committente: *«admin login ok togliamoli»*.
+     *
+     * ⚠️ `local` e non `! production`: gli ambienti sono più di due, e ogni
+     * ambiente nuovo nascerebbe con questa porta aperta.
+     */
     public static function enabled(): bool
     {
-        if (app()->environment('production')) {
+        if (! app()->environment('local')) {
             return false;
         }
 

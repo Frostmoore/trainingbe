@@ -423,13 +423,60 @@ class PanelAccessTest extends TestCase
 
     // ───────────────────── accesso rapido di sviluppo ─────────────────────
 
+    /**
+     * 🆕 L'accesso rapido esiste **solo in locale** (20/09/2026): i test che lo
+     * provano acceso devono quindi fingere quell'ambiente, o proverebbero
+     * soltanto che è spento.
+     */
+    private function inLocale(callable $cosa): void
+    {
+        $originale = app()->environment();
+        app()->detectEnvironment(fn (): string => 'local');
+
+        try {
+            $cosa();
+        } finally {
+            app()->detectEnvironment(fn (): string => $originale);
+        }
+    }
+
     #[Test]
     public function quick_login_is_off_by_default(): void
     {
-        config(['dev.quick_login' => false]);
+        $this->inLocale(function (): void {
+            config(['dev.quick_login' => false]);
 
-        $this->assertFalse(QuickLogin::enabled());
-        $this->assertSame([], QuickLogin::candidates());
+            $this->assertFalse(QuickLogin::enabled());
+            $this->assertSame([], QuickLogin::candidates());
+        });
+    }
+
+    /**
+     * 🆕 🚨 **E fuori da `local` è spento anche se configurato** — 20/09/2026.
+     *
+     * ⛔ Su **staging** i tre pulsanti si vedevano davvero (`/admin/login`), e
+     * staging sta su internet: chi ne conosceva l'indirizzo entrava come super
+     * admin senza password. La serratura era «non produzione», e gli ambienti
+     * non sono due.
+     */
+    #[Test]
+    public function quick_login_stays_off_outside_local(): void
+    {
+        config(['dev.quick_login' => true]);
+        $originale = app()->environment();
+
+        foreach (['staging', 'testing', 'production'] as $ambiente) {
+            app()->detectEnvironment(fn (): string => $ambiente);
+
+            try {
+                $this->assertFalse(QuickLogin::enabled(), "acceso in {$ambiente}");
+                $this->assertSame([], QuickLogin::candidates());
+                $this->assertNull(QuickLogin::resolve($this->god->email));
+                $this->get('/admin/login')->assertOk()->assertDontSee('Ambiente di sviluppo');
+            } finally {
+                app()->detectEnvironment(fn (): string => $originale);
+            }
+        }
     }
 
     /**
@@ -455,34 +502,40 @@ class PanelAccessTest extends TestCase
         }
     }
 
+    // 💡 I due qui sotto provano l'accesso rapido **acceso**: girano in `local`.
+
     #[Test]
     public function quick_login_only_accepts_the_accounts_it_offers(): void
     {
-        config(['dev.quick_login' => true]);
+        $this->inLocale(function (): void {
+            config(['dev.quick_login' => true]);
 
-        $proposti = array_column(QuickLogin::candidates(), 'email');
+            $proposti = array_column(QuickLogin::candidates(), 'email');
 
-        $this->assertContains($this->god->email, $proposti);
-        $this->assertNotNull(QuickLogin::resolve($this->god->email));
+            $this->assertContains($this->god->email, $proposti);
+            $this->assertNotNull(QuickLogin::resolve($this->god->email));
 
-        // Un utente vero, ma non fra quelli proposti: senza questo controllo
-        // sarebbe «entra come chiunque, basta il suo indirizzo».
-        $altro = app(TenantContext::class)->runAs($this->palestra, fn () => User::create([
-            'name' => 'Estraneo', 'email' => 'estraneo@demo.test', 'password' => self::FAKE_PASSWORD,
-        ]));
+            // Un utente vero, ma non fra quelli proposti: senza questo controllo
+            // sarebbe «entra come chiunque, basta il suo indirizzo».
+            $altro = app(TenantContext::class)->runAs($this->palestra, fn () => User::create([
+                'name' => 'Estraneo', 'email' => 'estraneo@demo.test', 'password' => self::FAKE_PASSWORD,
+            ]));
 
-        $this->assertNotContains($altro->email, $proposti);
-        $this->assertNull(QuickLogin::resolve($altro->email));
-        $this->assertNull(QuickLogin::resolve('inesistente@nessuno.test'));
+            $this->assertNotContains($altro->email, $proposti);
+            $this->assertNull(QuickLogin::resolve($altro->email));
+            $this->assertNull(QuickLogin::resolve('inesistente@nessuno.test'));
+        });
     }
 
     #[Test]
     public function the_login_page_shows_the_shortcuts_only_when_enabled(): void
     {
-        config(['dev.quick_login' => true]);
-        $this->get('/admin/login')->assertOk()->assertSee('Piattaforma');
+        $this->inLocale(function (): void {
+            config(['dev.quick_login' => true]);
+            $this->get('/admin/login')->assertOk()->assertSee('Piattaforma');
 
-        config(['dev.quick_login' => false]);
-        $this->get('/admin/login')->assertOk()->assertDontSee('Ambiente di sviluppo');
+            config(['dev.quick_login' => false]);
+            $this->get('/admin/login')->assertOk()->assertDontSee('Ambiente di sviluppo');
+        });
     }
 }

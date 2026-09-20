@@ -33,15 +33,16 @@ vuoi, con effetto dalla richiesta successiva (§8).
 
 | | |
 |---|---|
-| **Titolare del trattamento** | [RAGIONE SOCIALE], [indirizzo della sede], P.IVA [numero], PEC [indirizzo] |
-| **Contatto privacy** | [indirizzo email] |
-| **Responsabile della protezione dei dati** | [nominativo e contatto, se designato] |
+| **Titolare del trattamento** | **SeeMyPage di Ronconi Riccardo** · Via degli Orti, 426 — 01036 Nepi (VT) · P.IVA 02288080563 · C.F. RNCRCR88T16H501M · PEC legale@pec.seemypage.it |
+| **Contatto privacy** | info@smp-digital.it |
+| **Responsabile della protezione dei dati** | [non designato — da confermare col legale] |
 
-**Se sei iscritto a una palestra**, per i dati del tuo rapporto con lei — chi ti segue, che
-programma ti dà — il titolare è **la palestra**, e noi trattiamo quei dati per suo conto, come
-responsabile (art. 28 GDPR).
+**Il titolare siamo sempre noi.** Anche quando sei iscritto a una palestra o segui un trainer:
+loro vedono i tuoi dati per seguirti, e lo fanno **per nostro conto**, come responsabili del
+trattamento (art. 28 GDPR). ⚠️ Prima di poterti seguire firmano un accordo che dice cosa possono
+fare con quei dati e cosa no — e non possono usarli per altro.
 
-**Se usi l'app da solo, o con un trainer indipendente**, il titolare siamo noi.
+**Se usi l'app da solo**, non li vede nessun altro.
 
 ---
 
