@@ -9,6 +9,7 @@ use App\Http\Middleware\VersioneMinima;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -78,4 +79,29 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        /*
+         * 🈯 **«Too Many Attempts.» non lo diciamo in inglese** — 20/09/2026.
+         *
+         * ⛔ Visto sull'emulatore: chi riprova troppo in fretta si trovava a
+         * schermo la frase di Laravel, in inglese e senza dire **cosa fare**.
+         * ⚠️ Questo messaggio non sta in un file di lingua: è scritto dentro
+         * l'eccezione, quindi si sostituisce qui.
+         *
+         * 💡 `Retry-After` arriva già dal middleware: lo si legge e si dice fra
+         * quanto riprovare, invece di lasciare la persona a indovinare.
+         */
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            $secondi = (int) ($e->getHeaders()['Retry-After'] ?? 0);
+
+            return response()->json([
+                'message' => $secondi > 0
+                    ? __('Hai riprovato troppe volte di seguito. Riprova fra :secondi secondi.', ['secondi' => $secondi])
+                    : __('Hai riprovato troppe volte di seguito. Aspetta un momento e riprova.'),
+            ], 429, $e->getHeaders());
+        });
     })->create();
