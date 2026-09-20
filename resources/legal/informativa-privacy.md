@@ -35,7 +35,7 @@ vuoi, con effetto dalla richiesta successiva (§8).
 |---|---|
 | **Titolare del trattamento** | **SeeMyPage di Ronconi Riccardo** · Via degli Orti, 426 — 01036 Nepi (VT) · P.IVA 02288080563 · C.F. RNCRCR88T16H501M · PEC legale@pec.seemypage.it |
 | **Contatto privacy** | info@smp-digital.it |
-| **Responsabile della protezione dei dati** | [non designato — da confermare col legale] |
+| **Responsabile della protezione dei dati (DPO)** | **Non designato**: non ne ricorre l'obbligo (art. 37 GDPR), perché i dati sulla tua salute — peso, diario, allenamenti, sonno — **non stanno sui nostri server**. Per qualunque domanda sui tuoi dati scrivi a info@smp-digital.it |
 
 **Il titolare siamo sempre noi.** Anche quando sei iscritto a una palestra o segui un trainer:
 loro vedono i tuoi dati per seguirti, e lo fanno **per nostro conto**, come responsabili del
@@ -343,8 +343,8 @@ pannello.
 | Messaggi cifrati | Restano, **illeggibili da chiunque** — vedi §4.3 |
 | Foto in chat | Fino allo scaricamento, e comunque **non oltre 24 ore** |
 | Documento importato | Il tempo della trascrizione; la bozza **non oltre 7 giorni** |
-| Registro di controllo | [24 mesi — da confermare] |
-| Conteggi dell'uso dell'intelligenza artificiale | [fino alla fine dell'esercizio fiscale + 10 anni, art. 2220 c.c. — da confermare] |
+| Registro di controllo (chi ha fatto cosa nel pannello) | **12 mesi**, poi si cancella da solo |
+| Conteggi dell'uso dell'intelligenza artificiale, riga per riga | **13 mesi**, poi si cancella da solo. 💡 Restano solo i **totali** delle fatture, per l'obbligo fiscale |
 | Riferimenti dei pagamenti e fatture | Per il tempo imposto dagli obblighi fiscali |
 | Comune indicato · foto del profilo | Finché li tieni: si tolgono in qualsiasi momento dal profilo |
 | Chi ha visto quali schede sponsorizzate | **13 mesi**, poi si cancella |

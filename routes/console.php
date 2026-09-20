@@ -248,3 +248,23 @@ Schedule::command('model:prune', ['--model' => StimaCibo::class])
     ->hourly()
     ->withoutOverlapping(15)
     ->runInBackground();
+
+/*
+| I registri: si tengono finche' servono a funzionare - 20/09/2026.
+|
+| «tempi di conservazione solo finche' serve per funzionare» - il committente.
+|
+| # Un termine scritto e non applicato e' peggio di un termine lungo: dichiara
+|   una cosa che non succede. `audit_logs` e `ai_usage_logs` non li potava
+|   nessuno, e l'informativa avrebbe detto il falso dal primo giorno.
+|
+| * Il primo del mese alle 4:45 - dopo la potatura della pubblicita' (4:35), per
+|   non far partire due DELETE insieme sul server condiviso.
+*/
+Schedule::command('registri:pota')
+    ->monthlyOn(1, '4:45')
+    ->withoutOverlapping(60)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura dei registri fallita: restano piu\' a lungo di quanto l\'informativa promette.');
+    });
