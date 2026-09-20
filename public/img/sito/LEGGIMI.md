@@ -61,3 +61,28 @@ del file, quindi la versione nuova si vede subito.
 
 ⚠️ **Per un ritaglio diverso si riparte dagli originali**, non da questi: questi sono già stati
 tagliati e compressi una volta, e ricomprimerli somma i difetti.
+
+## 🆕 Le schermate dell'app — 20/09/2026
+
+| File | Misura | Dove compare |
+|---|---|---|
+| `app-oggi.webp` | 540 × 1200 | La schermata «Oggi» sulla home |
+| `app-diario.webp` | 540 × 1200 | Il diario alimentare, sulla home |
+| `app-allenamento.webp` | 540 × 1200 | La seduta in corso, sulla home |
+
+🚨 **Sono catture dall'emulatore, non fotografie.** Vanno rifatte quando la
+schermata cambia davvero: un sito che mostra un'interfaccia che l'app non ha più
+è peggio di un sito senza schermate.
+
+💡 **Come si rifanno** (ci vuole mezz'ora, ed è tutta preparazione):
+l'app vuota mostra schermate a zero, perché dal 19/09 diario, peso, allenamenti
+e passi stanno **sul telefono**. Serve un utente **abbonato** (o metà card
+restano sfumate), col tema blu, e una giornata dentro l'archivio locale
+`app_flutter/salute.sqlite` — si scrive con `sqlite3` e si rimette con
+`adb shell "cat /sdcard/x.sqlite | run-as <pkg> sh -c 'cat > app_flutter/salute.sqlite'"`.
+⚠️ Le ore vanno calcolate **sull'orologio del telefono**: l'emulatore sta su GMT
+e questa macchina no, e le righe finiscono nel giorno sbagliato senza dare
+errore.
+
+⏳ **Mancano ancora** `app-chat` (serve un secondo account: la chat è cifrata fra
+due telefoni, non si può riempire da fuori) e `pannello`.
