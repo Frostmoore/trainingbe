@@ -51,7 +51,6 @@ class SitoController extends Controller
         return view('sito.home', [
             'formatta' => $this->formattatore(),
             'prezzoSingolo' => $listino->singolo(),
-            'chiamateMensili' => $listino->chiamateMensili(),
 
             /*
              * 💡 «Da X al mese»: si prende il **primo piano** di ogni platea,
@@ -113,7 +112,6 @@ class SitoController extends Controller
         return view('sito.prezzi-individuale', [
             'formatta' => $this->formattatore(),
             'prezzoSingolo' => $listino->singolo(),
-            'chiamateMensili' => $listino->chiamateMensili(),
             'pacchetti' => $listino->pacchettiGettoni(),
         ]);
     }
@@ -150,10 +148,20 @@ class SitoController extends Controller
             'costoAlMinimo' => $listino->costoSuMisura($platea, $listino->suMisura($platea)['minimo']),
             'piuGrande' => $piani[count($piani) - 1],
             'prezzoSingolo' => $listino->singolo(),
-            'chiamateMensili' => $listino->chiamateMensili(),
             'esempio' => $listino->esempio($platea),
-            'costoVisualizzazione' => $listino->costoVisualizzazione() / 100,
-            'budgetMinimo' => $listino->budgetMinimoPubblicita() / 100,
+
+            /*
+             * ⛔ **Tolti il 20/09 sera: `chiamateMensili`, `costoVisualizzazione`
+             * e `budgetMinimo`.**
+             *
+             * 🚨 Il numero delle chiamate incluse **non si pubblica** (📌 *«poi
+             * ok sono 150 ma non lo diciamo»*), e soprattutto raccontava una
+             * cosa falsa: quella quota copre **solo l'automatico**, non le
+             * richieste fatte a mano, che si pagano a gettoni sempre.
+             *
+             * ⛔ E la pubblicità nel catalogo non si vende, perché il catalogo
+             * come prodotto non esiste: vedi il commento in `prezzi-a-posti`.
+             */
         ]);
     }
 

@@ -129,10 +129,7 @@
                         @if ($piano->max_trainers !== null)
                             <li><strong>{{ $piano->max_trainers }} trainer</strong> al lavoro</li>
                         @endif
-                        <li>
-                            Ognuno riceve l'app intera, assistente compreso
-                            ({{ number_format($chiamateMensili, 0, ',', '.') }} elaborazioni al mese)
-                        </li>
+                        <li>Ognuno riceve <strong>il piano Plus</strong>: schede senza limiti e assistente automatico</li>
                         <li>Schede e piani illimitati, chat cifrata con ognuno</li>
                         @if ($ePalestra)
                             <li>L'app vestita coi colori e il logo della palestra</li>

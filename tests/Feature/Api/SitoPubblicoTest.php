@@ -392,38 +392,116 @@ class SitoPubblicoTest extends TestCase
     }
 
     /**
-     * 📌 **Quante richieste include l'abbonamento si dice.**
+     * 🚨 **Il numero delle chiamate incluse NON si pubblica** — 20/09/2026.
      *
-     * ── ⚠️ Ha ROVESCIATO `the_included_monthly_allowance_is_never_published`
+     * ── 🔄 Terza versione di questo test, e le tre ragioni sono diverse ────
      *
-     * Fino al 17/08 il numero era **deliberatamente taciuto**: sulla stessa
-     * pagina ci sono i pacchetti di gettoni, e la divisione la fa chiunque in
-     * tre secondi, scoprendo che comprare un pacchetto costa meno che
-     * abbonarsi. C'era un test che vietava di pubblicarlo.
+     * | Quando | Regola | Perché |
+     * |---|---|---|
+     * | fino al 17/08 | non si dice | accanto ai gettoni, la divisione fa scoprire che un pacchetto costa meno |
+     * | 18/08 | **si dice** | 📌 *«a sto punto diciamolo, tanto sta scritto nelle condizioni»* |
+     * | **20/09** | **non si dice** | 📌 *«150 incluse non è vero, sono quelle automatiche (poi ok sono 150 ma non lo diciamo)»* |
      *
-     * 🎯 Il 18/08 il committente ha deciso il contrario: *«a sto punto
-     * diciamolo, tanto sta scritto nelle condizioni d'uso»*. 💡 Ed e' la scelta
-     * giusta per una ragione che vale piu' del calcolo: **un numero che c'e' ma
-     * non si dice si legge come qualcosa da nascondere**, e su un servizio a
-     * pagamento e' l'impressione peggiore possibile.
+     * 🚨 **E stavolta non è pudore: era una frase falsa.** Quella quota copre
+     * **solo le chiamate automatiche**; tutto ciò che una persona chiede
+     * toccando qualcosa si paga a gettoni, abbonata o no
+     * (`CancelloDeiGettoni`, 31/08). Scrivere «150 elaborazioni incluse»
+     * accanto al prezzo faceva credere di aver comprato 150 foto di piatti.
      *
-     * 📌 Resta vero che a 300 gettoni i pacchetti convengono di piu' per
-     * gettone: e' una scelta commerciale consapevole, non una svista.
+     * 💡 Il test mette un numero riconoscibile e controlla che **non compaia
+     * da nessuna parte**: è l'unico modo di accorgersi se qualcuno lo rimette.
      */
     #[Test]
-    public function the_included_monthly_allowance_is_published(): void
+    public function the_included_monthly_allowance_is_not_published(): void
     {
-        /*
-         * ⛔ **`chiamate_mensili`, non `gettoni_mensili`** — 31/08/2026.
-         *
-         * 🚨 Il nome vecchio diceva «gettoni», e non lo sono: sono le richieste
-         * incluse nell'abbonamento. Da quel nome e' nato un accredito di
-         * gettoni all'accensione dell'abbonamento, scritto e tolto lo stesso
-         * giorno. La nota lunga sta in `config/listino.php`.
-         */
         config()->set('listino.chiamate_mensili', 7777);
 
-        $this->get('/prezzi/individuale')->assertOk()->assertSee('7.777', escape: false);
+        foreach (self::LE_PAGINE as $pagina) {
+            $this->get($pagina)
+                ->assertOk()
+                ->assertDontSee('7.777', escape: false)
+                ->assertDontSee('7777', escape: false);
+        }
+    }
+
+    /**
+     * 🚨 **Il sito non vende un catalogo che non esiste** — 20/09/2026.
+     *
+     * 📌 Il committente: *«La cosa di comparire più in alto nel catalogo per i
+     * trainer non ha senso, i trainer proprio non compaiono nel catalogo …
+     * anzi, in realtà è una stronzata anche per le palestre al momento, proprio
+     * non esiste ancora un catalogo»*.
+     *
+     * ⚠️ **Il codice ce l'ha**: `/api/v1/catalogo`, le campagne a
+     * visualizzazione, la scheda pubblica nel pannello. Ma come **prodotto**
+     * non c'è: nell'app quella schermata è «trova qualcuno a cui scrivere»
+     * dentro i messaggi, e nessuno vende quelle posizioni.
+     *
+     * 💡 Il test guarda le **parole**, non le intenzioni: qualunque promessa di
+     * visibilità a pagamento lo fa fallire, comunque sia scritta. Il giorno in
+     * cui il catalogo esiste davvero, si cancella questo test — con un commento
+     * che dice perché.
+     */
+    #[Test]
+    public function the_site_does_not_sell_a_catalogue_that_does_not_exist(): void
+    {
+        foreach (self::LE_PAGINE as $pagina) {
+            $html = $this->get($pagina)->assertOk()->getContent();
+
+            foreach (['comparire più in alto', 'visualizzazione', 'vetrina', 'a visualizzazione'] as $promessa) {
+                $this->assertStringNotContainsString(
+                    $promessa,
+                    $html,
+                    "{$pagina} promette una visibilità a pagamento che non si può comprare",
+                );
+            }
+        }
+    }
+
+    /**
+     * 🚨 **Il piano gratuito è raccontato com'è, coi suoi limiti.**
+     *
+     * ── ⛔ Cosa diceva la prima stesura, e perché era peggio di niente ─────
+     *
+     * Diceva *«Gratis: allenamenti, schede, storico e cronometro — tutto»*, e
+     * *«Plus: scrivi cosa hai mangiato e le calorie le conta lei»* come se
+     * fosse compreso. Nessuna delle due è vera:
+     *
+     * | Nel codice | Dove |
+     * |---|---|
+     * | Senza abbonamento si usano **le 3 schede più recenti**, e **solo di un giorno** | `limiti_delle_schede.dart` |
+     * | Quello che chiedi tu si paga **a gettoni sempre**, abbonati o no | `CancelloDeiGettoni` |
+     * | Senza abbonamento l'assistente **non parte da solo**, nemmeno coi gettoni | `CancelloDeiGettoni`, 20/09 |
+     *
+     * 🚨 Un limite scoperto **dopo** aver scaricato è una disinstallazione; un
+     * limite scritto prima è una ragione per abbonarsi.
+     */
+    #[Test]
+    public function the_free_plan_is_described_with_its_real_limits(): void
+    {
+        foreach (['/', '/prezzi/individuale'] as $pagina) {
+            $html = $this->get($pagina)->assertOk()->getContent();
+
+            $this->assertStringContainsString('3', $html);
+
+            foreach (['schede', 'gettoni'] as $parola) {
+                $this->assertStringContainsString($parola, $html, "{$pagina} non parla di {$parola}");
+            }
+        }
+
+        // 🚨 I tre limiti veri, detti a parole, sulla pagina che li deve dire.
+        $prezzi = $this->get('/prezzi/individuale')->assertOk();
+
+        $prezzi->assertSee('3 schede più recenti', escape: false)
+            ->assertSee('solo di un giorno', escape: false)
+            ->assertSee('assistente non lavora da solo', escape: false);
+
+        /*
+         * ⛔ **E non si promette come incluso quello che si paga a gettoni.**
+         * La frase deve esserci in positivo: «si paga a gettoni in tutti e due
+         * i casi».
+         */
+        $prezzi->assertSee('si paga a gettoni in tutti e', escape: false);
     }
 
     /**

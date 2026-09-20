@@ -6,7 +6,6 @@ namespace App\Http\Controllers;
 
 use App\Enums\PlanKind;
 use App\Models\Plan;
-use App\Services\Billing\Listino;
 use App\Services\Billing\Stripe\PianiInVendita;
 use App\Services\Tenancy\IscrizioneDalSito;
 use Illuminate\Contracts\View\View;
@@ -46,7 +45,7 @@ use Throwable;
 class IscrizioneController extends Controller
 {
     /** Il modulo: nome, email, password, e il piano già scelto. */
-    public function modulo(string $piano, IscrizioneDalSito $iscrizioni, Listino $listino): View
+    public function modulo(string $piano, IscrizioneDalSito $iscrizioni): View
     {
         $scelto = $iscrizioni->pianoComprabile($piano);
 
@@ -54,7 +53,7 @@ class IscrizioneController extends Controller
         // nemmeno mostrare un modulo che poi rifiuterà.
         abort_if($scelto === null, 404);
 
-        return view('sito.iscriviti', $this->datiDelModulo($scelto, $listino));
+        return view('sito.iscriviti', $this->datiDelModulo($scelto));
     }
 
     /**
@@ -71,7 +70,6 @@ class IscrizioneController extends Controller
         string $piano,
         IscrizioneDalSito $iscrizioni,
         PianiInVendita $vendita,
-        Listino $listino,
     ): RedirectResponse {
         $scelto = $iscrizioni->pianoComprabile($piano);
 
@@ -160,7 +158,7 @@ class IscrizioneController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function datiDelModulo(Plan $piano, Listino $listino): array
+    private function datiDelModulo(Plan $piano): array
     {
         $ePalestra = $piano->kind === PlanKind::Gym;
 
@@ -169,8 +167,6 @@ class IscrizioneController extends Controller
             'ePalestra' => $ePalestra,
             'unita' => $ePalestra ? 'iscritti' : 'allievi',
             'formatta' => static fn (int $centesimi): string => number_format($centesimi / 100, 2, ',', '.').' €',
-            'chiamateMensili' => $listino->chiamateMensili(),
-
             // 💡 Il link «torna ai piani» punta alla pagina da cui si arriva,
             // non a `/prezzi`: chi cambia idea vuole gli altri piani suoi, non
             // di nuovo il bivio fra le tre platee.

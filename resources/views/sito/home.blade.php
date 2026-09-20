@@ -93,7 +93,7 @@
                         <li>Le calorie del giorno, confrontate col tuo obiettivo</li>
                         <li>La seduta di oggi, pronta da cominciare</li>
                         <li>Un tocco per segnare un pasto o aprire la scheda</li>
-                        <li>Se colleghi Health Connect, ci finiscono anche sonno e passi</li>
+                        <li>Se colleghi Health Connect, ci finiscono anche sonno e calorie bruciate</li>
                     </ul>
                 </div>
 
@@ -130,8 +130,8 @@
                     </p>
                     <ul class="elenco">
                         <li>Colazione, pranzo, cena e spuntini, con calorie e macro</li>
-                        <li>Gli alimenti che ti scrivi tu restano tuoi: non finiscono nel catalogo di nessuno</li>
-                        <li>Ricette e piatti composti, salvati una volta e riusati sempre</li>
+                        <li>Le cose che mangi spesso fra i <strong>preferiti</strong>, a un tocco</li>
+                        <li>Gli alimenti che ti scrivi tu restano tuoi: non finiscono nell'archivio di nessun altro</li>
                     </ul>
                 </div>
             </div>
@@ -193,7 +193,11 @@
                 </div>
                 <div class="scheda">
                     <h3>📄 Import da PDF o foto</h3>
-                    <p>La scheda che ti hanno dato in palestra diventa una scheda vera, che poi controlli riga per riga.</p>
+                    <p>
+                        La scheda che ti hanno dato in palestra diventa una scheda vera, che poi
+                        controlli riga per riga. <span class="nota">La trascrizione la fa
+                        l'assistente: costa 50 gettoni.</span>
+                    </p>
                 </div>
                 <div class="scheda">
                     <h3>🎨 I colori della tua palestra</h3>
@@ -222,9 +226,9 @@
             <h2>L'app è gratis. Si paga solo l'assistente.</h2>
 
             <p class="guida">
-                Diario, allenamenti, schede, chat, peso e misure non costano niente e non
-                scadono. Quello che si paga è l'<strong>intelligenza artificiale</strong>,
-                perché costa a ogni domanda: chi non la usa non deve pagarla.
+                Diario, peso, misure e chat non costano niente e non scadono. L'abbonamento
+                toglie i <strong>limiti sulle schede</strong> e accende l'assistente
+                <strong>automatico</strong>, quello che lavora senza che tu chieda niente.
             </p>
 
             <div class="confronto" style="margin-top: var(--sp-3);">
@@ -238,44 +242,49 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Diario alimentare, catalogo, ricette</td>
+                            <td>Diario alimentare, catalogo, preferiti</td>
                             <td class="si">✓ tutto</td>
                             <td class="si">✓ tutto</td>
                         </tr>
                         <tr>
-                            <td>Allenamenti, schede, storico, cronometro</td>
+                            <td>Peso, misure, foto, copia di sicurezza, esporta i dati</td>
                             <td class="si">✓ tutto</td>
                             <td class="si">✓ tutto</td>
                         </tr>
                         <tr>
-                            <td>Chat cifrata col trainer</td>
-                            <td class="si">✓</td>
+                            <td>Chat con chi ti allena</td>
+                            <td class="si">✓ senza limite</td>
+                            <td class="si">✓ senza limite</td>
+                        </tr>
+                        <tr>
+                            <td>Quante schede puoi usare</td>
+                            <td class="no">le <strong>3</strong> più recenti</td>
+                            <td class="si">tutte</td>
+                        </tr>
+                        <tr>
+                            <td>Schede su più giorni</td>
+                            <td class="no">no, solo di un giorno</td>
                             <td class="si">✓</td>
                         </tr>
                         <tr>
-                            <td>Peso, misure, foto, copia di sicurezza</td>
-                            <td class="si">✓</td>
-                            <td class="si">✓</td>
-                        </tr>
-                        <tr>
-                            <td>Scrivi «due uova e una mela» e le calorie le conta lei</td>
-                            <td class="no">a gettoni</td>
-                            <td class="si">✓ incluso</td>
-                        </tr>
-                        <tr>
-                            <td>Fotografi il piatto e lo riconosce</td>
-                            <td class="no">a gettoni</td>
-                            <td class="si">✓ incluso</td>
-                        </tr>
-                        <tr>
-                            <td>Lo spunto del giorno sulla tua giornata</td>
+                            <td>Il consiglio del giorno, che arriva da solo</td>
                             <td class="no">—</td>
                             <td class="si">✓</td>
                         </tr>
                         <tr>
-                            <td>Quante elaborazioni al mese</td>
-                            <td class="no">quelle che compri</td>
-                            <td class="si">{{ number_format($chiamateMensili, 0, ',', '.') }} incluse</td>
+                            <td>L'analisi della scheda dopo l'allenamento</td>
+                            <td class="no">—</td>
+                            <td class="si">✓</td>
+                        </tr>
+                        <tr>
+                            <td>Scrivere a un trainer che non ti segue</td>
+                            <td class="no">3 messaggi</td>
+                            <td class="si">✓ senza limite</td>
+                        </tr>
+                        <tr>
+                            <td>Scrivere un pasto a parole, fotografarlo, trascrivere un PDF</td>
+                            <td class="no">a gettoni</td>
+                            <td class="no">a gettoni</td>
                         </tr>
                     </tbody>
                 </table>
@@ -283,29 +292,34 @@
 
             <div class="griglia-2" style="margin-top: var(--sp-4);">
                 <div>
-                    <h3>Perché conviene il Plus</h3>
+                    <h3>La differenza vera</h3>
                     <p class="guida">
-                        Perché la parte che fa risparmiare tempo è quella: scrivere una frase
-                        invece di cercare quattro alimenti, o fotografare il piatto invece di
-                        pesarlo. 💡 A {{ $formatta($prezzoSingolo) }} al mese sono
-                        <strong>cinque elaborazioni al giorno</strong>, che è più di quante
-                        ne fa chi segna tre pasti.
+                        🚨 <strong>Quello che chiedi tu si paga a gettoni in tutti e due i
+                        casi</strong>, e lo diciamo qui invece di fartelo scoprire dopo: una
+                        stima da una frase, una foto del piatto o la trascrizione di una scheda
+                        costano perché costano a noi, a ogni chiamata.
                     </p>
-                    <div class="fila-bottoni" style="margin-top: var(--sp-2);">
+                    <p class="guida" style="margin-top: var(--sp-2);">
+                        💡 Quello che il Plus aggiunge è l'assistente che <strong>lavora da
+                        solo</strong> — il consiglio del giorno, l'analisi della scheda dopo
+                        l'allenamento — e le schede senza limiti.
+                    </p>
+                    <div class="fila-bottoni" style="margin-top: var(--sp-3);">
                         <a href="/prezzi/individuale" class="bottone bottone-pieno">Cosa comprende il Plus</a>
                     </div>
                 </div>
 
                 <div class="scheda tenue">
-                    <h3 style="margin-top: 0;">E se lo usi ogni tanto?</h3>
+                    <h3 style="margin-top: 0;">I gettoni, in due righe</h3>
                     <p>
-                        Ci sono i <strong>gettoni</strong>: si comprano una volta, non scadono,
-                        e si consumano solo quando chiedi qualcosa all'assistente. Una stima da
-                        testo ne vale uno, una da foto dieci.
+                        Si comprano una volta e <strong>non scadono</strong>. Si consumano solo
+                        quando chiedi qualcosa all'assistente: una stima da testo ne vale uno,
+                        una da foto dieci, la trascrizione di una scheda cinquanta.
                     </p>
                     <p style="margin-bottom: 0;">
                         💡 Se ti allena una palestra o un trainer, l'abbonamento
-                        <strong>può regalartelo</strong>: in quel caso non paghi niente tu.
+                        <strong>può regalartelo</strong>: in quel caso hai il Plus senza pagare
+                        niente tu.
                     </p>
                 </div>
             </div>
@@ -485,9 +499,19 @@
                 <details class="domanda">
                     <summary><strong>Usate i miei dati per la pubblicità?</strong></summary>
                     <p>
-                        No. Nel catalogo dell'app una palestra può pagare per comparire più in
-                        alto, e questo è tutto: non compriamo né vendiamo profili, e per
-                        mostrare quelle schede non serve sapere niente di te.
+                        No: non compriamo e non vendiamo profili, e dentro l'app non c'è
+                        pubblicità di nessun tipo. ⚠️ E non potremmo nemmeno volendo: peso,
+                        diario e allenamenti sui nostri server non ci sono.
+                    </p>
+                </details>
+
+                <details class="domanda">
+                    <summary><strong>Cosa perdo se non mi abbono?</strong></summary>
+                    <p>
+                        Niente di quello che hai già scritto. Senza abbonamento usi le
+                        <strong>3 schede più recenti</strong> e solo quelle di un giorno, e
+                        l'assistente non lavora da solo. 💡 Le schede che ti hanno mandato
+                        restano tutte lì: quando ti abboni le ritrovi.
                     </p>
                 </details>
             </div>

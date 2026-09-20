@@ -184,7 +184,11 @@
 
                 <div class="scheda">
                     <h3>📄 Import da PDF o foto</h3>
-                    <p>Le schede che hai su carta diventano schede vere: un modello le trascrive, tu le controlli riga per riga.</p>
+                    <p>
+                        Le schede che hai su carta diventano schede vere: un modello le
+                        trascrive, tu le controlli riga per riga.
+                        <span class="nota">Ogni trascrizione costa 50 gettoni.</span>
+                    </p>
                 </div>
 
                 <div class="scheda">
@@ -193,8 +197,8 @@
                 </div>
 
                 <div class="scheda">
-                    <h3>📣 La scheda pubblica</h3>
-                    <p>La tua vetrina nel catalogo dell'app, con la possibilità di comparire più in alto a pagamento.</p>
+                    <h3>🎨 I tuoi colori</h3>
+                    <p>Logo e colori della palestra dentro l'app dei tuoi iscritti: la usano, e vedono te.</p>
                 </div>
             </div>
         </div>

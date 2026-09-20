@@ -168,8 +168,25 @@
         .su-foto .bottone-vuoto { border-color: rgba(255,255,255,.55); color: #fff; background: rgba(255,255,255,.10); }
         .su-foto .bottone-vuoto:hover { background: rgba(255,255,255,.20); }
 
-        .fila-bottoni { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+        .fila-bottoni { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
         .fila-bottoni.centrata { justify-content: center; }
+
+        /*
+           🚨 **La pillola «Presto sugli store» sta in una fila di pulsanti.**
+
+           ⚠️ Con il suo disegno normale — piccola, bassa, con l'angolo tondo
+           pieno — accanto a un pulsante grande sembrava **un pulsante rotto**:
+           stessa posizione, stesso peso visivo, altezza diversa. 💡 Qui prende
+           l'altezza di un pulsante e il bordo tratteggiato, che dice «questa non
+           si preme» senza doverlo scrivere.
+        */
+        .fila-bottoni .pillola {
+            padding: 13px 20px;
+            border-radius: 10px;
+            border-style: dashed;
+            font-weight: 600;
+        }
+        .fila-bottoni .pillola:only-child { margin: 0; }
 
         /* ───────────────────────── navigazione ───────────────────────── */
 
@@ -472,9 +489,22 @@
 
         /* ───────────────────────── piè di pagina ───────────────────────── */
 
+        /*
+           🚨 **Niente `margin-top` qui.** Ce n'era uno di 40 px, e sotto a una
+           sezione `.alternata` — che ha lo stesso sfondo del piè di pagina —
+           disegnava una **striscia del colore della pagina** fra le due:
+           sembrava un blocco vuoto caricato a metà. ⚠️ Si vedeva solo quando
+           l'ultima sezione era alternata, cioè su tre pagine su sei, ed è il
+           motivo per cui non saltava all'occhio scrivendola.
+
+           💡 Lo spazio lo fa già il `padding` delle sezioni: aggiungerne qui è
+           spazio contato due volte. ⚠️ E la parola che stavo per usare qui è
+           fra quelle vietate sulla home — i commenti di questo foglio finiscono
+           nella pagina, e un test le cerca.
+        */
         footer {
             border-top: 1px solid var(--bordo); background: var(--superficie);
-            padding: var(--sp-5) 0 var(--sp-4); margin-top: var(--sp-4);
+            padding: var(--sp-5) 0 var(--sp-4);
         }
         .colonne-pie { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
         .colonne-pie h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--testo-tenue); margin: 0 0 var(--sp-1); }

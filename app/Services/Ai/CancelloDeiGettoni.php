@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Ai\Exceptions\AiQuotaExceededException;
 use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
+use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\PortafoglioGettoni;
 
 /**
@@ -112,6 +113,7 @@ class CancelloDeiGettoni
     public function __construct(
         private readonly MemberAiQuota $quota,
         private readonly PortafoglioGettoni $portafoglio,
+        private readonly PianoAttivo $piano,
     ) {}
 
     /**
@@ -188,6 +190,30 @@ class CancelloDeiGettoni
 
         if (! $soloGettoni && $this->quota->hasQuotaLeft($utente, $funzione)) {
             return false;
+        }
+
+        /*
+         * ══ 🚨 L'AUTOMATICO NON SI PAGA COI GETTONI — 20/09/2026 ═══════════
+         *
+         * 📌 Il committente, rileggendo il sito: *«le chiamate automatiche non
+         * sono attive neanche se hai i gettoni per i non abbonati»*.
+         *
+         * ⛔ **E il codice faceva il contrario, in silenzio.** La tabella in
+         * testa a questa classe dice da sempre «quello che parte da solo lo
+         * paga la quota inclusa, quello che chiedi tu lo pagano i gettoni» — ma
+         * senza questa riga una chiamata **automatica** che non trovava quota
+         * cadeva dritta sui gettoni. 🚨 Cioè: chi non è abbonato e aveva
+         * comprato dieci gettoni per fotografare i piatti se li vedeva
+         * consumare dal consiglio del giorno, che non aveva chiesto.
+         *
+         * 💡 La condizione è `haLaAi()` — «l'AI spetta per contratto» — e non
+         * `eAbbonato()`: chi riceve il posto dalla palestra o dal trainer non è
+         * lui a pagare, ma l'automatico gli spetta lo stesso. ⚠️ E un abbonato
+         * che ha finito la quota del mese continua a poterlo pagare a gettoni:
+         * quello è un tetto raggiunto, non una funzione che non ha comprato.
+         */
+        if (! $soloGettoni && ! $this->piano->haLaAi($utente)) {
+            $this->quota->assertWithinQuota($utente, $funzione);
         }
 
         /*

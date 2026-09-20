@@ -1,37 +1,46 @@
 {{--
-    I prezzi di chi si allena — 20/09/2026.
+    I prezzi di chi si allena — rifatta il 20/09/2026 sera, sui fatti del codice.
 
-    ── 🚨 La regola che non cambia ────────────────────────────────────────────
+    ── 🚨 Perché è stata rifatta ──────────────────────────────────────────────
 
-    **Nessun numero è scritto qui dentro.** Tutto viene da `config/listino.php`
-    attraverso `Listino`: se un prezzo cambia lì, cambia qui, nell'app e su
-    Stripe. Un prezzo copiato a mano è un prezzo che un giorno dirà una cosa
-    diversa da quella che il sistema incassa, e lo si scopre da un cliente
-    arrabbiato invece che da un test.
+    Perché la prima stesura **raccontava un prodotto che non esiste**. Il
+    committente, riga per riga:
 
-    ── 💡 Perché la pagina comincia dal gratis ────────────────────────────────
+    | Diceva | La verità nel codice |
+    |---|---|
+    | «Gratis: allenamenti, schede, storico» | ⛔ Senza abbonamento si usano **le 3 schede più recenti** e **solo di un giorno** (`limiti_delle_schede.dart`) |
+    | «Plus: scrivi il pasto e lo conta lei» come cosa inclusa | ⛔ Le richieste fatte a mano **si pagano a gettoni sempre**, abbonati o no (`CancelloDeiGettoni`, 31/08) |
+    | «150 elaborazioni incluse» | ⛔ Quella quota copre **solo l'automatico**, e il numero non si pubblica |
+    | Niente sulle chiamate automatiche del non abbonato | ⛔ Non partono: senza abbonamento non c'è nessuna quota inclusa |
 
-    Perché è vero, ed è la cosa che distingue: l'app **non è una prova di trenta
-    giorni**. ⚠️ Cominciare dal prezzo del Plus farebbe cercare la fregatura, e
-    chi la cerca la trova anche dove non c'è.
+    💡 **La divisione vera è una sola, e regge tutta la pagina**: quello che
+    parte **da solo** lo paga l'abbonamento; quello che **chiedi tu** lo pagano i
+    gettoni. 🚨 Dirlo prima è l'unico modo onesto di far spendere qualcuno.
+
+    ── 🚨 E i numeri non si scrivono qui dentro ───────────────────────────────
+
+    Vengono da `config/listino.php` attraverso `Listino`. Un prezzo copiato a
+    mano è un prezzo che un giorno dirà una cosa diversa da quella che il
+    sistema incassa.
 --}}
 @extends('sito.layout')
 
 @section('titolo', 'Prezzi per chi si allena — Training Companion')
-@section('descrizione', 'L\'app è gratis e non scade. Il Plus costa 8 € al mese e comprende l\'assistente automatico; in alternativa ci sono i gettoni, che non scadono.')
+@section('descrizione', 'L\'app è gratis e non scade. Il Plus costa 8 € al mese: toglie i limiti sulle schede e accende l\'assistente automatico.')
 
 @section('contenuto')
 
     <section style="padding-bottom: var(--sp-4);">
         <div class="contenitore">
             <span class="pillola">Individuale</span>
-            <h1 style="margin-top: var(--sp-2);">L'app è gratis.<br>Si paga solo l'assistente.</h1>
+            <h1 style="margin-top: var(--sp-2);">Gratis si usa davvero.<br>Il Plus toglie i limiti.</h1>
 
             <div class="griglia-2" style="margin-top: var(--sp-3);">
                 <p class="guida">
-                    Diario, allenamenti, schede, chat, peso e misure non costano niente e non
-                    scadono. L'intelligenza artificiale costa a ogni domanda: o la prendi a
-                    canone col Plus, o la paghi a gettoni quando ti serve.
+                    Diario, peso, misure, chat e copia di sicurezza non costano niente e non
+                    scadono. L'abbonamento fa due cose: toglie i <strong>limiti sulle
+                    schede</strong> e accende l'assistente <strong>automatico</strong>, quello
+                    che lavora senza che tu chieda niente.
                 </p>
 
                 <x-sito.figura
@@ -51,12 +60,13 @@
                     <p class="sotto-cifra">nessun periodo di prova, nessuna carta</p>
 
                     <ul class="elenco">
-                        <li>Diario alimentare e catalogo completo</li>
-                        <li>Allenamenti, schede, storico e cronometro</li>
-                        <li>Chat cifrata con chi ti allena</li>
+                        <li>Diario alimentare, catalogo completo e preferiti</li>
                         <li>Peso, misure, foto dei progressi</li>
-                        <li>Copia di sicurezza cifrata</li>
-                        <li class="no">Assistente automatico</li>
+                        <li>Chat con chi ti allena, senza limite</li>
+                        <li>Copia di sicurezza cifrata, ed esporta i tuoi dati</li>
+                        <li>Allenamenti col cronometro e lo storico degli esercizi</li>
+                        <li class="no"><strong>Solo le 3 schede più recenti</strong>, e solo di un giorno</li>
+                        <li class="no">L'assistente non lavora da solo</li>
                     </ul>
 
                     <div class="in-fondo">
@@ -71,10 +81,11 @@
 
                     <ul class="elenco">
                         <li><strong>Tutto quello che c'è nel gratis</strong></li>
-                        <li>Scrivi cosa hai mangiato e le calorie le conta lei</li>
-                        <li>Fotografi il piatto e lo riconosce</li>
-                        <li>Lo spunto del giorno sulla tua giornata</li>
-                        <li>{{ number_format($chiamateMensili, 0, ',', '.') }} elaborazioni al mese — cinque al giorno</li>
+                        <li><strong>Schede senza limiti</strong>, anche su più giorni</li>
+                        <li>Il <strong>consiglio del giorno</strong>, che arriva da solo fino a tre volte</li>
+                        <li>L'<strong>analisi della scheda</strong> dopo l'allenamento</li>
+                        <li>L'andamento di un esercizio nel tempo, letto dall'assistente</li>
+                        <li>Scrivere senza limite anche a chi non ti segue</li>
                     </ul>
 
                     <div class="in-fondo">
@@ -85,19 +96,31 @@
                     </div>
                 </div>
             </div>
+
+            <div class="scheda tenue" style="margin-top: var(--sp-3);">
+                <h3 style="margin-top: 0;">⚠️ Una cosa da sapere prima di pagare</h3>
+                <p style="margin-bottom: 0;">
+                    <strong>Quello che chiedi tu all'assistente si paga a gettoni in tutti e
+                    due i casi</strong>: scrivere un pasto a parole, fotografare il piatto,
+                    trascrivere una scheda da un PDF. 💡 Non è un limite del piano gratuito —
+                    è che ognuna di quelle richieste costa a noi nel momento in cui la fai, e
+                    preferiamo dirlo prima invece di nasconderlo in un tetto mensile.
+                </p>
+            </div>
         </div>
     </section>
 
     {{-- ═══════════════════════ i gettoni ═══════════════════════ --}}
     <section class="alternata" id="gettoni">
         <div class="contenitore">
-            <p class="occhiello">L'alternativa al canone</p>
+            <p class="occhiello">Per quello che chiedi tu</p>
             <h2>I gettoni: si comprano una volta e restano lì.</h2>
 
             <p class="guida">
-                Vanno bene se l'assistente lo accendi ogni tanto. ⚠️ Non scadono, e non c'è un
-                abbonamento nascosto dietro: quando finiscono, l'app continua a funzionare come
-                prima.
+                Servono per le richieste che parti tu: una stima da una frase vale
+                <strong>1 gettone</strong>, una da foto <strong>10</strong>, la trascrizione di
+                una scheda o di un piano alimentare <strong>50</strong>. ⚠️ Non scadono, e
+                quando finiscono l'app continua a funzionare come prima.
             </p>
 
             <div class="griglia-pacchetti" style="margin-top: var(--sp-3);">
@@ -115,9 +138,9 @@
             </div>
 
             <p class="nota" style="margin-top: var(--sp-3);">
-                Quanto costa una cosa? Il conto lo trovi nell'app <strong>prima</strong> di
-                premere: una stima da testo vale un gettone, una da foto dieci, la trascrizione
-                di una scheda cinquanta.
+                💡 Il costo lo trovi scritto nell'app <strong>prima</strong> di premere, ogni
+                volta. E i gettoni restano tuoi: non sono della palestra e non scadono se cambi
+                piano.
             </p>
         </div>
     </section>
@@ -130,21 +153,43 @@
 
             <div style="margin-top: var(--sp-3);">
                 <details class="domanda">
-                    <summary><strong>Se non pago, cosa perdo?</strong></summary>
+                    <summary><strong>Cosa cambia davvero fra gratis e Plus?</strong></summary>
                     <p>
-                        Niente di quello che hai già. Senza Plus e senza gettoni l'assistente
-                        non risponde: tutto il resto dell'app funziona uguale, compresi i dati
-                        che hai messo dentro fino a ieri.
+                        Due cose. Senza abbonamento puoi usare <strong>le 3 schede più
+                        recenti</strong> e solo quelle di un giorno, e l'assistente non parte
+                        mai da solo. Col Plus le schede sono tutte, anche su più giorni, e
+                        l'assistente ti scrive il consiglio del giorno e legge l'andamento
+                        delle tue sedute.
                     </p>
                 </details>
 
                 <details class="domanda">
-                    <summary><strong>Conviene il Plus o i gettoni?</strong></summary>
+                    <summary><strong>Se compro dei gettoni, l'assistente lavora da solo?</strong></summary>
                     <p>
-                        Il Plus, se usi l'assistente quasi ogni giorno: comprende
-                        {{ number_format($chiamateMensili, 0, ',', '.') }} elaborazioni al mese.
-                        I gettoni, se lo accendi ogni tanto — non scadono, quindi non si butta
-                        via niente.
+                        No. I gettoni pagano <strong>quello che chiedi tu</strong>; il consiglio
+                        del giorno e l'analisi dopo l'allenamento sono compresi
+                        nell'abbonamento, e senza abbonamento non partono — ⛔ nemmeno se hai
+                        gettoni da spendere. 💡 È voluto: nessuno deve vedersi consumare il
+                        saldo da una cosa che non ha chiesto.
+                    </p>
+                </details>
+
+                <details class="domanda">
+                    <summary><strong>E se mi abbono, le foto dei piatti sono gratis?</strong></summary>
+                    <p>
+                        No: quelle sono richieste che parti tu, e si pagano a gettoni anche col
+                        Plus. Una stima da foto ne vale dieci. ⚠️ Lo scriviamo grande perché è
+                        la cosa che più facilmente si scopre dopo aver pagato.
+                    </p>
+                </details>
+
+                <details class="domanda">
+                    <summary><strong>Cosa succede alle mie schede se non rinnovo?</strong></summary>
+                    <p>
+                        Restano tutte dove sono: nessuna si cancella. Tornano utilizzabili le
+                        tre più recenti di un giorno, e le altre le rivedi disattivate. 🚨 Una
+                        scheda che il tuo trainer ha scritto per te non la buttiamo perché è
+                        scaduto un abbonamento.
                     </p>
                 </details>
 
@@ -152,9 +197,9 @@
                     <summary><strong>Me lo può pagare la mia palestra?</strong></summary>
                     <p>
                         Sì. Palestre e trainer comprano dei <strong>posti</strong> e li regalano
-                        a chi vogliono: chi lo riceve ha il Plus senza pagare niente. Se poi
-                        lascia la palestra, l'abbonamento regalato finisce — ma i suoi dati
-                        restano suoi.
+                        a chi vogliono: chi lo riceve ha esattamente il Plus, senza pagare
+                        niente. Se lascia la palestra il regalo finisce, ma i suoi dati e le sue
+                        schede restano suoi.
                     </p>
                 </details>
 

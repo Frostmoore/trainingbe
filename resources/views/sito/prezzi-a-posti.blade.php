@@ -150,9 +150,13 @@
                 <div class="scheda">
                     <h3>👤 Per chi lo riceve</h3>
                     <p>
-                        Diario, allenamenti, chat e assistente automatico
-                        ({{ number_format($chiamateMensili, 0, ',', '.') }} elaborazioni al
-                        mese). Non paga niente e non gli si chiede una carta.
+                        <strong>Esattamente il piano Plus</strong>: schede senza limiti anche
+                        su più giorni, il consiglio del giorno e l'analisi della scheda dopo
+                        l'allenamento. Non paga niente e non gli si chiede una carta.
+                    </p>
+                    <p class="nota" style="margin: var(--sp-1) 0 0;">
+                        ⚠️ Quello che <em>chiede lui</em> all'assistente — la foto del piatto,
+                        la trascrizione di un PDF — resta a gettoni, come per tutti.
                     </p>
                 </div>
                 <div class="scheda">
@@ -211,26 +215,24 @@
         </div>
     </section>
 
-    {{-- ═══════════════════════ farsi trovare ═══════════════════════ --}}
-    <section class="alternata" id="visibilita">
-        <div class="contenitore">
-            <p class="occhiello">Farsi trovare</p>
-            <h2>Comparire più in alto nel catalogo.</h2>
+    {{--
+        ⛔ **Tolta il 20/09 sera: «comparire più in alto nel catalogo».**
 
-            <p class="guida">
-                Nell'app c'è un catalogo di palestre e trainer. Comparire è gratis; comparire
-                <strong>più in alto</strong> si paga a persona raggiunta:
-                {{ number_format($costoVisualizzazione, 2, ',', '.') }} centesimi a
-                visualizzazione, con un budget mensile minimo di
-                {{ number_format($budgetMinimo, 0, ',', '.') }} €.
-            </p>
+        📌 Il committente: *«La cosa di comparire più in alto nel catalogo per i
+        trainer non ha senso, i trainer proprio non compaiono nel catalogo …
+        anzi, in realtà è una stronzata anche per le palestre al momento,
+        proprio non esiste ancora un catalogo»*.
 
-            <p class="nota">
-                💡 Decidi tu quanto spendere al mese: finito il budget, la scheda torna al suo
-                posto naturale. E per mostrarla non serve sapere niente di chi guarda.
-            </p>
-        </div>
-    </section>
+        ⚠️ **Il codice ce l'ha** — `/api/v1/catalogo`, le campagne a
+        visualizzazione, la scheda pubblica nel pannello — ma come **prodotto**
+        non esiste: nell'app quella schermata è «trova qualcuno a cui scrivere»
+        dentro i messaggi, e non c'è nessun catalogo da scorrere né nessuno che
+        venda quelle posizioni.
+
+        🚨 Un sito che vende una cosa che non si può comprare è la cosa peggiore
+        da lasciare su una pagina di prezzi: si scopre **dopo** aver pagato.
+        Torna qui il giorno in cui il catalogo esiste davvero.
+    --}}
 
     {{-- ═══════════════════════ domande ═══════════════════════ --}}
     <section id="domande-prezzi">
