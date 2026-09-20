@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Panels;
 
 use App\Enums\PlanKind;
+use App\Filament\God\Resources\Offerte\Pages\ListOfferte;
 use App\Filament\God\Resources\Plans\Pages\CreatePlan;
 use App\Filament\God\Resources\Plans\Pages\ListPlans;
 use App\Filament\God\Resources\RichiesteDiContatto\Pages\ListRichiesteDiContatto;
+use App\Models\OffertaDiPiano;
 use App\Models\Plan;
 use App\Models\RichiestaDiContatto;
 use Database\Seeders\PlanSeeder;
@@ -81,6 +83,81 @@ class IlPannelloDeiPianiSuMisuraTest extends TestCase
             ->assertSuccessful()
             ->assertSee('Giulia Ferri')
             ->assertSee('180 iscritti · 9 trainer');
+    }
+
+    /**
+     * 🆕 🔗 **Il pulsante che fa il link di pagamento** — 21/09/2026.
+     *
+     * 📌 *«certo che il piano cucito a mano deve essere fatto con stripe»*.
+     *
+     * ⚠️ Il test guarda che nasca **l'offerta**, non la notifica: la notifica
+     * è dove si legge il link, ma quello che vale è la riga — il link si
+     * ritrova, la notifica no.
+     */
+    #[Test]
+    public function dal_piano_si_crea_il_link_di_pagamento(): void
+    {
+        $palestra = $this->creaPalestra();
+
+        $piano = Plan::create([
+            'code' => 'su_misura_link',
+            'name' => 'Su misura — link',
+            'kind' => PlanKind::Gym,
+            'ai_enabled' => true,
+            'max_members' => 300,
+            'max_trainers' => 25,
+            'price_cents' => 70000,
+            'is_public' => false,
+            'cucito_a_mano' => true,
+        ]);
+
+        Livewire::test(ListPlans::class)
+            ->callTableAction('manda_il_link', $piano, [
+                'tenant_id' => $palestra->getKey(),
+                'email' => 'capo@palestrademo.it',
+                'scade_il' => now()->addDays(30),
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $offerta = OffertaDiPiano::withoutGlobalScopes()->sole();
+
+        $this->assertSame($piano->getKey(), $offerta->plan_id);
+        $this->assertSame($palestra->getKey(), $offerta->tenant_id);
+        $this->assertSame(32, mb_strlen($offerta->token), 'il token non è lungo come quelli degli inviti');
+        $this->assertTrue($offerta->eValida());
+        $this->assertStringEndsWith('/offerta/'.$offerta->token, $offerta->link());
+    }
+
+    /** 💡 E il link si ritrova: è il motivo per cui l'elenco esiste. */
+    #[Test]
+    public function l_elenco_delle_offerte_si_apre(): void
+    {
+        $piano = Plan::create([
+            'code' => 'su_misura_elenco',
+            'name' => 'Su misura per elenco',
+            'kind' => PlanKind::Gym,
+            'ai_enabled' => true,
+            'price_cents' => 50000,
+            'is_public' => false,
+            'cucito_a_mano' => true,
+        ]);
+
+        OffertaDiPiano::create([
+            'plan_id' => $piano->getKey(),
+            'token' => OffertaDiPiano::nuovoToken(),
+            'email' => 'capo@palestrademo.it',
+        ]);
+
+        Livewire::test(ListOfferte::class)
+            ->assertSuccessful()
+            /*
+             * ⚠️ Il nome del piano di prova è in ASCII puro, e non è pignoleria:
+             * un nome con un trattino lungo si ritrova nella pagina **scritto
+             * diverso** da com'è nel database, e `assertSee` fallisce su una
+             * pagina giusta. Si è già perso tempo così il 21/09.
+             */
+            ->assertSee('Su misura per elenco')
+            ->assertSee('capo@palestrademo.it');
     }
 
     /**

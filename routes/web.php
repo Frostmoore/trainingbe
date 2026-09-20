@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IscrizioneController;
+use App\Http\Controllers\OffertaController;
 use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
@@ -114,6 +115,33 @@ Route::get('/professionisti', [SitoController::class, 'professionisti'])
 | segnaposto, e messa prima si prenderebbe anche `scrivici`.
 */
 Route::get('/scrivici', [ScriviciController::class, 'modulo'])->name('sito.scrivici');
+
+/*
+| 🔗 L'offerta di un piano su misura - 21/09/2026.
+|
+| 📌 *«certo che il piano cucito a mano deve essere fatto con stripe»*.
+|
+| ⛔ Prima il piano su misura si **assegnava** dal pannello: il cliente si
+| ritrovava il servizio acceso e la fattura da nessuna parte. Adesso il pannello
+| crea un **link**, e da quel link si paga su Stripe come da qualunque altro
+| piano.
+|
+| 🚨 **Il token e' l'autorizzazione**: rende comprabile un piano che non e' a
+| listino, e solo a chi ha il link. Vincolato a 32 caratteri alfanumerici come i
+| token degli inviti - senza il vincolo, un token storto finirebbe in una query
+| invece che in un 404.
+|
+| ⚠️ `throttle` sul POST: e' una rotta che puo' **creare un account**, come
+| `/iscriviti`.
+*/
+Route::get('/offerta/{token}', [OffertaController::class, 'mostra'])
+    ->where('token', '[A-Za-z0-9]{32}')
+    ->name('sito.offerta');
+
+Route::post('/offerta/{token}', [OffertaController::class, 'attiva'])
+    ->where('token', '[A-Za-z0-9]{32}')
+    ->middleware('throttle:6,1')
+    ->name('sito.offerta.attiva');
 
 Route::post('/scrivici', [ScriviciController::class, 'invia'])
     ->middleware('throttle:5,10')

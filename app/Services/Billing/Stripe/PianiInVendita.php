@@ -6,6 +6,7 @@ namespace App\Services\Billing\Stripe;
 
 use App\Enums\PlanKind;
 use App\Enums\UserRole;
+use App\Models\OffertaDiPiano;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
@@ -105,13 +106,104 @@ class PianiInVendita
             : $this->apriIlCanone($utente, $tenant, $piano, $tornaA);
     }
 
-    private function apriIlCanone(User $utente, Tenant $tenant, Plan $piano, ?string $tornaA): string
+    /**
+     * 🆕 🔗 **Un piano su misura, pagato con Stripe** — 21/09/2026.
+     *
+     * 📌 Il committente: *«certo che il piano cucito a mano deve essere fatto
+     * con stripe»*.
+     *
+     * ── ⛔ Cosa c'era stamattina ───────────────────────────────────────────
+     *
+     * Il piano si cuciva e si **assegnava**: nasceva un abbonamento senza
+     * `stripe_subscription_id`, cioè un servizio acceso che nessuno fattura.
+     * 🚨 Per un canone voleva dire ricordarsi ogni mese di incassarlo a mano.
+     *
+     * ── 💡 Perché passa da un'offerta e non da `apri()` ────────────────────
+     *
+     * Perché `apri()` vende **il listino**, e un piano su misura a listino non
+     * c'è: metterlo fra i `pubblici()` per poterlo vendere vorrebbe dire
+     * offrire a chiunque il prezzo cucito per uno. 🚨 È il **token**
+     * dell'offerta a rendere comprabile quel piano, e solo a chi ha il link.
+     *
+     * ── ⚠️ Torna `null`, e non è un errore ─────────────────────────────────
+     *
+     * | Situazione | Cosa succede | Cosa torna |
+     * |---|---|---|
+     * | Nessun canone Stripe attivo | si apre il checkout | **l'indirizzo** dove mandare la persona |
+     * | Canone Stripe già attivo | ⚠️ si **cambia** l'abbonamento che c'è, col conguaglio | `null`: non c'è niente da aprire, è già fatto |
+     *
+     * ⛔ Un secondo checkout sopra un canone vivo sarebbe un **secondo**
+     * abbonamento su Stripe: due addebiti al mese per un servizio solo, e
+     * nessun errore da nessuna parte.
+     *
+     * 🚨 **L'offerta la segna accettata il webhook**, non questo metodo — a
+     * parte il caso del cambio, dove il webhook non c'è perché non c'è nessun
+     * pagamento nuovo da attendere.
+     *
+     * @return string|null l'indirizzo del checkout, o `null` se il piano è già
+     *                     stato attivato cambiando l'abbonamento esistente
+     *
+     * @throws InvalidArgumentException con un messaggio da mostrare
+     */
+    public function attivaOfferta(User $utente, OffertaDiPiano $offerta, ?string $tornaA = null): ?string
     {
+        if (! $offerta->eValida()) {
+            throw new InvalidArgumentException(
+                $offerta->perchePiuNonVale() ?? 'Questo link non è più valido.'
+            );
+        }
+
+        $piano = $offerta->plan;
+
+        if ($piano === null) {
+            throw new InvalidArgumentException('Il piano di questa offerta non esiste più.');
+        }
+
+        $tenant = $this->tenantCheCompra($utente, $piano);
+
+        /*
+         * 🚨 **Un'offerta intestata vale per quel cliente e basta.** ⛔ Senza
+         * questo controllo, il link concordato con una palestra funzionerebbe
+         * per qualunque altra palestra a cui venisse inoltrato — col prezzo
+         * della prima.
+         */
+        if ($offerta->tenant_id !== null && $offerta->tenant_id !== $tenant->getKey()) {
+            throw new InvalidArgumentException('Questa offerta è intestata a un altro cliente.');
+        }
+
+        $attuale = $this->abbonamentoStripeAttivo($tenant);
+
+        if (! $piano->aConsumo() && $attuale !== null) {
+            if ($attuale->plan_id === $piano->getKey()) {
+                throw new InvalidArgumentException('Hai già questo piano.');
+            }
+
+            $this->cambiaVerso($utente, $tenant, $piano, $attuale);
+
+            // ⚠️ Qui l'offerta si consuma subito: non c'è nessun webhook in
+            // arrivo, perché non c'è nessun pagamento nuovo da aspettare.
+            $offerta->segnaAccettata();
+
+            return null;
+        }
+
+        return $piano->aConsumo()
+            ? $this->apriIlConsumo($utente, $tenant, $piano, $tornaA, $offerta)
+            : $this->apriIlCanone($utente, $tenant, $piano, $tornaA, $offerta);
+    }
+
+    private function apriIlCanone(
+        User $utente,
+        Tenant $tenant,
+        Plan $piano,
+        ?string $tornaA,
+        ?OffertaDiPiano $offerta = null,
+    ): string {
         if ($piano->eGratuito()) {
             throw new InvalidArgumentException('Questo piano non si paga.');
         }
 
-        $meta = $this->metadata($utente, $tenant, $piano);
+        $meta = $this->metadata($utente, $tenant, $piano, $offerta);
         $cliente = $this->clienteDel($tenant);
 
         $sessione = $this->stripe()->checkout->sessions->create([
@@ -170,15 +262,20 @@ class PianiInVendita
      * *setup* è il modo di sapere per certo **quale** cliente riceverà la carta —
      * lo stesso che poi riceverà le fatture.
      */
-    private function apriIlConsumo(User $utente, Tenant $tenant, Plan $piano, ?string $tornaA): string
-    {
+    private function apriIlConsumo(
+        User $utente,
+        Tenant $tenant,
+        Plan $piano,
+        ?string $tornaA,
+        ?OffertaDiPiano $offerta = null,
+    ): string {
         $cliente = $this->clienteDel($tenant) ?? (string) $this->stripe()->customers->create([
             'email' => $utente->email,
             'name' => $tenant->name,
             'metadata' => ['tenant_id' => (string) $tenant->getKey()],
         ])->id;
 
-        $meta = $this->metadata($utente, $tenant, $piano);
+        $meta = $this->metadata($utente, $tenant, $piano, $offerta);
 
         $sessione = $this->stripe()->checkout->sessions->create([
             'mode' => 'setup',
@@ -239,13 +336,44 @@ class PianiInVendita
         }
 
         try {
-            $this->context->runWithoutTenant(fn () => DB::transaction(function () use ($sessione, $piano, $tenant, $utente): void {
+            /*
+             * ⚠️ **`$meta` sta nella lista del `use`**, e la prima stesura del
+             * 21/09 se l'era dimenticato: dentro la closure la variabile non
+             * esisteva, `$meta['offerta']` valeva `null` e l'offerta restava
+             * spendibile dopo il pagamento. 🚨 Nessun errore, nessun log — solo
+             * un `if` che non entrava mai. L'ha trovato il test, non il codice.
+             */
+            $this->context->runWithoutTenant(fn () => DB::transaction(function () use ($sessione, $meta, $piano, $tenant, $utente): void {
                 ($sessione['mode'] ?? null) === 'setup'
                     ? $this->accendiIlConsumo($sessione, $piano, $tenant)
                     : $this->accendiIlCanone($sessione, $piano, $tenant);
 
                 if ($piano->kind === PlanKind::Trainer) {
                     $this->diventaTrainer($utente, $tenant);
+                }
+
+                /*
+                 * 🆕 🔗 **L'offerta si consuma qui, e solo qui** — 21/09/2026.
+                 *
+                 * 🚨 È il momento in cui i soldi sono arrivati davvero.
+                 * ⛔ Segnarla accettata all'apertura del checkout vorrebbe dire
+                 * bruciare il link di chi ci ripensa per due secondi e chiude
+                 * la pagina di Stripe: tornerebbe su un link morto e un piano
+                 * non attivo.
+                 *
+                 * ⚠️ `withoutGlobalScopes()`: qui non c'è contesto di tenant, e
+                 * un'offerta intestata a una palestra non si troverebbe.
+                 */
+                $token = $meta['offerta'] ?? null;
+
+                if ($token !== null) {
+                    $offerta = OffertaDiPiano::withoutGlobalScopes()
+                        ->where('token', $token)
+                        ->first();
+
+                    if ($offerta !== null && $offerta->accettata_il === null) {
+                        $offerta->segnaAccettata();
+                    }
                 }
             }));
         } catch (Throwable $e) {
@@ -390,6 +518,22 @@ class PianiInVendita
             throw new InvalidArgumentException('Hai già questo piano.');
         }
 
+        $this->cambiaVerso($utente, $tenant, $nuovo, $attuale);
+    }
+
+    /**
+     * 🆕 Il cambio vero, senza le domande su **quale** piano.
+     *
+     * 💡 Estratto da [cambia] il 21/09/2026 perché serve anche a
+     * `attivaOfferta()`: un piano su misura dato a chi ha già un canone pagato
+     * su Stripe **si cambia**, non si ricompra. ⛔ Due copie di questa
+     * procedura vorrebbero dire che un giorno una delle due dimentica il
+     * conguaglio, o i metadata, o la riga aggiornata subito.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function cambiaVerso(User $utente, Tenant $tenant, Plan $nuovo, PlanSubscription $attuale): void
+    {
         $this->pretendiCheCiStianoTutti($tenant, $nuovo);
 
         $voce = $this->stripe()->subscriptions->retrieve((string) $attuale->stripe_subscription_id)->items->data[0] ?? null;
@@ -668,13 +812,28 @@ class PianiInVendita
      *
      * @return array<string, string>
      */
-    private function metadata(User $utente, Tenant $tenant, Plan $piano): array
-    {
+    private function metadata(
+        User $utente,
+        Tenant $tenant,
+        Plan $piano,
+        ?OffertaDiPiano $offerta = null,
+    ): array {
         return [
             'tipo' => self::TIPO,
             'piano' => $piano->code,
             'user_id' => (string) $utente->getKey(),
             'tenant_id' => (string) $tenant->getKey(),
+
+            /*
+             * 🆕 🔗 Il token dell'offerta, quando il piano è cucito a mano.
+             *
+             * 🚨 È l'unico modo che ha il webhook di sapere **quale offerta
+             * si è consumata**: al ritorno c'è solo quello che si è scritto
+             * qui, ed è la regola di tutta questa classe. ⚠️ Senza, l'offerta
+             * resterebbe valida dopo il pagamento e lo stesso link
+             * attiverebbe il piano una seconda volta.
+             */
+            ...($offerta !== null ? ['offerta' => $offerta->token] : []),
         ];
     }
 

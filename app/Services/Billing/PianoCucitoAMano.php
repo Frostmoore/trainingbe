@@ -44,13 +44,29 @@ use InvalidArgumentException;
  *    nessuno da invitare, e `ContoDegliIscritti` conterebbe iscritti che non
  *    esistono.
  *
- * ══ ⚠️ COSA NON FA, E VA SAPUTO ═══════════════════════════════════════════
+ * ══ 🚨 NON È PIÙ LA STRADA NORMALE — 21/09/2026, sera ═════════════════════
  *
- * ⛔ **Non incassa niente.** Un piano cucito a mano è un accordo preso a voce o
- * per contratto: l'abbonamento nasce senza `stripe_subscription_id`, come i
- * regali. 💡 Se è **a consumo**, `AddebitoDelMese` calcola comunque il dovuto
+ * 📌 Il committente, la sera stessa: *«certo che il piano cucito a mano deve
+ * essere fatto con stripe»*. ⛔ Ha ragione: **questo metodo non incassa
+ * niente**. L'abbonamento nasce senza `stripe_subscription_id`, come i regali,
+ * e su un canone vuol dire ricordarsi ogni mese di fatturarlo a mano — cioè,
+ * prima o poi, regalarlo.
+ *
+ * 💡 **La strada normale è `PianiInVendita::attivaOfferta()`**: dal pannello si
+ * crea un link, il cliente lo apre e paga su Stripe come da qualunque altro
+ * piano.
+ *
+ * ── ⚠️ Perché questo metodo resta ─────────────────────────────────────────
+ *
+ * Perché non tutti pagano con carta: c'è chi paga per **bonifico** e chi vuole
+ * la **fattura emessa fuori**, e c'è il caso di dover rimettere in piedi un
+ * cliente dopo un guaio. 🚨 Nel pannello il pulsante si chiama **«Attiva senza
+ * pagamento»** ed è rosso: chi lo preme deve sapere che sta accendendo un
+ * servizio che nessuno fatturerà.
+ *
+ * 💡 Se il piano è **a consumo**, `AddebitoDelMese` calcola comunque il dovuto
  * ogni mese e lo lascia in stato `senza_cliente` finché non c'è un cliente
- * Stripe a cui mandarlo — quindi il conto non si perde, si accumula.
+ * Stripe a cui mandarlo: quel conto non si perde, si accumula.
  */
 class PianoCucitoAMano
 {

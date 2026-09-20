@@ -6,13 +6,16 @@ namespace App\Filament\God\Resources\Plans\Tables;
 
 use App\Enums\PlanKind;
 use App\Enums\TenantKind;
+use App\Models\OffertaDiPiano;
 use App\Models\Plan;
+use App\Models\RichiestaDiContatto;
 use App\Models\Tenant;
 use App\Services\Billing\PianoCucitoAMano;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -127,16 +130,120 @@ class PlansTable
                      */
                     ->visible(fn (Plan $p): bool => $p->cucito_a_mano),
 
-                Action::make('assegna')
-                    ->label('Assegna')
-                    ->icon('heroicon-m-user-plus')
-                    ->color('warning')
-                    ->modalHeading(fn (Plan $p): string => "Assegna «{$p->name}» a un cliente")
+                /*
+                 * 🆕 🔗 **Il link di pagamento** — 21/09/2026.
+                 *
+                 * 📌 Il committente: *«certo che il piano cucito a mano deve
+                 * essere fatto con stripe»*. ⛔ Fino a stamattina qui c'era solo
+                 * «Assegna», che accendeva il servizio **senza fattura**: per un
+                 * canone voleva dire ricordarsi ogni mese di incassarlo a mano,
+                 * cioè prima o poi non incassarlo.
+                 *
+                 * 💡 Questa è la strada normale: si crea un link, il cliente lo
+                 * apre e paga su Stripe come da qualunque altro piano.
+                 */
+                Action::make('manda_il_link')
+                    ->label('Link di pagamento')
+                    ->icon('heroicon-m-link')
+                    ->color('primary')
+                    ->visible(fn (Plan $p): bool => $p->cucito_a_mano)
+                    ->modalHeading(fn (Plan $p): string => "Link di pagamento per «{$p->name}»")
                     ->modalDescription(
-                        'L\'abbonamento parte subito e non scade. Quello che il cliente ha adesso '
-                        .'viene chiuso. ⛔ Non passa da Stripe: quello che deve pagare lo si concorda a parte.'
+                        'Chi apre il link vede il piano e paga su Stripe. Il piano resta fuori '
+                        .'listino: lo compra solo chi ha questo indirizzo.'
                     )
-                    ->modalSubmitActionLabel('Assegna')
+                    ->modalSubmitActionLabel('Crea il link')
+                    ->schema([
+                        Select::make('tenant_id')
+                            ->label('Cliente')
+                            ->options(fn (Plan $p): array => self::clientiPossibili($p))
+                            ->searchable()
+                            ->placeholder('Non è ancora cliente')
+                            ->helperText(
+                                'Se lo scegli, il link vale solo per lui. ⚠️ Lascialo vuoto per chi non '
+                                .'ha ancora uno spazio: si iscrive dal link stesso.'
+                            ),
+
+                        TextInput::make('email')
+                            ->label('Email a cui lo mandi')
+                            ->email()
+                            ->helperText('Facoltativa: serve a ritrovare l\'offerta, e a precompilare il modulo.'),
+
+                        /*
+                         * 💡 Chiude il giro: scrivono dal modulo → si concorda →
+                         * si manda il link. ⚠️ Facoltativo, perché un accordo può
+                         * anche nascere da una telefonata.
+                         */
+                        Select::make('richiesta_di_contatto_id')
+                            ->label('Nasce da una richiesta')
+                            ->options(fn (): array => RichiestaDiContatto::query()
+                                ->latest()
+                                ->limit(50)
+                                ->get()
+                                ->mapWithKeys(fn (RichiestaDiContatto $r): array => [
+                                    $r->getKey() => $r->nome.($r->organizzazione !== null ? " — {$r->organizzazione}" : ''),
+                                ])
+                                ->all())
+                            ->searchable()
+                            ->placeholder('Nessuna'),
+
+                        DateTimePicker::make('scade_il')
+                            ->label('Vale fino al')
+                            ->default(now()->addDays(30))
+                            ->helperText(
+                                '⚠️ Vuoto = non scade mai, ed è la scelta peggiore: un prezzo concordato '
+                                .'oggi resterebbe comprabile fra due anni.'
+                            ),
+                    ])
+                    /*
+                     * ⚠️ Il parametro si chiama **`$data`**, e non e' una
+                     * preferenza: Filament risolve gli argomenti delle closure
+                     * **per nome**, e con `$dati` risponde «was unresolvable»
+                     * al primo clic.
+                     */
+                    ->action(function (Plan $record, array $data): void {
+                        $offerta = OffertaDiPiano::create([
+                            'plan_id' => $record->getKey(),
+                            'token' => OffertaDiPiano::nuovoToken(),
+                            'tenant_id' => $data['tenant_id'] ?? null,
+                            'email' => $data['email'] ?? null,
+                            'richiesta_di_contatto_id' => $data['richiesta_di_contatto_id'] ?? null,
+                            'creata_da_id' => auth()->id(),
+                            'scade_il' => $data['scade_il'] ?? null,
+                        ]);
+
+                        /*
+                         * ⚠️ `persistent()`: questo link è l'unica cosa che conta
+                         * di tutta l'operazione, e una notifica che sparisce dopo
+                         * tre secondi se lo porterebbe via. 💡 Si ritrova comunque
+                         * in «Offerte su misura».
+                         */
+                        Notification::make()
+                            ->title('Link creato')
+                            ->body($offerta->link())
+                            ->success()
+                            ->persistent()
+                            ->send();
+                    }),
+
+                /*
+                 * ⚠️ **L'assegnazione a mano resta, ma non è la strada normale.**
+                 * Serve a chi paga per bonifico o con fattura emessa fuori, e a
+                 * rimettere in piedi un cliente dopo un guaio. ⛔ Chi la usa per
+                 * comodità accende un servizio che nessuno fattura: è scritto sul
+                 * pulsante, ed è il motivo per cui chiede conferma.
+                 */
+                Action::make('assegna')
+                    ->label('Attiva senza pagamento')
+                    ->icon('heroicon-m-exclamation-triangle')
+                    ->color('danger')
+                    ->visible(fn (Plan $p): bool => $p->cucito_a_mano)
+                    ->modalHeading(fn (Plan $p): string => "Attiva «{$p->name}» senza passare da Stripe")
+                    ->modalDescription(
+                        '⛔ Nessuno fatturerà questo piano: usala solo se il cliente paga per bonifico '
+                        .'o con fattura emessa fuori. Per farlo pagare, usa il link.'
+                    )
+                    ->modalSubmitActionLabel('Attiva comunque')
                     ->schema([
                         Select::make('tenant_id')
                             ->label('Cliente')
@@ -164,9 +271,9 @@ class PlansTable
                             /*
                              * ⚠️ Il messaggio dell'eccezione **si mostra**, al
                              * contrario che sul sito: qui chi legge è il super
-                             * admin, e i due motivi di rifiuto — Stripe di
-                             * mezzo, specie sbagliata — sono esattamente ciò
-                             * che deve sapere per risolvere.
+                             * admin, e i due motivi di rifiuto — Stripe di mezzo,
+                             * specie sbagliata — sono esattamente ciò che deve
+                             * sapere per risolvere.
                              */
                             Notification::make()
                                 ->title('Non assegnato')
@@ -179,9 +286,9 @@ class PlansTable
                         }
 
                         Notification::make()
-                            ->title('Piano assegnato')
-                            ->body("{$tenant->name} adesso è su «{$record->name}».")
-                            ->success()
+                            ->title('Piano attivato senza pagamento')
+                            ->body("{$tenant->name} adesso è su «{$record->name}». ⛔ Nessuno lo fatturerà.")
+                            ->warning()
                             ->send();
                     }),
             ])

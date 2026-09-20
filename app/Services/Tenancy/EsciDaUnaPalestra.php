@@ -115,6 +115,18 @@ final class EsciDaUnaPalestra
         'media',
         'model_has_permissions',
         'model_has_roles',
+        /*
+         * 🔗 **Le offerte di un piano su misura** — 21/09/2026.
+         *
+         * 🚨 Sono il **contratto della palestra**: dicono quanto paga e
+         * quanti posti ha concordato. ⛔ Farle seguire chi esce vorrebbe dire
+         * consegnare a un ex iscritto il prezzo cucito per il suo ex titolare.
+         *
+         * ⚠️ Qui la colonna è **nullable** (`BelongsToTenantOrGlobal`): le
+         * offerte a chi non è ancora cliente hanno `tenant_id` a `null`, e non
+         * riguardano nessuna uscita.
+         */
+        'offerte_di_piano',
         'plan_subscriptions',
         'profili_pubblici',
         'roles',
