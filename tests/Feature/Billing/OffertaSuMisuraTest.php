@@ -61,15 +61,15 @@ final class OffertaSuMisuraTest extends TestCase
     }
 
     /** Il piano cucito: 400 iscritti, 30 trainer, 890 € al mese. */
-    private function pianoSuMisura(array $extra = []): Plan
+    private function pianoSuMisura(int $trainer = 30, int $iscritti = 400, array $extra = []): Plan
     {
         return Plan::create(array_merge([
             'code' => 'su_misura_prova',
             'name' => 'Su misura — prova',
             'kind' => PlanKind::Gym,
             'ai_enabled' => true,
-            'max_members' => 400,
-            'max_trainers' => 30,
+            'max_members' => $iscritti,
+            'max_trainers' => $trainer,
             'price_cents' => 89000,
             'is_public' => false,
             'cucito_a_mano' => true,
@@ -310,6 +310,31 @@ final class OffertaSuMisuraTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         app(PianiInVendita::class)->attivaOfferta($suoTitolare->fresh(), $offerta);
+    }
+
+    /**
+     * 💡 **La pagina si apre e ripete i numeri dell'accordo.**
+     *
+     * ⚠️ Il prezzo e i posti si rileggono **sul link**, non solo nella mail
+     * in cui sono stati concordati: un pulsante «attiva» senza le cifre accanto
+     * è un pulsante che nessuno preme.
+     */
+    #[Test]
+    public function la_pagina_dell_offerta_mostra_cosa_si_sta_comprando(): void
+    {
+        [$palestra, $titolare] = $this->palestraConTitolare();
+
+        $offerta = $this->offerta($this->pianoSuMisura(trainer: 30, iscritti: 400), [
+            'tenant_id' => $palestra->getKey(),
+        ]);
+
+        $this->actingAs($titolare)
+            ->get("/offerta/{$offerta->token}")
+            ->assertOk()
+            ->assertSee('890,00 €', escape: false)
+            ->assertSee('400 iscritti', escape: false)
+            ->assertSee('30 trainer', escape: false)
+            ->assertSee('Vai al pagamento', escape: false);
     }
 
     /** 🚨 Un token inventato non riceve una pagina: riceve un 404. */
