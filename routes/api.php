@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
+use App\Http\Controllers\Api\V1\LiberatoriaController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
 use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
@@ -848,6 +849,16 @@ Route::prefix('v1')->group(function (): void {
         //
         // 🚨 Revocare costa esattamente quanto concedere: stessa chiamata,
         // `false` invece di `true` (art. 7(3)).
+        /*
+         * 🆕 ✍️ **La liberatoria del trainer** — art. 28 GDPR, 20/09/2026.
+         *
+         * 🚨 Chi vede i dati di un'altra persona deve prima accettare per
+         * iscritto cosa può farci. La palestra firma nel pannello, il trainer
+         * qui. ⛔ Finché non firma non puo' accettare allievi.
+         */
+        Route::get('account/liberatoria', [LiberatoriaController::class, 'show']);
+        Route::post('account/liberatoria', [LiberatoriaController::class, 'store']);
+
         Route::get('account/consents', [ConsentController::class, 'show']);
         Route::patch('account/consents', [ConsentController::class, 'update']);
 

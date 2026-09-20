@@ -10,6 +10,7 @@ use App\Filament\Auth\Login;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Privacy\LeLiberatorie;
 use App\Support\Dev\QuickLogin;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -75,6 +76,21 @@ class PanelAccessTest extends TestCase
                     'password' => self::FAKE_PASSWORD,
                 ]);
                 $u->assignRole($ruolo->value);
+
+                /*
+                 * 🆕 ✍️ **La liberatoria dell'art. 28, già firmata** — 20/09/2026.
+                 *
+                 * 💡 Qui gli utenti si costruiscono a mano, quindi non passano
+                 * da `creaUtente()`, che la firma da sé. Senza, ogni prova sul
+                 * pannello finirebbe sulla schermata della firma invece che
+                 * dove deve: lo sbarramento si prova in
+                 * `LaLiberatoriaSiFirmaTest`, non qui.
+                 */
+                foreach ([LeLiberatorie::PALESTRA, LeLiberatorie::TRAINER] as $tipo) {
+                    if (app(LeLiberatorie::class)->riguarda($u, $tipo)) {
+                        app(LeLiberatorie::class)->firma($u, $tipo);
+                    }
+                }
 
                 return $u;
             });

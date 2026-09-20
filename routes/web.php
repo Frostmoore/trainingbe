@@ -52,7 +52,7 @@ Route::get('/prezzi', [SitoController::class, 'prezzi'])->name('sito.prezzi');
 Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
 
 Route::get('/{quale}', [SitoController::class, 'documento'])
-    ->whereIn('quale', ['privacy', 'condizioni'])
+    ->whereIn('quale', ['privacy', 'condizioni', 'liberatoria-palestra', 'liberatoria-trainer'])
     ->name('sito.documento');
 
 /*

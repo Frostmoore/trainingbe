@@ -6,6 +6,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
 use App\Http\Middleware\EnsureTenantActive;
+use App\Http\Middleware\PretendeLaLiberatoria;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\SpazioDelPannello;
 use App\Support\Tenancy\PanelBranding;
@@ -97,6 +98,16 @@ class AdminPanelProvider extends PanelProvider
 
                 Authenticate::class,
                 EnsureTenantActive::class,
+
+                /*
+                 * 🆕 ✍️ **E la liberatoria dell'art. 28** — 20/09/2026.
+                 *
+                 * 🚨 Ultima della catena, dopo `Authenticate`: serve sapere
+                 * **chi** è per sapere cosa deve firmare. ⛔ Finché non firma,
+                 * il pannello non si apre — chi vede i dati di altre persone
+                 * deve prima accettare per iscritto cosa può farci.
+                 */
+                PretendeLaLiberatoria::class,
             ]);
     }
 }

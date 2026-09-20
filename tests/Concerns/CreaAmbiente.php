@@ -12,6 +12,7 @@ use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\PortafoglioGettoni;
+use App\Services\Privacy\LeLiberatorie;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -104,9 +105,17 @@ trait CreaAmbiente
     }
 
     /** Un utente dentro la palestra, con il ruolo assegnato nel contesto giusto. */
-    protected function creaUtente(Tenant $tenant, UserRole $ruolo, string $email, array $extra = []): User
-    {
-        return $this->ctx()->runAs($tenant, function () use ($tenant, $ruolo, $email, $extra): User {
+    /**
+     * @param  bool  $liberatoriaFirmata  🆕 20/09/2026 — vedi sotto.
+     */
+    protected function creaUtente(
+        Tenant $tenant,
+        UserRole $ruolo,
+        string $email,
+        array $extra = [],
+        bool $liberatoriaFirmata = true,
+    ): User {
+        return $this->ctx()->runAs($tenant, function () use ($tenant, $ruolo, $email, $extra, $liberatoriaFirmata): User {
             $u = User::create(array_merge([
                 'name' => ucfirst(explode('@', $email)[0]),
                 'email' => $email,
@@ -133,6 +142,28 @@ trait CreaAmbiente
             ])->save();
 
             $u->assignRole($ruolo->value);
+
+            /*
+             * 🆕 ✍️ **Chi allena ha già firmato la liberatoria** — 20/09/2026.
+             *
+             * 🚨 Dal 20/09 il pannello non si apre finché palestra o trainer
+             * non hanno accettato la nomina a responsabile (art. 28). ⛔ Senza
+             * questa riga **ogni** test sul pannello diventerebbe un test sullo
+             * sbarramento: si fermerebbero tutti alla stessa schermata, e non
+             * proverebbero più quello per cui esistono.
+             *
+             * 💡 È la stessa logica di `terms_accepted_at` qui sopra: nella
+             * vita vera la firma c'è già. Lo **sbarramento** si prova dove
+             * deve, in `LaLiberatoriaSiFirmaTest`, passando
+             * `liberatoriaFirmata: false`.
+             */
+            if ($liberatoriaFirmata) {
+                foreach ([LeLiberatorie::PALESTRA, LeLiberatorie::TRAINER] as $tipo) {
+                    if (app(LeLiberatorie::class)->riguarda($u, $tipo)) {
+                        app(LeLiberatorie::class)->firma($u, $tipo);
+                    }
+                }
+            }
 
             /*
              * 🆕 **Il primo `gym_admin` diventa il proprietario del tenant**

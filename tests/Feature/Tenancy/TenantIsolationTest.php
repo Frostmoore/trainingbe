@@ -7,6 +7,7 @@ namespace Tests\Feature\Tenancy;
 use App\Models\Campagna;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
+use App\Models\LiberatoriaFirmata;
 use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
@@ -49,6 +50,25 @@ class TenantIsolationTest extends TestCase
      * @var array<class-string, string>
      */
     private const ECCEZIONI_MOTIVATE = [
+        /*
+         * 🆕 ✍️ `liberatorie_firmate` è un **atto della persona**, non della palestra.
+         *
+         * 🚨 La domanda che fa è «questa persona ha firmato la versione in
+         * vigore?», e la risposta non deve cambiare col tenant da cui si
+         * guarda: un trainer che passa da una palestra all'altra ha firmato
+         * comunque, e col `TenantScope` la sua firma sparirebbe dalla vista —
+         * cioè gli si richiederebbe di firmare una cosa già firmata.
+         *
+         * ⚠️ **Il `tenant_id` resta, ma è un dato storico**: dice *dove* è
+         * stata firmata, non a chi appartiene la riga. Per questo la tabella
+         * sta anche in `EsciDaUnaPalestra::REGOLE_PROPRIE` e uscendo non si
+         * sposta.
+         *
+         * 💡 L'isolamento in lettura non serve: `LeLiberatorie` cerca sempre
+         * per `user_id`, e la riga non contiene niente di riservato — chi,
+         * quando, quale versione.
+         */
+        LiberatoriaFirmata::class => 'Atto della persona (art. 28): vale in ogni spazio, e si cerca sempre per `user_id`.',
         /*
          * 🚨 `profili_pubblici` esiste **apposta** per essere visto da fuori.
          *

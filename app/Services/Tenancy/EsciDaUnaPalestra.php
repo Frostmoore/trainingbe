@@ -141,6 +141,18 @@ final class EsciDaUnaPalestra
      * una classificazione per ogni tabella le segnalerebbe come dimenticate.
      */
     public const REGOLE_PROPRIE = [
+        /*
+         * 🆕 ✍️ **La liberatoria firmata non si sposta** — 20/09/2026.
+         *
+         * 🚨 È un **atto avvenuto**: «il giorno X, dentro la palestra Y, questa
+         * persona ha accettato la versione Z». ⛔ Spostarle il `tenant_id`
+         * quando esce vorrebbe dire riscrivere dove è stata firmata — cioè
+         * falsificare la prova che serve proprio a dimostrare l'atto.
+         *
+         * 💡 E non serve nemmeno: `LeLiberatorie` guarda **la persona e la
+         * versione**, non lo spazio.
+         */
+        'liberatorie_firmate',
         'nutrition_plans',
         'workout_plans',
     ];

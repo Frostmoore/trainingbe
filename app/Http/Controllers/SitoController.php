@@ -95,6 +95,16 @@ class SitoController extends Controller
         $ammessi = [
             'privacy' => 'informativa-privacy',
             'condizioni' => 'condizioni-uso',
+
+            /*
+             * 🆕 ✍️ Le due liberatorie dell'art. 28 — 20/09/2026.
+             *
+             * 💡 Pubbliche apposta: una palestra o un trainer devono poterle
+             * **leggere prima** di trovarsele davanti da firmare, e chi le
+             * riceve da un collega deve poterle aprire senza un account.
+             */
+            'liberatoria-palestra' => 'liberatoria-palestra',
+            'liberatoria-trainer' => 'liberatoria-trainer',
         ];
 
         abort_unless(isset($ammessi[$quale]), 404);

@@ -55,6 +55,8 @@ final class EsportaIDatiDellaPersona
         'food_entries' => [['user_id'], []],
         'food_favorites' => [['user_id'], []],
         'importazioni_da_documento' => [['user_id'], []],
+        // 🆕 ✍️ La liberatoria firmata: è un atto suo, e gli spetta.
+        'liberatorie_firmate' => [['user_id'], []],
         // ⚠️ Senza `body` e `nonce`: sono la busta cifrata, illeggibile per noi e inutile fuori dall'app.
         'messages' => [['sender_id'], ['body', 'nonce']],
         'nutrition_plans' => [['member_id'], []],
