@@ -443,7 +443,19 @@
             background: var(--sfondo); color: var(--testo); font: inherit; font-size: 16px;
             width: 100%;
         }
-        .campo input:focus { outline: 2px solid var(--accento); outline-offset: 1px; border-color: var(--accento); }
+        .campo select, .campo textarea {
+            padding: 11px 13px; border: 1px solid var(--bordo); border-radius: 10px;
+            background: var(--sfondo); color: var(--testo); font: inherit; font-size: 16px;
+            width: 100%;
+        }
+        .campo textarea { resize: vertical; min-height: 110px; }
+        .campo input:focus, .campo select:focus, .campo textarea:focus {
+            outline: 2px solid var(--accento); outline-offset: 1px; border-color: var(--accento);
+        }
+
+        /* Il campo trappola del modulo di contatto: nascosto a chi guarda,
+           presente per chi compila tutto quello che trova. */
+        .trappola { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
         .campo .aiuto { font-size: 13px; color: var(--testo-tenue); }
         .campo-spunta { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; }
         .campo-spunta input { margin-top: 4px; }
@@ -589,6 +601,7 @@
             <div>
                 <h4>Chi allena</h4>
                 <a href="/professionisti">Palestre e trainer</a>
+                <a href="/scrivici">Scrivici</a>
                 <a href="/liberatoria-palestra">Liberatoria palestre</a>
                 <a href="/liberatoria-trainer">Liberatoria trainer</a>
             </div>

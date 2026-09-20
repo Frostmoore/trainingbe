@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\DB;
  * |---|---|---|
  * | `audit_logs` | **12 mesi** | È la traccia che risponde a «chi ha fatto cosa»: serve quando una palestra contesta una disiscrizione o si indaga su un accesso. Un anno copre un ciclo intero di stagioni e contratti; oltre, nessuno la guarda più |
  * | `ai_usage_logs` | **13 mesi** | Riga per riga è il **dettaglio** dei consumi: serve a spiegare una fattura contestata. Un anno più un mese copre la fattura più vecchia ancora discutibile |
+ * | `richieste_di_contatto` | **24 mesi** | 🆕 21/09/2026. Sono nome, email e telefono di chi ci ha scritto dal sito: una trattativa che riparte dopo un anno è normale, dopo due non è più la stessa. ⚠️ È il termine scritto nell'informativa (§3.12) e sul modulo stesso |
  *
  * ⚠️ **Gli importi non si toccano.** `addebiti_mensili` e `ai_credit_movements`
  * restano: sono i **totali** su cui si fattura e il saldo dei gettoni, non il
@@ -48,6 +49,16 @@ class PotaIRegistri extends Command
     /** Il dettaglio dei consumi AI: un anno più un mese. */
     public const MESI_CONSUMI = 13;
 
+    /**
+     * ✉️ Le richieste dal modulo di contatto: due anni.
+     *
+     * 💡 Una trattativa che riparte dopo un anno è normale — una palestra
+     * che aveva chiesto un preventivo a settembre richiama a gennaio. Dopo due
+     * non è più la stessa trattativa, e quello che resta è solo il nome e il
+     * telefono di qualcuno.
+     */
+    public const MESI_RICHIESTE = 24;
+
     public function handle(): int
     {
         $prova = (bool) $this->option('dry-run');
@@ -57,6 +68,7 @@ class PotaIRegistri extends Command
         foreach ([
             'audit_logs' => self::MESI_REGISTRO,
             'ai_usage_logs' => self::MESI_CONSUMI,
+            'richieste_di_contatto' => self::MESI_RICHIESTE,
         ] as $tabella => $mesi) {
             $limite = now()->subMonths($mesi);
 

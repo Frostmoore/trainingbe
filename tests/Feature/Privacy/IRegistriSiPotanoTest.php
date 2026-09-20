@@ -56,6 +56,28 @@ class IRegistriSiPotanoTest extends TestCase
         $this->assertSame(1, DB::table('ai_usage_logs')->count());
     }
 
+    /**
+     * ✉️ **Anche le richieste dal modulo di contatto** — 21/09/2026.
+     *
+     * 🚨 Nome, email e telefono di chi ci ha scritto dal sito. ⚠️ Il termine —
+     * 24 mesi — è **scritto sul modulo stesso** («Lo teniamo 24 mesi») e
+     * nell'informativa §3.12: è una promessa fatta a chi compila, e questo test
+     * è il motivo per cui è vera.
+     */
+    #[Test]
+    public function anche_le_richieste_dal_sito_hanno_una_fine(): void
+    {
+        $this->richiesta(now()->subMonths(PotaIRegistri::MESI_RICHIESTE + 1), 'vecchia@esempio.test');
+        $this->richiesta(now()->subMonths(6), 'recente@esempio.test');
+
+        $this->artisan('registri:pota')->assertSuccessful();
+
+        $this->assertSame(
+            ['recente@esempio.test'],
+            DB::table('richieste_di_contatto')->pluck('email')->all(),
+        );
+    }
+
     /** 💡 `--dry-run` conta e basta: serve a guardare prima di buttare. */
     #[Test]
     public function la_prova_non_butta_niente(): void
@@ -99,6 +121,19 @@ class IRegistriSiPotanoTest extends TestCase
             'actor_id' => $this->persona->getKey(),
             'action' => $azione,
             'created_at' => $quando,
+        ]);
+    }
+
+    private function richiesta(Carbon $quando, string $email): void
+    {
+        DB::table('richieste_di_contatto')->insert([
+            'tipo' => 'palestra',
+            'nome' => 'Chi Scrive',
+            'email' => $email,
+            'messaggio' => 'Vorrei un preventivo per la mia palestra.',
+            'stato' => 'nuova',
+            'created_at' => $quando,
+            'updated_at' => $quando,
         ]);
     }
 

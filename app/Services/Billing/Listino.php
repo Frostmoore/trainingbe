@@ -204,10 +204,19 @@ class Listino
      * 10€/mese»* per i trainer, *«min. 60 … + 15€/mese con trainer
      * illimitati»* per le palestre.
      *
-     * 💡 Torna anche `trainerIllimitati`, che è la cosa che quel piano **vende**
-     * a una palestra: non è un dettaglio del prezzo, è il motivo per sceglierlo.
+     * 🔄 **`trainerIllimitati` non c'è più, c'è `trainer`** — 21/09/2026.
      *
-     * @return array{codice: string, nome: string, perSlot: int, canone: int, minimo: int, trainerIllimitati: bool}
+     * ⛔ Il su misura vendeva i trainer **illimitati**, e illimitato più non
+     * fatturato voleva dire che una palestra poteva registrare i propri
+     * iscritti come trainer e pagare il minimo invece del dovuto. 📌 Adesso
+     * sono **venti**, e sopra venti si scrive: c'è il modulo di contatto, e dal
+     * pannello god si fa un piano su misura coi posti che si vogliono.
+     *
+     * ⚠️ **Resta `?int`, e `null` continua a voler dire «senza tetto»**: i
+     * piani cuciti a mano dal pannello possono averlo, ed è giusto che il
+     * listino sappia leggerli.
+     *
+     * @return array{codice: string, nome: string, perSlot: int, canone: int, minimo: int, trainer: ?int}
      */
     public function suMisura(string $platea = 'palestre'): array
     {
@@ -220,9 +229,13 @@ class Listino
             'canone' => (int) ($p['canone_cent'] ?? 0),
             'minimo' => (int) $p['minimo_iscritti'],
 
-            // ⚠️ `array_key_exists` e non `?? null`: la chiave c'è **e vale
-            // `null`** proprio quando i trainer sono illimitati.
-            'trainerIllimitati' => array_key_exists('trainer', $p) && $p['trainer'] === null,
+            /*
+             * ⚠️ `array_key_exists` e non `?? null`: la chiave può esserci **e
+             * valere `null`**, ed è il modo in cui si dice «senza tetto». Un
+             * `?? 0` ci metterebbe uno zero, cioè «nessun trainer», che è
+             * l'opposto.
+             */
+            'trainer' => array_key_exists('trainer', $p) ? $p['trainer'] : null,
         ];
     }
 

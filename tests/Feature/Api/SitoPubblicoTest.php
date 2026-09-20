@@ -46,6 +46,9 @@ class SitoPubblicoTest extends TestCase
         '/prezzi/trainer',
         '/prezzi/palestra',
         '/professionisti',
+        // ✉️ 21/09/2026: il modulo di contatto è una pagina del sito come le
+        // altre, e le regole del sito valgono anche per lei.
+        '/scrivici',
     ];
 
     protected function setUp(): void
@@ -856,8 +859,10 @@ class SitoPubblicoTest extends TestCase
      * un trainer con 30 allievi paga 94 € su misura e 100 € col Pro; una
      * palestra con 60 iscritti paga 183 € contro 200 €. 💡 Non è una svista:
      * è il punto in cui si vuole che chi ha toccato il tetto **salga** invece
-     * di andarsene, e sale trovando anche i trainer illimitati. Il listino
-     * l'ha deciso il committente il 20/09/2026, con i prezzi finali.
+     * di andarsene, e sale trovando anche più posti trainer (20, contro i 6 del
+     * Pro). Il listino l'ha deciso il committente il 20/09/2026, con i prezzi
+     * finali; i posti trainer li ha stretti il 21/09 — ⛔ erano *illimitati*, ed
+     * era il modo di far passare gli iscritti per istruttori e non pagarli.
      */
     #[Test]
     public function the_custom_plan_is_for_the_big_numbers_and_the_minimum_keeps_the_small_ones_out(): void

@@ -22,8 +22,9 @@
 
             <hr>
             <p class="nota">
-                Hai una domanda su questo documento? Scrivici prima di accettare qualcosa
-                che non ti torna: è il momento in cui serve.
+                Hai una domanda su questo documento?
+                <a href="/scrivici">Scrivici</a> prima di accettare qualcosa che non ti
+                torna: è il momento in cui serve.
             </p>
         </div>
     </section>

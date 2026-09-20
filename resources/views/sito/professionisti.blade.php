@@ -84,7 +84,8 @@
                     <p>
                         Scrivono schede e piani alimentari, li mandano in chat, e vedono gli
                         iscritti che affidi loro. Le palestre hanno anche un tetto di
-                        <strong>posti trainer</strong>, largo apposta.
+                        <strong>posti trainer</strong>: da 2 a 20 secondo il piano, e se ne
+                        servono di più si concorda.
                     </p>
                 </div>
             </div>
@@ -93,10 +94,12 @@
                 <h3 style="margin-top: 0;">💡 Due tetti, e valgono tutti e due</h3>
                 <p style="margin-bottom: 0;">
                     Un piano palestra dice quanti <strong>iscritti</strong> puoi abbonare e
-                    quanti <strong>trainer</strong> puoi far lavorare. I trainer sono tanti
-                    rispetto agli iscritti, perché è normale avere più istruttori che
-                    abbonamenti regalati — ma restano un massimo. Se ti servono trainer
-                    illimitati, c'è il piano su misura.
+                    quanti <strong>trainer</strong> puoi far lavorare: 2 sul Basic, 4
+                    sull'Advanced, 6 sul Pro, 20 sul su misura. ⚠️ Anche un trainer ha
+                    l'app intera e l'intelligenza artificiale accesa, e quella la paghiamo
+                    noi: è il motivo per cui i posti sono un numero e non &laquo;quanti ne
+                    vuoi&raquo;. Se te ne servono di più,
+                    <a href="/scrivici?tipo=palestra">scrivici</a>: si fa un piano apposta.
                 </p>
             </div>
         </div>

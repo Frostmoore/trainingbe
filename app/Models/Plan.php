@@ -59,6 +59,9 @@ class Plan extends Model
     protected $fillable = [
         'code', 'name', 'kind', 'ai_enabled',
         'max_members', 'price_cents', 'is_public',
+
+        // ✂️ 21/09/2026 — chi comanda su questa riga: il seeder o una persona.
+        'cucito_a_mano',
         // G1 — D5, D6, D7.
         'max_trainers',
 
@@ -84,6 +87,7 @@ class Plan extends Model
             'kind' => PlanKind::class,
             'ai_enabled' => 'boolean',
             'is_public' => 'boolean',
+            'cucito_a_mano' => 'boolean',
             'max_members' => 'integer',
             'price_cents' => 'integer',
             'max_trainers' => 'integer',
@@ -108,6 +112,21 @@ class Plan extends Model
     public function scopeDiTipo(Builder $query, PlanKind $kind): Builder
     {
         return $query->where('kind', $kind->value);
+    }
+
+    /**
+     * ✂️ **I piani cuciti a mano dal pannello** — 21/09/2026.
+     *
+     * 📌 *«creami la possibilità di creare nuovi abbonamenti per palestre con
+     * il numero di trainers che voglio io»*.
+     *
+     * ⚠️ **Non è la stessa cosa di «non pubblico»**: non pubblici sono anche i
+     * piani ritirati, che `PlanSeeder` riscrive a ogni deploy. Solo questi si
+     * possono modificare dal pannello senza che la modifica sparisca.
+     */
+    public function scopeCucitiAMano(Builder $query): Builder
+    {
+        return $query->where('cucito_a_mano', true);
     }
 
     /** Il prezzo in euro, per il listino. */

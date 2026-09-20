@@ -188,11 +188,30 @@ return [
 
     'palestre' => [
         'piani' => [
+            /*
+             * ══ 🚨 I POSTI TRAINER, STRETTI — 21/09/2026 ══════════════════
+             *
+             * 📌 Il committente, dopo aver visto il conto: *«non ha senso così.
+             * Dobbiamo rivedere il numero massimo di trainers per ciascun
+             * piano: Basic 2, Advanced 4, Pro 6, su misura 20»*.
+             *
+             * ⛔ **Erano 5 / 10 / 20, e senza tetto sul su misura.** Il difetto
+             * non era il costo — un trainer in più costa 1,64 € al mese — era
+             * che **un posto trainer è un posto iscritto che non si fattura**:
+             * `PianoAttivo::haLaAi()` guarda il piano del tenant, quindi
+             * trainer e titolare hanno l'AI inclusa, e
+             * `ContoDegliIscritti::quanti()` conta solo gli iscritti.
+             *
+             * 🚨 Col vecchio Basic una palestra aveva 10 posti pagati e 5
+             * gratis: **il 50% in regalo**. Adesso è il 20%, e il conto di chi
+             * ne ha bisogno di più si fa a voce — è il motivo per cui il su
+             * misura ha un modulo di contatto invece di un pulsante.
+             */
             [
                 'codice' => 'gym_10',
                 'nome' => 'Palestra Basic',
                 'iscritti' => 10,
-                'trainer' => 5,
+                'trainer' => 2,
                 'prezzo_cent' => 6000,
                 'nota' => 'per cominciare',
             ],
@@ -200,7 +219,7 @@ return [
                 'codice' => 'gym_30',
                 'nome' => 'Palestra Advanced',
                 'iscritti' => 30,
-                'trainer' => 10,
+                'trainer' => 4,
                 'prezzo_cent' => 13000,
                 'nota' => 'il più scelto',
             ],
@@ -208,17 +227,23 @@ return [
                 'codice' => 'gym_60',
                 'nome' => 'Palestra Pro',
                 'iscritti' => 60,
-                'trainer' => 20,
+                'trainer' => 6,
                 'prezzo_cent' => 20000,
                 'nota' => 'per una sala grande',
             ],
         ],
 
         /*
-         * 🚨 `trainer` a `null` = **illimitati**, ed è la differenza che questo
-         * piano vende. Chi legge `max_trainers` deve trovarci `null`, non un
-         * numero grande: un numero grande è comunque un muro, e prima o poi ci
-         * sbatte qualcuno.
+         * ⛔ **`trainer` NON è più `null`** — 21/09/2026.
+         *
+         * Valeva «illimitati», ed era la cosa che questo piano vendeva. 🚨 Ma
+         * illimitato + non fatturato voleva dire che una palestra poteva
+         * registrare i propri iscritti **come trainer** e pagare il minimo
+         * (183 €) invece del dovuto (297,80 € con 101 iscritti).
+         *
+         * 💡 Venti è il numero del committente, e sopra venti **si scrive**:
+         * c'è il modulo di contatto, e dal pannello god si fa un piano su
+         * misura vero, coi posti trainer che decide lui (§104).
          */
         'a_consumo' => [
             'codice' => 'gym_consumo',
@@ -226,7 +251,7 @@ return [
             'prezzo_iscritto_cent' => 280,
             'canone_cent' => 1500,
             'minimo_iscritti' => 60,
-            'trainer' => null,
+            'trainer' => 20,
         ],
     ],
 

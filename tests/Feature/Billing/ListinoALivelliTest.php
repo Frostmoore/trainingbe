@@ -62,44 +62,86 @@ final class ListinoALivelliTest extends TestCase
         $palestra = $this->piano('gym_10');
 
         $this->assertSame(10, $palestra->max_members, 'gli iscritti non sono contati');
-        $this->assertSame(5, $palestra->max_trainers, 'i trainer non sono contati');
+
+        /*
+         * 🆕 **Due, non cinque** — 21/09/2026. 📌 *«Dobbiamo rivedere il numero
+         * massimo di trainers per ciascun piano: Palestra basic 2, Advanced 4,
+         * Pro 6, su misura 20»*.
+         *
+         * ⛔ Cinque posti trainer su dieci iscritti voleva dire **metà della
+         * palestra con l'AI accesa e non fatturata**: `PianoAttivo::haLaAi()`
+         * guarda il piano del tenant, `ContoDegliIscritti::quanti()` conta solo
+         * `UserRole::Member`.
+         */
+        $this->assertSame(2, $palestra->max_trainers, 'i trainer non sono contati');
     }
 
     /**
-     * 🚨 **E gli slot trainer sono sproporzionati, di proposito.**
+     * 🚨 **I posti trainer sono pochi, e crescono col piano** — 21/09/2026.
      *
-     * 📌 *«Una palestra deve poter inserire più o meno tutti i suoi trainer
-     * anche se vuole dare l'abbonamento a pochissimi allievi»*, ma il tetto resta
-     * un massimo — *«se una palestra ha 50 trainer non mi sta bene che paghi
-     * soltanto per 10-20 iscritti»*.
+     * ── ⛔ Cosa diceva prima questo test ──────────────────────────────────────
      *
-     * ⚠️ Il test prova il **rapporto**, non i numeri.
+     * Diceva il contrario: *«i posti trainer non sono mai meno di un terzo dei
+     * posti iscritto»*, perché *«una palestra deve poter inserire più o meno
+     * tutti i suoi trainer anche se vuole dare l'abbonamento a pochissimi
+     * allievi»*. Con 10/5, 30/10 e 60/20 reggeva.
      *
-     * 🆕 **20/09/2026, coi prezzi veri**: la soglia era «almeno tre iscritti per
-     * trainer» e il listino nuovo non la rispetta più — il Basic ha 10 iscritti
-     * e 5 trainer, cioè due. ⛔ Non è una svista del listino: una palestra
-     * piccola ha **pochi abbonamenti regalati e tutti i suoi istruttori**, ed è
-     * il caso che quel piano serve.
+     * 🚨 **Reggeva una regola sbagliata.** Un posto trainer non è un posto
+     * gratis: è un posto **con l'AI accesa che nessuno fattura**. Il conto del
+     * 20/09 (`ai:misura-i-costi`) lo ha reso visibile — col su misura senza
+     * tetto una palestra da 101 persone poteva registrarle tutte come trainer e
+     * pagare 183 € invece di 297,80 €.
      *
-     * 💡 La regola vera, quella che il listino rispetta davvero, è l'altra
-     * faccia della stessa cosa: **i posti trainer non sono mai meno di un terzo
-     * dei posti iscritto**. Con 10/5, 30/10 e 60/20 regge, e regge anche il
-     * giorno che i numeri cambiano — se un giorno non reggesse, sarebbe una
-     * palestra costretta a lasciare fuori i propri istruttori.
+     * ── ✅ Le tre regole che il listino nuovo rispetta ────────────────────────
+     *
+     * 1. **Almeno un posto trainer**, sempre: una palestra senza istruttori non
+     *    è una palestra, e un piano a zero non si vende.
+     * 2. **Un tetto c'è sempre**, anche sul su misura: `null` è quello che ha
+     *    aperto il buco. ⚠️ Il codice continua a *saper leggere* `null` (i piani
+     *    cuciti a mano dal pannello god possono averlo); è il **listino
+     *    pubblico** che non può più venderlo.
+     * 3. **Non si scende mai salendo di prezzo**: chi paga di più non può avere
+     *    meno posti di chi paga di meno. 💡 È la regola che protegge dal
+     *    refuso, non dalla scelta — i numeri li decide il committente
+     *    (2 / 4 / 6 / 20), la monotonia no.
+     *
+     * 💡 Il rapporto sugli iscritti non si prova più: era un vincolo di
+     * generosità, e la generosità qui è **il costo di inferenza non fatturato**.
+     * Chi ha bisogno di più istruttori scrive — c'è il modulo di contatto.
      */
     #[Test]
-    public function i_trainer_sono_proporzionalmente_piu_generosi_degli_iscritti(): void
+    public function i_posti_trainer_sono_pochi_e_crescono_col_piano(): void
     {
-        foreach (Plan::query()->pubblici()->diTipo(PlanKind::Gym)->get() as $piano) {
-            if ($piano->max_trainers === null) {
-                continue; // il piano a consumo: nessun tetto, nessun rapporto.
-            }
+        /*
+         * ⚠️ Ordinati per `price_cents`, con il su misura **ultimo**: il suo
+         * canone di listino è 0 (si paga a iscritto), quindi l'ordinamento per
+         * prezzo lo metterebbe primo e la monotonia fallirebbe per finta.
+         */
+        $piani = Plan::query()->pubblici()->diTipo(PlanKind::Gym)->orderBy('price_cents')->get()
+            ->sortBy(fn (Plan $p): int => $p->aConsumo() ? PHP_INT_MAX : $p->price_cents)
+            ->values();
+
+        $prima = 0;
+
+        foreach ($piani as $piano) {
+            $this->assertNotNull(
+                $piano->max_trainers,
+                "{$piano->code}: nessun tetto ai trainer, ed è il buco che abbiamo chiuso il 21/09",
+            );
 
             $this->assertGreaterThanOrEqual(
-                $piano->max_members / 3,
+                1,
                 $piano->max_trainers,
-                "{$piano->code}: troppo pochi posti trainer per gli iscritti che vende",
+                "{$piano->code}: una palestra senza posti trainer non è una palestra",
             );
+
+            $this->assertGreaterThanOrEqual(
+                $prima,
+                $piano->max_trainers,
+                "{$piano->code}: costa di più del piano prima e offre meno posti trainer",
+            );
+
+            $prima = $piano->max_trainers;
         }
     }
 
@@ -121,7 +163,7 @@ final class ListinoALivelliTest extends TestCase
      * 🆕 **Il piano a consumo si paga a iscritto, con un minimo** — 13/09.
      *
      * 📌 *«Pagherà un tot per ogni iscritto a cui regala l'abbonamento, per un
-     * minimo di 100»*, e i trainer sono illimitati.
+     * minimo di 100»*.
      *
      * 🚨 **Il minimo si applica al CONTEGGIO, non al totale**: una palestra con
      * 40 iscritti paga 100 × il prezzo. ⛔ «Almeno tot euro» sembrerebbe la stessa
@@ -133,8 +175,19 @@ final class ListinoALivelliTest extends TestCase
         $consumo = $this->piano('gym_consumo');
 
         $this->assertTrue($consumo->aConsumo());
-        $this->assertNull($consumo->max_members, 'un piano a consumo non ha tetti');
-        $this->assertNull($consumo->max_trainers);
+        $this->assertNull($consumo->max_members, 'un piano a consumo non ha tetti sugli iscritti');
+
+        /*
+         * 🆕 **Venti, non «illimitati»** — 21/09/2026. 📌 *«Palestra su misura:
+         * 20 trainers (tanto c'è scrivici)»*.
+         *
+         * 🚨 Qui `null` era il buco vero: gli iscritti li paghi uno per uno, i
+         * trainer no, e senza tetto la palestra da 101 persone poteva
+         * registrarle **tutte come trainer** — 183 € di minimo invece di 297,80.
+         * ⚠️ Sopra venti non si dice di no: si fa un piano su misura dal
+         * pannello god, coi posti che decide il committente.
+         */
+        $this->assertSame(20, $consumo->max_trainers, 'il su misura ha un tetto anche lui');
         $this->assertSame(0, $consumo->price_cents, 'un piano a consumo non ha un canone di listino');
 
         $minimo = $consumo->minimo_iscritti;

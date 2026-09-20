@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IscrizioneController;
+use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Responses\RoleAwareLoginResponse;
@@ -96,6 +97,27 @@ Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.web
 */
 Route::get('/professionisti', [SitoController::class, 'professionisti'])
     ->name('sito.professionisti');
+
+/*
+| ✉️ Il modulo di contatto - 21/09/2026.
+|
+| 📌 *«tanto c'e' scrivici. Mettici un modulo di contatto cosi' mi scrivono»*.
+|
+| ⛔ Prima al suo posto c'era un `mailto:`, che su un telefono senza posta
+| configurata non fa niente: il cliente preme e non succede nulla.
+|
+| ⚠️ `throttle:5,10` **solo sul POST**: cinque invii ogni dieci minuti per
+| indirizzo IP. Sulla GET no - e' una pagina pubblica come le altre, e chi
+| ricarica il modulo tre volte perche' ha sbagliato un campo non va punito.
+|
+| 🚨 Stanno **sopra** `/{quale}`: quella e' la rotta dei documenti legali con
+| segnaposto, e messa prima si prenderebbe anche `scrivici`.
+*/
+Route::get('/scrivici', [ScriviciController::class, 'modulo'])->name('sito.scrivici');
+
+Route::post('/scrivici', [ScriviciController::class, 'invia'])
+    ->middleware('throttle:5,10')
+    ->name('sito.scrivici.invia');
 
 Route::get('/{quale}', [SitoController::class, 'documento'])
     ->whereIn('quale', ['privacy', 'condizioni', 'liberatoria-palestra', 'liberatoria-trainer'])

@@ -1,6 +1,6 @@
 # Informativa privacy
 
-> **Ultimo aggiornamento:** 19 settembre 2026
+> **Ultimo aggiornamento:** 21 settembre 2026
 
 ---
 
@@ -329,6 +329,21 @@ servizio: Stripe riprova per qualche giorno.
 Carta, ricevute e disdetta si gestiscono dal portale di Stripe, che raggiungi dall'app o dal
 pannello.
 
+### 3.12 ✉️ Il modulo di contatto del sito
+
+Se ci scrivi dal modulo **Scrivici**, riceviamo quello che hai compilato: **nome, email**, e se li
+hai messi **telefono, nome dell'attività, quanti iscritti e quanti trainer**, oltre al messaggio.
+
+**Serve a risponderti, e a nient'altro.** Niente newsletter, niente pubblicità, niente giro ad
+altri. ⚠️ Lo leggiamo solo noi, dal pannello della piattaforma.
+
+🚨 **Non registriamo il tuo indirizzo IP né che browser usi.** Per difendere il modulo dagli
+invii automatici basta un limite al numero di invii, e quello non ha bisogno di sapere chi sei.
+
+La richiesta si conserva **24 mesi** dall'invio, e poi si cancella da sola: una trattativa che
+riparte dopo un anno è normale, dopo due non è più la stessa. Se vuoi che spariscano prima,
+scrivicelo — vedi §6.
+
 ---
 
 ## 4. Per quanto tempo
@@ -344,6 +359,7 @@ pannello.
 | Foto in chat | Fino allo scaricamento, e comunque **non oltre 24 ore** |
 | Documento importato | Il tempo della trascrizione; la bozza **non oltre 7 giorni** |
 | Registro di controllo (chi ha fatto cosa nel pannello) | **12 mesi**, poi si cancella da solo |
+| Richiesta mandata dal modulo di contatto del sito | **24 mesi**, poi si cancella da sola — vedi §3.12 |
 | Conteggi dell'uso dell'intelligenza artificiale, riga per riga | **13 mesi**, poi si cancella da solo. 💡 Restano solo i **totali** delle fatture, per l'obbligo fiscale |
 | Riferimenti dei pagamenti e fatture | Per il tempo imposto dagli obblighi fiscali |
 | Comune indicato · foto del profilo | Finché li tieni: si tolgono in qualsiasi momento dal profilo |

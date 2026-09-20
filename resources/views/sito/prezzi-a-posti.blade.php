@@ -111,15 +111,20 @@
 
                     <ul class="elenco">
                         <li><strong>Da {{ $suMisura['minimo'] }} {{ $unita }}</strong> in su, senza tetto</li>
-                        @if ($suMisura['trainerIllimitati'])
-                            <li><strong>Trainer illimitati</strong></li>
+                        @if ($suMisura['trainer'] === null)
+                            <li><strong>Trainer senza tetto</strong></li>
+                        @else
+                            <li><strong>{{ $suMisura['trainer'] }} trainer</strong> al lavoro, e sopra si concorda</li>
                         @endif
                         <li>Si paga quello che si usa, col minimo garantito</li>
                         <li>Fattura mensile a mese chiuso</li>
                     </ul>
 
                     <div class="in-fondo">
-                        <a href="mailto:info@smp-digital.it?subject=Piano%20su%20misura%20{{ $diPalestra ? 'palestra' : 'trainer' }}"
+                        {{-- Il modulo, non piu' un mailto: su un telefono senza posta
+                             configurata quel link non faceva niente, e chi lo premeva se
+                             ne andava convinto che il sito fosse rotto. --}}
+                        <a href="/scrivici?tipo={{ $diPalestra ? 'palestra' : 'trainer' }}"
                            class="bottone bottone-vuoto" style="width: 100%;">Scrivici</a>
                     </div>
                 </div>
@@ -132,7 +137,7 @@
                     <strong>{{ $formatta($costoAlMinimo) }}</strong> al mese, contro i
                     {{ $formatta($piuGrande['prezzo']) }} del {{ $piuGrande['nome'] }}. Da lì in
                     su cresce di {{ $formatta($suMisura['perSlot']) }} per
-                    ogni {{ $unitaUno }} in più, e non ha tetti.
+                    ogni {{ $unitaUno }} in più, e sugli {{ $unita }} non ha tetti.
                     ⚠️ Sotto il minimo si paga comunque il minimo: è il prezzo di avere il conto
                     aperto.
                 </p>

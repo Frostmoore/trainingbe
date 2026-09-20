@@ -95,6 +95,17 @@ enum AuditAction: string
      */
     case UscitoDallaPalestra = 'account.left_gym';
 
+    /**
+     * 🆕 ✂️ **Un piano cucito a mano assegnato a un cliente** — 21/09/2026.
+     *
+     * 🚨 È l'azione con più soldi attaccati di tutto il pannello: decide
+     * **quanto paga** un cliente e **quanti posti** ha. ⚠️ Non passa da Stripe e
+     * non lascia traccia in fattura finché il mese non si chiude, quindi senza
+     * questa riga di registro l'unica prova di chi l'ha fatto e quando sarebbe
+     * la colonna `updated_at` dell'abbonamento.
+     */
+    case PianoSuMisuraAssegnato = 'tenant.piano_su_misura_assegnato';
+
     public function label(): string
     {
         return match ($this) {
@@ -115,6 +126,7 @@ enum AuditAction: string
             self::AbbonamentoPagatoDisdetto => 'Abbonamento pagato disdetto',
             self::IscrittoDisiscritto => 'Iscritto disiscritto',
             self::UscitoDallaPalestra => 'Uscito dalla palestra',
+            self::PianoSuMisuraAssegnato => 'Piano su misura assegnato',
         };
     }
 
@@ -124,7 +136,8 @@ enum AuditAction: string
         return match ($this) {
             self::ImpersonationStarted, self::UserDeleted, self::TenantSuspended => 'danger',
             self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged,
-            self::AiQuotaChanged, self::AbbonamentoRegalato => 'warning',
+            self::AiQuotaChanged, self::AbbonamentoRegalato,
+            self::PianoSuMisuraAssegnato => 'warning',
             default => 'gray',
         };
     }

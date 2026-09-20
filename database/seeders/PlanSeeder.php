@@ -214,12 +214,17 @@ class PlanSeeder extends Seeder
             'ai_enabled' => true,
 
             /*
-             * ⚠️ **Nessun tetto, ed è il punto del piano**: si paga per ogni
-             * iscritto a cui si regala l'abbonamento, con un minimo. 📌 *«per un
-             * minimo di 100»*, e i trainer sono illimitati.
+             * ⚠️ **Nessun tetto sugli iscritti, ed è il punto del piano**: si
+             * paga per ognuno a cui si regala l'abbonamento, con un minimo.
+             *
+             * 🔄 **I trainer invece un tetto ce l'hanno** dal 21/09/2026: erano
+             * illimitati, e illimitato più non fatturato voleva dire che una
+             * palestra poteva registrare gli iscritti come trainer e pagare il
+             * minimo invece del dovuto. 💡 Sopra il tetto si concorda: c'è il
+             * modulo di contatto, e dal pannello god si cuce un piano apposta.
              */
             'max_members' => null,
-            'max_trainers' => null,
+            'max_trainers' => $consumo['trainer'],
 
             /*
              * 🚨 **`price_cents = 0` e non è gratis.** Un piano a consumo non ha
