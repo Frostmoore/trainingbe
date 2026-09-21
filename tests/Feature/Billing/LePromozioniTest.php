@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Billing;
 
+use App\Enums\DurataDelloSconto;
+use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\SuCosaVale;
 use App\Enums\TipoBersaglio;
+use App\Enums\TipoDiPremio;
 use App\Enums\TipoDiSconto;
 use App\Enums\UserRole;
 use App\Models\Promozione;
 use App\Models\PromozioneBersaglio;
+use App\Models\PromozionePremio;
 use App\Services\Billing\LePromozioni;
 use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,23 +39,41 @@ class LePromozioniTest extends TestCase
     use CreaAmbiente;
     use RefreshDatabase;
 
+    /**
+     * 🆕 P1 — `tipo_sconto`, `valore` e `su_cosa` non stanno più sulla riga:
+     * l'helper li accetta ancora e ne fa **premi**, uno per voce di `su_cosa`,
+     * così i casi di F2 restano scritti come erano.
+     */
     private function promo(array $extra = []): Promozione
     {
+        $tipoSconto = $extra['tipo_sconto'] ?? TipoDiSconto::Percentuale;
+        $valore = $extra['valore'] ?? 20;
+        $suCosa = $extra['su_cosa'] ?? [SuCosaVale::Gettoni->value, SuCosaVale::Canone->value];
+        unset($extra['tipo_sconto'], $extra['valore'], $extra['su_cosa']);
+
         $promozione = Promozione::query()->create(array_merge([
             'codice' => Promozione::nuovoCodice(),
             'nome' => 'Offerta di prova',
-            'tipo_sconto' => TipoDiSconto::Percentuale,
-            'valore' => 20,
-            'su_cosa' => [SuCosaVale::Gettoni->value, SuCosaVale::Canone->value],
+            'genere' => GenereDiPromozione::Entrambi,
             'cumulabile' => false,
         ], $extra));
+
+        foreach ($suCosa as $voce) {
+            PromozionePremio::query()->create([
+                'promozione_id' => $promozione->getKey(),
+                'tipo' => $voce === SuCosaVale::Gettoni->value ? TipoDiPremio::ScontoGettoni : TipoDiPremio::ScontoAbbonamento,
+                'tipo_sconto' => $tipoSconto,
+                'valore' => $valore,
+                'durata' => $voce === SuCosaVale::Gettoni->value ? null : DurataDelloSconto::UnaVolta,
+            ]);
+        }
 
         PromozioneBersaglio::query()->create([
             'promozione_id' => $promozione->getKey(),
             'tipo' => TipoBersaglio::Tutti,
         ]);
 
-        return $promozione->fresh('bersagli');
+        return $promozione->fresh(['bersagli', 'premi']);
     }
 
     // ═════════════════════════ il conto ═════════════════════════
@@ -60,7 +82,7 @@ class LePromozioniTest extends TestCase
     #[Test]
     public function una_percentuale_toglie_la_sua_parte(): void
     {
-        $conto = app(LePromozioni::class)->applica(1000, [$this->promo(['valore' => 20])]);
+        $conto = app(LePromozioni::class)->applica(1000, [$this->promo(['valore' => 20])], SuCosaVale::Gettoni);
 
         $this->assertSame(200, $conto['sconto']);
         $this->assertSame(800, $conto['finale']);
@@ -79,7 +101,7 @@ class LePromozioniTest extends TestCase
         $conto = app(LePromozioni::class)->applica(10000, [
             $this->promo(['valore' => 30, 'cumulabile' => true]),
             $this->promo(['valore' => 20, 'cumulabile' => true]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         // 10.000 − 30% = 7.000; 7.000 − 20% = 5.600.
         $this->assertSame(5600, $conto['finale']);
@@ -101,7 +123,7 @@ class LePromozioniTest extends TestCase
             $this->promo(['valore' => 10]),
             $this->promo(['valore' => 35]),
             $this->promo(['valore' => 5]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         $this->assertSame(3500, $conto['sconto']);
         $this->assertCount(1, $conto['applicate']);
@@ -118,7 +140,7 @@ class LePromozioniTest extends TestCase
             $this->promo(['valore' => 50]),
             $this->promo(['valore' => 10, 'cumulabile' => true]),
             $this->promo(['valore' => 10, 'cumulabile' => true]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         // 50% da sola batte 10% + 10% incolonnati (19%).
         $this->assertSame(5000, $conto['sconto']);
@@ -133,7 +155,7 @@ class LePromozioniTest extends TestCase
             $this->promo(['valore' => 15]),
             $this->promo(['valore' => 20, 'cumulabile' => true]),
             $this->promo(['valore' => 20, 'cumulabile' => true]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         // 20% + 20% incolonnati = 36%, meglio del 15% da solo.
         $this->assertSame(3600, $conto['sconto']);
@@ -149,7 +171,7 @@ class LePromozioniTest extends TestCase
     {
         $conto = app(LePromozioni::class)->applica(300, [
             $this->promo(['tipo_sconto' => TipoDiSconto::Importo, 'valore' => 5000]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         $this->assertSame(0, $conto['finale']);
         $this->assertSame(300, $conto['sconto']);
@@ -162,7 +184,7 @@ class LePromozioniTest extends TestCase
         $conto = app(LePromozioni::class)->applica(1000, [
             $this->promo(['tipo_sconto' => TipoDiSconto::Importo, 'valore' => 1000, 'cumulabile' => true]),
             $this->promo(['valore' => 50, 'cumulabile' => true]),
-        ]);
+        ], SuCosaVale::Gettoni);
 
         $this->assertSame(0, $conto['finale']);
         $this->assertCount(1, $conto['applicate']);
@@ -172,7 +194,7 @@ class LePromozioniTest extends TestCase
     #[Test]
     public function senza_promozioni_non_cambia_niente(): void
     {
-        $conto = app(LePromozioni::class)->applica(1234, []);
+        $conto = app(LePromozioni::class)->applica(1234, [], SuCosaVale::Gettoni);
 
         $this->assertSame(1234, $conto['finale']);
         $this->assertSame(0, $conto['sconto']);
@@ -307,9 +329,12 @@ class LePromozioniTest extends TestCase
     public function una_promozione_esaurita_non_si_spende_piu(): void
     {
         $promozione = $this->promo(['massimo_usi' => 2]);
+        $palestra = $this->creaPalestra();
+        $persona = $this->creaUtente($palestra, UserRole::Member, 'esaurita@esempio.test');
 
-        app(LePromozioni::class)->segnaUsata($promozione);
-        app(LePromozioni::class)->segnaUsata($promozione);
+        // 🆕 P1 — l'uso lo segna il webhook, una volta per sessione pagata.
+        app(LePromozioni::class)->segnaUsate($promozione->codice, $persona, 'cs_uno', 100);
+        app(LePromozioni::class)->segnaUsate($promozione->codice, $persona, 'cs_due', 100);
 
         $this->assertTrue($promozione->refresh()->eEsaurita());
         $this->assertSame('Questa offerta è esaurita.', $promozione->perchePiuNonVale());

@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Panels;
 
+use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
-use App\Enums\SuCosaVale;
 use App\Enums\TipoBersaglio;
+use App\Enums\TipoDiPremio;
 use App\Enums\TipoDiSconto;
 use App\Enums\UserRole;
 use App\Filament\God\Resources\Promozioni\Pages\ListPromozioni;
 use App\Filament\Gym\Pages\OffertaPerTe;
 use App\Models\Promozione;
 use App\Models\PromozioneBersaglio;
+use App\Models\PromozionePremio;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -38,17 +40,23 @@ class IlPannelloDellePromozioniTest extends TestCase
             'codice' => Promozione::nuovoCodice(),
             'nome' => 'Sconto di settembre',
             'descrizione' => 'Il venti per cento sul prossimo pagamento.',
+            'genere' => GenereDiPromozione::Gettoni,
+        ], $extra));
+
+        // 🆕 P1 — lo sconto è un premio.
+        PromozionePremio::query()->create([
+            'promozione_id' => $promozione->getKey(),
+            'tipo' => TipoDiPremio::ScontoGettoni,
             'tipo_sconto' => TipoDiSconto::Percentuale,
             'valore' => 20,
-            'su_cosa' => [SuCosaVale::Gettoni->value, SuCosaVale::Canone->value],
-        ], $extra));
+        ]);
 
         PromozioneBersaglio::query()->create(array_merge([
             'promozione_id' => $promozione->getKey(),
             'tipo' => TipoBersaglio::Tutti,
         ], $bersaglio ?? []));
 
-        return $promozione->fresh('bersagli');
+        return $promozione->fresh(['bersagli', 'premi']);
     }
 
     #[Test]

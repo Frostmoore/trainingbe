@@ -9,6 +9,7 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
 use App\Models\LiberatoriaFirmata;
 use App\Models\ProfiloPubblico;
+use App\Models\PromozioneAssegnazione;
 use App\Models\PromozioneBersaglio;
 use App\Models\Tenant;
 use App\Models\User;
@@ -87,6 +88,16 @@ class TenantIsolationTest extends TestCase
          * che guarda **dove sta la persona adesso**.
          */
         PromozioneBersaglio::class => 'Il `tenant_id` è il BERSAGLIO di un\'offerta, non il proprietario della riga.',
+        /*
+         * 🆕 🧾 P1 di `plan_promozioni.md` — **chi ha preso una promozione**.
+         *
+         * 🚨 Si legge dal pannello della piattaforma, che gira **senza** tenant:
+         * con lo scope, `/god` non vedrebbe chi l'ha usata, e il budget e il
+         * massimo per persona si conterebbero solo dentro la palestra corrente —
+         * cioè una persona potrebbe riprendere la stessa offerta cambiando
+         * palestra. Il `tenant_id` dice solo dove stava quando l'ha presa.
+         */
+        PromozioneAssegnazione::class => 'Letta da /god e contata per persona: il `tenant_id` è solo dove stava quando l\'ha presa.',
         /*
          * 🚨 `profili_pubblici` esiste **apposta** per essere visto da fuori.
          *

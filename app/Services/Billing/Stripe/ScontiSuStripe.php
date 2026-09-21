@@ -52,6 +52,8 @@ class ScontiSuStripe
         SuCosaVale $cosa,
         int $importoCent,
         ?string $codice = null,
+        ?int $pacchettoId = null,
+        ?int $planId = null,
     ): array {
         $candidate = $this->promozioni->automaticheDi($utente, $cosa)->all();
 
@@ -64,7 +66,7 @@ class ScontiSuStripe
             $candidate[] = $conCodice;
         }
 
-        $conto = $this->promozioni->applica($importoCent, $candidate);
+        $conto = $this->promozioni->applica($importoCent, $candidate, $cosa, $pacchettoId, $planId);
 
         if ($conto['sconto'] <= 0) {
             return ['promozioni' => [], 'sconto' => 0];

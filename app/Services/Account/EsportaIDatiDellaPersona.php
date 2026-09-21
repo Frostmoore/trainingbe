@@ -83,6 +83,15 @@ final class EsportaIDatiDellaPersona
         'messages' => [['sender_id'], ['body', 'nonce']],
         'nutrition_plans' => [['member_id'], []],
         'profili_pubblici' => [['user_id'], []],
+        /*
+         * 🆕 🎁 **Le promozioni che ha preso** — 24/09/2026, P1 di `plan_promozioni.md`.
+         *
+         * 🚨 Sono **sue**: quali offerte ha avuto, quanto le hanno scontato,
+         * quanti gettoni le hanno regalato. ⚠️ Chi l'ha revocata
+         * (`revocata_da_id`) resta fuori: è una persona della piattaforma, non
+         * un dato di chi chiede l'export.
+         */
+        'promozione_assegnazioni' => [['user_id'], ['revocata_da_id']],
         // ⛔ Sale, nonce e chiave avvolta: materiale crittografico, non dati. Resta la data.
         'recovery_keys' => [['user_id'], ['salt', 'nonce', 'wrapped_key', 'ops_limit', 'mem_limit']],
         'social_identities' => [['user_id'], []],

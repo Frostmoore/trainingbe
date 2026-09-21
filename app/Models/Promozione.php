@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\ComeSiAttiva;
+use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\SuCosaVale;
-use App\Enums\TipoDiSconto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,45 +22,73 @@ use Illuminate\Support\Str;
  * dicono i `bersagli`, non la colonna di un tenant.
  *
  * 🚨 **Lo sconto non si applica leggendo questo modello**: si passa da
- * `LoScontoDaApplicare`, che sa mettere in fila più promozioni e sa dove si
+ * `LePromozioni`, che sa mettere in fila più promozioni e sa dove si
  * ferma. ⛔ Un `prezzo * (1 - valore/100)` scritto in una vista è il modo in
  * cui un giorno si vende sotto costo.
+ *
+ * 🆕 **P1 di `plan_promozioni.md`, 24/09/2026**: quello che dà non sta più
+ * sulla riga (`tipo_sconto`, `valore`, `su_cosa` sono state tolte) ma nei
+ * **premi** — una promozione può darne più d'uno. E chi l'ha presa resta
+ * scritto nelle **assegnazioni**: da lì il massimo per persona e il budget.
  */
 class Promozione extends Model
 {
     protected $table = 'promozioni';
 
     protected $fillable = [
-        'codice', 'nome', 'descrizione', 'tipo_sconto', 'valore', 'su_cosa',
-        'cumulabile', 'attivazione', 'stato', 'inizia_il', 'scade_il',
-        'massimo_usi', 'creata_da_id',
+        'codice', 'nome', 'descrizione', 'genere',
+        'cumulabile', 'priorita', 'attivazione', 'evento', 'evento_parametri',
+        'stato', 'inizia_il', 'scade_il',
+        'massimo_usi', 'massimo_per_persona', 'budget_cent', 'budget_gettoni',
+        'avviso', 'visibile_in', 'creata_da_id',
     ];
 
     protected $attributes = [
         'stato' => 'attiva',
         'attivazione' => 'automatica',
+        'genere' => 'abbonamenti',
         'cumulabile' => false,
+        'priorita' => 0,
         'usata_volte' => 0,
     ];
 
     protected function casts(): array
     {
         return [
-            'tipo_sconto' => TipoDiSconto::class,
+            'genere' => GenereDiPromozione::class,
+            'attivazione' => ComeSiAttiva::class,
             'stato' => StatoPromozione::class,
-            'su_cosa' => 'array',
             'cumulabile' => 'boolean',
-            'valore' => 'integer',
+            'priorita' => 'integer',
             'massimo_usi' => 'integer',
+            'massimo_per_persona' => 'integer',
+            'budget_cent' => 'integer',
+            'budget_gettoni' => 'integer',
             'usata_volte' => 'integer',
+            'evento_parametri' => 'array',
+            'avviso' => 'array',
+            'visibile_in' => 'array',
             'inizia_il' => 'datetime',
             'scade_il' => 'datetime',
+            'eseguita_il' => 'datetime',
         ];
     }
 
     public function bersagli(): HasMany
     {
         return $this->hasMany(PromozioneBersaglio::class);
+    }
+
+    /** 🆕 P1 — cosa dà: uno o più premi. */
+    public function premi(): HasMany
+    {
+        return $this->hasMany(PromozionePremio::class);
+    }
+
+    /** 🆕 P1 — chi l'ha presa. */
+    public function assegnazioni(): HasMany
+    {
+        return $this->hasMany(PromozioneAssegnazione::class);
     }
 
     /**
@@ -85,7 +114,8 @@ class Promozione extends Model
     {
         return $this->stato === StatoPromozione::Attiva
             && $this->eNelPeriodo($quando)
-            && ! $this->eEsaurita();
+            && ! $this->eEsaurita()
+            && ! $this->eFuoriBudget();
     }
 
     public function eNelPeriodo(?Carbon $quando = null): bool
@@ -109,6 +139,43 @@ class Promozione extends Model
         return $this->massimo_usi !== null && $this->usata_volte >= $this->massimo_usi;
     }
 
+    /**
+     * 🆕 P1 — **Il budget è finito?** Opzione 35 del piano.
+     *
+     * 💡 Si somma dalle assegnazioni che contano (non revocate, non scadute):
+     * una revoca restituisce il budget, perché quei soldi non sono stati dati.
+     */
+    public function eFuoriBudget(): bool
+    {
+        if ($this->budget_cent === null && $this->budget_gettoni === null) {
+            return false;
+        }
+
+        $speso = $this->assegnazioni()->cheContano()
+            ->selectRaw('COALESCE(SUM(scontato_cent), 0) as cent, COALESCE(SUM(gettoni), 0) as gettoni')
+            ->first();
+
+        return ($this->budget_cent !== null && (int) $speso?->cent >= $this->budget_cent)
+            || ($this->budget_gettoni !== null && (int) $speso?->gettoni >= $this->budget_gettoni);
+    }
+
+    /** 🆕 P1 — quante volte questa persona l'ha già presa (revocate e scadute escluse). */
+    public function usiDi(User $utente): int
+    {
+        return $this->assegnazioni()->cheContano()->where('user_id', $utente->getKey())->count();
+    }
+
+    /**
+     * 🆕 P1 — **Questa persona può prenderla ancora?** Opzione 34 del piano.
+     *
+     * ⛔ Senza, una promozione automatica si riapplicava a ogni acquisto della
+     * stessa persona finché non finiva il tetto totale.
+     */
+    public function laPuoPrendereAncora(User $utente): bool
+    {
+        return $this->massimo_per_persona === null || $this->usiDi($utente) < $this->massimo_per_persona;
+    }
+
     /** Perché non si può usare — o `null` se si può. */
     public function perchePiuNonVale(): ?string
     {
@@ -117,38 +184,60 @@ class Promozione extends Model
             $this->stato === StatoPromozione::Disattivata => 'Questa offerta non è più valida.',
             $this->eEsaurita() => 'Questa offerta è esaurita.',
             $this->eScaduta() => 'Questa offerta è scaduta.',
+            $this->eFuoriBudget() => 'Questa offerta è esaurita.',
             ! $this->eNelPeriodo() => 'Questa offerta non è ancora cominciata.',
             default => null,
         };
     }
 
-    /** Vale su questo tipo di acquisto? */
+    /**
+     * Vale su questo tipo di acquisto?
+     *
+     * 🆕 P1 — lo dicono i **premi**: vero se almeno uno agisce su quell'acquisto.
+     */
     public function valeSu(SuCosaVale $cosa): bool
     {
-        return in_array($cosa->value, (array) $this->su_cosa, true);
+        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->suCosaVale() === $cosa);
     }
 
     /**
      * 💰 Quanto toglie da questo importo, in centesimi.
      *
-     * 🚨 **Non scende mai sotto zero**: uno sconto a importo più grande del
-     * prezzo non regala la differenza, la lascia a zero. ⛔ Senza questa riga
-     * un fisso da 50 € su un pacchetto da 3 € darebbe un importo negativo, e
-     * Stripe lo rifiuterebbe **dopo** aver mostrato il prezzo al cliente.
+     * 🆕 P1 — somma **in fila** i premi di sconto che valgono su questo
+     * acquisto (di solito uno): ognuno sull'importo che resta, mai sotto zero.
      */
-    public function scontoSu(int $importoCent): int
+    public function scontoSu(int $importoCent, SuCosaVale $cosa, ?int $pacchettoId = null, ?int $planId = null): int
     {
-        $sconto = $this->tipo_sconto === TipoDiSconto::Percentuale
-            ? (int) round($importoCent * $this->valore / 100)
-            : $this->valore;
+        $resta = max(0, $importoCent);
 
-        return max(0, min($sconto, $importoCent));
+        foreach ($this->premiDiSconto($cosa, $pacchettoId, $planId) as $premio) {
+            $resta -= $premio->scontoSu($resta);
+        }
+
+        return max(0, $importoCent) - $resta;
     }
 
-    /** Come si legge lo sconto: «20%» o «5,00 €». */
+    /**
+     * I premi di sconto che valgono su questo acquisto.
+     *
+     * @return list<PromozionePremio>
+     */
+    public function premiDiSconto(SuCosaVale $cosa, ?int $pacchettoId = null, ?int $planId = null): array
+    {
+        return $this->premi
+            ->filter(fn (PromozionePremio $p): bool => $p->tipo->eUnoSconto()
+                && $p->tipo->costruito()
+                && $p->tipo->suCosaVale() === $cosa
+                && $p->valeSulPacchetto($pacchettoId)
+                && $p->valeSulPiano($planId))
+            ->values()
+            ->all();
+    }
+
+    /** Come si legge: i premi uniti da « + ». */
     public function scrittoBene(): string
     {
-        return $this->tipo_sconto->scrivi($this->valore);
+        return $this->premi->map(fn (PromozionePremio $p): string => $p->scrittoBene())->join(' + ') ?: 'nessun premio';
     }
 
     // ───────────────────────── query ─────────────────────────

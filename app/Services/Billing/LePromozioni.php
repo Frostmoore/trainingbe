@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Enums\ComeSiAttiva;
+use App\Enums\OrigineAssegnazione;
+use App\Enums\StatoAssegnazione;
 use App\Enums\SuCosaVale;
-use App\Enums\TipoBersaglio;
 use App\Models\Promozione;
+use App\Models\PromozioneAssegnazione;
 use App\Models\User;
-use App\Support\Tenancy\TenantContext;
+use App\Services\Promozioni\ChiLaRiceve;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -39,10 +43,24 @@ use Illuminate\Support\Facades\DB;
  *    percentuali è il modo classico di regalare il 6% senza accorgersene.
  * 3. **Non si scende mai sotto zero.** ⛔ Uno sconto a importo più grande del
  *    prezzo non regala la differenza.
+ *
+ * ══ 🆕 P1 di `plan_promozioni.md` — 24/09/2026 ════════════════════════════
+ *
+ * 4. **Lo sconto lo danno i premi**, non la riga: `applica()` chiede su cosa si
+ *    sta comprando e quale pacchetto o piano, perché un premio può valere su
+ *    un pacchetto solo.
+ * 5. **La priorità viene prima della convenienza** fra le non cumulabili:
+ *    📌 *«Cumulabile sì/no, e quale vince se ce ne sono più di una»*. A parità
+ *    di priorità vince ancora quella che conviene al cliente.
+ * 6. **Il massimo per persona e il budget** tengono fuori chi l'ha già presa e
+ *    le promozioni che hanno finito i soldi.
+ * 7. **L'uso si segna al webhook** (`segnaUsate()`), una volta sola per
+ *    sessione — ⛔ fino al 23/09 non lo segnava nessuno, e `massimo_usi` non
+ *    fermava niente.
  */
 class LePromozioni
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(private readonly ChiLaRiceve $chiLaRiceve) {}
 
     /**
      * Le promozioni **automatiche** che questa persona ha, su questo acquisto.
@@ -55,7 +73,7 @@ class LePromozioni
     public function automaticheDi(User $utente, SuCosaVale $cosa): Collection
     {
         return $this->spendibiliDi($utente, $cosa)
-            ->filter(static fn (Promozione $p): bool => $p->attivazione === 'automatica')
+            ->filter(static fn (Promozione $p): bool => $p->attivazione === ComeSiAttiva::Automatica)
             ->values();
     }
 
@@ -66,30 +84,53 @@ class LePromozioni
      * Senza il controllo sui bersagli, un codice inoltrato varrebbe per
      * chiunque — e una promozione «per gli allievi della palestra Tal dei
      * Tali» finirebbe su mezza piattaforma.
+     *
+     * 🆕 P1 — `$cosa` `null` = «su qualunque cosa»: la pagina dell'offerta la
+     * spiega, non vende niente. E chi l'ha già presa quante volte poteva non la
+     * ritrova.
      */
-    public function conIlCodice(string $codice, User $utente, SuCosaVale $cosa): ?Promozione
+    public function conIlCodice(string $codice, User $utente, ?SuCosaVale $cosa = null): ?Promozione
     {
         $promozione = Promozione::query()
-            ->with('bersagli')
+            ->with(['bersagli', 'premi'])
             ->where('codice', mb_strtoupper(trim($codice)))
             ->first();
 
-        if ($promozione === null || ! $promozione->eSpendibile() || ! $promozione->valeSu($cosa)) {
+        if ($promozione === null || ! $promozione->eSpendibile()) {
             return null;
         }
 
-        return $this->loPrende($promozione, $utente) ? $promozione : null;
+        if ($cosa !== null && ! $promozione->valeSu($cosa)) {
+            return null;
+        }
+
+        return $this->loPrende($promozione, $utente) && $promozione->laPuoPrendereAncora($utente)
+            ? $promozione
+            : null;
     }
 
     /**
      * 💰 **Il conto**: quanto si paga davvero, e con quali promozioni.
      *
+     * 🆕 P1 — `$cosa`, `$pacchettoId` e `$planId` dicono **cosa** si sta
+     * comprando: i premi di sconto valgono su un genere di acquisto, e alcuni
+     * su un pacchetto o un piano solo.
+     *
      * @param  iterable<Promozione>  $promozioni
      * @return array{finale: int, sconto: int, applicate: list<Promozione>}
      */
-    public function applica(int $importoCent, iterable $promozioni): array
-    {
-        $tutte = collect($promozioni)->values();
+    public function applica(
+        int $importoCent,
+        iterable $promozioni,
+        SuCosaVale $cosa,
+        ?int $pacchettoId = null,
+        ?int $planId = null,
+    ): array {
+        $sconto = static fn (Promozione $p, int $su): int => $p->scontoSu($su, $cosa, $pacchettoId, $planId);
+
+        $tutte = collect($promozioni)
+            ->filter(static fn (Promozione $p): bool => $sconto($p, max(1, $importoCent)) > 0)
+            ->values();
 
         if ($tutte->isEmpty() || $importoCent <= 0) {
             return ['finale' => max(0, $importoCent), 'sconto' => 0, 'applicate' => []];
@@ -99,13 +140,14 @@ class LePromozioni
         $esclusive = $tutte->reject(static fn (Promozione $p): bool => $p->cumulabile);
 
         /*
-         * 🚨 **Fra le non cumulabili vince la migliore**, e si guarda quanto
-         * toglie **su questo importo**: una percentuale e un importo fisso non
-         * si confrontano in astratto — il 10% è meglio di 5 € sopra i 50 €, ed
-         * è peggio sotto.
+         * 🚨 **Fra le non cumulabili vince la priorità più alta**, e a parità
+         * la migliore **su questo importo**: una percentuale e un importo fisso
+         * non si confrontano in astratto — il 10% è meglio di 5 € sopra i
+         * 50 €, ed è peggio sotto.
          */
         $migliore = $esclusive
-            ->sortByDesc(static fn (Promozione $p): int => $p->scontoSu($importoCent))
+            ->sort(static fn (Promozione $a, Promozione $b): int => [$b->priorita, $sconto($b, $importoCent)]
+                <=> [$a->priorita, $sconto($a, $importoCent)])
             ->first();
 
         /*
@@ -115,13 +157,24 @@ class LePromozioni
          */
         $conEsclusiva = $migliore === null
             ? null
-            : $this->incolonna($importoCent, collect([$migliore]));
+            : $this->incolonna($importoCent, collect([$migliore]), $sconto);
 
         $conCumulabili = $cumulabili->isEmpty()
             ? null
             : $this->incolonna($importoCent, $cumulabili->sortByDesc(
-                static fn (Promozione $p): int => $p->scontoSu($importoCent),
-            ));
+                static fn (Promozione $p): int => $sconto($p, $importoCent),
+            ), $sconto);
+
+        /*
+         * 🆕 P1 — ⚠️ **Un'esclusiva con priorità più alta di tutte le
+         * cumulabili vince comunque**: la priorità è una decisione di chi l'ha
+         * creata («questa deve passare davanti»), e la convenienza decide solo
+         * fra pari.
+         */
+        if ($conEsclusiva !== null && $conCumulabili !== null
+            && $migliore->priorita > $cumulabili->max('priorita')) {
+            return $conEsclusiva;
+        }
 
         return collect([$conEsclusiva, $conCumulabili])
             ->filter()
@@ -133,15 +186,16 @@ class LePromozioni
      * Le promozioni in fila, **una sull'importo che resta**.
      *
      * @param  Collection<int, Promozione>  $promozioni
+     * @param  callable(Promozione, int): int  $scontoSu
      * @return array{finale: int, sconto: int, applicate: list<Promozione>}
      */
-    private function incolonna(int $importoCent, Collection $promozioni): array
+    private function incolonna(int $importoCent, Collection $promozioni, callable $scontoSu): array
     {
         $resta = $importoCent;
         $applicate = [];
 
         foreach ($promozioni as $promozione) {
-            $sconto = $promozione->scontoSu($resta);
+            $sconto = $scontoSu($promozione, $resta);
 
             if ($sconto <= 0) {
                 continue;
@@ -168,111 +222,88 @@ class LePromozioni
     /**
      * Tutte le spendibili che prendono questa persona su questo acquisto.
      *
+     * 🆕 P1 — e che questa persona **può ancora prendere** (massimo per
+     * persona), dentro il budget.
+     *
      * @return Collection<int, Promozione>
      */
     private function spendibiliDi(User $utente, SuCosaVale $cosa): Collection
     {
         return Promozione::query()
             ->spendibili()
-            ->with('bersagli')
+            ->with(['bersagli', 'premi'])
             ->get()
-            ->filter(fn (Promozione $p): bool => $p->valeSu($cosa) && $this->loPrende($p, $utente))
+            ->filter(fn (Promozione $p): bool => $p->valeSu($cosa)
+                && ! $p->eFuoriBudget()
+                && $this->loPrende($p, $utente)
+                && $p->laPuoPrendereAncora($utente))
             ->values();
     }
 
     /**
-     * 🎯 **Questa persona rientra in almeno un bersaglio?**
+     * 🎯 **Questa persona rientra nei destinatari?**
      *
-     * ⚠️ I bersagli sono in **OR**: «per i trainer e per gli allievi di Tizio»
-     * vuol dire «chi è trainer **oppure** allievo di Tizio». ⛔ In AND sarebbe
-     * «i trainer che sono anche allievi di Tizio», cioè quasi nessuno.
+     * 💡 Da P1 la risposta la dà `ChiLaRiceve`, che serve anche ai regali e
+     * all'accredito di massa: una regola sola per tutti.
      */
     public function loPrende(Promozione $promozione, User $utente): bool
     {
-        foreach ($promozione->bersagli as $bersaglio) {
-            $preso = match ($bersaglio->tipo) {
-                TipoBersaglio::Tutti => true,
+        return $this->chiLaRiceve->prende($promozione, $utente);
+    }
 
-                TipoBersaglio::Utente => $bersaglio->user_id === $utente->getKey(),
+    /**
+     * 🧾 **Il webhook segna le promozioni usate** — P1.6.
+     *
+     * 🐛 Fino al 23/09 i codici finivano nei `metadata` della sessione e al
+     * ritorno non li rileggeva nessuno: `usata_volte` restava a zero e
+     * `massimo_usi` non fermava niente.
+     *
+     * 🚨 **Idempotente**: Stripe rimanda gli eventi, e l'indice unico
+     * `(promozione_id, riferimento)` fa sì che la stessa sessione conti una
+     * volta sola. ⛔ Senza, un evento ripetuto esaurirebbe un'offerta a metà.
+     *
+     * 💡 Lo sconto incassato si divide fra le promozioni applicate in parti
+     * uguali (l'ultima prende il resto): serve al budget e ai numeri, e Stripe
+     * restituisce solo il totale.
+     *
+     * @param  string  $codici  quelli scritti in `metadata['promozioni']`, separati da virgola
+     */
+    public function segnaUsate(string $codici, User $utente, string $riferimento, int $scontoCent): void
+    {
+        $elenco = array_values(array_filter(array_map('trim', explode(',', $codici))));
 
-                /*
-                 * ⚠️ La palestra è quella **in cui la persona sta**, non quella
-                 * che possiede: un trainer con un portfolio suo lavora in una
-                 * palestra senza avere lì il proprio `tenant_id`, e il
-                 * conteggio dei ruoli è il posto in cui quel legame è scritto.
-                 */
-                TipoBersaglio::Palestra => $bersaglio->tenant_id !== null
-                    && $this->staNellaPalestra($utente, (int) $bersaglio->tenant_id),
+        if ($elenco === [] || $riferimento === '') {
+            return;
+        }
 
-                TipoBersaglio::Ruolo => $bersaglio->ruolo !== null
-                    && $this->haIlRuolo($utente, $bersaglio->ruolo),
+        $promozioni = Promozione::query()->whereIn('codice', $elenco)->get();
+        $quante = $promozioni->count();
+        $resta = max(0, $scontoCent);
 
-                TipoBersaglio::AllieviDiTrainer => $bersaglio->user_id !== null
-                    && $this->eAllievoDi($utente, (int) $bersaglio->user_id),
-            };
+        foreach ($promozioni->values() as $i => $promozione) {
+            $quota = $i === $quante - 1 ? $resta : intdiv(max(0, $scontoCent), max(1, $quante));
+            $resta -= $quota;
 
-            if ($preso) {
-                return true;
+            try {
+                DB::transaction(function () use ($promozione, $utente, $riferimento, $quota): void {
+                    PromozioneAssegnazione::query()->create([
+                        'promozione_id' => $promozione->getKey(),
+                        'user_id' => $utente->getKey(),
+                        'tenant_id' => $utente->tenant_id,
+                        'stato' => StatoAssegnazione::Usata,
+                        'origine' => $promozione->attivazione === ComeSiAttiva::Automatica
+                            ? OrigineAssegnazione::Automatica
+                            : OrigineAssegnazione::Codice,
+                        'riferimento' => $riferimento,
+                        'scontato_cent' => $quota,
+                        'usata_il' => now(),
+                    ]);
+
+                    $promozione->increment('usata_volte');
+                });
+            } catch (UniqueConstraintViolationException) {
+                // 💡 Già segnata per questa sessione: è Stripe che ha rimandato l'evento.
             }
         }
-
-        return false;
-    }
-
-    /**
-     * 🚨 Si guarda `model_has_roles`, non `users.tenant_id`.
-     *
-     * ⛔ Con la colonna, un trainer che lavora in una palestra ma ha casa
-     * altrove risulterebbe fuori — cioè escluso proprio dalla promozione che
-     * la sua palestra gli sta facendo.
-     */
-    private function staNellaPalestra(User $utente, int $tenantId): bool
-    {
-        if ($utente->tenant_id === $tenantId) {
-            return true;
-        }
-
-        return $this->context->runWithoutTenant(fn (): bool => DB::table('model_has_roles')
-            ->where('model_type', $utente->getMorphClass())
-            ->where('model_id', $utente->getKey())
-            ->where('tenant_id', $tenantId)
-            ->exists());
-    }
-
-    private function haIlRuolo(User $utente, string $ruolo): bool
-    {
-        return $this->context->runWithoutTenant(fn (): bool => DB::table('model_has_roles as mhr')
-            ->join('roles as r', function ($join): void {
-                $join->on('r.id', '=', 'mhr.role_id')->on('r.tenant_id', '=', 'mhr.tenant_id');
-            })
-            ->where('mhr.model_type', $utente->getMorphClass())
-            ->where('mhr.model_id', $utente->getKey())
-            ->where('r.name', $ruolo)
-            ->exists());
-    }
-
-    /**
-     * ⚠️ «Allievo di» è il rapporto di `trainer_member`, quello dei trainer
-     * indipendenti: dentro una palestra i trainer seguono tutti, e un bersaglio
-     * «allievi di» lì dentro non vorrebbe dire niente.
-     */
-    private function eAllievoDi(User $utente, int $trainerId): bool
-    {
-        return $this->context->runWithoutTenant(fn (): bool => DB::table('trainer_member')
-            ->where('trainer_id', $trainerId)
-            ->where('member_id', $utente->getKey())
-            ->exists());
-    }
-
-    /**
-     * 🚨 **Si segna usata quando i soldi sono arrivati**, non quando qualcuno
-     * apre il link.
-     *
-     * ⛔ Un contatore che scende guardando una pagina è un'offerta che si
-     * esaurisce senza vendere niente.
-     */
-    public function segnaUsata(Promozione $promozione): void
-    {
-        $promozione->increment('usata_volte');
     }
 }

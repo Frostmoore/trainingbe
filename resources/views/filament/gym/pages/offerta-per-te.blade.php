@@ -21,7 +21,7 @@
             <x-slot name="heading">{{ $offerta->nome }}</x-slot>
 
             <x-slot name="description">
-                Sconto di <strong>{{ $offerta->scrittoBene() }}</strong>
+                <strong>{{ ucfirst($offerta->scrittoBene()) }}</strong>
                 @if ($offerta->scade_il)
                     · valido fino al {{ $offerta->scade_il->format('d/m/Y') }}
                 @else
@@ -35,8 +35,7 @@
 
             <p class="fi-ta-text-item fi-size-sm" style="margin-top: .75rem; opacity: .75;">
                 Si applica da solo al prossimo pagamento
-                @php($cose = collect($offerta->su_cosa)->map(fn ($v) => \App\Enums\SuCosaVale::from($v)->label()))
-                ({{ $cose->join(', ', ' e ') }}).
+                ({{ mb_strtolower($offerta->genere->label()) }}).
                 @if (! $offerta->cumulabile)
                     ⚠️ Non si somma ad altre offerte: se ne hai già una migliore, resta quella.
                 @endif

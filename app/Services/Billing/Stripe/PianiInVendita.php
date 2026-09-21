@@ -221,7 +221,7 @@ class PianiInVendita
          * scontare ogni rinnovo per sempre è una decisione da prendere una
          * promozione alla volta, non il default di un metodo.
          */
-        $sconto = $this->sconti->perIlCheckout($utente, SuCosaVale::Canone, (int) $piano->price_cents);
+        $sconto = $this->sconti->perIlCheckout($utente, SuCosaVale::Canone, (int) $piano->price_cents, planId: $piano->getKey());
 
         $meta['promozioni'] = $this->sconti->perIMetadata($sconto['promozioni']);
 

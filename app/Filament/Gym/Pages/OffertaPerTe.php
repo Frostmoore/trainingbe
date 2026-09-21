@@ -73,18 +73,11 @@ class OffertaPerTe extends Page
         }
 
         /*
-         * 💡 Si prova su tutte e tre le cose che una promozione può scontare:
-         * la pagina spiega l'offerta, non un acquisto in particolare.
+         * 💡 Senza dire su cosa: la pagina spiega l'offerta, non un acquisto in
+         * particolare. 🆕 P1 — e un'offerta di soli regali non sconta niente,
+         * quindi chiederla «sui gettoni» o «sul canone» non la troverebbe.
          */
-        foreach (SuCosaVale::cases() as $cosa) {
-            $trovata = app(LePromozioni::class)->conIlCodice($this->codice, $utente, $cosa);
-
-            if ($trovata !== null) {
-                return $trovata;
-            }
-        }
-
-        return null;
+        return app(LePromozioni::class)->conIlCodice($this->codice, $utente);
     }
 
     /**

@@ -7,10 +7,12 @@ namespace App\Services\Billing\Stripe;
 use App\Enums\SuCosaVale;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
+use App\Models\PacchettoGettoni;
 use App\Models\PagamentoIncassato;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\User;
+use App\Services\Billing\LePromozioni;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Billing\RegistroDeiPagamenti;
@@ -95,7 +97,15 @@ class Cassa
             ? $this->listino->singolo()
             : $this->prezzoDelPacchetto($gettoni);
 
-        $sconto = $this->sconti->perIlCheckout($utente, $suCosa, $importo, $promozione);
+        // 🆕 P1 — il pacchetto o il piano preciso: un premio può valere su uno solo.
+        $sconto = $this->sconti->perIlCheckout(
+            $utente,
+            $suCosa,
+            $importo,
+            $promozione,
+            pacchettoId: $tipo === self::ABBONAMENTO ? null : PacchettoGettoni::query()->inVendita()->where('gettoni', $gettoni)->value('id'),
+            planId: $tipo === self::ABBONAMENTO ? Plan::query()->where('code', Plan::PLUS)->value('id') : null,
+        );
 
         $comune = [
             'mode' => $tipo === self::ABBONAMENTO ? 'subscription' : 'payment',
@@ -724,6 +734,22 @@ class Cassa
 
             default => Log::warning('Stripe: pagamento di tipo ignoto.', ['tipo' => $meta['tipo'] ?? null]),
         };
+
+        /*
+         * 🆕 🐛 **Le promozioni usate si segnano QUI** — P1.6 di `plan_promozioni.md`.
+         *
+         * ⛔ Fino al 23/09 i codici finivano nei `metadata` e al ritorno non li
+         * rileggeva nessuno: `usata_volte` restava a zero e `massimo_usi` non
+         * fermava niente. 💡 Si segnano a pagamento riuscito — non all'apertura
+         * della sessione, che si può abbandonare — e l'id della sessione rende
+         * la cosa idempotente se Stripe rimanda l'evento.
+         */
+        app(LePromozioni::class)->segnaUsate(
+            (string) ($meta['promozioni'] ?? ''),
+            $utente,
+            (string) ($sessione['id'] ?? ''),
+            (int) ($sessione['total_details']['amount_discount'] ?? 0),
+        );
     }
 
     /**

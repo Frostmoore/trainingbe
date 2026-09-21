@@ -222,6 +222,18 @@ final class EsciDaUnaPalestra
          */
         'promozione_bersagli',
 
+        /*
+         * 🆕 🧾 **Chi ha preso una promozione** — 24/09/2026, P1 di `plan_promozioni.md`.
+         *
+         * 🚨 Come la liberatoria: è un **atto avvenuto**. `tenant_id` dice dove
+         * stava la persona quando l'ha presa, e resta quello. ⛔ Spostarlo
+         * riscriverebbe la storia di uno sconto già incassato.
+         *
+         * 💡 E non serve: i limiti per persona si contano su `user_id`, che
+         * segue la persona ovunque vada.
+         */
+        'promozione_assegnazioni',
+
         'workout_plans',
     ];
 
