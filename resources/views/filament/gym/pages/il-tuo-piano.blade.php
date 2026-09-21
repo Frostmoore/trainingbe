@@ -52,13 +52,17 @@
             @endif
 
             {{-- 🆕 💳 Dopo F8: il metodo di pagamento si cambia da qui, senza il portale. --}}
-            @if ($this->haUnMetodoDiPagamento())
-                <div class="tc-azione">
+            {{-- 🆕 🛑 25/09: e da qui si disdice (a fine periodo), o ci si ripensa. --}}
+            <div class="tc-azione">
+                @if ($this->haUnMetodoDiPagamento())
                     <x-filament::button color="gray" wire:click="cambiaCarta" wire:loading.attr="disabled" icon="heroicon-m-credit-card">
                         Cambia metodo di pagamento
                     </x-filament::button>
-                </div>
-            @endif
+                @endif
+
+                {{ $this->disdiciAction }}
+                {{ $this->ripensaciAction }}
+            </div>
         </x-filament::section>
 
         <div class="tc-piani">

@@ -76,6 +76,16 @@ enum AuditAction: string
     case AbbonamentoPagatoDisdetto = 'user.abbonamento_pagato_disdetto';
 
     /**
+     * 🆕 La palestra (o il trainer) **disdice da sola** il suo piano dal pannello
+     * — 25/09/2026. ⚠️ Diversa da [AbbonamentoPagatoDisdetto]: quella è nostra
+     * e ferma subito, questa è del cliente e vale **a fine periodo**.
+     */
+    case PianoDisdetto = 'tenant.piano_disdetto';
+
+    /** 🆕 …e ci ha ripensato prima della fine: il piano torna a rinnovarsi. */
+    case DisdettaAnnullata = 'tenant.disdetta_annullata';
+
+    /**
      * 🆕 La palestra ha **disiscritto** un iscritto — D4, 19/09/2026.
      *
      * ⛔ Prima il pannello aveva solo «Elimina»: cancellava l'**account** della
@@ -171,6 +181,8 @@ enum AuditAction: string
             self::AiQuotaChanged => 'Quota AI modificata',
             self::AbbonamentoRegalato => 'Abbonamento regalato',
             self::AbbonamentoPagatoDisdetto => 'Abbonamento pagato disdetto',
+            self::PianoDisdetto => 'Piano disdetto dal cliente',
+            self::DisdettaAnnullata => 'Disdetta annullata dal cliente',
             self::IscrittoDisiscritto => 'Iscritto disiscritto',
             self::UscitoDallaPalestra => 'Uscito dalla palestra',
             self::PianoSuMisuraAssegnato => 'Piano su misura assegnato',

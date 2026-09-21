@@ -357,6 +357,38 @@ class Cassa
          * `abbonamenti:rinnova-i-regali`, che guarda **questa** colonna. La
          * spunta governa qualcosa davvero.
          */
+        /*
+         * ══ 🆕 📊 IL PIANO A CONSUMO — 25/09/2026 ══════════════════════════
+         *
+         * 📌 Il committente: una palestra deve poter **disdire da sola** dal
+         * pannello («Il tuo piano»), senza il portale di Stripe.
+         *
+         * ⛔ **Il consumo non ha un abbonamento su Stripe**: lo fattura
+         * `fattura:il-consumo` a mese chiuso, per **ogni mese in cui il piano è
+         * stato vivo** (`AddebitoDelMese::palestreAConsumo()`). Finiva nel ramo
+         * del regalo qui sotto, che fissa la fine a «un mese dall'inizio» —
+         * cioè, per un consumo aperto a marzo, **adesso**, a metà di un mese che
+         * si paga lo stesso.
+         *
+         * 💡 Quindi: disdire = finisce **l'ultimo giorno di questo mese** (quel
+         * mese si paga comunque, tanto vale usarlo); ripensarci = torna senza
+         * scadenza, com'era.
+         */
+        if ($riga->stripe_subscription_id === null && $riga->plan?->aConsumo()) {
+            $riga->update([
+                'rinnova' => $rinnova,
+                'ends_at' => $rinnova ? null : Carbon::now()->endOfMonth(),
+            ]);
+
+            Log::info('Consumo: disdetta cambiata.', [
+                'abbonamento' => $riga->getKey(),
+                'rinnova' => $rinnova,
+                'fino_al' => (string) $riga->ends_at,
+            ]);
+
+            return;
+        }
+
         if ($riga->stripe_subscription_id === null) {
             $riga->update([
                 'rinnova' => $rinnova,
@@ -395,7 +427,23 @@ class Cassa
             ['cancel_at_period_end' => ! $rinnova],
         );
 
-        $riga->update(['rinnova' => $rinnova]);
+        /*
+         * 🆕 25/09/2026 — **la data giusta subito**, non al webhook.
+         *
+         * ⚠️ `ends_at` porta la grazia solo a rinnovo acceso (`conLaGrazia()`):
+         * senza questa correzione, chi disdice leggeva «finisce il …» con **sette
+         * giorni in più** finché non arrivava `customer.subscription.updated`. E
+         * chi ci ripensava li perdeva. Il webhook poi scrive lo stesso valore.
+         */
+        $fine = $riga->ends_at;
+
+        if ($fine !== null && (bool) $riga->rinnova !== $rinnova) {
+            $fine = $rinnova
+                ? $fine->copy()->addDays(self::GIORNI_DI_GRAZIA)
+                : $fine->copy()->subDays(self::GIORNI_DI_GRAZIA);
+        }
+
+        $riga->update(['rinnova' => $rinnova, 'ends_at' => $fine]);
 
         Log::info('Stripe: rinnovo automatico cambiato.', [
             'abbonamento' => $riga->stripe_subscription_id,

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Pages;
 
+use App\Enums\AuditAction;
 use App\Enums\TipoDiRichiesta;
 use App\Mail\RichiestaDalPannello;
 use App\Models\Fattura;
 use App\Models\PlanSubscription;
 use App\Models\RichiestaDiContatto;
 use App\Models\User;
+use App\Services\Audit\AuditLogger;
 use App\Services\Billing\Exceptions\AbbonamentoNonSuStripeException;
 use App\Services\Billing\Stripe\CambioDellaCarta;
 use App\Services\Billing\Stripe\Cassa;
@@ -161,7 +163,7 @@ class IlTuoPiano extends Page
      * non esisteva (vedi `Cassa::clienteEsistente()`); il committente ha
      * comunque scelto di non avere il portale qui. Le ricevute ora sono **le
      * fatture** qui sotto, e la carta si cambia con `cambiaCarta()` (§116).
-     * ⏳ Disdire resta da decidere.
+     * ✅ Disdire: `disdiciAction()` qui sotto (25/09/2026).
      */
 
     /**
@@ -182,6 +184,112 @@ class IlTuoPiano extends Page
 
             Notification::make()->title('La pagina di Stripe non si è aperta')->body('Riprova fra poco.')->danger()->send();
         }
+    }
+
+    /**
+     * 🆕 🛑 **Disdire, da soli** — 25/09/2026.
+     *
+     * 📌 Il committente: *«ma certo facciamo così mi pare ovvio»* — alla proposta
+     * di un tasto «Disdici» a fine periodo, con la conferma e la possibilità di
+     * ripensarci. ⛔ Prima di F8 lo faceva il portale di Stripe; tolto quello,
+     * per disdire bisognava scriverci.
+     *
+     * 💡 **Non ferma niente subito**: quello che è pagato si usa fino in fondo
+     * (`Cassa::rinnovoAutomatico()` → `cancel_at_period_end` su Stripe; il
+     * consumo finisce l'ultimo giorno del mese, che si paga comunque).
+     *
+     * ⚠️ Solo per i piani che **costano**: un canone su Stripe o il consumo. Un
+     * regalo o il gratuito non hanno niente da disdire.
+     */
+    public function disdiciAction(): Action
+    {
+        return Action::make('disdici')
+            ->label('Disdici')
+            ->icon('heroicon-m-x-circle')
+            ->color('danger')
+            ->outlined()
+            ->visible(fn (): bool => $this->puoDisdire())
+            ->requiresConfirmation()
+            ->modalHeading('Disdire il piano?')
+            ->modalDescription(function (): string {
+                $riga = $this->inCorso();
+
+                $quando = $riga?->plan?->aConsumo()
+                    ? 'alla fine di questo mese (il '.now()->endOfMonth()->format('d/m/Y').')'
+                    : 'alla fine del periodo già pagato';
+
+                return "Il piano resta attivo {$quando}, poi si ferma e non ti addebitiamo più niente. "
+                    .'Fino a quel giorno puoi ripensarci da qui.';
+            })
+            ->modalSubmitActionLabel('Sì, disdici')
+            ->action(fn () => $this->cambiaLaDisdetta(false));
+    }
+
+    /** 🆕 …e il ripensamento, finché il piano non è finito. */
+    public function ripensaciAction(): Action
+    {
+        return Action::make('ripensaci')
+            ->label('Non disdire più')
+            ->icon('heroicon-m-arrow-path')
+            ->color('primary')
+            ->visible(fn (): bool => $this->haDisdetto())
+            ->requiresConfirmation()
+            ->modalHeading('Tenere il piano?')
+            ->modalDescription('Il piano torna a rinnovarsi da solo, come prima della disdetta.')
+            ->modalSubmitActionLabel('Sì, tienilo')
+            ->action(fn () => $this->cambiaLaDisdetta(true));
+    }
+
+    /** Il piano in corso costa, e si rinnova: c'è qualcosa da disdire. */
+    public function puoDisdire(): bool
+    {
+        $riga = $this->inCorso();
+
+        return $riga !== null && (bool) $riga->rinnova && $this->costa($riga);
+    }
+
+    /** Il piano in corso è disdetto, ma non è ancora finito. */
+    public function haDisdetto(): bool
+    {
+        $riga = $this->inCorso();
+
+        return $riga !== null && ! $riga->rinnova && $riga->ends_at?->isFuture() === true && $this->costa($riga);
+    }
+
+    private function costa(PlanSubscription $riga): bool
+    {
+        return $riga->stripe_subscription_id !== null || $riga->plan?->aConsumo() === true;
+    }
+
+    private function cambiaLaDisdetta(bool $rinnova): void
+    {
+        try {
+            app(Cassa::class)->rinnovoAutomatico($this->utente(), $rinnova);
+        } catch (Throwable $e) {
+            report($e);
+
+            Notification::make()
+                ->title($rinnova ? 'Non siamo riusciti a riattivare il rinnovo' : 'La disdetta non è andata')
+                ->body('Riprova fra poco. Se continua, scrivici.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        app(AuditLogger::class)->log(
+            $rinnova ? AuditAction::DisdettaAnnullata : AuditAction::PianoDisdetto,
+            $this->utente(),
+            ['piano' => $this->inCorso()?->plan?->code, 'fino_al' => (string) $this->inCorso()?->ends_at],
+        );
+
+        $fine = $this->inCorso()?->ends_at?->format('d/m/Y');
+
+        Notification::make()
+            ->title($rinnova ? 'Il piano si rinnova di nuovo' : 'Piano disdetto')
+            ->body($rinnova ? null : ($fine ? "Resta attivo fino al {$fine}." : null))
+            ->success()
+            ->send();
     }
 
     /**
