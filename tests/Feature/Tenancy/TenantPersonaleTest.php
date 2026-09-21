@@ -120,7 +120,6 @@ class TenantPersonaleTest extends TestCase
 
         $this->assertNotSame($a->tenant_id, $b->tenant_id);
         $this->assertNotSame($a->tenant->slug, $b->tenant->slug);
-        $this->assertNotSame($a->tenant->join_code, $b->tenant->join_code);
     }
 
     // ───────────────────── 🚨 F1.6 — non vede niente ─────────────────────
@@ -135,7 +134,7 @@ class TenantPersonaleTest extends TestCase
     #[Test]
     public function a_free_user_sees_nothing_of_any_gym(): void
     {
-        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::GymAdmin, 'admin@alfa.test');
         $this->creaUtente($palestra, UserRole::Trainer, 'trainer@alfa.test');
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
@@ -187,7 +186,7 @@ class TenantPersonaleTest extends TestCase
     #[Test]
     public function the_api_answers_a_free_user_with_their_own_data_only(): void
     {
-        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
 
         $libero = ($this->crea())('Mario', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
@@ -200,70 +199,12 @@ class TenantPersonaleTest extends TestCase
 
     // ────────────────── 🚨 La porta che non deve aprirsi ──────────────────
 
-    /**
-     * Il `join_code` di un tenant personale **non fa entrare nessuno**.
-     *
-     * ⚠️ Senza questo rifiuto, chi presentasse quel codice si registrerebbe
-     * **dentro** lo spazio di un'altra persona, e da lì `TenantScope` gli
-     * mostrerebbe diario, allenamenti e conversazioni di quella persona — non
-     * per un difetto dello scoping, ma perché lo scoping avrebbe fatto
-     * esattamente il suo lavoro su un tenant in cui non doveva entrare.
+    /*
+     * ⛔ Qui c'erano tre test sul `join_code` di un tenant personale (non deve
+     * far iscrivere, né accedere, né comparire nel branding pubblico). Con F11
+     * (24/09/2026) il codice non esiste più, e con lui la porta: a impedire che
+     * torni è `IlCodicePalestraNonTornaTest`.
      */
-    #[Test]
-    public function the_join_code_of_a_personal_tenant_does_not_let_anyone_register(): void
-    {
-        $libero = ($this->crea())('Mario', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
-
-        $this->postJson('/api/v1/auth/register', [
-            'join_code' => $libero->tenant->join_code,
-            'age_confirmed' => true, 'terms_accepted' => true,
-            'name' => 'Intruso', 'email' => 'intruso@esempio.test', 'username' => 'intruso',
-            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
-        ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('join_code');
-
-        $this->assertSame(
-            1,
-            User::withoutGlobalScopes()->where('tenant_id', $libero->tenant_id)->count(),
-            'Qualcuno è entrato in un tenant personale.',
-        );
-    }
-
-    /** E nemmeno accedere: la stessa porta, l'altro verso. */
-    #[Test]
-    public function the_join_code_of_a_personal_tenant_does_not_let_anyone_log_in(): void
-    {
-        $libero = ($this->crea())('Mario', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
-
-        $this->postJson('/api/v1/auth/login', [
-            'join_code' => $libero->tenant->join_code,
-            'login' => 'mario@esempio.test',
-            'password' => self::FAKE_PASSWORD,
-        ])->assertStatus(422);
-    }
-
-    /**
-     * 🚨 E il branding pubblico non deve nemmeno ammettere che esista.
-     *
-     * ⚠️ Qui la posta è più alta che altrove: l'endpoint è **senza
-     * autenticazione** e `branding()` restituisce `name`, che per un tenant
-     * personale è **il nome e cognome della persona**.
-     *
-     * 💡 La risposta è identica a quella di un codice inesistente: dire «questo
-     * è personale» confermerebbe che quel codice esiste.
-     */
-    #[Test]
-    public function the_public_branding_lookup_ignores_personal_tenants(): void
-    {
-        $libero = ($this->crea())('Mario Rossi', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
-
-        $risposta = $this->getJson('/api/v1/branding/lookup?code='.$libero->tenant->join_code);
-
-        $risposta->assertNotFound()->assertJsonPath('code', 'gym_not_found');
-
-        $this->assertStringNotContainsString('Mario', $risposta->getContent());
-    }
 
     // ─────────────────── F1.4 — invisibili al pannello ───────────────────
 
@@ -277,8 +218,8 @@ class TenantPersonaleTest extends TestCase
     #[Test]
     public function personal_tenants_stay_out_of_the_gym_counts(): void
     {
-        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
-        $this->creaPalestra('Palestra Beta', 'beta', 'BETA2345');
+        $this->creaPalestra('Palestra Alfa', 'alfa');
+        $this->creaPalestra('Palestra Beta', 'beta');
 
         ($this->crea())('Mario', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
         ($this->crea())('Anna', 'anna@esempio.test', ['password' => self::FAKE_PASSWORD]);
@@ -297,7 +238,7 @@ class TenantPersonaleTest extends TestCase
     #[Test]
     public function the_god_panel_lists_only_gyms(): void
     {
-        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa');
         $libero = ($this->crea())('Mario', 'mario@esempio.test', ['password' => self::FAKE_PASSWORD]);
 
         $ids = TenantResource::getEloquentQuery()

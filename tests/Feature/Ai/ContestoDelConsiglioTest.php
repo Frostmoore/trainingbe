@@ -74,7 +74,7 @@ final class ContestoDelConsiglioTest extends TestCase
 
         $this->finta = $this->aiFinta()->willReturnAdvice('Un consiglio.');
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@alfa.test');
 
         // 🚨 Il fuso si fissa: `scritto_alle` e' un'ora **locale**, e senza

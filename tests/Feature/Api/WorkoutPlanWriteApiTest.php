@@ -38,8 +38,8 @@ class WorkoutPlanWriteApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
+        $this->beta = $this->creaPalestra('Beta', 'beta');
 
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'coach@alfa.test');

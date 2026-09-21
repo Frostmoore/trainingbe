@@ -48,7 +48,7 @@ final class PannelloDeiPianiTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'trainer@alfa.test');
     }
 

@@ -150,7 +150,6 @@ class PianoCucitoAManoTest extends TestCase
         $personale = Tenant::create([
             'name' => 'Spazio di Luca',
             'slug' => 'luca-personale',
-            'join_code' => 'LUCA2345',
             'contact_email' => 'luca@esempio.test',
             'kind' => TenantKind::Personal,
         ]);

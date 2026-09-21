@@ -7,18 +7,16 @@ namespace App\Http\Requests\Api\V1;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Accesso di un iscritto.
+ * Accesso di un iscritto: email **o** nome utente, e password.
  *
- * Serve il `join_code` oltre alle credenziali, perché **l'email è unica per
- * palestra e non per piattaforma**: senza, `mario@esempio.it` sarebbe ambiguo
- * fra due palestre e il sistema dovrebbe indovinare. L'app lo ha già, perché lo
- * usa per scaricare il branding prima ancora di mostrare la schermata di login.
+ * ⛔ **Niente più `join_code`** — F11, 24/09/2026. 📌 *«è da rimuovere da tutto,
+ * non esiste più»*. ⚠️ Un'app vecchia che lo manda ancora **non viene
+ * respinta**: il campo semplicemente non si legge. All'accesso respingerla non
+ * proteggerebbe niente, e chiuderebbe fuori chi ha le credenziali giuste.
  *
- * ⚠️ Questo NON viola ADR-04 («il tenant non arriva mai dal client»). Il
- * `join_code` serve solo a **trovare** l'utente candidato; una volta autenticato,
- * il tenant si legge da `$user->tenant_id`. Indicare il codice di un'altra
- * palestra non dà accesso a nulla: semplicemente le credenziali non
- * corrisponderanno a nessun utente di quella palestra.
+ * 💡 L'email è unica per palestra e non per piattaforma: se due account hanno
+ * lo stesso indirizzo si rifiuta invece di indovinare, e si entra col nome
+ * utente, che è unico ovunque (`AuthController::login()`).
  */
 class LoginRequest extends FormRequest
 {
@@ -45,20 +43,6 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            /*
-             * 🆕 **Facoltativo da F3.** Senza codice si accede al proprio
-             * account **personale** (`TenantKind::Personal`).
-             *
-             * 🚨 Non era nel piano, ed è stato aggiunto perché senza F3 sarebbe
-             * stata una funzione rotta: la registrazione libera avrebbe creato
-             * persone che **non riescono più a entrare**. Il dettaglio in
-             * `AuthController::login()`.
-             *
-             * ⚠️ Come in `RegisterRequest`, il vuoto diventa `null` in
-             * `prepareForValidation()`: `nullable` non basta, perché l'app manda
-             * il campo sempre e `''` non è `null`.
-             */
-            'join_code' => ['nullable', 'string', 'size:8'],
             'login' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:100'],
@@ -77,14 +61,6 @@ class LoginRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if (is_string($this->join_code)) {
-            $codice = strtoupper(trim($this->join_code));
-
-            // Vedi la nota gemella in `RegisterRequest`: `nullable` salta le
-            // regole solo su `null`, e l'app manda il campo anche quando è vuoto.
-            $this->merge(['join_code' => $codice === '' ? null : $codice]);
-        }
-
         // 🚨 Compatibilità all'indietro: le versioni dell'app già installate
         // mandano `email`. Si accetta, e da qui in poi esiste solo `login`.
         $identificativo = $this->input('login') ?? $this->input('email');

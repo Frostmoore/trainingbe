@@ -55,7 +55,7 @@ class InvitoInChatTest extends TestCase
             'popolazione' => 150_951, 'lat' => 44.060249, 'lng' => 12.565599, 'attivo' => true,
         ]);
 
-        $suo = $this->creaPalestra('Studio Libero', 'libero', 'LIBE2345');
+        $suo = $this->creaPalestra('Studio Libero', 'libero');
 
         /*
          * 🆕 **Lo spazio del trainer è personale, ed è suo** — 3b-AH (12/09).
@@ -79,7 +79,7 @@ class InvitoInChatTest extends TestCase
             'visibile' => true,
         ]);
 
-        $altro = $this->creaPalestra('Ares', 'ares', 'ARES2345');
+        $altro = $this->creaPalestra('Ares', 'ares');
         $this->tizio = $this->creaUtente($altro, UserRole::Member, 'tizio@esempio.it');
 
         // 🚨 Senza abbonamento: è tutto il punto della decisione del committente.

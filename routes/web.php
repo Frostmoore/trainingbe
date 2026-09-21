@@ -199,7 +199,8 @@ Route::get('/offerte', [SitoController::class, 'offerte'])->name('sito.offerte')
 /*
 | 🆕 🔗 Il link di attivazione di una promozione — 24/09/2026. ⛔ Niente codici
 | sconto: le promozioni si attivano da sole o da questo link. `GET` che non
-| attiva niente (come gli inviti); con l'app installata lo apre l'app.
+| attiva niente (come gli inviti); con l'app installata lo apre l'app, dal
+| browser porta alla pagina dell'offerta nel pannello (S2: non sul sito).
 */
 Route::get('/promo/{codice}', [SitoController::class, 'promo'])
     ->where('codice', '[A-Za-z0-9]{1,40}')

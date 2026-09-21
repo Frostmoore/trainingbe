@@ -44,7 +44,7 @@ class SeedMemberPlansTest extends TestCase
 
         $this->seed(ExerciseLibrarySeeder::class);
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'anna@alfa.test');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
@@ -168,7 +168,7 @@ class SeedMemberPlansTest extends TestCase
     #[Test]
     public function le_schede_restano_dentro_la_palestra_dell_iscritto(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $estraneo = $this->creaUtente($beta, UserRole::Member, 'luca@beta.test');
 
         $this->artisan('training:seed-plans', ['email' => 'mario@alfa.test'])->assertSuccessful();

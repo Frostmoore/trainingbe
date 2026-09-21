@@ -136,7 +136,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function un_trainer_di_palestra_vede_tutti_gli_iscritti(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
@@ -151,7 +151,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function un_iscritto_vede_tutti_i_trainer_della_palestra(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $primo = $this->creaUtente($palestra, UserRole::Trainer, 'uno@olimpo.test');
         $secondo = $this->creaUtente($palestra, UserRole::Trainer, 'due@olimpo.test');
@@ -166,8 +166,8 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function ma_non_quelli_di_un_altra_palestra(): void
     {
-        $olimpo = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
-        $zeus = $this->creaPalestra('Zeus', 'zeus', 'ZEUS2345');
+        $olimpo = $this->creaPalestra('Olimpo', 'olimpo');
+        $zeus = $this->creaPalestra('Zeus', 'zeus');
 
         $this->creaUtente($zeus, UserRole::Trainer, 'estraneo@zeus.test');
         $iscritto = $this->creaUtente($olimpo, UserRole::Member, 'tizio@olimpo.test');
@@ -204,7 +204,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function chi_ha_un_giro_suo_e_allena_in_palestra_vede_tutti_e_due(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -225,7 +225,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function e_tutti_e_due_i_gruppi_vedono_lui(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -259,7 +259,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function chi_lascia_la_palestra_tiene_i_suoi_allievi(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -294,7 +294,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function gli_allievi_suoi_non_vedono_i_trainer_della_palestra(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $altro = $this->creaUtente($palestra, UserRole::Trainer, 'altro@olimpo.test');
@@ -328,7 +328,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function la_palestra_che_lo_spegne_non_gli_spegne_gli_allievi_suoi(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -364,7 +364,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function la_palestra_non_tocca_l_account_di_chi_non_e_suo(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $gestore = $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@olimpo.test');
         $trainer = $this->unTrainerIndipendente();
 
@@ -403,7 +403,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function chi_compare_nei_contatti_si_puo_anche_aprire(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
 
@@ -432,7 +432,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function la_chat_aperta_si_ritrova_e_si_legge(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
 
@@ -470,7 +470,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function un_allievo_personale_non_apre_una_chat_col_trainer_della_palestra(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $altro = $this->creaUtente($palestra, UserRole::Trainer, 'altro@olimpo.test');
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -494,7 +494,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function l_elenco_dice_quali_rapporti_sono_suoi(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -522,7 +522,7 @@ class ChiVedeChiTest extends TestCase
     #[Test]
     public function gli_iscritti_della_palestra_non_consumano_i_posti_del_trainer(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');

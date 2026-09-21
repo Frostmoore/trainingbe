@@ -52,8 +52,8 @@ class AiApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
+        $this->beta = $this->creaPalestra('Beta', 'beta');
 
         /*
          * 🎟️ **I gettoni per le richieste fatte a mano** — 3b-AE, 31/08/2026.

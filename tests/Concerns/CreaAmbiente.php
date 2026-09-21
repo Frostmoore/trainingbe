@@ -37,12 +37,11 @@ trait CreaAmbiente
     }
 
     /** Una palestra attiva, con i suoi tre ruoli spatie gia' creati. */
-    protected function creaPalestra(string $nome = 'Demo', string $slug = 'demo', string $codice = 'DEMO2345'): Tenant
+    protected function creaPalestra(string $nome = 'Demo', string $slug = 'demo'): Tenant
     {
         $tenant = Tenant::create([
             'name' => $nome,
             'slug' => $slug,
-            'join_code' => $codice,
             'contact_email' => $slug.'@esempio.test',
             'status' => TenantStatus::Active,
         ]);

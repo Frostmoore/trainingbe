@@ -41,7 +41,7 @@ class ChatContactsApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'anna@alfa.test');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
@@ -129,7 +129,7 @@ class ChatContactsApiTest extends TestCase
     #[Test]
     public function le_persone_di_un_altra_palestra_non_compaiono_mai(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $trainerBeta = $this->creaUtente($beta, UserRole::Trainer, 'carla@beta.test');
 
         $this->collega($this->trainer, $this->iscritto);

@@ -76,7 +76,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function il_ruolo_dipende_dallo_spazio_in_cui_si_lavora(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $this->allenaAnchePresso($trainer, $palestra);
@@ -107,8 +107,8 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function chi_ha_un_cappello_solo_risponde_come_prima(): void
     {
-        $olimpo = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
-        $zeus = $this->creaPalestra('Zeus', 'zeus', 'ZEUS2345');
+        $olimpo = $this->creaPalestra('Olimpo', 'olimpo');
+        $zeus = $this->creaPalestra('Zeus', 'zeus');
 
         $capo = $this->creaUtente($olimpo, UserRole::GymAdmin, 'capo@olimpo.test');
 
@@ -140,7 +140,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function nel_pannello_della_palestra_vede_gli_iscritti(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
@@ -175,7 +175,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function un_trainer_della_palestra_li_vede_tutti_non_solo_gli_assegnati(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
@@ -201,7 +201,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function ma_non_li_puo_modificare_ne_cancellare(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
@@ -232,8 +232,8 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function uno_spazio_che_non_e_suo_non_si_sceglie(): void
     {
-        $olimpo = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
-        $zeus = $this->creaPalestra('Zeus', 'zeus', 'ZEUS2345');
+        $olimpo = $this->creaPalestra('Olimpo', 'olimpo');
+        $zeus = $this->creaPalestra('Zeus', 'zeus');
 
         $trainer = $this->unTrainerIndipendente();
         $this->allenaAnchePresso($trainer, $olimpo);
@@ -254,7 +254,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function la_pagina_del_cambio_si_vede_solo_con_due_spazi(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $solo = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
 
         $this->actingAs($solo);
@@ -281,7 +281,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function chi_perde_il_ruolo_torna_nel_proprio_spazio(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $this->allenaAnchePresso($trainer, $palestra);
 
@@ -315,7 +315,7 @@ class DueCappelliNelPannelloTest extends TestCase
     #[Test]
     public function una_palestra_sospesa_non_lo_lascia_chiuso_fuori(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $this->allenaAnchePresso($trainer, $palestra);
 
@@ -368,7 +368,7 @@ class DueCappelliNelPannelloTest extends TestCase
             'Un trainer indipendente viene rimandato fuori dal pannello che puo aprire.',
         );
 
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->allenaAnchePresso($solo, $palestra);
 
         $this->assertNotNull(

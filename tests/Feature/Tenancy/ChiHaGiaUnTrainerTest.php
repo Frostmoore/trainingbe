@@ -233,7 +233,7 @@ class ChiHaGiaUnTrainerTest extends TestCase
     #[Test]
     public function gli_iscritti_di_una_palestra_non_contano(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
 

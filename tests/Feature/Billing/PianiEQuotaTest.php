@@ -236,7 +236,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function a_gym_member_with_a_paying_gym_gets_through(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->abbona($palestra, Plan::GYM);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
@@ -251,7 +251,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function the_personal_cap_wins_over_everything(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
@@ -264,7 +264,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function then_the_gym_decides(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
@@ -283,7 +283,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function the_gym_comes_before_the_independent_trainer(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
@@ -413,8 +413,8 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function subscriptions_are_scoped_per_tenant(): void
     {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
+        $beta = $this->creaPalestra('Beta', 'beta');
 
         $this->assertSame(1, $this->ctx()->runAs($alfa, fn (): int => PlanSubscription::count()));
         $this->assertSame(1, $this->ctx()->runAs($beta, fn (): int => PlanSubscription::count()));
@@ -428,7 +428,7 @@ class PianiEQuotaTest extends TestCase
     #[Test]
     public function the_catalogue_belongs_to_the_platform(): void
     {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
 
         /*
          * ⚠️ **Si confronta dentro con fuori, non con un numero scritto a mano.**

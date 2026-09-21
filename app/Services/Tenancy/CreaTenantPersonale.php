@@ -87,24 +87,6 @@ final class CreaTenantPersonale
                 'name' => $nome,
                 'slug' => Tenant::generatePersonalSlug(),
 
-                /*
-                 * 🚨 **Il codice d'invito c'è ma non deve aprire niente.**
-                 *
-                 * `join_code` è `unique` e NOT NULL, quindi un valore ci deve
-                 * essere. Ma un tenant personale non ha nessuno da invitare, e
-                 * un codice funzionante sarebbe una porta su un account altrui:
-                 * chi lo presentasse si registrerebbe **dentro** lo spazio di
-                 * un'altra persona, e da lì il `TenantScope` gli mostrerebbe i
-                 * dati di quella persona.
-                 *
-                 * ⚠️ La difesa vera **non è qui**: è in
-                 * `AuthController::resolveActiveTenant()`, che rifiuta il codice
-                 * quando il tenant è personale. Questo valore casuale serve solo
-                 * a non far collidere l'indice unico — se fosse una costante,
-                 * il secondo tenant personale non nascerebbe proprio.
-                 */
-                'join_code' => Tenant::generateJoinCode(),
-
                 'kind' => TenantKind::Personal,
 
                 /*
@@ -202,7 +184,6 @@ final class CreaTenantPersonale
             $tenant = Tenant::create([
                 'name' => $utente->name,
                 'slug' => Tenant::generatePersonalSlug(),
-                'join_code' => Tenant::generateJoinCode(),
                 'kind' => TenantKind::Personal,
                 'status' => TenantStatus::Active,
                 'contact_email' => $utente->email,

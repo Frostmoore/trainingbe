@@ -32,7 +32,7 @@ class CatalogoDalDiarioTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
     }
 
     private const POLLO = [

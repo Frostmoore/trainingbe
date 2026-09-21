@@ -45,7 +45,7 @@ class AccountAndPhotoApiTest extends TestCase
         Storage::fake('public');
         Storage::fake('local');
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test', [
             'username' => 'mario.alfa',
         ]);

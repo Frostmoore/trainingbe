@@ -72,7 +72,7 @@ class CancelloDellaChatTest extends TestCase
             'popolazione' => 150_951, 'lat' => 44.060249, 'lng' => 12.565599, 'attivo' => true,
         ]);
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->proprietario = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@olimpo.it');
 
         $this->scheda = ProfiloPubblico::create([
@@ -83,7 +83,7 @@ class CancelloDellaChatTest extends TestCase
         ]);
 
         // 🚨 Un tenant DIVERSO: è il caso che il catalogo esiste per creare.
-        $this->altroTenant = $this->creaPalestra('Ares', 'ares', 'ARES2345');
+        $this->altroTenant = $this->creaPalestra('Ares', 'ares');
         $this->tizio = $this->creaUtente($this->altroTenant, UserRole::Member, 'tizio@esempio.it');
 
         $this->disabbona($this->altroTenant);
@@ -420,7 +420,7 @@ class CancelloDellaChatTest extends TestCase
          * volta: a questo test interessa **l'effetto** dell'iscrizione sul
          * filo, non da quale porta sia passata.
          */
-        app(UnisciAUnaPalestra::class)($senzaPalestra, $this->palestra->join_code);
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($senzaPalestra, $this->palestra);
 
         $this->assertSame(
             TipoConversazione::Iscritto,
@@ -437,7 +437,7 @@ class CancelloDellaChatTest extends TestCase
          * iscrivendosi alla palestra più economica, e da lì si scrive senza
          * limiti a chiunque.
          */
-        $altraPalestra = $this->creaPalestra('Zeus', 'zeus', 'ZEUS2345');
+        $altraPalestra = $this->creaPalestra('Zeus', 'zeus');
         $altroCapo = $this->creaUtente($altraPalestra, UserRole::GymAdmin, 'capo@zeus.it');
 
         $altraScheda = ProfiloPubblico::create([
@@ -457,7 +457,7 @@ class CancelloDellaChatTest extends TestCase
         );
 
         // Si iscrive a Olimpo, non a Zeus. 🆕 Dal servizio: vedi sopra.
-        app(UnisciAUnaPalestra::class)($senzaPalestra, $this->palestra->join_code);
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($senzaPalestra, $this->palestra);
 
         $this->assertSame(TipoConversazione::Informazioni, $conZeus->fresh()->tipo);
     }
@@ -555,7 +555,6 @@ class CancelloDellaChatTest extends TestCase
         $suo = Tenant::create([
             'name' => 'Spazio di '.$email,
             'slug' => 'spazio-'.md5($email),
-            'join_code' => strtoupper(substr(md5($email), 0, 8)),
             'contact_email' => $email,
             'status' => TenantStatus::Active,
             'kind' => TenantKind::Personal,

@@ -52,7 +52,7 @@ final class LaReimpostazioneDellaPasswordTest extends TestCase
     public function il_token_vale_per_una_persona_sola_anche_con_la_stessa_email(): void
     {
         $palestra = $this->creaPalestra();
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $genitore = $this->creaUtente($palestra, UserRole::Member, 'famiglia@esempio.test');
         $figlio = $this->creaUtente($altra, UserRole::Member, 'famiglia@esempio.test');
@@ -259,7 +259,7 @@ final class LaReimpostazioneDellaPasswordTest extends TestCase
     public function l_api_non_indovina_quando_l_indirizzo_e_di_due_persone(): void
     {
         $palestra = $this->creaPalestra();
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $this->creaUtente($palestra, UserRole::Member, 'famiglia@esempio.test');
         $this->creaUtente($altra, UserRole::Member, 'famiglia@esempio.test');

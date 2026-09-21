@@ -139,11 +139,8 @@ class TenantsTable
                      * di esistere, gli inviti si fanno con il link di invito.
                      * Togliamo proprio tutto il discorso dei codici»*.
                      *
-                     * ⚠️ `tenants.join_code` è ancora **viva** in
-                     * registrazione, login, login social e nell'app: toglierla
-                     * di lì è la fase **F11** del piano, e ha un ordine di
-                     * rilascio suo (prima l'app, poi il server). Qui sparisce
-                     * solo dalla vista, che è la parte che non rompe niente.
+                     * ✅ E con F11 (24/09) la colonna non c'è più nemmeno in
+                     * tabella: né registrazione, né accesso, né app.
                      */
 
                     VoceDiScheda::make('Stato', TextColumn::make('status')

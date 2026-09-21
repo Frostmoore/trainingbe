@@ -237,8 +237,8 @@ final class OgniTrainerHaUnaCasaTest extends TestCase
     #[Test]
     public function lelenco_non_mostra_i_trainer_degli_altri(): void
     {
-        $qui = $this->creaPalestra('Qui', 'qui', 'QUII2345');
-        $altrove = $this->creaPalestra('Altrove', 'altrove', 'ALTR2345');
+        $qui = $this->creaPalestra('Qui', 'qui');
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
 
         $estraneo = $this->trainerNatoDentro($altrove, 'estraneo@esempio.test');
         app(DaiUnaCasaAlTrainer::class)($estraneo);

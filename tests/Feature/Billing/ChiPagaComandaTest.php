@@ -124,7 +124,7 @@ final class ChiPagaComandaTest extends TestCase
     #[Test]
     public function il_proprietario_di_un_tenant_personale_lo_gestisce(): void
     {
-        $suo = $this->creaPalestra('Personale', 'personale', 'PERS2345');
+        $suo = $this->creaPalestra('Personale', 'personale');
         $suo->update(['kind' => 'personal']);
 
         $tizio = $this->creaUtente($suo->fresh(), UserRole::FreeUser, 'tizio@test.it');
@@ -145,7 +145,7 @@ final class ChiPagaComandaTest extends TestCase
     #[Test]
     public function ma_un_allievo_dentro_quel_tenant_no(): void
     {
-        $delTrainer = $this->creaPalestra('Trainer', 'trainer-suo', 'TRAI2345');
+        $delTrainer = $this->creaPalestra('Trainer', 'trainer-suo');
         $delTrainer->update(['kind' => 'personal']);
 
         $trainer = $this->creaUtente($delTrainer->fresh(), UserRole::FreeTrainer, 'coach@test.it');

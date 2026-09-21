@@ -295,7 +295,7 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
     public function chi_esce_non_vede_la_libreria_di_una_palestra_dove_non_e_mai_stato(): void
     {
         $sua = $this->creaPalestra();
-        $altra = $this->creaPalestra('Altra Palestra', 'altra', 'ALTRA234');
+        $altra = $this->creaPalestra('Altra Palestra', 'altra');
 
         $mario = $this->creaUtente($sua, UserRole::Member, 'mario@demo.test');
 

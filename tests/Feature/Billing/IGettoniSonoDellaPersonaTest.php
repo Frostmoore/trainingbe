@@ -94,7 +94,7 @@ class IGettoniSonoDellaPersonaTest extends TestCase
     #[Test]
     public function chi_compra_li_tiene_e_nessun_altro_li_tocca(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $chiPaga = $this->creaUtente($palestra, UserRole::Member, 'paga@olimpo.test');
         $laltro = $this->creaUtente($palestra, UserRole::Member, 'altro@olimpo.test');
@@ -113,7 +113,7 @@ class IGettoniSonoDellaPersonaTest extends TestCase
     #[Test]
     public function spendendoli_cala_solo_il_suo(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $chiPaga = $this->creaUtente($palestra, UserRole::Member, 'paga@olimpo.test');
         $laltro = $this->creaUtente($palestra, UserRole::Member, 'altro@olimpo.test');
@@ -138,7 +138,7 @@ class IGettoniSonoDellaPersonaTest extends TestCase
     #[Test]
     public function il_registro_intesta_ogni_movimento_a_una_persona(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $chiPaga = $this->creaUtente($palestra, UserRole::Member, 'paga@olimpo.test');
 
         $acquisto = $this->portafoglio()->accredita($chiPaga, 100);
@@ -167,7 +167,7 @@ class IGettoniSonoDellaPersonaTest extends TestCase
     #[Test]
     public function chi_ha_ai_illimitata_passa_con_zero_gettoni(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $fortunato = $this->creaUtente($palestra, UserRole::Member, 'illimitato@olimpo.test');
 
         $fortunato->forceFill([
@@ -300,7 +300,7 @@ class IGettoniSonoDellaPersonaTest extends TestCase
     #[Test]
     public function il_messaggio_guarda_se_ha_comprato_lui(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         $chiCompra = $this->creaUtente($palestra, UserRole::Member, 'compra@olimpo.test');
         $chiNo = $this->creaUtente($palestra, UserRole::Member, 'mai@olimpo.test');

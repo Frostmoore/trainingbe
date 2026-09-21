@@ -50,7 +50,7 @@ class BillingApiTest extends TestCase
          */
         $this->seed(PacchettiGettoniSeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'io@alfa.test');
     }
 

@@ -110,8 +110,7 @@ final class EserciziSenzaMuscoliTest extends TestCase
          * pagina mostrerebbe righe che nessuno stava cercando.
          */
         $palestra = Tenant::create([
-            'name' => 'Alfa', 'slug' => 'alfa', 'join_code' => 'ALFA2345',
-            'contact_email' => 'a@a.test', 'status' => TenantStatus::Active,
+            'name' => 'Alfa', 'slug' => 'alfa',            'contact_email' => 'a@a.test', 'status' => TenantStatus::Active,
         ]);
 
         Exercise::withoutGlobalScopes()->create([

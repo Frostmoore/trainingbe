@@ -24,6 +24,7 @@ enum AuditAction: string
     case UserDeleted = 'user.deleted';
     case TenantSuspended = 'tenant.suspended';
     case TenantReactivated = 'tenant.reactivated';
+    /** ⛔ Non si scrive più (F11: niente codici palestra). Resta per leggere le righe vecchie del registro. */
     case JoinCodeRegenerated = 'tenant.join_code_regenerated';
     case WorkoutPlanPublished = 'workout_plan.published';
     case NutritionPlanPublished = 'nutrition_plan.published';

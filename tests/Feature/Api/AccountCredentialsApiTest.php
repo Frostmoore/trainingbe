@@ -36,7 +36,7 @@ class AccountCredentialsApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
@@ -95,7 +95,7 @@ class AccountCredentialsApiTest extends TestCase
     #[Test]
     public function un_email_usata_in_un_altra_palestra_va_benissimo(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $this->creaUtente($beta, UserRole::Member, 'condivisa@esempio.test');
 
         $this->comeApp($this->iscritto)

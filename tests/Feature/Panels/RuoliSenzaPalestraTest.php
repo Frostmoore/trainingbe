@@ -198,7 +198,7 @@ class RuoliSenzaPalestraTest extends TestCase
     public function a_free_trainer_enters_the_panel_and_sees_nothing(): void
     {
         // Una palestra piena: iscritti, una scheda e un piano.
-        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa');
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
 
         $this->ctx()->runAs($palestra, function () use ($iscritto): void {

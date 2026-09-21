@@ -54,7 +54,7 @@ final class RifAllievoTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->tommaso = $this->creaUtente($this->palestra, UserRole::Trainer, 'tommaso@alfa.test');
         $this->altroTrainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'altro@alfa.test');
     }

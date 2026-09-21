@@ -81,7 +81,7 @@ final class ConsigliNonSiAccumulanoTest extends TestCase
 
         $this->aiFinta();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
         $this->iscritto->accendiLAi();
     }

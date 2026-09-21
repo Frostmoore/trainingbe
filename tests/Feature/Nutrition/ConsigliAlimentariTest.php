@@ -41,7 +41,7 @@ class ConsigliAlimentariTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'coach@olimpo.it');
     }
 

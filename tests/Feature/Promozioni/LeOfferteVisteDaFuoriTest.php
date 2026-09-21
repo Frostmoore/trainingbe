@@ -167,14 +167,16 @@ final class LeOfferteVisteDaFuoriTest extends TestCase
         $this->assertSame((int) round($pacchetto->prezzo_cent * 0.2), $this->stripe->ultima('coupons.create')[0]['amount_off']);
     }
 
-    /** 🔗 La pagina `/promo/{codice}` del sito: cos'è e come attivarla, senza attivare niente. */
+    /**
+     * 🔗 Il link `/promo/{codice}` aperto dal browser porta alla pagina
+     * dell'offerta **nel pannello** (S2: non sul sito), senza attivare niente.
+     */
     #[Test]
-    public function la_pagina_del_link_sul_sito(): void
+    public function il_link_dal_browser_porta_al_pannello(): void
     {
         $promozione = $this->promo([$this->sconto()], ['nome' => 'Autunno', 'attivazione' => ComeSiAttiva::Link]);
 
-        $this->get("/promo/{$promozione->codice}")->assertOk()->assertSee('Autunno')->assertSee('Attivala dal pannello');
-        $this->get('/promo/NONESISTE')->assertOk()->assertSee('non è più disponibile');
+        $this->get('/promo/'.mb_strtolower($promozione->codice))->assertRedirect("/admin/offerta/{$promozione->codice}");
         $this->assertSame(0, $promozione->fresh()->usata_volte);
     }
 

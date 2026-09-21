@@ -52,7 +52,7 @@ final class ScritturaDeiPianiTest extends TestCase
          */
         $this->seed(ExerciseLibrarySeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         /*
          * #! **Nutrizionista, non trainer** - N19/N22, 19/08/2026.
          *

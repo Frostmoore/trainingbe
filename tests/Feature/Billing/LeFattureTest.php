@@ -55,7 +55,7 @@ final class LeFattureTest extends TestCase
 
         Carbon::setTestNow('2026-09-23 10:00:00');
 
-        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia');
         $this->titolare = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@olimpia.test');
         $this->palestra->forceFill(['proprietario_id' => $this->titolare->getKey()])->save();
 
@@ -146,7 +146,7 @@ final class LeFattureTest extends TestCase
     #[Test]
     public function lo_spazio_di_un_trainer_non_si_fattura(): void
     {
-        $spazio = $this->creaPalestra('Spazio di Anna', 'anna', 'ANNA2345');
+        $spazio = $this->creaPalestra('Spazio di Anna', 'anna');
         $spazio->forceFill(['kind' => 'personal'])->save();
 
         $riga = app(RegistroDeiPagamenti::class)->segna($spazio, PagamentoIncassato::CANONE, 1500, 'cs_trainer', cosa: 'trainer_5');
@@ -284,7 +284,7 @@ final class LeFattureTest extends TestCase
         $f = $this->incassa(PagamentoIncassato::CANONE, 13000, 'gym_30');
         $url = route('filament.admin.fattura-pdf', ['fattura' => $f->getKey()]);
 
-        $altra = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $altra = $this->creaPalestra('Beta', 'beta');
         $altroTitolare = $this->creaUtente($altra, UserRole::GymAdmin, 'capo@beta.test');
         $altra->forceFill(['proprietario_id' => $altroTitolare->getKey()])->save();
 

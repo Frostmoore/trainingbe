@@ -67,7 +67,7 @@ final class DiChiELoSpazioTest extends TestCase
     /** Lo spazio di un trainer: personale, suo, con un allievo dentro. */
     private function spazioDiUnTrainer(): array
     {
-        $tenant = $this->creaPalestra('Coach', 'coach', 'COAC2345');
+        $tenant = $this->creaPalestra('Coach', 'coach');
         $tenant->update(['kind' => TenantKind::Personal->value]);
 
         $trainer = $this->creaUtente($tenant->fresh(), UserRole::FreeTrainer, 'coach@test.it');
@@ -97,14 +97,16 @@ final class DiChiELoSpazioTest extends TestCase
             'name' => 'La scheda del trainer',
         ]));
 
-        $palestra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $palestra = $this->creaPalestra('Altra', 'altra');
 
-        try {
-            app(UnisciAUnaPalestra::class)($allievo, $palestra->join_code);
-            self::fail('un allievo ha portato il tenant del suo trainer dentro una palestra');
-        } catch (ValidationException) {
-            // atteso
-        }
+        /*
+         * ✅ F11 (24/09/2026): col codice la chiamata veniva rifiutata; con
+         * l'invito (l'unica porta rimasta) l'allievo esce **da solo** dallo
+         * spazio del trainer (AH.1-ter.6, `daLoSpazioDiUnTrainer()`). La falla
+         * che questo test guarda resta la stessa: le righe del trainer non si
+         * muovono.
+         */
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($allievo, $palestra);
 
         self::assertSame(
             (int) $spazio->getKey(),
@@ -112,7 +114,8 @@ final class DiChiELoSpazioTest extends TestCase
             'la scheda del trainer e\' finita dentro la palestra',
         );
 
-        self::assertSame((int) $spazio->getKey(), (int) $allievo->fresh()->tenant_id);
+        self::assertSame((int) $palestra->getKey(), (int) $allievo->fresh()->tenant_id, 'l\'allievo non e\' entrato');
+        self::assertNotNull($spazio->fresh(), 'lo spazio del trainer e\' sparito');
     }
 
     /**
@@ -125,11 +128,11 @@ final class DiChiELoSpazioTest extends TestCase
     {
         [, $trainer] = $this->spazioDiUnTrainer();
 
-        $palestra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $palestra = $this->creaPalestra('Altra', 'altra');
 
         $this->expectException(ValidationException::class);
 
-        app(UnisciAUnaPalestra::class)($trainer, $palestra->join_code);
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($trainer, $palestra);
     }
 
     /**
@@ -143,11 +146,11 @@ final class DiChiELoSpazioTest extends TestCase
         $capo = $this->creaUtente($mia, UserRole::GymAdmin, 'capo@test.it');
         $this->creaUtente($mia->fresh(), UserRole::Member, 'iscritto@test.it');
 
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $this->expectException(ValidationException::class);
 
-        app(UnisciAUnaPalestra::class)($capo, $altra->join_code);
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($capo, $altra);
     }
 
     /** Chi e' davvero solo nel suo spazio entra come prima. */
@@ -160,7 +163,7 @@ final class DiChiELoSpazioTest extends TestCase
 
         $palestra = $this->creaPalestra();
 
-        $entrato = app(UnisciAUnaPalestra::class)($tizio, $palestra->join_code);
+        $entrato = app(UnisciAUnaPalestra::class)->dentroQuestoTenant($tizio, $palestra);
 
         self::assertSame((int) $palestra->getKey(), (int) $entrato->getKey());
         self::assertSame((int) $palestra->getKey(), (int) $tizio->fresh()->tenant_id);
@@ -325,10 +328,10 @@ final class DiChiELoSpazioTest extends TestCase
 
         $palestra->forceFill(['proprietario_id' => null])->save();
 
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         try {
-            app(UnisciAUnaPalestra::class)($tizio, $altra->join_code);
+            app(UnisciAUnaPalestra::class)->dentroQuestoTenant($tizio, $altra);
             self::fail('un tenant senza proprietario si e\' lasciato portare via');
         } catch (ValidationException) {
             // atteso
@@ -347,7 +350,7 @@ final class DiChiELoSpazioTest extends TestCase
         $rotti = 0;
 
         foreach ([
-            fn (): Tenant => app(UnisciAUnaPalestra::class)($god, $palestra->join_code),
+            fn (): Tenant => app(UnisciAUnaPalestra::class)->dentroQuestoTenant($god, $palestra),
             fn (): Tenant => app(EsciDaUnaPalestra::class)($god),
         ] as $gesto) {
             try {

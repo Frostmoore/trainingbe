@@ -58,7 +58,7 @@ final class GliImportPdfSiPaganoAGettoniTest extends TestCase
 
         $this->seed(PlanSeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
         $this->iscritto->accendiLAi();
     }

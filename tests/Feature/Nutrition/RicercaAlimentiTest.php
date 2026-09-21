@@ -37,7 +37,7 @@ class RicercaAlimentiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->io = $this->creaUtente($this->alfa, UserRole::Member, 'io@alfa.test');
     }
 

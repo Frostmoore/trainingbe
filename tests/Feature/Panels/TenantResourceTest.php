@@ -39,7 +39,7 @@ class TenantResourceTest extends TestCase
         $ctx = app(TenantContext::class);
 
         $this->palestra = Tenant::create(['name' => 'Demo', 'slug' => 'demo',
-            'join_code' => 'DEMO2345', 'contact_email' => 'd@d.test',
+            'contact_email' => 'd@d.test',
             'status' => TenantStatus::Active]);
 
         $ctx->runAs($this->palestra, function (): void {
@@ -116,7 +116,6 @@ class TenantResourceTest extends TestCase
             ->fillForm([
                 'name' => 'Nuova Palestra',
                 'slug' => 'nuova-palestra',
-                'join_code' => 'NUOVA234',
                 'contact_email' => 'info@nuova.test',
                 'status' => TenantStatus::Trial->value,
                 'plan' => 'starter',
@@ -131,25 +130,16 @@ class TenantResourceTest extends TestCase
 
         $this->assertDatabaseHas('tenants', [
             'slug' => 'nuova-palestra',
-            'join_code' => 'NUOVA234',
         ]);
     }
 
+    /** ⛔ F11 (24/09/2026): il codice palestra non esiste più, nemmeno nel modulo. */
     #[Test]
-    public function it_refuses_a_duplicate_join_code(): void
+    public function the_form_has_no_gym_code(): void
     {
         $this->actingAs($this->god);
 
-        Livewire::test(CreateTenant::class)
-            ->fillForm([
-                'name' => 'Copiona', 'slug' => 'copiona',
-                'join_code' => 'DEMO2345',   // già di «Demo»
-                'status' => TenantStatus::Trial->value, 'plan' => 'starter',
-                'color_primary' => '#111827', 'color_secondary' => '#6B7280',
-                'color_accent' => '#F59E0B', 'locale' => 'it', 'timezone' => 'Europe/Rome',
-            ])
-            ->call('create')
-            ->assertHasFormErrors(['join_code']);
+        Livewire::test(CreateTenant::class)->assertFormFieldDoesNotExist('join_code');
     }
 
     // ───────────────────── modificare ─────────────────────
@@ -180,9 +170,13 @@ class TenantResourceTest extends TestCase
             ->assertFormFieldDisabled('slug');
     }
 
-    /** Il branding modificato dal pannello arriva subito all'app. */
+    /**
+     * Il branding modificato dal pannello arriva subito all'app: è quello che
+     * esce con l'accesso (`tokenResponse`) e con `auth/me`. ✅ F11: prima lo si
+     * leggeva da `branding/lookup?code=`, che non c'è più.
+     */
     #[Test]
-    public function the_new_branding_reaches_the_public_endpoint(): void
+    public function the_new_branding_reaches_the_app(): void
     {
         $this->actingAs($this->god);
 
@@ -191,9 +185,7 @@ class TenantResourceTest extends TestCase
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->getJson('/api/v1/branding/lookup?code=DEMO2345')
-            ->assertOk()
-            ->assertJsonPath('data.colors.accent', '#00FF00');
+        $this->assertSame('#00FF00', $this->palestra->fresh()->branding()['colors']['accent']);
     }
 
     // ───────────────────── sospendere ─────────────────────
@@ -208,15 +200,10 @@ class TenantResourceTest extends TestCase
 
         $this->assertSame(TenantStatus::Suspended, $this->palestra->refresh()->status);
 
-        // Effetto immediato e verificabile da fuori: l'endpoint pubblico
-        // smette di riconoscere il codice.
-        $this->getJson('/api/v1/branding/lookup?code=DEMO2345')->assertNotFound();
-
         Livewire::test(ListTenants::class)
             ->callTableAction('sospendi', $this->palestra->refresh());
 
         $this->assertSame(TenantStatus::Active, $this->palestra->refresh()->status);
-        $this->getJson('/api/v1/branding/lookup?code=DEMO2345')->assertOk();
     }
 
     /**
@@ -261,7 +248,7 @@ class TenantResourceTest extends TestCase
     public function it_filters_by_status(): void
     {
         $sospesa = Tenant::create(['name' => 'Sospesa', 'slug' => 'sospesa',
-            'join_code' => 'SOSP2345', 'contact_email' => 's@s.test',
+            'contact_email' => 's@s.test',
             'status' => TenantStatus::Suspended]);
 
         $this->actingAs($this->god);

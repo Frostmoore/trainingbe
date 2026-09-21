@@ -122,7 +122,7 @@ class IlPannelloDellePromozioniTest extends TestCase
     public function a_chi_non_c_entra_dice_di_no(): void
     {
         $palestra = $this->creaPalestra();
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $estraneo = $this->creaUtente($altra, UserRole::GymAdmin, 'altro@esempio.test');
 

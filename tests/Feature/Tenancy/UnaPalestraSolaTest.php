@@ -145,7 +145,7 @@ final class UnaPalestraSolaTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        app(UnisciAUnaPalestra::class)($iscritto, $ares->join_code);
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($iscritto, $ares);
     }
 
     /**

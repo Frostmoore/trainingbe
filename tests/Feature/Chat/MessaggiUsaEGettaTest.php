@@ -49,7 +49,7 @@ class MessaggiUsaEGettaTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'coach@olimpo.it');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'atleta@olimpo.it');
 

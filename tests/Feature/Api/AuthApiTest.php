@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use App\Enums\TenantStatus;
+use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -36,10 +37,10 @@ class AuthApiTest extends TestCase
         parent::setUp();
 
         $this->alfa = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa',
-            'join_code' => 'ALFA2345', 'contact_email' => 'a@a.test']);
+            'contact_email' => 'a@a.test']);
 
         $this->sospesa = Tenant::create(['name' => 'Sospesa', 'slug' => 'sospesa',
-            'join_code' => 'SOSP2345', 'contact_email' => 's@s.test',
+            'contact_email' => 's@s.test',
             'status' => TenantStatus::Suspended]);
 
         foreach ([$this->alfa, $this->sospesa] as $t) {
@@ -49,64 +50,63 @@ class AuthApiTest extends TestCase
         }
     }
 
-    // ───────────────────────── branding ─────────────────────────
+    // ───────────────────────── ⛔ il codice palestra (F11) ─────────────────────────
 
+    /**
+     * ⛔ **Il codice palestra non esiste più** — F11, 24/09/2026. La ricerca
+     * della palestra dal codice (`branding/lookup`) non c'è più: il branding
+     * arriva con l'accesso o con l'invito.
+     */
     #[Test]
-    public function it_returns_branding_for_a_valid_code(): void
+    public function the_gym_code_lookup_is_gone(): void
     {
-        $this->getJson('/api/v1/branding/lookup?code=ALFA2345')
-            ->assertOk()
-            ->assertJsonPath('data.name', 'Alfa')
-            ->assertJsonPath('data.slug', 'alfa')
-            ->assertJsonStructure(['data' => ['name', 'slug', 'logo_url', 'colors', 'locale', 'social']]);
+        $this->getJson('/api/v1/branding/lookup?code=ABCD2345')->assertNotFound();
     }
 
     /**
-     * Il corpo non deve contenere altro che il branding.
-     *
-     * Un `id` o un conteggio iscritti qui sarebbe informazione commerciale
-     * regalata a chiunque conosca il codice.
+     * 🚨 Chi si iscrive **con un codice** pensa di entrare in una palestra:
+     * ignorarlo lo farebbe nascere fuori senza dirglielo. Si rifiuta, e il
+     * messaggio dice dove si entra.
      */
     #[Test]
-    public function it_exposes_only_branding_fields(): void
+    public function a_registration_with_a_gym_code_is_refused_with_a_clear_message(): void
     {
-        $dati = $this->getJson('/api/v1/branding/lookup?code=ALFA2345')->json('data');
+        $r = $this->postJson('/api/v1/auth/register', [
+            'join_code' => 'ALFA2345', 'name' => 'Vecchia App', 'email' => 'vecchia@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
+            'username' => 'vecchia.app',
+            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
+        ])->assertStatus(422)->assertJsonValidationErrors('join_code');
 
-        $this->assertSame(
-            ['name', 'slug', 'logo_url', 'colors', 'locale', 'social'],
-            array_keys($dati),
-        );
-
-        // ⚠️ `social` dice **quali pulsanti disegnare**, non come sono
-        // configurati: nessun client id, nessuna chiave. Un identificativo di
-        // applicazione qui non sarebbe un segreto grave, ma sarebbe comunque
-        // informazione regalata a chiunque conosca un codice palestra.
-        $this->assertIsArray($dati['social']);
-
-        foreach ($dati['social'] as $fornitore) {
-            $this->assertContains($fornitore, ['google', 'apple']);
-        }
+        $this->assertStringContainsString("link d'invito", $r->json('errors.join_code.0'));
+        $this->assertNull(User::withoutGlobalScopes()->where('email', 'vecchia@esempio.it')->first());
     }
 
+    /** ⚠️ Il campo **vuoto** (le app vecchie lo mandano sempre) non è un codice. */
     #[Test]
-    public function it_returns_the_same_404_for_unknown_and_suspended_gyms(): void
+    public function an_empty_gym_code_is_no_code(): void
     {
-        $inesistente = $this->getJson('/api/v1/branding/lookup?code=ZZZZ9999');
-        $sospesa = $this->getJson('/api/v1/branding/lookup?code=SOSP2345');
-        $malformato = $this->getJson('/api/v1/branding/lookup?code=x');
+        $this->postJson('/api/v1/auth/register', [
+            'join_code' => '  ', 'name' => 'Vuoto', 'email' => 'vuoto@esempio.it',
+            'age_confirmed' => true, 'terms_accepted' => true,
+            'username' => 'vuoto',
+            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
+        ])->assertCreated();
+    }
 
-        foreach ([$inesistente, $sospesa, $malformato] as $r) {
-            $r->assertNotFound();
-        }
+    /**
+     * ⚠️ All'**accesso**, invece, un codice mandato da un'app vecchia **non si
+     * legge**: respingerlo non proteggerebbe niente, e chiuderebbe fuori chi ha
+     * le credenziali giuste.
+     */
+    #[Test]
+    public function a_gym_code_sent_at_login_is_ignored(): void
+    {
+        $this->iscritto('anna@alfa.test');
 
-        $this->assertSame(
-            $inesistente->json(),
-            $sospesa->json(),
-            'Codice inesistente e palestra sospesa danno risposte diverse: '
-            .'basta provare codici a tappeto per sapere chi ha smesso di pagare.',
-        );
-
-        $this->assertSame($inesistente->json(), $malformato->json());
+        $this->postJson('/api/v1/auth/login', [
+            'join_code' => 'ZZZZ9999', 'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+        ])->assertOk()->assertJsonPath('branding.slug', 'alfa');
     }
 
     // ───────────────────────── registrazione ─────────────────────────
@@ -115,7 +115,6 @@ class AuthApiTest extends TestCase
     public function it_registers_a_member_and_returns_a_token(): void
     {
         $r = $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'alfa2345',
             'age_confirmed' => true, 'terms_accepted' => true,
             'name' => 'Anna',
             'email' => ' Anna@Esempio.IT ',
@@ -124,10 +123,10 @@ class AuthApiTest extends TestCase
             'password_confirmation' => self::FAKE_PASSWORD,
         ]);
 
+        // ✅ F11: senza codice palestra si nasce **sempre** nel proprio spazio.
         $r->assertCreated()
             ->assertJsonPath('data.email', 'anna@esempio.it')
-            ->assertJsonPath('data.roles', ['member'])
-            ->assertJsonPath('branding.name', 'Alfa');
+            ->assertJsonPath('data.roles', [UserRole::FreeUser->value]);
 
         $this->assertIsString($r->json('token'));
 
@@ -150,9 +149,9 @@ class AuthApiTest extends TestCase
     /**
      * 🚨 Il nome utente è unico su **tutta la piattaforma**, non per palestra.
      *
-     * È voluto: serve a essere un identificativo che non ha bisogno del codice
-     * palestra per essere disambiguato — è quello che permette il login dai
-     * pannelli, dove un `join_code` non c'è.
+     * È voluto: serve a essere un identificativo che non ha bisogno di niente
+     * per essere disambiguato — è quello che permette di entrare anche quando
+     * la stessa email è in due posti.
      */
     #[Test]
     public function it_refuses_a_username_already_taken_in_another_gym(): void
@@ -165,7 +164,7 @@ class AuthApiTest extends TestCase
         ]));
 
         $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'ALFA2345', 'name' => 'Anna', 'email' => 'anna2@esempio.it',
+            'name' => 'Anna', 'email' => 'anna2@esempio.it',
             'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'gia.preso',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
@@ -185,7 +184,7 @@ class AuthApiTest extends TestCase
 
         foreach (['ab', 'con spazi', 'con@chiocciola', '.punto', 'punto.'] as $sbagliato) {
             $this->postJson('/api/v1/auth/register', [
-                'join_code' => 'ALFA2345', 'name' => 'X', 'email' => 'x'.md5($sbagliato).'@esempio.it',
+                'name' => 'X', 'email' => 'x'.md5($sbagliato).'@esempio.it',
                 'age_confirmed' => true, 'terms_accepted' => true,
                 'username' => $sbagliato,
                 'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
@@ -198,17 +197,18 @@ class AuthApiTest extends TestCase
     public function it_ignores_a_role_sent_by_the_client(): void
     {
         $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'ALFA2345', 'name' => 'Furbo', 'email' => 'furbo@esempio.it',
+            'name' => 'Furbo', 'email' => 'furbo@esempio.it',
             'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'furbo',
             'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
             'role' => 'gym_admin', 'is_super_admin' => true, 'tenant_id' => 999,
-        ])->assertCreated()->assertJsonPath('data.roles', ['member']);
+        ])->assertCreated()->assertJsonPath('data.roles', [UserRole::FreeUser->value]);
 
         $u = User::withoutGlobalScopes()->where('email', 'furbo@esempio.it')->first();
 
         $this->assertFalse($u->is_super_admin);
-        $this->assertSame($this->alfa->id, $u->tenant_id);
+        $this->assertNotSame(999, $u->tenant_id);
+        $this->assertTrue($u->tenant->ePersonale());
     }
 
     // ───────────────────────── la password ─────────────────────────
@@ -236,7 +236,7 @@ class AuthApiTest extends TestCase
     public function it_refuses_a_password_below_the_floor(string $password, string $perche): void
     {
         $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'ALFA2345', 'name' => 'Debole', 'email' => 'debole@esempio.it',
+            'name' => 'Debole', 'email' => 'debole@esempio.it',
             'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'debole',
             'password' => $password, 'password_confirmation' => $password,
@@ -261,7 +261,7 @@ class AuthApiTest extends TestCase
     public function it_refuses_a_mismatched_confirmation(): void
     {
         $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'ALFA2345', 'name' => 'Distratto', 'email' => 'distratto@esempio.it',
+            'name' => 'Distratto', 'email' => 'distratto@esempio.it',
             'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'distratto',
             'password' => self::FAKE_PASSWORD,
@@ -280,23 +280,17 @@ class AuthApiTest extends TestCase
         $frase = 'cavallo divano lampada 7';
 
         $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'ALFA2345', 'name' => 'Saggia', 'email' => 'saggia@esempio.it',
+            'name' => 'Saggia', 'email' => 'saggia@esempio.it',
             'age_confirmed' => true, 'terms_accepted' => true,
             'username' => 'saggia',
             'password' => $frase, 'password_confirmation' => $frase,
         ])->assertCreated();
     }
 
-    #[Test]
-    public function it_refuses_registration_on_a_suspended_gym(): void
-    {
-        $this->postJson('/api/v1/auth/register', [
-            'join_code' => 'SOSP2345', 'name' => 'X', 'email' => 'x@esempio.it',
-            'age_confirmed' => true, 'terms_accepted' => true,
-            'username' => 'xxx',
-            'password' => self::FAKE_PASSWORD, 'password_confirmation' => self::FAKE_PASSWORD,
-        ])->assertStatus(422)->assertJsonValidationErrors('join_code');
-    }
+    /*
+     * ⛔ Qui c'era `it_refuses_registration_on_a_suspended_gym`: senza codice
+     * non ci si iscrive più «in» una palestra (F11).
+     */
 
     // ───────────────────────── accesso ─────────────────────────
 
@@ -306,7 +300,7 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+            'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertOk()->assertJsonPath('branding.slug', 'alfa');
     }
 
@@ -330,7 +324,7 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $r = $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+            'login' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertOk();
 
         $corpo = $r->json();
@@ -352,7 +346,7 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+            'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertOk();
     }
 
@@ -362,10 +356,10 @@ class AuthApiTest extends TestCase
         $this->iscritto('anna@alfa.test');
 
         $passwordErrata = $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => 'wrong-value',
+            'email' => 'anna@alfa.test', 'password' => 'wrong-value',
         ]);
         $emailIgnota = $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'nessuno@alfa.test', 'password' => 'qualunque',
+            'email' => 'nessuno@alfa.test', 'password' => 'qualunque',
         ]);
 
         $passwordErrata->assertStatus(422);
@@ -385,33 +379,15 @@ class AuthApiTest extends TestCase
         $u->forceFill(['username' => 'anna.alfa'])->save();
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => ' Anna.Alfa ', 'password' => self::FAKE_PASSWORD,
+            'email' => ' Anna.Alfa ', 'password' => self::FAKE_PASSWORD,
         ])->assertOk()->assertJsonPath('data.email', 'anna@alfa.test');
     }
 
-    /**
-     * Il nome utente è unico su tutta la piattaforma, ma la ricerca resta
-     * limitata alla palestra del `join_code`: un nome di un'altra palestra non
-     * fa entrare qui.
+    /*
+     * ⛔ Qui c'era `a_username_from_another_gym_does_not_work`: la ricerca non
+     * è più limitata alla palestra di un codice (F11), e il nome utente, unico
+     * su tutta la piattaforma, fa entrare nel suo account ovunque sia.
      */
-    #[Test]
-    public function a_username_from_another_gym_does_not_work(): void
-    {
-        $altra = Tenant::create(['name' => 'Altra', 'slug' => 'altra',
-            'join_code' => 'ALTR2345', 'contact_email' => 'x@x.test']);
-
-        app(TenantContext::class)->runAs($altra, function () use ($altra): void {
-            Role::create(['name' => 'member', 'guard_name' => 'web', 'tenant_id' => $altra->id]);
-            User::create([
-                'name' => 'Altrove', 'email' => 'altrove@altra.test',
-                'username' => 'altrove', 'password' => self::FAKE_PASSWORD,
-            ])->assignRole('member');
-        });
-
-        $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'altrove', 'password' => self::FAKE_PASSWORD,
-        ])->assertStatus(422);
-    }
 
     #[Test]
     public function it_refuses_login_for_an_inactive_user(): void
@@ -420,7 +396,7 @@ class AuthApiTest extends TestCase
         $u->forceFill(['is_active' => false])->save();
 
         $this->postJson('/api/v1/auth/login', [
-            'join_code' => 'ALFA2345', 'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
+            'email' => 'anna@alfa.test', 'password' => self::FAKE_PASSWORD,
         ])->assertStatus(422);
     }
 

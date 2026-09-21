@@ -66,7 +66,7 @@ final class ChiECopertoDecadeConChiPagaTest extends TestCase
      */
     private function trainerCheEPaga(?string $fine = null, bool $rinnova = false): array
     {
-        $spazio = $this->creaPalestra('Coach', 'coach', 'COAC2345');
+        $spazio = $this->creaPalestra('Coach', 'coach');
         $spazio->update(['kind' => TenantKind::Personal->value]);
 
         $trainer = $this->creaUtente($spazio->fresh(), UserRole::FreeTrainer, 'coach@test.it');

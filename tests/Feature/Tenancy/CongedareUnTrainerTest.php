@@ -88,7 +88,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function dopo_il_congedo_non_allena_piu_in_quella_palestra(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
@@ -121,7 +121,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function i_suoi_allievi_personali_non_si_toccano(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $suo = $this->allievoDi($trainer, 'suo@esempio.test');
@@ -156,7 +156,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function si_porta_a_casa_le_schede_che_ha_scritto(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $this->allenaAnchePresso($trainer, $palestra);
 
@@ -192,7 +192,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function ma_non_quelle_degli_altri(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $collega = $this->creaUtente($palestra, UserRole::Trainer, 'collega@olimpo.test');
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
@@ -233,7 +233,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function la_libreria_esercizi_resta_leggibile(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
         $this->allenaAnchePresso($trainer, $palestra);
 
@@ -258,7 +258,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function chi_non_ha_uno_spazio_suo_non_si_congeda_cosi(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $interno = $this->creaUtente($palestra, UserRole::Trainer, 'interno@olimpo.test');
 
         $this->expectException(ValidationException::class);
@@ -270,7 +270,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function chi_non_allena_li_non_si_congeda(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $estraneo = $this->unTrainerIndipendente();
 
         $this->expectException(ValidationException::class);
@@ -287,7 +287,7 @@ class CongedareUnTrainerTest extends TestCase
     #[Test]
     public function togliere_significa_tutti_i_ruoli_di_quella_palestra(): void
     {
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
 
         $this->allenaAnchePresso($trainer, $palestra);

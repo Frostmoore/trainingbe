@@ -61,7 +61,7 @@ final class LAbbonamentoToltoDallaPalestraTest extends TestCase
 
         $this->seed(PlanSeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->gestore = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@alfa.test');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'mario@alfa.test');
 

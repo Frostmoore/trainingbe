@@ -57,7 +57,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
 
         $this->seed(ExerciseLibrarySeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
     }
 

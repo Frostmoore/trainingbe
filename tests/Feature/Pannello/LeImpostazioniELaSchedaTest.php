@@ -44,7 +44,7 @@ final class LeImpostazioniELaSchedaTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia');
         $this->gestore = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@olimpia.test');
 
         filament()->setCurrentPanel('admin');
@@ -129,8 +129,7 @@ final class LeImpostazioniELaSchedaTest extends TestCase
         $this->entra();
 
         Livewire::test(GymSettings::class)
-            ->assertActionDoesNotExist('rigenera_codice')
-            ->assertDontSee($this->palestra->join_code);
+            ->assertActionDoesNotExist('rigenera_codice');
     }
 
     /** 📐 La cifra di controllo, sul numero vero del committente. */

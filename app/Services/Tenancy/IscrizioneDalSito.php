@@ -170,7 +170,6 @@ final class IscrizioneDalSito
         $palestra = Tenant::create([
             'name' => $attivita,
             'slug' => $this->slugLibero($attivita),
-            'join_code' => Tenant::generateJoinCode(),
             'kind' => TenantKind::Gym,
             'status' => TenantStatus::Active,
             'contact_email' => $email,

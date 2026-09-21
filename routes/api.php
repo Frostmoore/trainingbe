@@ -12,7 +12,6 @@ use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\Billing\BillingController;
-use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\AllegatoCifratoController;
 use App\Http\Controllers\Api\V1\Chat\ChatKeyController;
@@ -79,12 +78,11 @@ Route::prefix('v1')->group(function (): void {
         ]]);
     })->middleware('throttle:60,1');
 
-    // ── Pubblica, senza autenticazione ───────────────────────────────────
-    // L'app la chiama PRIMA del login per vestirsi dei colori della palestra.
-    // Throttle stretto: senza credenziali da indovinare, è il modo più comodo
-    // per provare codici palestra a tappeto.
-    Route::get('branding/lookup', [BrandingController::class, 'lookup'])
-        ->middleware('throttle:branding-lookup');
+    /*
+     * ⛔ Qui c'era `GET branding/lookup?code=`: i colori di una palestra dal suo
+     * codice. Tolta con F11 (24/09/2026): il codice palestra non esiste più, e
+     * il branding arriva con l'accesso (`tokenResponse`) o con l'invito.
+     */
 
     /*
      * ── 🔗 L'invito di una palestra — 3b-V.2 ──────────────────────────────
@@ -344,8 +342,8 @@ Route::prefix('v1')->group(function (): void {
          * Un codice finito in una chat di gruppo fa entrare venti persone e
          * consuma venti posti; un link ne fa entrare una.
          *
-         * ⚠️ `tenants.join_code` resta in tabella: e' il codice con cui il
-         * pannello genera gli inviti, non quello che digitava una persona.
+         * ✅ Con F11 (24/09/2026) `tenants.join_code` non c'e' piu' nemmeno in
+         * tabella.
          */
         Route::delete('account', [AccountController::class, 'destroy']);
 

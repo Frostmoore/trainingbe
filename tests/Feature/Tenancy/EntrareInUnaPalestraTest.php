@@ -16,7 +16,6 @@ use App\Services\Tenancy\UnisciAUnaPalestra;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
-use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -109,11 +108,11 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function the_whole_history_follows_the_person(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->libero();
         $this->conDeiDati($utente);
 
-        app(UnisciAUnaPalestra::class)($utente, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($utente, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $fresco = User::withoutGlobalScopes()->findOrFail($utente->getKey());
 
@@ -132,7 +131,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function the_api_lets_you_join_and_returns_the_new_branding(): void
     {
-        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Palestra Alfa', 'alfa');
         $utente = $this->libero();
 
         $this->entraDaInvito($utente, Tenant::where('slug', 'alfa')->firstOrFail())
@@ -149,7 +148,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function you_always_join_as_a_member(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
 
         $trainer = app(CreaTenantPersonale::class)(
             'Trainer', 'trainer@esempio.test',
@@ -157,7 +156,7 @@ class EntrareInUnaPalestraTest extends TestCase
             UserRole::FreeTrainer,
         );
 
-        app(UnisciAUnaPalestra::class)($trainer, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($trainer, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $ruoli = $this->ctx()->runAs($palestra, function () use ($trainer): array {
             $f = User::withoutGlobalScopes()->findOrFail($trainer->getKey());
@@ -176,11 +175,11 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function the_old_roles_do_not_survive(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->libero();
         $vecchio = $utente->tenant_id;
 
-        app(UnisciAUnaPalestra::class)($utente, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($utente, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $this->assertSame(
             0,
@@ -204,7 +203,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function the_ai_bill_stays_where_it_was(): void
     {
-        $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->libero();
         $vecchio = $utente->tenant_id;
 
@@ -221,7 +220,7 @@ class EntrareInUnaPalestraTest extends TestCase
             'created_at' => now(),
         ]);
 
-        app(UnisciAUnaPalestra::class)($utente, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($utente, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $this->assertSame(
             1,
@@ -255,8 +254,8 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function a_gym_member_with_an_invite_is_asked_before_moving(): void
     {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
+        $this->creaPalestra('Beta', 'beta');
 
         $iscritto = $this->creaUtente($alfa, UserRole::Member, 'iscritto@alfa.test');
 
@@ -268,25 +267,11 @@ class EntrareInUnaPalestraTest extends TestCase
         $this->assertSame($alfa->id, $iscritto->fresh()->tenant_id, 'la domanda lo ha gia spostato');
     }
 
-    /**
-     * ⛔ **Col codice, invece, il rifiuto resta** — regola 8.1.4.f.
-     *
-     * 🚨 È la metà della vecchia regola che resta vera: chiunque conosca il codice
-     * di un'altra palestra potrebbe portarsi via da solo, senza che la palestra
-     * nuova lo abbia invitato. La domanda esiste **solo** sull'invito.
+    /*
+     * ⛔ Qui c'era `a_gym_member_cannot_move_with_a_join_code`: il trasloco col
+     * codice palestra non esiste più (F11, 24/09/2026). Si entra solo con
+     * l'invito, e la domanda «sei già in una palestra» è il test qui sopra.
      */
-    #[Test]
-    public function a_gym_member_cannot_move_with_a_join_code(): void
-    {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->creaPalestra('Beta', 'beta', 'BETA2345');
-
-        $iscritto = $this->creaUtente($alfa, UserRole::Member, 'codice@alfa.test');
-
-        $this->expectException(ValidationException::class);
-
-        app(UnisciAUnaPalestra::class)($iscritto, 'BETA2345');
-    }
 
     /**
      * ⚠️ **L'email è unica per palestra, e in quella nuova può essere già presa.**
@@ -298,7 +283,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function it_refuses_when_the_gym_already_has_that_email(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::Member, 'mario@esempio.test');
 
         $utente = $this->libero();
@@ -335,11 +320,11 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function the_personal_tenant_is_retired_not_erased(): void
     {
-        $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->libero();
         $vecchio = $utente->tenant_id;
 
-        app(UnisciAUnaPalestra::class)($utente, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($utente, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $this->assertNull(Tenant::query()->find($vecchio), 'Il tenant personale è ancora vivo.');
         $this->assertNotNull(
@@ -352,12 +337,12 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function it_disappears_from_the_personal_tenant_count(): void
     {
-        $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->libero();
 
         $this->assertSame(1, Tenant::query()->personali()->count());
 
-        app(UnisciAUnaPalestra::class)($utente, 'ALFA2345');
+        app(UnisciAUnaPalestra::class)->dentroQuestoTenant($utente, Tenant::where('slug', 'alfa')->firstOrFail());
 
         $this->assertSame(0, Tenant::query()->personali()->count());
     }
@@ -414,7 +399,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function after_joining_you_can_still_log_in_without_the_code(): void
     {
-        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Palestra Alfa', 'alfa');
         $utente = $this->libero('rientro@esempio.test');
 
         $this->entraDaInvito($utente, Tenant::where('slug', 'alfa')->firstOrFail())
@@ -435,7 +420,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function after_joining_the_username_works_too(): void
     {
-        $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $this->creaPalestra('Palestra Alfa', 'alfa');
         $utente = $this->libero('conutente@esempio.test');
 
         $utente->forceFill(['username' => 'quellodelrientro'])->save();
@@ -460,7 +445,7 @@ class EntrareInUnaPalestraTest extends TestCase
     #[Test]
     public function a_repeated_email_is_refused_not_guessed(): void
     {
-        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Palestra Alfa', 'alfa');
 
         $this->libero('doppio@esempio.test');
 

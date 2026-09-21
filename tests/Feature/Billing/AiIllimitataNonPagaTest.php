@@ -60,7 +60,7 @@ final class AiIllimitataNonPagaTest extends TestCase
         $this->seed(PlanSeeder::class);
         $this->aiFinta();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->tester = $this->creaUtente($this->palestra, UserRole::Member, 'prova@alfa.test');
         $this->tester->accendiLAi();
     }

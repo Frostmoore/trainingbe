@@ -32,7 +32,7 @@ final class GiorniEAlternativeTest extends TestCase
 
     private function scheda(): WorkoutPlan
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'trainer@alfa.test');
 
         return $this->ctx()->runAs($palestra, fn (): WorkoutPlan => WorkoutPlan::create([
@@ -171,7 +171,7 @@ final class GiorniEAlternativeTest extends TestCase
     #[Test]
     public function copying_a_plan_re_points_the_alternatives_to_the_copy(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'trainer@alfa.test');
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
 
@@ -232,7 +232,7 @@ final class GiorniEAlternativeTest extends TestCase
     #[Test]
     public function a_meal_total_does_not_count_its_alternatives(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'trainer@alfa.test');
 
         $this->ctx()->runAs($palestra, function () use ($palestra, $trainer): void {

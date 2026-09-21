@@ -145,9 +145,9 @@ class TenantIsolationTest extends TestCase
         parent::setUp();
 
         $this->alfa = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa',
-            'join_code' => 'ALFA2345', 'contact_email' => 'a@a.test']);
+            'contact_email' => 'a@a.test']);
         $this->beta = Tenant::create(['name' => 'Beta', 'slug' => 'beta',
-            'join_code' => 'BETA2345', 'contact_email' => 'b@b.test']);
+            'contact_email' => 'b@b.test']);
 
         foreach ([$this->alfa, $this->beta] as $t) {
             $this->context()->runAs($t, fn () => Role::create([

@@ -46,7 +46,7 @@ class AbbonamentiStripeTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'io@alfa.test');
         $this->cassa = app(Cassa::class);
     }

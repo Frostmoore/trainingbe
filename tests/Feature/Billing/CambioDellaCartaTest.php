@@ -49,7 +49,7 @@ final class CambioDellaCartaTest extends TestCase
         $this->seed(PlanSeeder::class);
         $this->stripe = $this->stripeFinto();
 
-        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpia', 'olimpia');
         $this->titolare = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@olimpia.test');
         $this->palestra->forceFill(['proprietario_id' => $this->titolare->getKey()])->save();
 

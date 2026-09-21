@@ -28,12 +28,10 @@ class DemoGymSeeder extends Seeder
     public function run(): void
     {
         $palestre = [
-            ['name' => 'Palestra Demo', 'slug' => 'palestra-demo', 'join_code' => 'DEMO2345',
-                'color_primary' => '#0F766E', 'color_accent' => '#F97316'],
+            ['name' => 'Palestra Demo', 'slug' => 'palestra-demo', 'color_primary' => '#0F766E', 'color_accent' => '#F97316'],
             // La seconda esiste per un motivo preciso: con una sola palestra
             // nessun test di isolamento prova niente.
-            ['name' => 'Fitness Prova', 'slug' => 'fitness-prova', 'join_code' => 'PROVA234',
-                'color_primary' => '#7C3AED', 'color_accent' => '#22C55E'],
+            ['name' => 'Fitness Prova', 'slug' => 'fitness-prova', 'color_primary' => '#7C3AED', 'color_accent' => '#22C55E'],
         ];
 
         foreach ($palestre as $i => $dati) {
@@ -73,7 +71,7 @@ class DemoGymSeeder extends Seeder
                 }
             });
 
-            $this->command?->info("Palestra «{$tenant->name}» pronta — codice {$tenant->join_code}");
+            $this->command?->info("Palestra «{$tenant->name}» pronta");
         }
     }
 

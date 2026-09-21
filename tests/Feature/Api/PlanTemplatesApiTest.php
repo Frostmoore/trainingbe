@@ -47,7 +47,7 @@ class PlanTemplatesApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'anna@alfa.test');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
@@ -107,7 +107,7 @@ class PlanTemplatesApiTest extends TestCase
     #[Test]
     public function the_templates_of_another_gym_are_invisible(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $altroTrainer = $this->creaUtente($beta, UserRole::Trainer, 'clara@beta.test');
 
         $this->modello('Solo di Alfa');

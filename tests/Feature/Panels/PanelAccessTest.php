@@ -50,7 +50,7 @@ class PanelAccessTest extends TestCase
         $ctx = app(TenantContext::class);
 
         $this->palestra = Tenant::create(['name' => 'Demo', 'slug' => 'demo',
-            'join_code' => 'DEMO2345', 'contact_email' => 'd@d.test',
+            'contact_email' => 'd@d.test',
             'status' => TenantStatus::Active]);
 
         $ctx->runAs($this->palestra, function (): void {
@@ -393,7 +393,7 @@ class PanelAccessTest extends TestCase
     public function it_prefers_the_account_that_can_actually_use_a_panel(): void
     {
         $altra = Tenant::create(['name' => 'Altra', 'slug' => 'altra',
-            'join_code' => 'ALTR2345', 'contact_email' => 'x@x.test',
+            'contact_email' => 'x@x.test',
             'status' => TenantStatus::Active]);
 
         $ctx = app(TenantContext::class);

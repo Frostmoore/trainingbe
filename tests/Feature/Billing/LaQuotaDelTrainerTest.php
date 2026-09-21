@@ -275,7 +275,7 @@ final class LaQuotaDelTrainerTest extends TestCase
     #[Test]
     public function un_iscritto_in_palestra_non_prende_la_quota_del_trainer(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update(['ai_monthly_calls_per_member' => 111]);
 
         $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');

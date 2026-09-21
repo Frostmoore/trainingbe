@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Promozione;
 use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Billing\Listino;
 use App\Services\Promozioni\LeOfferteDellaPersona;
 use App\Services\Tenancy\InvitiInPalestra;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
 
 /**
@@ -284,21 +284,18 @@ class SitoController extends Controller
      *
      * ⛔ Niente codici sconto: il link è l'unico modo di prendere un'offerta
      * non automatica. Con l'app installata il link apre l'app (App Links) e qui
-     * non arriva nessuno; senza, si dice cos'è e come attivarla — dall'app, o
-     * dal pannello per palestre e trainer.
+     * non arriva nessuno; dal browser si va **alla pagina dell'offerta nel
+     * pannello** (`OffertaPerTe`), che chiede l'accesso e ha il tasto «Attiva».
      *
-     * ⚠️ Si mostra solo **nome e cosa dà** di un'offerta ancora spendibile: chi
-     * ne ha diritto lo decide l'attivazione, dopo l'accesso. 🚨 `GET` e non
-     * attiva niente: i servizi di messaggistica aprono i link per l'anteprima.
+     * 📌 S2 di `plan_UX_pannello.md`: *«il link deve portare a una pagina che
+     * spiega l'offerta, ma **nel pannello non sul sito**»*. ⛔ Per questo qui non
+     * c'è nessuna pagina: il 24/09 ce n'era una, ed era contro quella decisione.
+     * 🚨 `GET` che non attiva niente: i servizi di messaggistica aprono i link
+     * per l'anteprima.
      */
-    public function promo(string $codice): View
+    public function promo(string $codice): RedirectResponse
     {
-        $promozione = Promozione::query()->with('premi')->where('codice', mb_strtoupper($codice))->first();
-
-        return view('sito.promo', [
-            'offerta' => $promozione !== null && $promozione->eSpendibile() ? $promozione : null,
-            'pannello' => rtrim((string) config('app.url'), '/').'/admin/offerta/'.mb_strtoupper($codice),
-        ]);
+        return redirect('/admin/offerta/'.mb_strtoupper($codice));
     }
 
     /**

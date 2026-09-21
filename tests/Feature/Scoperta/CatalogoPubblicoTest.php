@@ -48,8 +48,8 @@ class CatalogoPubblicoTest extends TestCase
         $this->pesaro = $this->comune('041044', 'Pesaro', 'PU', 'Marche', 43.909444, 12.913611);
         $this->milano = $this->comune('015146', 'Milano', 'MI', 'Lombardia', 45.466794, 9.190347);
 
-        $this->palestraRimini = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
-        $this->palestraMilano = $this->creaPalestra('Ares', 'ares', 'ARES2345');
+        $this->palestraRimini = $this->creaPalestra('Olimpo', 'olimpo');
+        $this->palestraMilano = $this->creaPalestra('Ares', 'ares');
     }
 
     // ───────────────────────── il vincolo XOR ─────────────────────────

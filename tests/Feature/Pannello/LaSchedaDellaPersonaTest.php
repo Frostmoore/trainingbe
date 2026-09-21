@@ -317,7 +317,6 @@ final class LaSchedaDellaPersonaTest extends TestCase
         $tenant = Tenant::withoutGlobalScopes()->create([
             'name' => $nome,
             'slug' => str($nome)->slug()->value(),
-            'join_code' => 'PERS'.random_int(1000, 9999),
             'kind' => TenantKind::Personal,
             'status' => TenantStatus::Active,
         ]);

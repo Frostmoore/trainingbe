@@ -36,7 +36,7 @@ class NutritionApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
         $this->altro = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
     }

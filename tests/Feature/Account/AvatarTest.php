@@ -33,7 +33,7 @@ class AvatarTest extends TestCase
 
         Storage::fake('public');
 
-        $palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->io = $this->creaUtente($palestra, UserRole::Member, 'io@esempio.it');
     }
 

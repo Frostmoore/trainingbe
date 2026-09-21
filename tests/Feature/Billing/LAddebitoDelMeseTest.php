@@ -307,8 +307,8 @@ final class LAddebitoDelMeseTest extends TestCase
     #[Test]
     public function il_giro_pesca_solo_chi_e_a_consumo(): void
     {
-        $aCanone = $this->creaPalestra('Canone', 'canone', 'CANO2345');
-        $aConsumo = $this->creaPalestra('Consumo', 'consumo', 'CONS2345');
+        $aCanone = $this->creaPalestra('Canone', 'canone');
+        $aConsumo = $this->creaPalestra('Consumo', 'consumo');
 
         $this->aConsumo($aConsumo);
         $this->iscritti($aConsumo, 3, 'c');
@@ -439,8 +439,8 @@ final class LAddebitoDelMeseTest extends TestCase
     #[Test]
     public function gli_addebiti_non_si_vedono_fra_palestre(): void
     {
-        $una = $this->creaPalestra('Una', 'una', 'UNAA2345');
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $una = $this->creaPalestra('Una', 'una');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $this->aConsumo($una);
         $this->aConsumo($altra);

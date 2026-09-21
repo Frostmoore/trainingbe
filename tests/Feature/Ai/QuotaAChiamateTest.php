@@ -66,7 +66,7 @@ final class QuotaAChiamateTest extends TestCase
 
     private function iscritto(int $chiamate, int $foto): User
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update([
             'ai_monthly_calls_per_member' => $chiamate,
             'ai_monthly_photo_calls_per_member' => $foto,
@@ -227,7 +227,7 @@ final class QuotaAChiamateTest extends TestCase
             'ai.quota.default_monthly_photo_calls_per_user' => 7,
         ]);
 
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $utente = $this->creaUtente($palestra, UserRole::Member, 'x@alfa.test')->fresh();
 
         /*
@@ -274,7 +274,7 @@ final class QuotaAChiamateTest extends TestCase
     #[Test]
     public function someone_elses_calls_do_not_count(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $palestra->update(['ai_monthly_calls_per_member' => 10, 'ai_monthly_photo_calls_per_member' => 5]);
 
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@alfa.test')->fresh();

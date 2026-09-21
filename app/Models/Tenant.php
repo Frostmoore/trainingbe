@@ -60,7 +60,7 @@ class Tenant extends Model
     ];
 
     protected $fillable = [
-        'name', 'slug', 'join_code', 'kind', 'status', 'plan',
+        'name', 'slug', 'kind', 'status', 'plan',
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
         'ai_driver', 'settings', 'trial_ends_at',
@@ -493,16 +493,10 @@ class Tenant extends Model
 
     // ───────────────────────── utilità ─────────────────────────
 
-    /** Codice d'invito leggibile: niente 0/O/1/I, che al telefono si confondono. */
-    public static function generateJoinCode(): string
-    {
-        do {
-            $code = Str::upper(Str::password(8, letters: true, numbers: true, symbols: false));
-            $code = str_replace(['0', 'O', '1', 'I', 'L'], ['2', '3', '4', '5', '6'], $code);
-        } while (static::where('join_code', $code)->exists());
-
-        return $code;
-    }
+    /*
+     * ⛔ Qui c'era `generateJoinCode()`: il codice palestra non esiste più (F11,
+     * 24/09/2026). In una palestra si entra solo con il link d'invito.
+     */
 
     /**
      * Lo `slug` di un tenant personale: unico, e **non indovinabile**.

@@ -52,7 +52,7 @@ class ChatCryptoApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->trainer = $this->creaUtente($this->alfa, UserRole::Trainer, 'anna@alfa.test');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
         $this->estraneo = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');

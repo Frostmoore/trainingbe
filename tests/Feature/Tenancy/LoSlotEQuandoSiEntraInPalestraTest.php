@@ -356,7 +356,7 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
 
         app(LoSlotDelTrainer::class)->decidi($trainer, $allievo, true);
 
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $this->assertSame(
             0,

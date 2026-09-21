@@ -40,8 +40,8 @@ class UserResourceTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
+        $this->beta = $this->creaPalestra('Beta', 'beta');
 
         $this->adminAlfa = $this->creaUtente($this->alfa, UserRole::GymAdmin, 'admin@alfa.test');
         $this->iscrittoBeta = $this->creaUtente($this->beta, UserRole::Member, 'iscritto@beta.test');

@@ -65,7 +65,7 @@ final class CicloDeiGettoniTest extends TestCase
         $this->seed(PlanSeeder::class);
         $this->aiFinta();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
         $this->iscritto->accendiLAi();
     }
@@ -152,7 +152,7 @@ final class CicloDeiGettoniTest extends TestCase
     #[Test]
     public function buying_credits_enables_the_ai_for_a_plan_without_it(): void
     {
-        $senzaAi = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $senzaAi = $this->creaPalestra('Beta', 'beta');
 
         // Il piano di questo tenant non comprende l'AI.
         Plan::query()->update(['ai_enabled' => false]);
@@ -204,7 +204,7 @@ final class CicloDeiGettoniTest extends TestCase
     #[Test]
     public function credits_do_not_come_with_free_included_calls(): void
     {
-        $tenant = $this->creaPalestra('Gamma', 'gamma', 'GAMM2345');
+        $tenant = $this->creaPalestra('Gamma', 'gamma');
 
         Plan::query()->update(['ai_enabled' => false]);
 
@@ -263,7 +263,7 @@ final class CicloDeiGettoniTest extends TestCase
     #[Test]
     public function the_app_is_told_that_the_ai_is_available(): void
     {
-        $tenant = $this->creaPalestra('Delta', 'delta', 'DELT2345');
+        $tenant = $this->creaPalestra('Delta', 'delta');
         Plan::query()->update(['ai_enabled' => false]);
 
         $utente = $this->creaUtente($tenant, UserRole::Member, 'delta@esempio.test')->fresh();

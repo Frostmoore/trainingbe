@@ -27,9 +27,8 @@ use Filament\Resources\Pages\ListRecords;
  *
  * ✅ Resta **il link d'invito**: monouso, con scadenza, revocabile uno per uno.
  *
- * ⚠️ La colonna `tenants.join_code` esiste ancora e l'API la accetta ancora:
- * toglierla del tutto è la fase **F11**, che tocca anche l'app — e l'ordine di
- * rilascio conta.
+ * ✅ Con F11 (24/09/2026) `tenants.join_code` non esiste più: né in tabella,
+ * né nell'API, né nell'app.
  */
 class ListMembers extends ListRecords
 {

@@ -72,7 +72,7 @@ final class IlPannelloDellaPalestraTest extends TestCase
         $this->seed(PlanSeeder::class);
         $this->seed(PacchettiGettoniSeeder::class);
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->gestore = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@alfa.test');
 
         $this->abbona($this->palestra, 'gym_30');
@@ -212,8 +212,7 @@ final class IlPannelloDellaPalestraTest extends TestCase
 
         Livewire::test(ListMembers::class)
             ->assertSuccessful()
-            ->assertDontSee('Codice della palestra')
-            ->assertDontSee($this->palestra->join_code);
+            ->assertDontSee('Codice della palestra');
     }
 
     /** 🔗 E i due elenchi hanno il tasto d'invito. */
@@ -353,7 +352,7 @@ final class IlPannelloDellaPalestraTest extends TestCase
     #[Test]
     public function non_si_regalano_gettoni_a_chi_non_e_dei_nostri(): void
     {
-        $altra = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $altra = $this->creaPalestra('Beta', 'beta');
         $estraneo = $this->creaUtente($altra, UserRole::Member, 'clara@beta.test');
 
         app(Cassa::class)->apri(
@@ -523,7 +522,7 @@ final class IlPannelloDellaPalestraTest extends TestCase
         $inviti = app(InvitiInPalestra::class);
         $mio = $inviti->invita($this->palestra, $this->gestore, 'tizio@esempio.test');
 
-        $altra = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $altra = $this->creaPalestra('Beta', 'beta');
         $capoBeta = $this->creaUtente($altra, UserRole::GymAdmin, 'capo@beta.test');
         $suo = $inviti->invita($altra, $capoBeta, 'segreto@beta.test');
 

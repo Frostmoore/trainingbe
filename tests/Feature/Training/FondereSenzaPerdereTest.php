@@ -250,7 +250,7 @@ final class FondereSenzaPerdereTest extends TestCase
     #[Test]
     public function i_rinvii_di_un_altra_palestra_non_si_vedono(): void
     {
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTRA234');
+        $altra = $this->creaPalestra('Altra', 'altra');
         $suoVecchio = Exercise::withoutGlobalScopes()->create([
             'tenant_id' => $altra->getKey(),
             'name' => 'Panca Piana (Bilanciere)',

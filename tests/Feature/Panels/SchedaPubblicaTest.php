@@ -43,7 +43,7 @@ class SchedaPubblicaTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->proprietario = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'capo@olimpo.it');
 
         $this->rimini = Comune::create([
@@ -262,7 +262,7 @@ class SchedaPubblicaTest extends TestCase
          * 💡 Il vincolo XOR sul database impedisce di scriverli entrambi, ma non
          * puo' sapere **quale dei due** fosse quello giusto. Lo dice questo test.
          */
-        $suo = $this->creaPalestra('Studio Tizio', 'tizio', 'TIZI2345');
+        $suo = $this->creaPalestra('Studio Tizio', 'tizio');
         $trainer = $this->creaUtente($suo, UserRole::FreeTrainer, 'tizio@esempio.it');
 
         app(TenantContext::class)->set($suo);
@@ -293,7 +293,7 @@ class SchedaPubblicaTest extends TestCase
          * Scrivergli l'avvertenza delle palestre sarebbe rumore — e il rumore fa
          * smettere di leggere anche gli avvisi che contano.
          */
-        $suo = $this->creaPalestra('Studio Tizio', 'tizio', 'TIZI2345');
+        $suo = $this->creaPalestra('Studio Tizio', 'tizio');
         $trainer = $this->creaUtente($suo, UserRole::FreeTrainer, 'tizio@esempio.it');
 
         app(TenantContext::class)->set($suo);

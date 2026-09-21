@@ -423,7 +423,6 @@ final class EsciDaUnaPalestra
         $tenant = Tenant::create([
             'name' => $utente->name,
             'slug' => Tenant::generatePersonalSlug(),
-            'join_code' => Tenant::generateJoinCode(),
             'kind' => TenantKind::Personal,
             'status' => TenantStatus::Active,
             'contact_email' => $utente->email,

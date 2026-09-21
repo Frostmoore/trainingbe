@@ -41,7 +41,7 @@ class PresaDAttoSullAiTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->utente = $this->creaUtente($this->palestra, UserRole::Member, 'mario@alfa.test');
     }
 

@@ -52,7 +52,7 @@ final class PortafoglioGettoniTest extends TestCase
 
     private function iscritto(): User
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
 
         return $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test')->fresh();
     }
@@ -418,7 +418,7 @@ final class PortafoglioGettoniTest extends TestCase
     #[Test]
     public function the_wallet_belongs_to_the_person_not_to_the_tenant(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $uno = $this->creaUtente($palestra, UserRole::Member, 'uno@alfa.test')->fresh();
         $due = $this->creaUtente($palestra, UserRole::Member, 'due@alfa.test')->fresh();
 

@@ -62,7 +62,7 @@ final class CorsaSulConsiglioTest extends TestCase
 
         $this->finta = $this->aiFinta();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@alfa.test');
         $this->iscritto->accendiLAi();
     }
@@ -200,7 +200,7 @@ final class CorsaSulConsiglioTest extends TestCase
          * motivo per cui il `catch` non si accontenta del codice `23000`: la
          * prova che sia la nostra corsa è che **la riga adesso si veda**.
          */
-        $altra = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $altra = $this->creaPalestra('Beta', 'beta');
 
         $this->finta->duranteIlConsiglio(
             fn (array $contesto) => $this->scriviLaVincente(

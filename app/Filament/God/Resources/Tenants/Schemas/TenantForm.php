@@ -6,7 +6,6 @@ namespace App\Filament\God\Resources\Tenants\Schemas;
 
 use App\Enums\TenantStatus;
 use App\Models\Tenant;
-use Filament\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -54,29 +53,6 @@ class TenantForm
                         ->email()
                         ->maxLength(255),
 
-                    TextInput::make('join_code')
-                        ->label('Codice d\'invito')
-                        ->required()
-                        ->maxLength(12)
-                        ->unique(ignoreRecord: true)
-                        ->default(fn () => Tenant::generateJoinCode())
-                        ->helperText('È il codice che l\'iscritto digita nell\'app.')
-                        ->suffixAction(
-                            Action::make('rigenera')
-                                ->icon('heroicon-m-arrow-path')
-                                ->label('Rigenera')
-                                // 🚨 Rigenerarlo invalida il codice che la
-                                // palestra ha già distribuito ai suoi iscritti:
-                                // va chiesta conferma, non è un pulsante da
-                                // premere per curiosità.
-                                ->requiresConfirmation()
-                                ->modalHeading('Rigenerare il codice d\'invito?')
-                                ->modalDescription(
-                                    'Il codice attuale smetterà di funzionare. Chi lo ha già ricevuto '
-                                    .'e non si è ancora iscritto non potrà più usarlo.'
-                                )
-                                ->action(fn (callable $set) => $set('join_code', Tenant::generateJoinCode())),
-                        ),
                 ]),
 
             Section::make('Aspetto')

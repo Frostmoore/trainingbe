@@ -80,25 +80,11 @@ class UnisciAUnaPalestra
         private readonly LoSlotDelTrainer $slot,
     ) {}
 
-    /**
-     * @throws ValidationException
+    /*
+     * ⛔ Qui c'era `__invoke(User $utente, string $joinCode)`: l'ingresso col
+     * codice palestra. Tolto con F11 (24/09/2026) — in una palestra si entra
+     * solo col link d'invito, che arriva qui da `dentroQuestoTenant()`.
      */
-    public function __invoke(User $utente, string $joinCode): Tenant
-    {
-        $this->pretendiUnoSpazioTuoEVuoto($utente, 'join_code');
-
-        $palestra = Tenant::where('join_code', $joinCode)->first();
-
-        // ⚠️ Stesso rifiuto indistinguibile del login: codice inesistente,
-        // palestra sospesa e tenant personale danno lo stesso errore.
-        if ($palestra === null || $palestra->ePersonale() || ! $palestra->isActive()) {
-            throw ValidationException::withMessages([
-                'join_code' => __('Codice palestra non valido.'),
-            ]);
-        }
-
-        return $this->dentroQuestoTenant($utente, $palestra, UserRole::Member, 'join_code');
-    }
 
     /**
      * 🆕 **Lo stesso trasloco, verso un tenant che si ha già in mano** —
@@ -116,8 +102,8 @@ class UnisciAUnaPalestra
      * rifare i ruoli, due modi di sbloccare le conversazioni — e il giorno in
      * cui qualcuno ne aggiorna uno solo, la differenza non la segnala nessuno.
      *
-     * ⚠️ **La sola differenza è come si trova il tenant**: con il `join_code`
-     * per una palestra, con un invito monouso per un trainer. Tutto il resto —
+     * ⚠️ **La sola differenza è come si trova il tenant**: con l'invito della
+     * palestra, o con quello (monouso) di un trainer. Tutto il resto —
      * le guardie, il trasloco, i ruoli — è identico, e sta qui dentro una volta.
      *
      * @param  UserRole  $ruolo  con che ruolo si entra. ⛔ Mai un dato in ingresso: lo decide il chiamante che ha già verificato l'invito
@@ -536,8 +522,8 @@ class UnisciAUnaPalestra
      * esiste e non può fare niente.
      *
      * ⚠️ **Il ruolo non è mai un dato in ingresso.** Chi era `FreeTrainer` non
-     * diventa trainer della palestra perché ha digitato il suo codice: entrando
-     * con un `join_code` si entra come `Member`, sempre.
+     * diventa trainer della palestra perché ha un invito: il ruolo lo decide
+     * l'invito, verificato da chi chiama.
      *
      * 🆕 Il parametro esiste dal 12/09 perché `dentroQuestoTenant()` serve anche
      * all'invito di un trainer — ma anche lì lo decide **il chiamante che ha già

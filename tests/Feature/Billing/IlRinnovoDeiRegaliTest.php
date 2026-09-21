@@ -70,7 +70,7 @@ class IlRinnovoDeiRegaliTest extends TestCase
 
     private function tenantPersonale(): Tenant
     {
-        $t = $this->creaPalestra('Personale', 'personale', 'PERS2345');
+        $t = $this->creaPalestra('Personale', 'personale');
         $t->update(['kind' => TenantKind::Personal->value]);
 
         PlanSubscription::withoutGlobalScopes()

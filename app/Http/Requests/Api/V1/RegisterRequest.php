@@ -8,18 +8,17 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
 /**
- * Iscrizione di una persona nuova — **con o senza** il codice di una palestra.
+ * Iscrizione di una persona nuova: nasce **sempre** col suo spazio personale.
  *
- * Registra SEMPRE e SOLO un iscritto: il ruolo non è un dato in ingresso.
- * Se lo fosse, chiunque conosca un codice palestra potrebbe farsi amministratore
- * — e sarebbe un campo che nessuno nota finché non viene sfruttato.
- * Trainer e amministratori si creano dal pannello (B3).
+ * Il ruolo non è un dato in ingresso: se lo fosse, chiunque potrebbe farsi
+ * amministratore — e sarebbe un campo che nessuno nota finché non viene
+ * sfruttato. Trainer e amministratori si creano dal pannello (B3).
  *
- * ── 🆕 `join_code` è facoltativo da F3.1 ────────────────────────────────────
+ * ── ⛔ Niente più codice palestra — F11, 24/09/2026 ─────────────────────────
  *
- * Con il codice si entra in quella palestra, come sempre. Senza, nasce un
- * **tenant personale** (`TenantKind::Personal`) e la persona diventa un
- * `UserRole::FreeUser`. Il ramo sta in `AuthController::register()`.
+ * In una palestra si entra solo col **link d'invito** (`registerWithInvite`,
+ * `inviti-palestra/{token}/accetta`). Un `join_code` non vuoto si rifiuta con un
+ * messaggio che lo dice: vedi la regola qui sotto.
  *
  * 🚨 **Ciò che NON è diventato facoltativo: `age_confirmed` e `terms_accepted`.**
  * Sono ancora `required|accepted`, ed è la regola §2.4 del piano della Parte B —
@@ -42,18 +41,16 @@ class RegisterRequest extends FormRequest
     {
         return [
             /*
-             * 🆕 **Facoltativo da F3.1.** `nullable` e non `sometimes`: l'app in
-             * circolazione manda il campo **sempre**, e quando l'utente non
-             * scrive niente lo manda vuoto. Con `sometimes` una stringa vuota
-             * sarebbe entrata in validazione e avrebbe fallito `size:8`,
-             * bloccando l'iscrizione libera proprio dai telefoni già installati.
+             * ⛔ **Il codice palestra non esiste più** — F11, 24/09/2026.
              *
-             * ⚠️ `size:8` resta e vale **solo se il campo c'è**: un codice
-             * scritto male non deve diventare silenziosamente un'iscrizione
-             * senza palestra. Chi digita `ALFA234` (sette caratteri) ha sbagliato
-             * a copiare, e deve leggerlo — non ritrovarsi un account personale.
+             * 🚨 `prohibited` e non «si ignora»: chi manda un codice pensa di
+             * entrare in una palestra, e ignorarlo lo farebbe nascere **fuori**
+             * senza dirglielo. Meglio un 422 che spiega dove si entra (il link
+             * d'invito). ⚠️ Il vuoto passa: le app vecchie mandano il campo
+             * sempre, anche quando l'utente non ha scritto niente
+             * (`prepareForValidation()` lo porta a `null`).
              */
-            'join_code' => ['nullable', 'string', 'size:8'],
+            'join_code' => ['prohibited'],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
 
@@ -169,23 +166,13 @@ class RegisterRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        if (is_string($this->join_code)) {
-            $codice = strtoupper(trim($this->join_code));
-
-            /*
-             * 🚨 **Vuoto diventa `null`, e senza questa riga F3 non funziona.**
-             *
-             * `nullable` salta le regole successive solo su `null` — una stringa
-             * vuota **non** è `null`, quindi `size:8` girerebbe lo stesso e
-             * fallirebbe. E l'app manda il campo **sempre**: un utente che non
-             * scrive il codice invia `''`, non l'assenza del campo.
-             *
-             * ⚠️ Il risultato sarebbe stato il peggiore possibile: l'iscrizione
-             * senza palestra respinta con «il codice deve essere di 8 caratteri»,
-             * cioè un errore su un campo che l'utente ha lasciato vuoto **di
-             * proposito**.
-             */
-            $this->merge(['join_code' => $codice === '' ? null : $codice]);
+        /*
+         * ⚠️ Un codice vuoto (o di soli spazi) è «nessun codice»: le app vecchie
+         * mandano il campo sempre, e `prohibited` non deve respingere chi non ha
+         * scritto niente.
+         */
+        if (is_string($this->join_code) && trim($this->join_code) === '') {
+            $this->merge(['join_code' => null]);
         }
         if (is_string($this->email)) {
             $this->merge(['email' => strtolower(trim($this->email))]);
@@ -197,5 +184,13 @@ class RegisterRequest extends FormRequest
         if (is_string($this->username)) {
             $this->merge(['username' => strtolower(trim($this->username))]);
         }
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'join_code.prohibited' => __('I codici palestra non esistono più: in una palestra si entra con il link d\'invito.'),
+        ];
     }
 }

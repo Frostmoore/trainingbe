@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Auth\Social\Exceptions\InvalidSocialTokenException;
 use App\Services\Auth\Social\SocialTokenVerifier;
 use App\Services\Auth\Social\VerifiedSocialUser;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
@@ -40,7 +41,7 @@ class SocialAuthApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
 
         config()->set('services.social.google.client_ids', 'app-android.apps.googleusercontent.com');
         config()->set('services.social.apple.client_ids', 'it.riccardoronconi.training');
@@ -108,9 +109,9 @@ class SocialAuthApiTest extends TestCase
             'provider' => 'google',
             'id_token' => 'token-finto',
 
-            // S9.2 — al primo accesso (cioè quando c'è il `join_code`) servono
-            // anche di qui. ⚠️ Sono innocui quando il codice non c'è:
-            // `exclude_without:join_code` li toglie dalla validazione.
+            // S9.2 — al primo accesso servono anche di qui (li controlla
+            // `SocialAuthController::pretendiIConsensi()`); agli accessi
+            // successivi non si leggono.
             'age_confirmed' => true,
             'terms_accepted' => true,
         ], $extra));
@@ -118,29 +119,10 @@ class SocialAuthApiTest extends TestCase
 
     // ───────────────────────── primo accesso ─────────────────────────
 
-    #[Test]
-    public function il_primo_accesso_crea_l_iscritto_e_restituisce_un_token(): void
-    {
-        $this->verificaRestituisce(new VerifiedSocialUser(
-            provider: SocialProvider::Google,
-            providerUserId: 'google-sub-1',
-            email: 'nuovo@esempio.it',
-            emailVerified: true,
-            name: 'Nuovo Iscritto',
-        ));
-
-        $r = $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
-
-        $this->assertIsString($r->json('token'));
-        $this->assertSame('nuovo@esempio.it', $r->json('data.email'));
-        $this->assertSame(['member'], $r->json('data.roles'));
-
-        $utente = User::withoutGlobalScopes()->where('email', 'nuovo@esempio.it')->first();
-
-        $this->assertNotNull($utente);
-        $this->assertSame($this->alfa->id, $utente->tenant_id);
-        $this->assertNotNull($utente->username);
-    }
+    /*
+     * ⛔ Qui c'era `il_primo_accesso_crea_l_iscritto_e_restituisce_un_token`: col codice palestra si nasceva dentro la palestra. Da F11 (24/09/2026)
+     * il codice non esiste: si nasce nel proprio spazio (il test qui sotto).
+     */
 
     /**
      * 🆕 **Senza codice palestra nasce un account personale** — F3.
@@ -180,7 +162,7 @@ class SocialAuthApiTest extends TestCase
     /**
      * 🚨 **Lo sbarramento 18+ vale anche di qui, e da F3 non lo fa più il modulo.**
      *
-     * `SocialLoginRequest` ha `exclude_without:join_code` sui consensi, una
+     * `SocialLoginRequest` aveva `exclude_without:join_code` sui consensi (tolta con F11), una
      * regola che si reggeva sull'equivalenza *«niente codice ⇒ non è un primo
      * accesso»*. Da F3 quell'equivalenza **è falsa**: senza codice si può nascere.
      *
@@ -232,8 +214,13 @@ class SocialAuthApiTest extends TestCase
         $this->assertSame(0, SocialIdentity::count());
     }
 
+    /**
+     * ⛔ **Il codice palestra non esiste più** — F11, 24/09/2026. Chi lo manda
+     * pensa di entrare in una palestra: si rifiuta con un messaggio che dice
+     * dove si entra, e non nasce niente.
+     */
     #[Test]
-    public function con_un_codice_palestra_inesistente_non_crea_niente(): void
+    public function un_codice_palestra_si_rifiuta_con_un_messaggio_chiaro(): void
     {
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Google,
@@ -242,10 +229,11 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'NONESIST'])
+        $r = $this->accedi(['join_code' => 'ALFA2345'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('join_code');
 
+        $this->assertStringContainsString("link d'invito", $r->json('errors.join_code.0'));
         $this->assertSame(0, SocialIdentity::count());
     }
 
@@ -274,7 +262,7 @@ class SocialAuthApiTest extends TestCase
             emailVerified: false,
         ));
 
-        $r = $this->accedi(['join_code' => 'ALFA2345'])->assertStatus(422);
+        $r = $this->accedi()->assertStatus(422);
 
         $this->assertSame(
             0,
@@ -295,24 +283,11 @@ class SocialAuthApiTest extends TestCase
         $this->assertTrue($vittima->is_active);
     }
 
-    /**
-     * Un'email non verificata che NON collide con nessuno crea un account
-     * nuovo: non c'e' niente da rubare, e bloccare sarebbe gratuito.
+    /*
+     * ⛔ Qui c'era `un_email_non_verificata_senza_collisioni_crea_un_account_nuovo`: valeva solo dentro una palestra scelta col codice.
+     * Da F11 senza email verificata non nasce niente
+     * (`senza_codice_serve_un_email_verificata`).
      */
-    #[Test]
-    public function un_email_non_verificata_senza_collisioni_crea_un_account_nuovo(): void
-    {
-        $this->verificaRestituisce(new VerifiedSocialUser(
-            provider: SocialProvider::Google,
-            providerUserId: 'nessuna-collisione',
-            email: 'libero@esempio.it',
-            emailVerified: false,
-        ));
-
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
-
-        $this->assertSame(1, SocialIdentity::where('provider_user_id', 'nessuna-collisione')->count());
-    }
 
     #[Test]
     public function un_email_verificata_collega_l_account_esistente_invece_di_duplicarlo(): void
@@ -326,7 +301,7 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertOk();
+        $this->accedi()->assertOk();
 
         $this->assertSame(
             $esistente->getKey(),
@@ -359,8 +334,8 @@ class SocialAuthApiTest extends TestCase
             ),
         );
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertOk();
-        $this->accedi(['provider' => 'apple', 'join_code' => 'ALFA2345'])->assertOk();
+        $this->accedi()->assertOk();
+        $this->accedi(['provider' => 'apple'])->assertOk();
 
         $this->assertSame(2, SocialIdentity::where('user_id', $utente->getKey())->count());
     }
@@ -368,7 +343,7 @@ class SocialAuthApiTest extends TestCase
     // ───────────────────────── accessi successivi ─────────────────────────
 
     #[Test]
-    public function dal_secondo_accesso_il_codice_palestra_non_serve_piu(): void
+    public function il_secondo_accesso_ritrova_l_identita(): void
     {
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Google,
@@ -377,9 +352,7 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
-
-        // Senza `join_code`: l'identita' e' gia' nota.
+        $this->accedi()->assertCreated();
         $this->accedi()->assertOk()->assertJsonPath('data.email', 'tornante@esempio.it');
 
         $this->assertSame(1, SocialIdentity::count());
@@ -387,41 +360,64 @@ class SocialAuthApiTest extends TestCase
     }
 
     /**
-     * 🚨 Il codice di un'altra palestra NON sposta nessuno.
-     *
-     * La palestra si legge da `user->tenant_id` (ADR-04). Se il `join_code`
-     * potesse cambiarla, presentare il codice altrui al secondo accesso
-     * porterebbe dentro una palestra che non e' la propria.
+     * 🆕 F11 — **al primo accesso ci si collega all'account che c'è già**, in
+     * qualunque posto sia (palestra o spazio personale), se è **uno solo** e
+     * l'email è verificata. ⛔ Prima di F11 un account personale con la stessa
+     * email faceva respingere l'accesso.
      */
     #[Test]
-    public function il_codice_di_un_altra_palestra_non_sposta_l_iscritto(): void
+    public function il_primo_accesso_si_collega_all_account_personale_che_c_e_gia(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $libero = app(CreaTenantPersonale::class)('Libero', 'libero@esempio.it', ['password' => self::FAKE_PASSWORD]);
 
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Google,
-            providerUserId: 'google-sub-1',
-            email: 'fermo@esempio.it',
+            providerUserId: 'google-sub-libero',
+            email: 'libero@esempio.it',
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
-        $this->accedi(['join_code' => 'BETA2345'])->assertOk();
+        $this->accedi()->assertOk()->assertJsonPath('data.email', 'libero@esempio.it');
 
-        $utente = User::withoutGlobalScopes()->where('email', 'fermo@esempio.it')->first();
+        $this->assertSame($libero->getKey(), SocialIdentity::where('provider_user_id', 'google-sub-libero')->value('user_id'));
+        $this->assertSame(1, User::withoutGlobalScopes()->where('email', 'libero@esempio.it')->count());
+    }
 
-        $this->assertSame($this->alfa->id, $utente->tenant_id);
-        $this->assertNotSame($beta->id, $utente->tenant_id);
+    /**
+     * 🚨 Due account con la stessa email (in due palestre): **si rifiuta**,
+     * invece di indovinare quale sia «il suo». La stessa regola dell'accesso
+     * con la password.
+     */
+    #[Test]
+    public function con_due_account_con_la_stessa_email_non_indovina(): void
+    {
+        $beta = $this->creaPalestra('Beta', 'beta');
+        $this->creaUtente($this->alfa, UserRole::Member, 'doppio@esempio.it');
+        $this->creaUtente($beta, UserRole::Member, 'doppio@esempio.it');
+
+        $this->verificaRestituisce(new VerifiedSocialUser(
+            provider: SocialProvider::Google,
+            providerUserId: 'google-sub-doppio',
+            email: 'doppio@esempio.it',
+            emailVerified: true,
+        ));
+
+        $this->accedi()->assertStatus(422);
+
+        $this->assertSame(0, SocialIdentity::count());
     }
 
     /**
      * La palestra sospesa da' `tenant_inactive`, non un errore di credenziali:
      * l'app deve portare alla schermata dedicata, non al login — dove si
-     * riproverebbe all'infinito con credenziali giuste.
+     * riproverebbe all'infinito con credenziali giuste. ⚠️ Vale sia al primo
+     * accesso (il collegamento non si fa) sia ai successivi.
      */
     #[Test]
     public function una_palestra_sospesa_da_tenant_inactive(): void
     {
+        $this->creaUtente($this->alfa, UserRole::Member, 'sospeso@esempio.it');
+
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Google,
             providerUserId: 'google-sub-1',
@@ -429,13 +425,33 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
+        $this->accedi()->assertOk();
 
         $this->alfa->forceFill(['status' => TenantStatus::Suspended])->save();
 
         $this->accedi()
             ->assertStatus(403)
             ->assertJsonPath('code', 'tenant_inactive');
+    }
+
+    #[Test]
+    public function col_la_palestra_sospesa_il_primo_accesso_non_collega_niente(): void
+    {
+        $this->creaUtente($this->alfa, UserRole::Member, 'sospeso@esempio.it');
+        $this->alfa->forceFill(['status' => TenantStatus::Suspended])->save();
+
+        $this->verificaRestituisce(new VerifiedSocialUser(
+            provider: SocialProvider::Google,
+            providerUserId: 'google-sub-1',
+            email: 'sospeso@esempio.it',
+            emailVerified: true,
+        ));
+
+        $this->accedi()
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'tenant_inactive');
+
+        $this->assertSame(0, SocialIdentity::count());
     }
 
     #[Test]
@@ -448,7 +464,7 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
+        $this->accedi()->assertCreated();
 
         User::withoutGlobalScopes()
             ->where('email', 'spento@esempio.it')
@@ -471,7 +487,7 @@ class SocialAuthApiTest extends TestCase
     {
         $this->verificaFallisce();
 
-        $r = $this->accedi(['join_code' => 'ALFA2345'])->assertStatus(422);
+        $r = $this->accedi()->assertStatus(422);
 
         $this->assertStringNotContainsStringIgnoringCase('firma', json_encode($r->json()));
         $this->assertSame(0, SocialIdentity::count());
@@ -480,7 +496,7 @@ class SocialAuthApiTest extends TestCase
     #[Test]
     public function un_fornitore_sconosciuto_si_rifiuta(): void
     {
-        $this->accedi(['provider' => 'facebook', 'join_code' => 'ALFA2345'])
+        $this->accedi(['provider' => 'facebook'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('provider');
     }
@@ -496,7 +512,7 @@ class SocialAuthApiTest extends TestCase
     {
         config()->set('services.social.google.client_ids', '');
 
-        $this->accedi(['join_code' => 'ALFA2345'])
+        $this->accedi()
             ->assertStatus(501)
             ->assertJsonPath('code', 'social_not_configured');
     }
@@ -515,20 +531,21 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $r = $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
+        $r = $this->accedi()->assertCreated();
 
         $this->assertArrayHasKey('token', $r->json());
         $this->assertArrayHasKey('data', $r->json());
         $this->assertArrayHasKey('branding', $r->json());
-        $this->assertSame('Alfa', $r->json('branding.name'));
     }
 
     /**
-     * ⚠️ Apple con «Nascondi la mia email» non manda un indirizzo utilizzabile
-     * e manda il nome **solo la prima volta**. L'account deve nascere comunque.
+     * ⚠️ Apple può non mandare un indirizzo. Prima di F11, dentro una palestra
+     * scelta col codice, nasceva un account con un indirizzo segnaposto; senza
+     * palestra **non nasce niente**: resterebbe un account senza recupero della
+     * password e senza modo di dimostrare che è suo.
      */
     #[Test]
-    public function apple_senza_email_crea_comunque_un_account_utilizzabile(): void
+    public function apple_senza_email_non_crea_un_account_senza_indirizzo(): void
     {
         $this->verificaRestituisce(new VerifiedSocialUser(
             provider: SocialProvider::Apple,
@@ -538,15 +555,9 @@ class SocialAuthApiTest extends TestCase
             name: 'Anonimo Mela',
         ));
 
-        $this->accedi(['provider' => 'apple', 'join_code' => 'ALFA2345'])->assertCreated();
+        $this->accedi(['provider' => 'apple'])->assertStatus(422);
 
-        $identita = SocialIdentity::where('provider_user_id', 'apple-sub-anonimo')->first();
-        $utente = User::withoutGlobalScopes()->find($identita->user_id);
-
-        $this->assertNotNull($utente);
-        $this->assertSame('Anonimo Mela', $utente->name);
-        $this->assertStringEndsWith('@social.invalid', $utente->email);
-        $this->assertNotNull($utente->username);
+        $this->assertSame(0, SocialIdentity::count());
     }
 
     /**
@@ -557,7 +568,7 @@ class SocialAuthApiTest extends TestCase
     #[Test]
     public function un_nome_utente_gia_preso_altrove_non_fa_esplodere_la_creazione(): void
     {
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $this->creaUtente($beta, UserRole::Member, 'mario@beta.test', ['username' => 'mario']);
 
         $this->verificaRestituisce(new VerifiedSocialUser(
@@ -567,7 +578,7 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi(['join_code' => 'ALFA2345'])->assertCreated();
+        $this->accedi()->assertCreated();
 
         $utente = User::withoutGlobalScopes()->where('email', 'mario@esempio.it')->first();
 

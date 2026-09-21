@@ -59,8 +59,8 @@ final class LImportDalPannelloTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
+        $this->beta = $this->creaPalestra('Beta', 'beta');
         $this->gestore = $this->creaUtente($this->alfa, UserRole::GymAdmin, 'capo@alfa.test');
         $this->altroGestore = $this->creaUtente($this->beta, UserRole::GymAdmin, 'capo@beta.test');
 

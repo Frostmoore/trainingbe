@@ -455,7 +455,7 @@ class ComuniTest extends TestCase
 
     private function utente(): User
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
 
         return $this->creaUtente($palestra, UserRole::Member, 'io@esempio.it');
     }

@@ -221,7 +221,7 @@ class LePromozioniTest extends TestCase
     public function il_bersaglio_palestra_prende_chi_ci_sta_dentro(): void
     {
         $palestra = $this->creaPalestra();
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
 
         $dentro = $this->creaUtente($palestra, UserRole::Member, 'dentro@esempio.test');
         $fuori = $this->creaUtente($altra, UserRole::Member, 'fuori@esempio.test');

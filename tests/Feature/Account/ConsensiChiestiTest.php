@@ -44,7 +44,7 @@ class ConsensiChiestiTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@olimpo.it');
     }
 

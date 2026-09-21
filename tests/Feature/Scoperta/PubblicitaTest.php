@@ -56,13 +56,13 @@ class PubblicitaTest extends TestCase
         // 🚨 «Alfa» viene prima di «Zeta» in ordine alfabetico: così, se la
         // sponsorizzazione non funzionasse, l'ordine sarebbe comunque A→B e il
         // test passerebbe per il motivo sbagliato. Quindi lo sponsor è **Zeta**.
-        $this->palestraA = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $this->palestraB = $this->creaPalestra('Zeta', 'zeta', 'ZETA2345');
+        $this->palestraA = $this->creaPalestra('Alfa', 'alfa');
+        $this->palestraB = $this->creaPalestra('Zeta', 'zeta');
 
         $this->schedaA = $this->scheda($this->palestraA, 'Alfa Fitness');
         $this->schedaB = $this->scheda($this->palestraB, 'Zeta Fitness');
 
-        $terzo = $this->creaPalestra('Mu', 'mu', 'MUMU2345');
+        $terzo = $this->creaPalestra('Mu', 'mu');
         $this->chiGuarda = $this->creaUtente($terzo, UserRole::Member, 'guarda@esempio.it');
         $this->chiGuarda->forceFill(['comune_id' => $this->rimini->id])->save();
     }
@@ -242,7 +242,7 @@ class PubblicitaTest extends TestCase
          * trova trenta e ne mostra venti farebbe pagare anche le dieci che
          * nessuno ha visto.
          */
-        $questaNo = $this->scheda($this->creaPalestra('Nu', 'nu', 'NUNU2345'), 'Nu Fitness');
+        $questaNo = $this->scheda($this->creaPalestra('Nu', 'nu'), 'Nu Fitness');
         $campagnaNascosta = $this->accendi($questaNo, budgetEuro: 10);
         $campagnaVisibile = $this->accendi($this->schedaB, budgetEuro: 10);
 

@@ -123,7 +123,7 @@ final class IlProprietarioDelTenantTest extends TestCase
         $palestra = $this->creaPalestra();
         $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@test.it');
 
-        $portfolio = $this->creaPalestra('Portfolio', 'portfolio', 'PORT2345');
+        $portfolio = $this->creaPalestra('Portfolio', 'portfolio');
         $portfolio->forceFill([
             'kind' => TenantKind::Personal,
             'proprietario_id' => $trainer->getKey(),

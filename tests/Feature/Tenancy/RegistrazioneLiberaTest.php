@@ -84,34 +84,23 @@ class RegistrazioneLiberaTest extends TestCase
     }
 
     /**
-     * 🚨 Un codice **scritto male** non deve diventare un'iscrizione libera.
+     * ⛔ **Il codice palestra non esiste più** — F11, 24/09/2026.
      *
-     * Chi digita sette caratteri ha sbagliato a copiare, e deve leggerlo — non
-     * ritrovarsi silenziosamente un account senza la propria palestra.
+     * 🚨 Ma chi ne manda uno pensa di entrare in una palestra: ignorarlo lo
+     * farebbe nascere **fuori** senza dirglielo. Si rifiuta, e nessun account
+     * nasce. (Prima di F11 qui c'erano «il codice scritto male» e «col codice
+     * si entra nella palestra».)
      */
     #[Test]
-    public function a_malformed_code_is_an_error_not_a_free_signup(): void
+    public function a_gym_code_is_refused_not_turned_into_a_free_signup(): void
     {
-        $this->postJson('/api/v1/auth/register', $this->modulo(['join_code' => 'ALFA234']))
+        $this->creaPalestra('Alfa', 'alfa');
+
+        $this->postJson('/api/v1/auth/register', $this->modulo(['join_code' => 'ALFA2345']))
             ->assertStatus(422)
             ->assertJsonValidationErrors('join_code');
 
         $this->assertSame(0, User::withoutGlobalScopes()->count());
-    }
-
-    /** Con il codice, tutto come prima: si entra nella palestra. */
-    #[Test]
-    public function the_code_still_puts_you_in_the_gym(): void
-    {
-        $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-
-        $this->postJson('/api/v1/auth/register', $this->modulo(['join_code' => 'alfa2345']))
-            ->assertCreated()
-            ->assertJsonPath('data.roles', [UserRole::Member->value]);
-
-        $utente = User::withoutGlobalScopes()->where('email', 'mario@esempio.test')->firstOrFail();
-
-        $this->assertSame(TenantKind::Gym, $utente->tenant->kind);
     }
 
     // ───────────────────── 🚨 F3.3 — lo sbarramento 18+ ─────────────────────
@@ -186,7 +175,7 @@ class RegistrazioneLiberaTest extends TestCase
     #[Test]
     public function a_gym_member_can_also_have_a_personal_account(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::Member, 'mario@esempio.test');
 
         $this->postJson('/api/v1/auth/register', $this->modulo())->assertCreated();
@@ -248,7 +237,7 @@ class RegistrazioneLiberaTest extends TestCase
     #[Test]
     public function logging_in_without_a_code_still_checks_the_gym_is_active(): void
     {
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test', [
             'username' => 'iscritto.alfa',
         ]);

@@ -30,7 +30,8 @@ final class VersioneMinimaTest extends TestCase
     /** @param  array<string, string>  $intestazioni */
     private function chiama(array $intestazioni = []): TestResponse
     {
-        return $this->getJson('/api/v1/branding/lookup?code=NONESISTE', $intestazioni);
+        // ✅ F11: `branding/lookup` non c'è più; questa è pubblica e risponde 404 allo stesso modo.
+        return $this->getJson('/api/v1/inviti/NONESISTE', $intestazioni);
     }
 
     #[Test]

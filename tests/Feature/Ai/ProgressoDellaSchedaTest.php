@@ -52,7 +52,7 @@ class ProgressoDellaSchedaTest extends TestCase
         $this->seed(PlanSeeder::class);
         $this->aiFinta();
 
-        $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->abbonato = $this->creaUtente($this->palestra, UserRole::Member, 'mario@alfa.test');
         $this->abbonato->accendiLAi();
 
@@ -458,7 +458,7 @@ class ProgressoDellaSchedaTest extends TestCase
      */
     private function utenteSulPianoGratuito(): User
     {
-        $tenant = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $tenant = $this->creaPalestra('Beta', 'beta');
 
         PlanSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->delete();
 

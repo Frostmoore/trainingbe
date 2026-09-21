@@ -37,7 +37,7 @@ class ConsentApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $this->alfa = $this->creaPalestra('Alfa', 'alfa');
         $this->iscritto = $this->creaUtente($this->alfa, UserRole::Member, 'mario@alfa.test');
     }
 
@@ -250,7 +250,6 @@ class ConsentApiTest extends TestCase
     private function iscrizione(array $sovrascrivi = [], ?string $exclude = null): array
     {
         $dati = [
-            'join_code' => 'ALFA2345',
             'name' => 'Nuovo Iscritto',
             'email' => 'nuovo@alfa.test',
             'username' => 'nuovoiscritto',

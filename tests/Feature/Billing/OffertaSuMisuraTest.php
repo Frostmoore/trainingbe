@@ -302,7 +302,7 @@ final class OffertaSuMisuraTest extends TestCase
     {
         [$palestra] = $this->palestraConTitolare();
 
-        $altra = $this->creaPalestra('Altra', 'altra', 'ALTR2345');
+        $altra = $this->creaPalestra('Altra', 'altra');
         $suoTitolare = $this->creaUtente($altra, UserRole::GymAdmin, 'altro@esempio.test');
 
         $offerta = $this->offerta($this->pianoSuMisura(), ['tenant_id' => $palestra->getKey()]);

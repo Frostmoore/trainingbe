@@ -52,7 +52,7 @@ class ImportazioneDaDocumentoTest extends TestCase
 
         Storage::fake('local');
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'anna@olimpo.it');
 
         /*

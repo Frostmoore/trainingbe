@@ -34,7 +34,7 @@ class RuoloNutrizionistaTest extends TestCase
     {
         parent::setUp();
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->nutrizionista = $this->creaUtente(
             $this->palestra,
             UserRole::Nutrizionista,

@@ -111,8 +111,8 @@ final class LePagineDelGodTest extends TestCase
     #[Test]
     public function un_esercizio_riservato_lo_vedono_solo_le_sue_palestre(): void
     {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $ctx = app(TenantContext::class);
 
         [$riservato, $perTutti] = $ctx->runWithoutTenant(fn (): array => [
@@ -140,8 +140,8 @@ final class LePagineDelGodTest extends TestCase
     #[Test]
     public function il_campo_palestre_decide_di_chi_e(): void
     {
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
+        $beta = $this->creaPalestra('Beta', 'beta');
         $autore = $this->creaUtente($alfa, UserRole::GymAdmin, 'capo@alfa.test');
 
         $suo = app(TenantContext::class)->runAs($alfa, fn () => Exercise::create([
@@ -193,7 +193,7 @@ final class LePagineDelGodTest extends TestCase
         $this->assertSame('2026-01-08', $piano->finePeriodo(Carbon::parse('2026-01-01'))->toDateString());
         $this->assertSame('2026-02-28', Plan::query()->where('code', 'gym_30')->sole()->finePeriodo(Carbon::parse('2026-01-31'))->toDateString(), 'Dal 31 gennaio, un mese è il 28 febbraio.');
 
-        $palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
+        $palestra = $this->creaPalestra('Alfa', 'alfa');
         $titolare = $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@alfa.test');
         $palestra->forceFill(['proprietario_id' => $titolare->getKey()])->save();
 
@@ -252,8 +252,8 @@ final class LePagineDelGodTest extends TestCase
     public function la_pagina_del_piano_dice_chi_ce_l_ha(): void
     {
         $piano = Plan::query()->where('code', 'gym_30')->sole();
-        $alfa = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
-        $beta = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $alfa = $this->creaPalestra('Alfa', 'alfa');
+        $beta = $this->creaPalestra('Beta', 'beta');
 
         $attivo = app(TenantContext::class)->runWithoutTenant(fn () => PlanSubscription::create([
             'tenant_id' => $alfa->getKey(), 'plan_id' => $piano->getKey(), 'starts_at' => now()->subMonth(), 'ends_at' => now()->addMonth(), 'rinnova' => true,

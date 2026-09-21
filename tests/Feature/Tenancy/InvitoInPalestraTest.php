@@ -67,7 +67,7 @@ final class InvitoInPalestraTest extends TestCase
 
         $this->seed(PlanSeeder::class);
 
-        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo', 'OLIM2345');
+        $this->palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $this->gestore = $this->creaUtente($this->palestra, UserRole::GymAdmin, 'gestore@olimpo.it');
     }
 
