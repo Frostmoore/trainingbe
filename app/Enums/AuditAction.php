@@ -142,6 +142,16 @@ enum AuditAction: string
      */
     case AbbonamentoDellIscritto = 'user.abbonamento_iscritto';
 
+    /**
+     * 🆕 🎁 **Una promozione revocata** (a una persona, o a tutti) — P7 di
+     * `plan_promozioni.md`. 🚨 Toglie gettoni e abbonamenti già dati: resta
+     * scritto chi l'ha fatto, e quanto ha tolto.
+     *
+     * ⚠️ Il soggetto è **la persona** (e la palestra è la sua): `AuditLog`
+     * pretende una palestra, e una promozione è della piattaforma.
+     */
+    case PromozioneRevocata = 'promozione.revocata';
+
     public function label(): string
     {
         return match ($this) {
@@ -166,6 +176,7 @@ enum AuditAction: string
             self::ResetPasswordMandato => 'Link per la password mandato',
             self::GettoniRegalatiDallaPalestra => 'Gettoni regalati dalla palestra',
             self::AbbonamentoDellIscritto => 'Abbonamento dell\'iscritto tolto o ridato',
+            self::PromozioneRevocata => 'Promozione revocata',
         };
     }
 
@@ -176,7 +187,7 @@ enum AuditAction: string
             self::ImpersonationStarted, self::UserDeleted, self::TenantSuspended => 'danger',
             self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged,
             self::AiQuotaChanged, self::AbbonamentoRegalato,
-            self::PianoSuMisuraAssegnato, self::ResetPasswordMandato => 'warning',
+            self::PianoSuMisuraAssegnato, self::ResetPasswordMandato, self::PromozioneRevocata => 'warning',
             default => 'gray',
         };
     }

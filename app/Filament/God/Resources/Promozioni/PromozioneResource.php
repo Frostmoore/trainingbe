@@ -168,9 +168,31 @@ class PromozioneResource extends Resource
                 Filter::make('spendibili')
                     ->label('Solo quelle spendibili adesso')
                     ->query(fn (Builder $query): Builder => $query->spendibili()),
+
+                /*
+                 * 🆕 P7 — opzione 39: **gli stati che non sono una colonna**.
+                 * ⚠️ «Esaurite» qui guarda solo il tetto degli usi: il budget si
+                 * somma dalle assegnazioni e non sta in una `where`. Sulla scheda
+                 * lo stato è giusto comunque (`stato()` guarda anche il budget).
+                 */
+                SelectFilter::make('come_sta')
+                    ->label('Come sta')
+                    ->options([
+                        'scadute' => 'Scadute',
+                        'non_ancora' => 'Non ancora cominciate',
+                        'esaurite' => 'Esaurite (usi)',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'scadute' => $query->whereNotNull('scade_il')->where('scade_il', '<=', now()),
+                        'non_ancora' => $query->whereNotNull('inizia_il')->where('inizia_il', '>', now()),
+                        'esaurite' => $query->whereNotNull('massimo_usi')->whereColumn('usata_volte', '>=', 'massimo_usi'),
+                        default => $query,
+                    }),
             ])
             ->recordActions([
                 EditAction::make()
+                    // 🆕 P7 — «Apri»: la pagina ha i numeri e chi l'ha presa, non solo il modulo.
+                    ->label('Apri')
                     // Come gli altri tasti delle schede: bordati, e la griglia di pannello-a-schede.css li allarga.
                     ->button()
                     ->outlined()
@@ -244,6 +266,8 @@ class PromozioneResource extends Resource
                 Action::make('sospendi')
                     ->button()
                     ->outlined()
+                    // 🆕 P7 — una disattivata non si riattiva: è definitiva.
+                    ->visible(fn (Promozione $p): bool => $p->stato !== StatoPromozione::Disattivata)
                     ->label(fn (Promozione $p): string => $p->stato === StatoPromozione::Attiva ? 'Sospendi' : 'Riattiva')
                     ->icon(fn (Promozione $p): string => $p->stato === StatoPromozione::Attiva
                         ? 'heroicon-m-pause'
