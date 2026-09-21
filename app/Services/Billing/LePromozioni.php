@@ -74,8 +74,16 @@ class LePromozioni
      */
     public function automaticheDi(User $utente, SuCosaVale $cosa): Collection
     {
+        /*
+         * 🆕 P6 — **e quelle che ha già in tasca**: un premio d'acquisto in
+         * sospeso (regalo riscattato col link, sconto sbloccato da un evento)
+         * vale al pagamento **senza** ripresentare il codice. ⛔ Altrimenti chi
+         * ha guadagnato uno sconto lo perderebbe al primo acquisto fatto
+         * dall'app, dove il codice non si scrive.
+         */
         return $this->spendibiliDi($utente, $cosa)
-            ->filter(static fn (Promozione $p): bool => $p->attivazione === ComeSiAttiva::Automatica)
+            ->filter(static fn (Promozione $p): bool => $p->attivazione === ComeSiAttiva::Automatica
+                || $p->haUnAcquistoInSospeso($utente) !== null)
             ->values();
     }
 

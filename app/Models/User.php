@@ -27,8 +27,10 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Laravel\Sanctum\HasApiTokens;
+use RuntimeException;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
@@ -820,6 +822,33 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      * palestra — cioe' proprio quando gli serve (impersonazione, B2.3).
      * La motivazione completa e' nella migration `..._add_is_super_admin_...`.
      */
+    /**
+     * 🆕 🤝 **Il codice «porta un amico»** — P6 di `plan_promozioni.md`.
+     *
+     * Nasce alla prima richiesta e poi resta quello: un link già condiviso deve
+     * continuare a funzionare. 💡 Otto caratteri leggibili a voce, come i codici
+     * delle promozioni; l'unicità la garantisce l'indice, e in caso di collisione
+     * si riprova.
+     */
+    public function codiceAmico(): string
+    {
+        if (filled($this->codice_amico)) {
+            return (string) $this->codice_amico;
+        }
+
+        for ($tentativo = 0; $tentativo < 5; $tentativo++) {
+            $codice = Str::upper(Str::random(8));
+
+            if (! static::withoutGlobalScopes()->where('codice_amico', $codice)->exists()) {
+                $this->forceFill(['codice_amico' => $codice])->saveQuietly();
+
+                return $codice;
+            }
+        }
+
+        throw new RuntimeException('Codice amico non generato dopo cinque tentativi.');
+    }
+
     public function isSuperAdmin(): bool
     {
         return (bool) $this->is_super_admin;

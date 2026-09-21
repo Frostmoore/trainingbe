@@ -98,7 +98,8 @@ enum TipoDiPremio: string
     /** Toglie soldi da un acquisto: passa da `LePromozioni::applica()`. */
     public function eUnoSconto(): bool
     {
-        return in_array($this, [self::ScontoGettoni, self::PrezzoPacchetto, self::ScontoAbbonamento, self::ScontoConsumo], true);
+        // 🆕 P6 — anche lo sconto sbloccato: su cosa lo dice `PromozionePremio::suCosaVale()`.
+        return in_array($this, [self::ScontoGettoni, self::PrezzoPacchetto, self::ScontoAbbonamento, self::ScontoConsumo, self::SbloccaSconto], true);
     }
 
     /**
@@ -217,6 +218,8 @@ enum TipoDiPremio: string
             self::ProvaGratuita, self::PrezzoBloccato, self::ScontoConsumo,
             // 🆕 P4 — gli abbonamenti regalati.
             self::AbbonamentoRegalato, self::Upgrade, self::PostiExtra,
+            // 🆕 P6 — tutti e due.
+            self::GettoniAOgniRinnovo, self::SbloccaSconto,
         ], true);
     }
 

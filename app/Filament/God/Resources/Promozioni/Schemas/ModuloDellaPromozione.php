@@ -6,6 +6,7 @@ namespace App\Filament\God\Resources\Promozioni\Schemas;
 
 use App\Enums\ComeSiAttiva;
 use App\Enums\DurataDelloSconto;
+use App\Enums\EventoDiPromozione;
 use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\TipoBersaglio;
@@ -73,7 +74,7 @@ final class ModuloDellaPromozione
                 ->schema([self::bersagli(), self::condizioni()]),
 
             Step::make('Come si attiva')
-                ->schema([self::attivazione()]),
+                ->schema(self::attivazione()),
 
             Step::make('Limiti')
                 ->columns(2)
@@ -92,7 +93,7 @@ final class ModuloDellaPromozione
             Section::make('Cosa promuovi')->schema([self::genere()]),
             Section::make('Cosa si dà')->schema([self::premi()]),
             Section::make('A chi')->schema([self::bersagli(), self::condizioni()]),
-            Section::make('Come si attiva')->schema([self::attivazione()]),
+            Section::make('Come si attiva')->schema(self::attivazione()),
             Section::make('Limiti')->columns(2)->schema(self::limiti()),
             Section::make('Il testo')->columns(2)->schema(self::testo()),
         ];
@@ -149,6 +150,17 @@ final class ModuloDellaPromozione
                     ->live()
                     ->native(false)
                     ->columnSpanFull(),
+
+                // 🆕 🤝 P6 — porta un amico: il premio va all'amico o a chi l'ha invitato.
+                Select::make('a_chi')
+                    ->label('A chi')
+                    ->options([
+                        'destinatario' => 'All\'amico che arriva',
+                        'chi_ha_invitato' => 'A chi l\'ha invitato',
+                    ])
+                    ->default('destinatario')
+                    ->native(false)
+                    ->visible(fn (callable $get): bool => $get('../../evento') === EventoDiPromozione::AmicoArrivato->value),
 
                 Select::make('tipo_sconto')
                     ->label('Sconto in')
@@ -262,12 +274,16 @@ final class ModuloDellaPromozione
                         || ($get('tipo') === TipoDiPremio::ScontoAbbonamento->value && $get('durata') === DurataDelloSconto::NVolte->value)),
 
                 TextInput::make('giorni')
-                    ->label(fn (callable $get): string => $get('tipo') === TipoDiPremio::ProvaGratuita->value
-                        ? 'Giorni di prova'
-                        : 'Scadono dopo (giorni)')
-                    ->helperText(fn (callable $get): ?string => $get('tipo') === TipoDiPremio::ProvaGratuita->value
-                        ? null
-                        : 'Vuoto: non scadono mai.')
+                    ->label(fn (callable $get): string => match ($get('tipo')) {
+                        TipoDiPremio::ProvaGratuita->value => 'Giorni di prova',
+                        TipoDiPremio::SbloccaSconto->value => 'Valido per (giorni)',
+                        default => 'Scadono dopo (giorni)',
+                    })
+                    ->helperText(fn (callable $get): ?string => match ($get('tipo')) {
+                        TipoDiPremio::ProvaGratuita->value => null,
+                        TipoDiPremio::SbloccaSconto->value => 'Vuoto: lo sconto sbloccato non scade.',
+                        default => 'Vuoto: non scadono mai.',
+                    })
                     ->numeric()
                     ->integer()
                     ->minValue(1)
@@ -453,7 +469,47 @@ final class ModuloDellaPromozione
             ]);
     }
 
-    private static function attivazione(): Radio
+    /**
+     * @return list<Field> l'attivazione e, se è «a evento», quale evento
+     */
+    private static function attivazione(): array
+    {
+        $aEvento = static fn (callable $get): bool => $get('attivazione') === ComeSiAttiva::Evento->value;
+
+        return [
+            self::comeSiAttiva(),
+
+            // 🆕 ⚡ P6 — quale evento, e i suoi parametri.
+            Select::make('evento')
+                ->label('Quando')
+                ->options(EventoDiPromozione::options())
+                ->live()
+                ->native(false)
+                ->visible($aEvento)
+                ->required($aEvento),
+
+            TextInput::make('evento_parametri.numero')
+                ->label('Quale rinnovo')
+                ->helperText('Vuoto: a ogni rinnovo. 1 = il primo rinnovo (il secondo pagamento).')
+                ->numeric()
+                ->integer()
+                ->minValue(1)
+                ->visible(fn (callable $get): bool => $aEvento($get) && $get('evento') === EventoDiPromozione::Rinnovo->value),
+
+            Select::make('evento_parametri.quando')
+                ->label('Quando si premia')
+                ->options([
+                    'registrazione' => 'Appena l\'amico si iscrive',
+                    'primo_acquisto' => 'Al primo acquisto dell\'amico',
+                ])
+                ->default('registrazione')
+                ->native(false)
+                ->visible(fn (callable $get): bool => $aEvento($get) && $get('evento') === EventoDiPromozione::AmicoArrivato->value)
+                ->helperText('Nei premi scegli «a chi»: all\'amico che arriva, o a chi l\'ha invitato.'),
+        ];
+    }
+
+    private static function comeSiAttiva(): Radio
     {
         return Radio::make('attivazione')
             ->hiddenLabel()
@@ -466,6 +522,7 @@ final class ModuloDellaPromozione
                 ->all())
             ->default(ComeSiAttiva::Automatica->value)
             ->required()
+            ->live()
             /*
              * 🆕 P2 — ⛔ **«Esegui» senza regali non consegna niente**: sconti e
              * bonus si usano pagando, e un accredito di massa di sconti sarebbe
@@ -473,15 +530,22 @@ final class ModuloDellaPromozione
              */
             ->rules([
                 fn (callable $get): \Closure => function (string $attributo, mixed $valore, \Closure $fallisci) use ($get): void {
-                    if ($valore !== ComeSiAttiva::Massa->value) {
-                        return;
+                    $tipi = collect((array) $get('premi'))
+                        ->map(fn (array $premio): ?TipoDiPremio => TipoDiPremio::tryFrom((string) ($premio['tipo'] ?? '')));
+
+                    $regali = $tipi->contains(fn (?TipoDiPremio $t): bool => $t?->eUnRegalo() === true);
+
+                    if ($valore === ComeSiAttiva::Massa->value && ! $regali) {
+                        $fallisci('L\'accredito di massa consegna solo regali (gettoni, mesi, posti): aggiungine uno, o scegli un\'altra attivazione.');
                     }
 
-                    $regali = collect((array) $get('premi'))
-                        ->contains(fn (array $premio): bool => TipoDiPremio::tryFrom((string) ($premio['tipo'] ?? ''))?->eUnRegalo() === true);
-
-                    if (! $regali) {
-                        $fallisci('L\'accredito di massa consegna solo regali (gettoni, mesi, posti): aggiungine uno, o scegli un\'altra attivazione.');
+                    /*
+                     * 🆕 P6 — ⛔ Un evento consegna regali o **sblocca** uno sconto:
+                     * uno sconto normale scatterebbe senza dare niente.
+                     */
+                    if ($valore === ComeSiAttiva::Evento->value && ! $regali
+                        && ! $tipi->contains(TipoDiPremio::SbloccaSconto)) {
+                        $fallisci('Una promozione a evento deve regalare qualcosa o sbloccare uno sconto.');
                     }
                 },
             ]);

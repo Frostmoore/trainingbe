@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Api\V1\Account\AmicoController;
 use App\Http\Controllers\Api\V1\Account\AvatarController;
 use App\Http\Controllers\Api\V1\Account\CittaController;
 use App\Http\Controllers\Api\V1\Account\ConsentController;
@@ -896,6 +897,10 @@ Route::prefix('v1')->group(function (): void {
         // `PUT` perché è idempotente: è lo stato del dispositivo, non una
         // modifica a qualcosa.
         Route::put('account/timezone', [TimezoneController::class, 'update']);
+
+        // 🆕 🤝 P6 di plan_promozioni.md — porta un amico: il mio codice, e «mi ha portato lui».
+        Route::get('account/amico', [AmicoController::class, 'show']);
+        Route::post('account/amico', [AmicoController::class, 'store'])->middleware('throttle:10,1');
 
         /*
         | ── La citta' della persona (M1.2) ────────────────────────────────

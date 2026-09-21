@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Http\ResponseFactory;
 use App\Http\Responses\RoleAwareLoginResponse;
+use App\Listeners\GliEventiDellePromozioni;
 use App\Services\Ai\AiManager;
 use App\Services\Auth\Social\JwksSocialTokenVerifier;
 use App\Services\Auth\Social\SocialTokenVerifier;
@@ -122,6 +123,9 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->registraBannerImpersonazione();
         $this->registraLoStileDelleSchede();
+
+        // 🆕 ⚡ P6 di plan_promozioni.md — registrazioni e inviti accettati fanno scattare le promozioni a evento.
+        GliEventiDellePromozioni::registra();
     }
 
     /**

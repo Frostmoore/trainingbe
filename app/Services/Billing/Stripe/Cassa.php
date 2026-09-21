@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
+use App\Enums\EventoDiPromozione;
 use App\Enums\SuCosaVale;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
@@ -11,12 +12,14 @@ use App\Models\PacchettoGettoni;
 use App\Models\PagamentoIncassato;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\LePromozioni;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Billing\RegistroDeiPagamenti;
 use App\Services\Promozioni\ConsegnaDeiPremi;
+use App\Services\Promozioni\GliEventi;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -783,6 +786,85 @@ class Cassa
                 PacchettoGettoni::query()->where('gettoni', $gettoni)->value('id'),
             );
         }
+
+        $this->eventiDelPagamento($utente, $sessione);
+    }
+
+    /**
+     * 🆕 ⚡ P6 — gettoni «a ogni rinnovo» ed evento `rinnovo` (col numero: il primo
+     * rinnovo è il **secondo** pagamento).
+     */
+    private function eventiDelRinnovo(PlanSubscription $riga, string $idFattura): void
+    {
+        $titolare = $riga->tenant_id !== null
+            ? User::withoutGlobalScopes()->whereKey(
+                Tenant::query()->withoutGlobalScopes()->whereKey($riga->tenant_id)->value('proprietario_id'),
+            )->first()
+            : null;
+
+        if ($titolare === null) {
+            return;
+        }
+
+        $pagamenti = PagamentoIncassato::withoutGlobalScopes()
+            ->where('tenant_id', $riga->tenant_id)
+            ->where('tipo', PagamentoIncassato::CANONE)
+            ->count();
+
+        app(ConsegnaDeiPremi::class)->gettoniDelPagamento($titolare, $riga->plan_id, $idFattura);
+        app(GliEventi::class)->succede(EventoDiPromozione::Rinnovo, $titolare, $idFattura, ['numero' => max(1, $pagamenti - 1)]);
+    }
+
+    /**
+     * 🆕 ⚡ **Gli eventi delle promozioni al primo pagamento** — P6 di `plan_promozioni.md`.
+     *
+     * | Pagamento | Evento |
+     * |---|---|
+     * | abbonamento (Plus, o un piano trainer/palestra) | `primo_abbonamento` + i gettoni «a ogni rinnovo» del primo periodo |
+     * | gettoni | `acquisto_gettoni` |
+     * | qualunque, se la persona è arrivata con un amico | `amico_arrivato` con `quando = primo_acquisto` (una volta sola: il riferimento è la persona) |
+     *
+     * ⚠️ Il primo periodo dei gettoni «a ogni rinnovo» si dà **qui**, con l'id
+     * della sessione; `rinnovo()` salta la fattura `subscription_create`, così
+     * lo stesso periodo non si premia due volte.
+     *
+     * @param  array<string, mixed>  $sessione
+     */
+    private function eventiDelPagamento(User $utente, array $sessione): void
+    {
+        $meta = $sessione['metadata'] ?? [];
+        $tipo = $meta['tipo'] ?? null;
+        $riferimento = (string) ($sessione['id'] ?? '');
+
+        if ($riferimento === '' || ! in_array($tipo, [self::ABBONAMENTO, self::GETTONI, PianiInVendita::TIPO], true)) {
+            return;
+        }
+
+        $eventi = app(GliEventi::class);
+        $abbonamento = $tipo === self::ABBONAMENTO
+            || ($tipo === PianiInVendita::TIPO && ($sessione['mode'] ?? null) === 'subscription');
+
+        if ($abbonamento) {
+            $planId = $tipo === self::ABBONAMENTO
+                ? Plan::query()->where('code', Plan::PLUS)->value('id')
+                : Plan::query()->where('code', (string) ($meta['piano'] ?? ''))->value('id');
+
+            $eventi->succede(EventoDiPromozione::PrimoAbbonamento, $utente, $riferimento);
+            app(ConsegnaDeiPremi::class)->gettoniDelPagamento($utente, $planId, $riferimento);
+        }
+
+        if ($tipo === self::GETTONI) {
+            $eventi->succede(EventoDiPromozione::AcquistoGettoni, $utente, $riferimento);
+        }
+
+        $invitante = $utente->invitato_da_id !== null ? User::withoutGlobalScopes()->find($utente->invitato_da_id) : null;
+
+        if ($invitante !== null) {
+            $eventi->succede(EventoDiPromozione::AmicoArrivato, $utente, (string) $utente->getKey(), [
+                'quando' => 'primo_acquisto',
+                'invitante' => $invitante,
+            ]);
+        }
     }
 
     /**
@@ -865,6 +947,16 @@ class Cassa
          * attraverso questa classe.
          */
         $riga->forceFill(['pagamento_fallito_il' => null])->save();
+
+        /*
+         * 🆕 ⚡ P6 — **il rinnovo per le promozioni**: gettoni «a ogni rinnovo»
+         * ed evento `rinnovo` col suo numero, al **titolare** dello spazio.
+         * ⚠️ Solo i rinnovi veri (`subscription_cycle`): la prima fattura
+         * (`subscription_create`) la premia già `eventiDelPagamento()`.
+         */
+        if (($fattura['billing_reason'] ?? 'subscription_cycle') === 'subscription_cycle' && ($fattura['id'] ?? null) !== null) {
+            $this->eventiDelRinnovo($riga, (string) $fattura['id']);
+        }
 
         Log::info('Stripe: abbonamento rinnovato.', [
             'subscription' => $idAbbonamento,

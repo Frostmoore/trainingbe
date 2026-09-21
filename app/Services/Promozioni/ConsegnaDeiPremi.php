@@ -70,15 +70,16 @@ class ConsegnaDeiPremi
         User $utente,
         OrigineAssegnazione $origine,
         ?string $riferimento = null,
+        string $aChi = 'destinatario',
     ): ?PromozioneAssegnazione {
         $promozione->loadMissing(['premi', 'bersagli']);
 
-        if ($this->percheNo($promozione, $utente) !== null) {
+        if ($this->percheNo($promozione, $utente, $aChi) !== null) {
             return null;
         }
 
         try {
-            return DB::transaction(function () use ($promozione, $utente, $origine, $riferimento): ?PromozioneAssegnazione {
+            return DB::transaction(function () use ($promozione, $utente, $origine, $riferimento, $aChi): ?PromozioneAssegnazione {
                 /*
                  * 🚨 La riga della promozione si blocca: due consegne insieme
                  * leggerebbero lo stesso `usata_volte` e lo stesso budget, e
@@ -90,7 +91,7 @@ class ConsegnaDeiPremi
                     return null;
                 }
 
-                $ricorrente = $bloccata->premi->first(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::GettoniRicorrenti);
+                $ricorrente = $bloccata->premiPer($aChi)->first(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::GettoniRicorrenti);
 
                 $assegnazione = PromozioneAssegnazione::query()->create([
                     'promozione_id' => $bloccata->getKey(),
@@ -101,14 +102,15 @@ class ConsegnaDeiPremi
                     'stato' => StatoAssegnazione::Usata,
                     'usata_il' => now(),
                     // P2 — se ha anche uno sconto o un bonus, resta da usare pagando.
-                    'acquisto_in_sospeso' => $bloccata->haPremiDAcquisto(),
+                    'acquisto_in_sospeso' => $bloccata->haPremiDAcquisto($aChi),
                 ]);
 
                 $dati = 0;
 
                 $altri = 0;
 
-                foreach ($bloccata->premi as $premio) {
+                // 🆕 P6 — solo i premi di chi riceve questa consegna (porta un amico).
+                foreach ($bloccata->premiPer($aChi) as $premio) {
                     $dati += match ($premio->tipo) {
                         TipoDiPremio::GettoniRegalo, TipoDiPremio::GettoniRicorrenti => $this->dai($bloccata, $premio, $utente, $assegnazione, (int) $premio->gettoni),
                         default => 0,
@@ -128,7 +130,7 @@ class ConsegnaDeiPremi
                  * regalo da zero gettoni non è un regalo, e contarlo esaurirebbe
                  * il massimo per persona di qualcuno che non ha avuto niente.
                  */
-                if ($dati === 0 && $altri === 0 && ! $bloccata->haPremiDAcquisto()) {
+                if ($dati === 0 && $altri === 0 && ! $bloccata->haPremiDAcquisto($aChi)) {
                     throw new NienteDaConsegnare;
                 }
 
@@ -157,18 +159,85 @@ class ConsegnaDeiPremi
      * 💡 Serve alla pagina dell'offerta: «l'hai già presa» e «non è per te»
      * sono due risposte diverse.
      */
-    public function percheNo(Promozione $promozione, User $utente): ?string
+    public function percheNo(Promozione $promozione, User $utente, string $aChi = 'destinatario'): ?string
     {
         $promozione->loadMissing(['premi', 'bersagli']);
 
         return match (true) {
-            ! $promozione->haRegali() => 'Questa offerta non regala niente: si usa pagando.',
+            // 🆕 P6 — uno sconto sbloccato da un evento si «consegna» anche senza regali.
+            ! $promozione->haRegali($aChi) && ! ($aChi === 'destinatario' && $promozione->haSblocchi()) => 'Questa offerta non regala niente: si usa pagando.',
             ($motivo = $promozione->perchePiuNonVale()) !== null => $motivo,
-            ! $this->chiLaRiceve->prende($promozione, $utente) => 'Questa offerta non è per il tuo account.',
+            // ⚠️ Chi ha invitato non deve rientrare nei destinatari: i destinatari sono chi arriva.
+            $aChi === 'destinatario' && ! $this->chiLaRiceve->prende($promozione, $utente) => 'Questa offerta non è per il tuo account.',
             ! $promozione->laPuoPrendereAncora($utente) => 'Hai già ricevuto questa offerta.',
             $promozione->budget_gettoni !== null && $promozione->gettoniRestantiNelBudget() === 0 => 'Questa offerta è esaurita.',
-            default => $this->percheNoAgliAbbonamenti($promozione, $utente),
+            default => $this->percheNoAgliAbbonamenti($promozione, $utente, $aChi),
         };
+    }
+
+    /**
+     * 🆕 🔁 **I gettoni a ogni pagamento dell'abbonamento** — P6 (opzione 16).
+     *
+     * Chiamato dal webhook al primo pagamento e a ogni rinnovo. Vale per le
+     * promozioni **automatiche** con un premio `gettoni_a_ogni_rinnovo` (sul
+     * piano giusto, se ne indica uno). Il massimo per persona dice **quanti
+     * pagamenti** vengono premiati (vuoto = tutti); il riferimento è la
+     * sessione o la fattura, così un evento ripetuto non paga due volte.
+     *
+     * @return int i gettoni accreditati
+     */
+    public function gettoniDelPagamento(User $utente, ?int $planId, string $riferimento): int
+    {
+        $totale = 0;
+
+        $promozioni = Promozione::query()
+            ->spendibili()
+            ->where('attivazione', ComeSiAttiva::Automatica->value)
+            ->with(['premi', 'bersagli', 'condizioni'])
+            ->get()
+            ->filter(fn (Promozione $p): bool => $p->premi->contains(
+                fn (PromozionePremio $r): bool => $r->tipo === TipoDiPremio::GettoniAOgniRinnovo && $r->valeSulPiano($planId),
+            ));
+
+        foreach ($promozioni as $promozione) {
+            if (! $this->chiLaRiceve->prende($promozione, $utente) || ! $promozione->laPuoPrendereAncora($utente)) {
+                continue;
+            }
+
+            try {
+                $totale += DB::transaction(function () use ($promozione, $utente, $planId, $riferimento): int {
+                    $assegnazione = PromozioneAssegnazione::query()->create([
+                        'promozione_id' => $promozione->getKey(),
+                        'user_id' => $utente->getKey(),
+                        'tenant_id' => $utente->tenant_id,
+                        'origine' => OrigineAssegnazione::Automatica,
+                        'riferimento' => 'pagamento:'.$riferimento,
+                        'stato' => StatoAssegnazione::Usata,
+                        'usata_il' => now(),
+                    ]);
+
+                    $dati = 0;
+
+                    foreach ($promozione->premi as $premio) {
+                        if ($premio->tipo === TipoDiPremio::GettoniAOgniRinnovo && $premio->valeSulPiano($planId)) {
+                            $dati += $this->dai($promozione, $premio, $utente, $assegnazione, (int) $premio->gettoni);
+                        }
+                    }
+
+                    if ($dati === 0) {
+                        throw new NienteDaConsegnare;
+                    }
+
+                    $promozione->increment('usata_volte');
+
+                    return $dati;
+                });
+            } catch (UniqueConstraintViolationException|NienteDaConsegnare) {
+                // Già premiato per questo pagamento, o budget finito.
+            }
+        }
+
+        return $totale;
     }
 
     /**
@@ -180,9 +249,9 @@ class ConsegnaDeiPremi
      * piano: un piano palestra su uno spazio palestra, un piano personale o da
      * trainer su uno spazio personale.
      */
-    private function percheNoAgliAbbonamenti(Promozione $promozione, User $utente): ?string
+    private function percheNoAgliAbbonamenti(Promozione $promozione, User $utente, string $aChi = 'destinatario'): ?string
     {
-        foreach ($promozione->premi as $premio) {
+        foreach ($promozione->premiPer($aChi) as $premio) {
             $motivo = match ($premio->tipo) {
                 TipoDiPremio::AbbonamentoRegalato => $this->percheNoAlRegalo($premio, $utente),
                 TipoDiPremio::Upgrade => $this->percheNoAllUpgrade($premio, $utente),

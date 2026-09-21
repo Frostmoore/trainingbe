@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\DurataDelloSconto;
 use App\Enums\GenereDiPromozione;
+use App\Enums\SuCosaVale;
 use App\Enums\TipoDiPremio;
 use App\Enums\TipoDiSconto;
 use Illuminate\Database\Eloquent\Model;
@@ -90,6 +91,25 @@ class PromozionePremio extends Model
         };
 
         return max(0, min($sconto, $importoCent));
+    }
+
+    /**
+     * 🆕 P6 — su quale acquisto agisce **questo** premio.
+     *
+     * Come `TipoDiPremio::suCosaVale()`, tranne lo sconto sbloccato: lì lo dice
+     * la colonna `sblocca_genere` (gettoni → i pacchetti, abbonamenti → il canone).
+     */
+    public function suCosaVale(): ?SuCosaVale
+    {
+        if ($this->tipo === TipoDiPremio::SbloccaSconto) {
+            return match ($this->sblocca_genere) {
+                GenereDiPromozione::Gettoni => SuCosaVale::Gettoni,
+                GenereDiPromozione::Abbonamenti => SuCosaVale::Canone,
+                default => null,
+            };
+        }
+
+        return $this->tipo->suCosaVale();
     }
 
     /** Vale su questo pacchetto? `pacchetto_id` vuoto = su tutti. */

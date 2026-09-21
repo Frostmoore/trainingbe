@@ -8,10 +8,12 @@ use App\Enums\ComeSiAttiva;
 use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\SuCosaVale;
+use App\Enums\TipoDiPremio;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -166,15 +168,36 @@ class Promozione extends Model
     }
 
     /** 🆕 P2 — ha almeno un premio che si consegna senza acquisto (e costruito)? */
-    public function haRegali(): bool
+    public function haRegali(string $aChi = 'destinatario'): bool
     {
-        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->eUnRegalo() && $p->tipo->costruito());
+        return $this->premiPer($aChi)->contains(fn (PromozionePremio $p): bool => $p->tipo->eUnRegalo() && $p->tipo->costruito());
     }
 
     /** 🆕 P2 — ha almeno un premio che si usa pagando (e costruito)? */
-    public function haPremiDAcquisto(): bool
+    public function haPremiDAcquisto(string $aChi = 'destinatario'): bool
     {
-        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->siUsaAllAcquisto() && $p->tipo->costruito());
+        return $this->premiPer($aChi)->contains(fn (PromozionePremio $p): bool => $p->tipo->siUsaAllAcquisto() && $p->tipo->costruito());
+    }
+
+    /**
+     * 🆕 P6 — i premi di **chi**: `destinatario` (sempre, tranne «porta un
+     * amico») o `chi_ha_invitato`.
+     *
+     * @return Collection<int, PromozionePremio>
+     */
+    public function premiPer(string $aChi = 'destinatario'): Collection
+    {
+        return $this->premi->filter(fn (PromozionePremio $p): bool => ($p->a_chi ?? 'destinatario') === $aChi)->values();
+    }
+
+    /**
+     * 🆕 🔓 P6 — **Sblocca uno sconto?** (opzione 18). Una promozione così non si
+     * usa pagando da sola: lo sconto si **guadagna** con l'evento, e vale solo
+     * per chi l'ha guadagnato.
+     */
+    public function haSblocchi(): bool
+    {
+        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::SbloccaSconto);
     }
 
     /**
@@ -187,10 +210,19 @@ class Promozione extends Model
      */
     public function haUnAcquistoInSospeso(User $utente): ?PromozioneAssegnazione
     {
+        /*
+         * 🆕 P6 — lo sconto sbloccato può scadere: `giorni` del premio
+         * `sblocca_sconto`, contati da quando è stato guadagnato.
+         */
+        $giorni = (int) $this->premi
+            ->filter(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::SbloccaSconto)
+            ->max('giorni');
+
         return $this->assegnazioni()
             ->cheContano()
             ->where('user_id', $utente->getKey())
             ->where('acquisto_in_sospeso', true)
+            ->when($giorni > 0, fn ($q) => $q->where('created_at', '>=', now()->subDays($giorni)))
             ->oldest()
             ->first();
     }
@@ -198,6 +230,11 @@ class Promozione extends Model
     /** 🆕 P2 — si può usare pagando: o la prende ora, o ne ha una in sospeso. */
     public function laPuoUsareAllAcquisto(User $utente): bool
     {
+        // 🆕 P6 — uno sconto sbloccato si usa solo da chi l'ha guadagnato.
+        if ($this->haSblocchi()) {
+            return $this->haUnAcquistoInSospeso($utente) !== null;
+        }
+
         return $this->laPuoPrendereAncora($utente) || $this->haUnAcquistoInSospeso($utente) !== null;
     }
 
@@ -253,7 +290,7 @@ class Promozione extends Model
      */
     public function valeSu(SuCosaVale $cosa): bool
     {
-        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->suCosaVale() === $cosa);
+        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->suCosaVale() === $cosa);
     }
 
     /**
@@ -283,7 +320,7 @@ class Promozione extends Model
         return $this->premi
             ->filter(fn (PromozionePremio $p): bool => $p->tipo->eUnoSconto()
                 && $p->tipo->costruito()
-                && $p->tipo->suCosaVale() === $cosa
+                && $p->suCosaVale() === $cosa
                 && $p->valeSulPacchetto($pacchettoId)
                 && $p->valeSulPiano($planId))
             ->values()
