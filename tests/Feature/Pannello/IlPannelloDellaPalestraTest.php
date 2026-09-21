@@ -420,7 +420,101 @@ final class IlPannelloDellaPalestraTest extends TestCase
             ->assertSee('Scritta da');
     }
 
+    // ─────────────── 🆕 la finestra dell'invito: il link prima, l'email se vuoi ───────────────
+
+    /**
+     * 🔗 **Il link nasce aprendo la finestra**, e si vede lì. 📌 *«Deve subito
+     * generare un link di invito (e io lo devo vedere nella modale e poterlo
+     * copiare)»*. Chiudendo senza email non parte niente.
+     */
+    #[Test]
+    public function aprendo_l_invito_il_link_c_e_gia_e_l_email_non_serve(): void
+    {
+        Mail::fake();
+        $this->entra($this->gestore);
+
+        $pagina = Livewire::test(ListMembers::class)->mountAction('invita');
+
+        $invito = app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->sole());
+        $link = url("/invito-palestra/{$invito->token}");
+
+        // ⚠️ Il campo lo riempie Livewire nel browser: si guarda lo stato della finestra aperta.
+        $this->assertSame($link, $this->statoDellInvito($pagina)['link']);
+
+        // «Fatto» senza nessun indirizzo: nessun errore, l'email non è obbligatoria.
+        $pagina->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        Mail::assertNothingSent();
+        $this->assertSame(1, app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->count()));
+    }
+
+    /** 📧 Con un indirizzo, lo stesso link parte per email (e l'indirizzo resta sull'invito). */
+    #[Test]
+    public function con_un_indirizzo_lo_stesso_link_parte_per_email(): void
+    {
+        Mail::fake();
+        $this->entra($this->gestore);
+
+        Livewire::test(ListMembers::class)
+            ->mountAction('invita')
+            ->fillForm(['email' => 'mario@esempio.test'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+
+        $invito = app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->sole());
+
+        $this->assertSame('mario@esempio.test', $invito->email);
+        Mail::assertSent(InvitoInPalestraMail::class, fn (InvitoInPalestraMail $m): bool => $m->hasTo('mario@esempio.test'));
+    }
+
+    /** 🏋️ Uguale per i trainer: il link è da trainer. */
+    #[Test]
+    public function vale_anche_per_i_trainer(): void
+    {
+        Mail::fake();
+        $this->entra($this->gestore);
+
+        $pagina = Livewire::test(ListTrainers::class)->mountAction('invita');
+
+        $invito = app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->sole());
+
+        $this->assertSame(UserRole::Trainer->value, $invito->ruolo instanceof UserRole ? $invito->ruolo->value : $invito->ruolo);
+        $this->assertSame(url("/invito-palestra/{$invito->token}"), $this->statoDellInvito($pagina)['link']);
+        $pagina->callMountedAction();
+
+        Mail::assertNothingSent();
+    }
+
+    /** ⛔ Posti finiti: niente link, e la finestra dice perché. */
+    #[Test]
+    public function senza_posti_niente_link_e_il_perche(): void
+    {
+        $posti = app(InvitiInPalestra::class)->iPosti($this->palestra, UserRole::Trainer);
+
+        for ($i = 0; $i < $posti['totali']; $i++) {
+            $this->creaUtente($this->palestra, UserRole::Trainer, "t{$i}@alfa.test");
+        }
+
+        $this->entra($this->gestore);
+
+        $pagina = Livewire::test(ListTrainers::class)
+            ->mountAction('invita');
+
+        $stato = $this->statoDellInvito($pagina);
+        $this->assertNull($stato['link']);
+        $this->assertNotEmpty($stato['errore'], 'La finestra deve dire perché il link non c\'è.');
+
+        $this->assertSame(0, app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->count()));
+    }
+
     // ───────────────────────── aiuti ─────────────────────────
+
+    /** @return array<string, mixed> i campi della finestra d'invito aperta */
+    private function statoDellInvito(mixed $pagina): array
+    {
+        return (array) ($pagina->instance()->mountedActions[0]['data'] ?? []);
+    }
 
     private function entra(User $utente): void
     {

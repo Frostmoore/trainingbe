@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Support;
 
 use App\Enums\UserRole;
+use App\Models\InvitoInPalestra;
 use App\Models\User;
 use App\Services\Tenancy\InvitiInPalestra;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,23 +25,29 @@ use Illuminate\Validation\ValidationException;
  * sull'elenco dei trainer, e **dentro le rispettive card del cruscotto**
  * (F5.3). 💡 Tre copie della stessa finestra sarebbero tre testi che divergono
  * al primo cambio di regola — ed è una finestra che parla di **posti a
- * pagamento**.
+ * pagamento**. Vale uguale per **allievi e trainer** (cambia solo `$ruolo`).
  *
- * ══ 🆕 COSA CAMBIA RISPETTO A PRIMA ══════════════════════════════════════
+ * ══ 🆕 IL LINK PRIMA, L'EMAIL DOPO (E SOLO SE VUOI) — 23/09/2026 ══════════
  *
- * 1. 📧 **Si può mandare per email.** Prima il link si copiava e basta: la
- *    ragione era che non avevamo un trasporto. Adesso ce l'abbiamo (F4.0), e
- *    ⚠️ finché `MAIL_MAILER=log` la notifica lo dice a chiare lettere invece
- *    di far credere che sia partito.
- * 2. 🔗 **Un link nuovo ogni volta.** Era già così — `invita()` crea sempre una
- *    riga nuova — ma non lo diceva nessuno: ⛔ chi premeva due volte poteva
- *    credere di aver mandato lo stesso link a due persone, e che quindi solo
- *    una delle due sarebbe entrata.
+ * 📌 Il committente: *«non deve essere obbligatorio che metto l'email. Deve
+ * subito generare un link di invito (e io lo devo vedere nella modale e poterlo
+ * copiare …) e poi sotto mi deve chiedere se voglio inviarlo per email (solo lì
+ * potrò inserire un indirizzo mail) ma non deve essere obbligatorio»*.
  *
- * ══ ⚠️ E I POSTI SI DICONO PRIMA ═════════════════════════════════════════
+ * ⛔ Prima la finestra chiedeva **prima** l'email e il link compariva solo dopo,
+ * in una notifica. Adesso:
  *
- * Un limite scoperto premendo un tasto sembra un guasto; un limite scritto
- * prima è una condizione del piano.
+ * 1. aprendo la finestra il link **nasce subito** (`mountUsing`) e si vede in un
+ *    campo con il tasto **copia**;
+ * 2. sotto, **facoltativo**, un indirizzo: se c'è, premendo il tasto parte la
+ *    mail; se non c'è, il tasto chiude e basta.
+ *
+ * ⚠️ **Il prezzo, detto chiaro**: il link nasce anche se poi chiudi la finestra
+ * senza usarlo, e **occupa un posto** finché non scade (sette giorni) — un
+ * invito valido è un posto promesso (F5.1). La descrizione lo dice.
+ *
+ * ⚠️ E se i posti sono finiti il link **non** nasce: la finestra dice perché al
+ * posto del link.
  */
 class UnInvito
 {
@@ -50,76 +61,103 @@ class UnInvito
             ->color($eTrainer ? 'gray' : 'primary')
             ->modalHeading($eTrainer ? 'Un invito per un trainer' : 'Un invito per una persona')
             ->modalDescription(fn (): string => self::descrizione($ruolo))
-            ->modalSubmitActionLabel('Crea il link')
+            ->modalSubmitActionLabel('Fatto')
+            ->modalCancelAction(false)
+
+            // 1. Il link nasce all'apertura.
+            ->mountUsing(function (Schema $form) use ($ruolo): void {
+                $form->fill(self::creaIlLink($ruolo));
+            })
+
             ->schema([
-                TextInput::make('email')
-                    ->label('A chi lo mandi')
-                    ->email()
-                    ->maxLength(255)
-                    ->helperText('Serve a ritrovarlo nell\'elenco, e a spedirlo se scegli di farlo.'),
+                Hidden::make('invito_id'),
+                Hidden::make('errore'),
 
-                /*
-                 * ⚠️ **Spento di default, e non è pigrizia.** Finché la posta
-                 * non è collegata la mail finisce nel log: accenderlo da solo
-                 * farebbe credere a tutti che sia partita.
-                 *
-                 * 💡 E anche dopo, il canale vero di una palestra è WhatsApp:
-                 * il link copiato resta la strada più usata.
-                 */
-                Toggle::make('manda')
-                    ->label('Mandaglielo per email')
-                    ->default(false)
-                    ->helperText('Se lo lasci spento, copi tu il link dalla notifica.'),
+                // Se i posti sono finiti: il perché, al posto del link.
+                Text::make(fn (Get $get): string => (string) $get('errore'))
+                    ->color('danger')
+                    ->visible(fn (Get $get): bool => filled($get('errore'))),
+
+                TextInput::make('link')
+                    ->label('Il link')
+                    ->readOnly()
+                    ->copyable(copyMessage: 'Copiato')
+                    ->helperText('Copialo e mandalo come preferisci: WhatsApp, SMS, dove vuoi.')
+                    ->visible(fn (Get $get): bool => blank($get('errore'))),
+
+                // 2. L'email, facoltativa, e solo qui.
+                Section::make('Vuoi mandarlo anche per email?')
+                    ->description('Facoltativo. Se scrivi un indirizzo, premendo «Fatto» gli mandiamo il link.')
+                    ->compact()
+                    ->visible(fn (Get $get): bool => blank($get('errore')))
+                    ->schema([
+                        TextInput::make('email')
+                            ->label('Indirizzo email')
+                            ->email()
+                            ->maxLength(255)
+                            ->placeholder('nome@esempio.it'),
+                    ]),
             ])
-            ->action(function (array $data) use ($ruolo): void {
-                $utente = auth()->user();
-                $palestra = $utente?->tenant;
+            ->action(function (array $data): void {
+                $email = trim((string) ($data['email'] ?? ''));
 
-                if (! $utente instanceof User || $palestra === null) {
+                // Nessun indirizzo: il link l'hai già copiato, e basta così.
+                if ($email === '' || blank($data['invito_id'] ?? null)) {
                     return;
                 }
 
-                try {
-                    $invito = app(InvitiInPalestra::class)->invita(
-                        $palestra,
-                        $utente,
-                        $data['email'] ?: null,
-                        $ruolo,
-                    );
-                } catch (ValidationException $e) {
-                    /*
-                     * ⚠️ **Il messaggio del servizio, non uno inventato qui.**
-                     * Il servizio sa **perché** ha detto di no — posti finiti,
-                     * tenant personale — e riscriverlo nel pannello vorrebbe
-                     * dire due testi che raccontano la stessa cosa e divergono
-                     * al primo cambio di regola.
-                     */
-                    Notification::make()
-                        ->title('Invito non creato')
-                        ->body(collect($e->errors())->flatten()->first())
-                        ->danger()
-                        ->send();
+                $invito = InvitoInPalestra::query()->find($data['invito_id']);
 
+                if ($invito === null) {
                     return;
                 }
 
-                $link = url("/invito-palestra/{$invito->token}");
+                // 💡 L'indirizzo resta sull'invito: serve a ritrovarlo nell'elenco.
+                $invito->forceFill(['email' => $email])->save();
 
-                $mandata = ($data['manda'] ?? false) === true
-                    && app(InvitiInPalestra::class)->mandaIlLink($invito);
+                $mandata = app(InvitiInPalestra::class)->mandaIlLink($invito);
+                $davvero = $mandata && config('mail.default') !== 'log';
 
                 Notification::make()
-                    ->title('Invito pronto')
-                    ->body(self::esito($mandata, (bool) ($data['manda'] ?? false), $link))
-                    ->success()
-                    /*
-                     * 🚨 `persistent()`: un link che sparisce dopo cinque
-                     * secondi è un link perso, e il prossimo sarà un altro —
-                     * questo non si può più recuperare da nessuna parte.
-                     */
-                    ->persistent()
+                    ->title(self::esito($mandata))
+                    ->body($davvero ? null : 'Il link resta valido: copialo e mandalo tu.')
+                    ->status($davvero ? 'success' : 'warning')
                     ->send();
             });
+    }
+
+    /**
+     * Crea l'invito e restituisce lo stato iniziale della finestra.
+     *
+     * @return array{invito_id: ?int, link: ?string, errore: ?string, email: null}
+     */
+    private static function creaIlLink(UserRole $ruolo): array
+    {
+        $utente = auth()->user();
+        $palestra = $utente?->tenant;
+
+        if (! $utente instanceof User || $palestra === null) {
+            return ['invito_id' => null, 'link' => null, 'errore' => 'Non riesco a capire di quale palestra sei.', 'email' => null];
+        }
+
+        try {
+            $invito = app(InvitiInPalestra::class)->invita($palestra, $utente, null, $ruolo);
+        } catch (ValidationException $e) {
+            /*
+             * ⚠️ **Il messaggio del servizio, non uno inventato qui.** Il
+             * servizio sa **perché** ha detto di no — posti finiti, tenant
+             * personale — e riscriverlo qui vorrebbe dire due testi che
+             * divergono al primo cambio di regola.
+             */
+            return ['invito_id' => null, 'link' => null, 'errore' => (string) collect($e->errors())->flatten()->first(), 'email' => null];
+        }
+
+        return [
+            'invito_id' => $invito->getKey(),
+            'link' => url("/invito-palestra/{$invito->token}"),
+            'errore' => null,
+            'email' => null,
+        ];
     }
 
     private static function descrizione(UserRole $ruolo): string
@@ -132,8 +170,8 @@ class UnInvito
             : 'Vale per una persona sola, una volta sola, e scade dopo sette giorni. '
               .'Se finisce in una chat di gruppo, non fa entrare tutti.';
 
-        // 🔗 Il chiarimento che prima mancava: vedi il blocco in testa.
-        $base .= ' ⚠️ Ogni volta che premi nasce un link NUOVO: quelli di prima restano validi finché non scadono.';
+        // ⚠️ Il link nasce aprendo questa finestra, e occupa un posto finché non scade.
+        $base .= ' Ogni volta che apri questa finestra nasce un link nuovo, che tiene un posto finché non scade.';
 
         if ($palestra === null) {
             return $base;
@@ -150,22 +188,19 @@ class UnInvito
         return $base." Posti {$cosa}: {$posti['occupati']} occupati su {$posti['totali']}.";
     }
 
-    private static function esito(bool $mandata, bool $voleva, string $link): string
+    /**
+     * 🚨 **Si dice quando NON è partita**, anche col trasporto di prova: finché
+     * `MAIL_MAILER=log` la mail finisce nel registro del server e nessuno la
+     * riceve. ⛔ Un «mandata!» lì è la bugia più costosa del pannello.
+     */
+    private static function esito(bool $mandata): string
     {
-        if ($mandata) {
-            return "È partita la mail. Se preferisci, questo è il link: {$link}";
+        if ($mandata && config('mail.default') !== 'log') {
+            return 'Mail partita';
         }
 
-        if ($voleva) {
-            /*
-             * 🚨 **Si dice che NON è partita.** ⛔ Un «mandata!» su una mail
-             * finita nel log è la bugia più costosa del pannello: la palestra
-             * aspetta, la persona non riceve niente, e nessuno dei due sa
-             * perché.
-             */
-            return "⚠️ La mail non è partita (la posta non è ancora collegata). Copia il link e mandaglielo tu: {$link}";
-        }
-
-        return $link;
+        return $mandata
+            ? '⚠️ La posta non è ancora collegata: la mail non è partita davvero'
+            : '⚠️ La mail non è partita';
     }
 }
