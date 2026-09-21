@@ -108,6 +108,45 @@ class AdminPanelProvider extends PanelProvider
                  * deve prima accettare per iscritto cosa può farci.
                  */
                 PretendeLaLiberatoria::class,
+            ])
+
+            /*
+             * ══ 🚨 E GLI STESSI MIDDLEWARE ANCHE SULLE RICHIESTE LIVEWIRE ══
+             *
+             * 📌 Il committente, provando a creare una scheda vuota dal
+             * pannello: *«SQLSTATE[23000]: Column 'tenant_id' cannot be null»*.
+             *
+             * ── ⛔ La causa, che non è nel form ─────────────────────────────
+             *
+             * Filament applica `middleware()` e `authMiddleware()` alle
+             * **pagine**. ⛔ Quando poi si preme «Crea», il salvataggio non è
+             * una pagina: è una richiesta di Livewire a `/livewire/update`, e
+             * lì Livewire ri-applica **solo** i middleware che qualcuno ha
+             * dichiarato *persistenti* (`Livewire::addPersistentMiddleware()`,
+             * che Filament chiama con ciò che riceve con `isPersistent: true`).
+             *
+             * 🚨 Quindi in **ogni** richiesta che salva qualcosa il contesto
+             * del tenant era **vuoto**: `BelongsToTenant` non aveva niente da
+             * scrivere in `tenant_id`, e il database rifiutava la riga.
+             *
+             * ── ⚠️ E non era solo la scheda ────────────────────────────────
+             *
+             * `TenantScope` **a contesto vuoto non filtra**, di proposito (i
+             * comandi e i seeder girano senza tenant). ⛔ Con il contesto vuoto
+             * su ogni richiesta Livewire, le azioni del pannello giravano
+             * **senza il filtro della palestra**: nessuno se n'è accorto perché
+             * gli id che arrivano sono quelli della pagina, ma era una porta
+             * aperta che nessuno sorvegliava.
+             *
+             * 💡 **Si dichiarano persistenti solo questi due**, non tutta la
+             * catena: `Authenticate` sulle richieste Livewire lo gestisce già
+             * Livewire con la firma dello snapshot, e renderlo persistente
+             * rischierebbe di respingere i componenti **pubblici** — a partire
+             * dal modulo di accesso, che è anche lui un componente Livewire.
+             */
+            ->persistentMiddleware([
+                ResolveTenant::class,
+                SpazioDelPannello::class,
             ]);
     }
 }

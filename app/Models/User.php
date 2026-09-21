@@ -825,6 +825,27 @@ class User extends Authenticatable implements FilamentUser, HasMedia
         return (bool) $this->is_super_admin;
     }
 
+    /**
+     * 🚨 **Una persona può esistere senza palestra, e qui sta il perché** —
+     * 21/09/2026.
+     *
+     * `BelongsToTenant` dal 21/09 **rifiuta** di creare una riga senza tenant:
+     * su una scheda o su un abbonamento un `tenant_id` vuoto è una riga orfana,
+     * e prima dava un errore di vincolo d'integrità che non spiegava niente.
+     *
+     * ⛔ **Su `users` no**: il super admin della piattaforma non sta in nessuna
+     * palestra, `users.tenant_id` è nullable apposta, e `canAccessPanel()`
+     * conta su questo (*«il super admin non ha tenant, quindi non ha
+     * abbonamento»*).
+     *
+     * ⚠️ Quindi qui la guardia si spegne, e il conto torna: diciassette modelli
+     * la pretendono, uno no, e si sa quale e perché.
+     */
+    public function tenantObbligatorio(): bool
+    {
+        return false;
+    }
+
     public function isGymAdmin(): bool
     {
         return $this->hasAppRole(UserRole::GymAdmin);

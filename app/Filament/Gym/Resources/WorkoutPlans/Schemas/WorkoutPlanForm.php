@@ -50,7 +50,29 @@ class WorkoutPlanForm
                         ->label('Immagine')
                         ->collection(WorkoutPlan::COLLECTION_IMMAGINE)
                         ->image()
-                        ->imageEditor()
+                        /*
+                         * ⛔ **NIENTE `->imageEditor()`, e non è una scelta di
+                         * gusto** — 21/09/2026, fase F0.
+                         *
+                         * 🚨 Con l'editor acceso, `saveEditor()` di Filament viene
+                         * chiamato **al salvataggio del form** anche se l'editor
+                         * non è mai stato aperto. Lì dentro `this.editor` è
+                         * `undefined`, e la guardia del pacchetto (`if (E || !g)
+                         * return`) non lo controlla: parte
+                         * `this.editor.getCroppedCanvas is not a function`, il
+                         * JavaScript della pagina muore, e **non parte nessuna
+                         * richiesta**.
+                         *
+                         * ⚠️ Il sintomo è il peggiore che ci sia: il pulsante
+                         * «Salva» non fa **niente**. Nessun errore a schermo,
+                         * niente nel log del server — perché al server non arriva
+                         * mai niente. 🔬 Verificato nel browser: con l'editor 0
+                         * richieste a Livewire, senza l'editor la scheda si crea.
+                         *
+                         * 💡 Caricare l'immagine funziona lo stesso: quello che si
+                         * perde è solo il ritaglio nel browser. Su Filament v5.7.6;
+                         * da riprovare quando si salirà di versione.
+                         */
                         ->maxSize(4096)
                         ->helperText(
                             'La copertina della scheda. In un elenco di sei «Full body A/B/C» '
