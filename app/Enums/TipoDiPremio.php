@@ -153,7 +153,7 @@ enum TipoDiPremio: string
             self::ScontoAbbonamento => ['tipo_sconto', 'valore', 'durata'],
             self::ProvaGratuita => ['giorni'],
             self::AbbonamentoRegalato, self::Upgrade => ['plan_id', 'volte'],
-            self::PostiExtra => ['posti', 'volte'],
+            self::PostiExtra => ['posti', 'posti_di', 'volte'],
             self::SbloccaSconto => ['sblocca_genere', 'tipo_sconto', 'valore'],
         };
     }
@@ -215,6 +215,8 @@ enum TipoDiPremio: string
             self::GettoniRegalo, self::GettoniBonus, self::PrezzoPacchetto, self::GettoniRicorrenti,
             // 🆕 P3 — gli abbonamenti su Stripe, e il consumo.
             self::ProvaGratuita, self::PrezzoBloccato, self::ScontoConsumo,
+            // 🆕 P4 — gli abbonamenti regalati.
+            self::AbbonamentoRegalato, self::Upgrade, self::PostiExtra,
         ], true);
     }
 

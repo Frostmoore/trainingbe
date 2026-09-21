@@ -106,7 +106,30 @@ class Tenant extends Model
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
             'prezzo_per_allievo_cent' => 'integer',
+
+            // 🆕 🎀 P4 di plan_promozioni.md — i posti regalati da una promozione.
+            'posti_extra' => 'integer',
+            'posti_trainer_extra' => 'integer',
+            'posti_extra_fino_al' => 'datetime',
         ];
+    }
+
+    /**
+     * 🆕 🎀 **I posti in più regalati da una promozione** — P4 di `plan_promozioni.md`.
+     *
+     * ⚠️ Solo finché valgono (`posti_extra_fino_al` nel futuro): scaduti, tornano
+     * zero da soli — nessun comando notturno da dimenticare. ⛔ Non sono
+     * `fillable`: si scrivono solo da `ConsegnaDeiPremi`, con `forceFill`.
+     *
+     * @param  'iscritti'|'trainer'  $di
+     */
+    public function postiRegalati(string $di = 'iscritti'): int
+    {
+        if ($this->posti_extra_fino_al === null || $this->posti_extra_fino_al->isPast()) {
+            return 0;
+        }
+
+        return (int) ($di === 'trainer' ? $this->posti_trainer_extra : $this->posti_extra);
     }
 
     // ───────────────────────── relazioni ─────────────────────────

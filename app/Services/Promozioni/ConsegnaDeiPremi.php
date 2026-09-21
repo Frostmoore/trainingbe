@@ -6,15 +6,20 @@ namespace App\Services\Promozioni;
 
 use App\Enums\ComeSiAttiva;
 use App\Enums\OrigineAssegnazione;
+use App\Enums\PlanKind;
 use App\Enums\StatoAssegnazione;
 use App\Enums\TipoDiPremio;
 use App\Models\AiCreditMovement;
+use App\Models\Plan;
+use App\Models\PlanSubscription;
 use App\Models\Promozione;
 use App\Models\PromozioneAssegnazione;
 use App\Models\PromozionePremio;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\LePromozioni;
 use App\Services\Billing\PortafoglioGettoni;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -101,9 +106,19 @@ class ConsegnaDeiPremi
 
                 $dati = 0;
 
+                $altri = 0;
+
                 foreach ($bloccata->premi as $premio) {
                     $dati += match ($premio->tipo) {
                         TipoDiPremio::GettoniRegalo, TipoDiPremio::GettoniRicorrenti => $this->dai($bloccata, $premio, $utente, $assegnazione, (int) $premio->gettoni),
+                        default => 0,
+                    };
+
+                    // 🆕 🎀 P4 — abbonamenti, upgrade e posti.
+                    $altri += match ($premio->tipo) {
+                        TipoDiPremio::AbbonamentoRegalato => $this->regalaLAbbonamento($premio, $utente, $assegnazione),
+                        TipoDiPremio::Upgrade => $this->faiLUpgrade($premio, $utente, $assegnazione),
+                        TipoDiPremio::PostiExtra => $this->aggiungiIPosti($premio, $utente),
                         default => 0,
                     };
                 }
@@ -113,7 +128,7 @@ class ConsegnaDeiPremi
                  * regalo da zero gettoni non è un regalo, e contarlo esaurirebbe
                  * il massimo per persona di qualcuno che non ha avuto niente.
                  */
-                if ($dati === 0 && ! $bloccata->haPremiDAcquisto()) {
+                if ($dati === 0 && $altri === 0 && ! $bloccata->haPremiDAcquisto()) {
                     throw new NienteDaConsegnare;
                 }
 
@@ -152,8 +167,210 @@ class ConsegnaDeiPremi
             ! $this->chiLaRiceve->prende($promozione, $utente) => 'Questa offerta non è per il tuo account.',
             ! $promozione->laPuoPrendereAncora($utente) => 'Hai già ricevuto questa offerta.',
             $promozione->budget_gettoni !== null && $promozione->gettoniRestantiNelBudget() === 0 => 'Questa offerta è esaurita.',
-            default => null,
+            default => $this->percheNoAgliAbbonamenti($promozione, $utente),
         };
+    }
+
+    /**
+     * 🆕 🎀 **I regali di abbonamento hanno regole in più** — P4.
+     *
+     * 🚨 Un abbonamento sta su uno **spazio**, non su una persona: regalarlo a
+     * un iscritto vorrebbe dire regalarlo alla sua palestra intera. Per questo
+     * lo spazio deve essere **suo** (`Tenant::eDi()`), e del tipo giusto per il
+     * piano: un piano palestra su uno spazio palestra, un piano personale o da
+     * trainer su uno spazio personale.
+     */
+    private function percheNoAgliAbbonamenti(Promozione $promozione, User $utente): ?string
+    {
+        foreach ($promozione->premi as $premio) {
+            $motivo = match ($premio->tipo) {
+                TipoDiPremio::AbbonamentoRegalato => $this->percheNoAlRegalo($premio, $utente),
+                TipoDiPremio::Upgrade => $this->percheNoAllUpgrade($premio, $utente),
+                TipoDiPremio::PostiExtra => $this->spazioDi($utente) === null
+                    ? 'I posti si regalano a chi ha uno spazio suo: una palestra o i propri allievi.'
+                    : null,
+                default => null,
+            };
+
+            if ($motivo !== null) {
+                return $motivo;
+            }
+        }
+
+        return null;
+    }
+
+    private function percheNoAlRegalo(PromozionePremio $premio, User $utente): ?string
+    {
+        $piano = $premio->plan;
+
+        if ($piano === null || $this->spazioDi($utente, $piano) === null) {
+            return 'Questo abbonamento non si può regalare al tuo account: lo spazio in cui stai non è tuo, o non è del tipo giusto.';
+        }
+
+        // ⛔ Un regalo sopra un abbonamento pagato: Stripe continuerebbe a incassare.
+        if ($this->abbonamentoPagato($utente->tenant_id) !== null) {
+            return 'Hai già un abbonamento a pagamento: il regalo si sommerebbe a quello che paghi.';
+        }
+
+        return null;
+    }
+
+    private function percheNoAllUpgrade(PromozionePremio $premio, User $utente): ?string
+    {
+        $verso = $premio->plan;
+        $attuale = $this->abbonamentoPagato($utente->tenant_id);
+
+        if ($verso === null || $this->spazioDi($utente, $verso) === null) {
+            return 'Questo upgrade non si può dare al tuo account: lo spazio in cui stai non è tuo, o non è del tipo giusto.';
+        }
+
+        if ($attuale === null) {
+            return 'L\'upgrade è per chi ha già un abbonamento a pagamento.';
+        }
+
+        if ($premio->da_plan_id !== null && $attuale->plan_id !== $premio->da_plan_id) {
+            return 'Questo upgrade è per chi ha un altro piano.';
+        }
+
+        if ($attuale->plan_id === $verso->getKey()) {
+            return 'Hai già questo piano.';
+        }
+
+        return null;
+    }
+
+    /**
+     * Lo spazio della persona, **se è suo** e (con un piano) del tipo giusto.
+     */
+    private function spazioDi(User $utente, ?Plan $piano = null): ?Tenant
+    {
+        $spazio = app(TenantContext::class)->runWithoutTenant(
+            fn (): ?Tenant => $utente->tenant_id !== null ? Tenant::query()->find($utente->tenant_id) : null,
+        );
+
+        if ($spazio === null || ! $spazio->eDi($utente)) {
+            return null;
+        }
+
+        if ($piano !== null && ($piano->kind === PlanKind::Gym) === $spazio->ePersonale()) {
+            return null;
+        }
+
+        return $spazio;
+    }
+
+    private function abbonamentoPagato(?int $tenantId): ?PlanSubscription
+    {
+        if ($tenantId === null) {
+            return null;
+        }
+
+        return app(TenantContext::class)->runWithoutTenant(fn (): ?PlanSubscription => PlanSubscription::query()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('stripe_subscription_id')
+            ->attivi()
+            ->orderByDesc('starts_at')
+            ->first());
+    }
+
+    /**
+     * 🎀 **N periodi del piano, senza carta** — opzione 10.
+     *
+     * È una riga come quelle di «Regala abbonamento» (nessun id di Stripe), ma
+     * con `rinnova = false`: alla fine del regalo lo spazio torna com'era.
+     * ⛔ Con `rinnova = true` la prenderebbe `abbonamenti:rinnova-i-regali` e il
+     * regalo non finirebbe più.
+     */
+    private function regalaLAbbonamento(PromozionePremio $premio, User $utente, PromozioneAssegnazione $assegnazione): int
+    {
+        $piano = $premio->plan;
+
+        if ($piano === null) {
+            return 0;
+        }
+
+        $fine = now();
+
+        for ($i = 0; $i < max(1, (int) $premio->volte); $i++) {
+            $fine = $piano->finePeriodo($fine);
+        }
+
+        $riga = PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $utente->tenant_id,
+            'plan_id' => $piano->getKey(),
+            'starts_at' => now(),
+            'ends_at' => $fine->addDay(),
+            'rinnova' => false,
+            'promozione_assegnazione_id' => $assegnazione->getKey(),
+        ]);
+
+        $assegnazione->forceFill(['plan_subscription_id' => $riga->getKey(), 'scade_il' => $riga->ends_at])->save();
+
+        return 1;
+    }
+
+    /**
+     * ⬆️ **Il piano superiore per N mesi** — opzione 11.
+     *
+     * 💡 Si **aggiunge** una riga del piano superiore, più recente: `PianoAttivo::per()`
+     * prende l'abbonamento attivo più recente, quindi finché dura vale lui. Quello
+     * pagato resta sotto e Stripe continua a incassare **il suo** prezzo — è
+     * esattamente il regalo: paghi il Basic, hai l'Advanced. Alla scadenza la riga
+     * regalata esce da `attivi()` e torna in cima quella pagata, senza comandi.
+     */
+    private function faiLUpgrade(PromozionePremio $premio, User $utente, PromozioneAssegnazione $assegnazione): int
+    {
+        $verso = $premio->plan;
+
+        if ($verso === null) {
+            return 0;
+        }
+
+        $riga = PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $utente->tenant_id,
+            'plan_id' => $verso->getKey(),
+            'starts_at' => now(),
+            'ends_at' => now()->addMonthsNoOverflow(max(1, (int) $premio->volte))->addDay(),
+            'rinnova' => false,
+            'promozione_assegnazione_id' => $assegnazione->getKey(),
+        ]);
+
+        $assegnazione->forceFill(['plan_subscription_id' => $riga->getKey(), 'scade_il' => $riga->ends_at])->save();
+
+        return 1;
+    }
+
+    /**
+     * ➕ **Posti in più per N mesi** — opzione 13.
+     *
+     * ⚠️ Sullo spazio, non sull'abbonamento (vedi la migration di P4). Due
+     * promozioni di posti si **sommano**, e vale la scadenza più lontana; posti
+     * già scaduti ripartono da zero.
+     */
+    private function aggiungiIPosti(PromozionePremio $premio, User $utente): int
+    {
+        $spazio = $this->spazioDi($utente);
+
+        if ($spazio === null || (int) $premio->posti <= 0) {
+            return 0;
+        }
+
+        $scaduti = $spazio->posti_extra_fino_al === null || $spazio->posti_extra_fino_al->isPast();
+        $fino = now()->addMonthsNoOverflow(max(1, (int) $premio->volte));
+        $colonna = $premio->posti_di === 'trainer' ? 'posti_trainer_extra' : 'posti_extra';
+
+        $spazio->forceFill([
+            'posti_extra' => $scaduti ? 0 : $spazio->posti_extra,
+            'posti_trainer_extra' => $scaduti ? 0 : $spazio->posti_trainer_extra,
+        ]);
+
+        $spazio->forceFill([
+            $colonna => (int) $spazio->{$colonna} + (int) $premio->posti,
+            'posti_extra_fino_al' => $scaduti || $fino->gt($spazio->posti_extra_fino_al) ? $fino : $spazio->posti_extra_fino_al,
+        ])->save();
+
+        return 1;
     }
 
     /**

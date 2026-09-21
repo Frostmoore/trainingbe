@@ -150,7 +150,7 @@ class InvitiDelTrainer
      */
     public function postiRimasti(User $trainer): ?int
     {
-        $max = $this->piano->per($trainer)->max_members;
+        $max = $this->limiteDelPiano($trainer);
 
         if ($max === null) {
             return null;
@@ -711,10 +711,18 @@ class InvitiDelTrainer
         }
     }
 
-    /** Il piano di questo trainer prevede un limite di utenti? */
+    /**
+     * Il piano di questo trainer prevede un limite di utenti?
+     *
+     * 🆕 🎀 P4 di `plan_promozioni.md` — più i posti regalati da una promozione,
+     * finché valgono. ⚠️ Un piano senza limite resta senza limite: i posti
+     * regalati non trasformano `null` in un numero.
+     */
     public function limiteDelPiano(User $trainer): ?int
     {
-        return $this->piano->per($trainer)->max_members;
+        $max = $this->piano->per($trainer)->max_members;
+
+        return $max === null ? null : $max + ($trainer->tenant?->postiRegalati('iscritti') ?? 0);
     }
 
     /** 💡 Comodo per il sito e per il pannello: «sei sul piano X». */

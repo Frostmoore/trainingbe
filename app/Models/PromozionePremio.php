@@ -24,7 +24,7 @@ class PromozionePremio extends Model
 
     protected $fillable = [
         'promozione_id', 'tipo', 'a_chi', 'gettoni', 'tipo_sconto', 'valore', 'prezzo_cent',
-        'pacchetto_id', 'plan_id', 'da_plan_id', 'durata', 'volte', 'giorni', 'posti', 'sblocca_genere',
+        'pacchetto_id', 'plan_id', 'da_plan_id', 'durata', 'volte', 'giorni', 'posti', 'posti_di', 'sblocca_genere',
     ];
 
     protected $attributes = [
@@ -124,7 +124,7 @@ class PromozionePremio extends Model
             TipoDiPremio::AbbonamentoRegalato => $this->volte.' periodi di '.$piano().' in regalo',
             TipoDiPremio::Upgrade => $piano().' gratis per '.$this->volte.' mesi',
             TipoDiPremio::PrezzoBloccato => 'prezzo bloccato su '.$piano(),
-            TipoDiPremio::PostiExtra => '+'.$this->posti.' posti per '.$this->volte.' mesi',
+            TipoDiPremio::PostiExtra => '+'.$this->posti.($this->posti_di === 'trainer' ? ' posti trainer' : ' posti').' per '.$this->volte.' mesi',
             TipoDiPremio::ScontoConsumo => $sconto().' sul piano a consumo',
             TipoDiPremio::GettoniAOgniRinnovo => $this->gettoni.' gettoni a ogni rinnovo',
             TipoDiPremio::SbloccaSconto => 'sblocca '.$sconto().' su '.mb_strtolower($this->sblocca_genere?->label() ?? '?'),

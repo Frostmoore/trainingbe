@@ -117,6 +117,15 @@ class InvitiInPalestra
             ? $piano?->max_trainers
             : $piano?->max_members;
 
+        /*
+         * 🆕 🎀 P4 di `plan_promozioni.md` — i posti regalati da una promozione,
+         * finché valgono. ⚠️ Solo se il piano ha un limite: «senza limite» più
+         * cinque resta senza limite.
+         */
+        if ($totali !== null) {
+            $totali += $palestra->postiRegalati($ruolo === UserRole::Trainer ? 'trainer' : 'iscritti');
+        }
+
         $occupati = $this->quanteNePorta($palestra, $ruolo)
             + $this->invitiValidiPer($palestra, $ruolo);
 

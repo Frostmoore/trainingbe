@@ -35,6 +35,9 @@ class PlanSubscription extends Model
 
         // 🆕 🎁 P3 di plan_promozioni.md — il premio «prezzo bloccato».
         'prezzo_bloccato',
+
+        // 🆕 🎀 P4 — da quale promozione viene un abbonamento regalato o un upgrade.
+        'promozione_assegnazione_id',
     ];
 
     protected function casts(): array

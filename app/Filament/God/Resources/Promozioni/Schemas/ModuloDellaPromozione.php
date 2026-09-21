@@ -280,6 +280,18 @@ final class ModuloDellaPromozione
                     ->visible(fn (callable $get): bool => $usa($get('tipo'), 'posti'))
                     ->required(fn (callable $get): bool => $pretende($get('tipo'), 'posti')),
 
+                // 🆕 🎀 P4 — i posti di chi: iscritti (o allievi di un trainer) o trainer di una palestra.
+                Select::make('posti_di')
+                    ->label('Posti per')
+                    ->options([
+                        'iscritti' => 'Iscritti (o allievi del trainer)',
+                        'trainer' => 'Trainer (solo palestre)',
+                    ])
+                    ->default('iscritti')
+                    ->native(false)
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'posti_di'))
+                    ->required(fn (callable $get): bool => $pretende($get('tipo'), 'posti_di')),
+
                 Select::make('sblocca_genere')
                     ->label('Sconto su')
                     ->options([
@@ -516,7 +528,7 @@ final class ModuloDellaPromozione
         }
 
         $colonne = ['gettoni', 'tipo_sconto', 'valore', 'prezzo_cent', 'pacchetto_id', 'plan_id',
-            'da_plan_id', 'durata', 'volte', 'giorni', 'posti', 'sblocca_genere'];
+            'da_plan_id', 'durata', 'volte', 'giorni', 'posti', 'posti_di', 'sblocca_genere'];
 
         foreach ($colonne as $colonna) {
             if (! $tipo->usa($colonna)) {
