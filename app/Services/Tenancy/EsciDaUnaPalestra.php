@@ -105,6 +105,16 @@ final class EsciDaUnaPalestra
          * c'era davvero, e una fattura gia' emessa non cambia perche' qualcuno
          * se n'e' andato dopo.
          */
+        /*
+         * 🆕 💰 **Il registro degli incassi** — 22/09/2026, fase F3.
+         *
+         * 🚨 Stessa ragione delle fatture qui sotto: è **contabilità della
+         * palestra**. ⛔ Farla seguire chi esce vorrebbe dire spostare in un
+         * tenant personale le righe che dicono quanto ha incassato quella
+         * palestra — e per giunta è lei che quei soldi li ha tirati fuori.
+         */
+        'pagamenti_incassati',
+
         'addebiti_mensili',
         'ai_credit_movements',
         'ai_usage_logs',

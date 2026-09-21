@@ -6,6 +6,8 @@ use App\Enums\TenantStatus;
 use App\Filament\God\Resources\Tenants\Pages\CreateTenant;
 use App\Filament\God\Resources\Tenants\Pages\EditTenant;
 use App\Filament\God\Resources\Tenants\Pages\ListTenants;
+use App\Filament\God\Resources\Tenants\Pages\ViewTenant;
+use App\Filament\God\Resources\Tenants\Schemas\SchedaDellaPalestra;
 use App\Filament\God\Resources\Tenants\Schemas\TenantForm;
 use App\Filament\God\Resources\Tenants\Tables\TenantsTable;
 use App\Models\Tenant;
@@ -94,6 +96,15 @@ class TenantResource extends Resource
         return TenantForm::configure($schema);
     }
 
+    /**
+     * 🆕 **La scheda** — 22/09/2026, fase F3: tutto quello che serve sapere
+     * di una palestra senza aprire tre pagine.
+     */
+    public static function infolist(Schema $schema): Schema
+    {
+        return SchedaDellaPalestra::configure($schema);
+    }
+
     public static function table(Table $table): Table
     {
         return TenantsTable::configure($table);
@@ -111,6 +122,7 @@ class TenantResource extends Resource
         return [
             'index' => ListTenants::route('/'),
             'create' => CreateTenant::route('/create'),
+            'view' => ViewTenant::route('/{record}'),
             'edit' => EditTenant::route('/{record}/edit'),
         ];
     }

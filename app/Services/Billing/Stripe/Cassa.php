@@ -7,11 +7,13 @@ namespace App\Services\Billing\Stripe;
 use App\Enums\SuCosaVale;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
+use App\Models\PagamentoIncassato;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\User;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
+use App\Services\Billing\RegistroDeiPagamenti;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -49,6 +51,9 @@ class Cassa
 
         // 🆕 🎁 Le promozioni — 22/09/2026, fase F2.
         private readonly ScontiSuStripe $sconti,
+
+        // 🆕 💰 Il registro degli incassi — 22/09/2026, fase F3.
+        private readonly RegistroDeiPagamenti $registro,
     ) {}
 
     /**
@@ -690,6 +695,24 @@ class Cassa
 
         $riga = $this->abbonamentoDi($idAbbonamento);
 
+        /*
+         * 🆕 💰 **Il rinnovo è un incasso, e prima non lo scriveva nessuno** —
+         * fase F3.
+         *
+         * 🚨 Era il buco più grosso del conto: un cliente a canone da un anno
+         * risultava non aver mai pagato niente, perché l'unico posto in cui
+         * quel pagamento esisteva era Stripe.
+         */
+        if ($riga !== null) {
+            $this->registro->segna(
+                tenant: $riga->tenant_id,
+                tipo: PagamentoIncassato::CANONE,
+                importoCent: (int) ($fattura['amount_paid'] ?? 0),
+                stripeId: $fattura['id'] ?? null,
+                cosa: $riga->plan?->code,
+            );
+        }
+
         if ($riga === null) {
             Log::error('Stripe: rinnovo di un abbonamento che non conosciamo.', [
                 'subscription' => $idAbbonamento,
@@ -840,11 +863,30 @@ class Cassa
      */
     private function addebitoPagato(array $fattura): void
     {
-        $this->addebitoDellaFattura($fattura)?->forceFill([
+        $addebito = $this->addebitoDellaFattura($fattura);
+
+        $addebito?->forceFill([
             'stato' => AddebitoMensile::INCASSATO,
             'incassato_il' => now(),
             'errore' => null,
         ])->save();
+
+        /*
+         * 🆕 💰 E nel registro degli incassi — fase F3.
+         *
+         * 💡 Qui l'importo si legge dalla **fattura di Stripe** e non
+         * dall'addebito: se il conguaglio o uno sconto l'hanno cambiata, quello
+         * che è entrato in cassa è il primo, non il secondo.
+         */
+        if ($addebito !== null) {
+            $this->registro->segna(
+                tenant: $addebito->tenant_id,
+                tipo: PagamentoIncassato::CONSUMO,
+                importoCent: (int) ($fattura['amount_paid'] ?? $addebito->importo_cent),
+                stripeId: $fattura['id'] ?? null,
+                cosa: 'consumo '.$addebito->periodo,
+            );
+        }
     }
 
     private function abbonamentoFinito(array $abbonamento): void
@@ -952,6 +994,27 @@ class Cassa
             nota: 'Stripe '.($sessione['id'] ?? '?'),
             causale: AiCreditMovement::ACQUISTO,
         );
+
+        /*
+         * 🆕 💰 **E i soldi finiscono nel registro degli incassi** — fase F3.
+         *
+         * 🚨 Il movimento qui sopra conta **gettoni**; questo conta **euro**.
+         * ⛔ Senza, alla domanda «quanto mi ha dato questa persona» si poteva
+         * solo rispondere «guarda su Stripe», che per un cruscotto vuol dire
+         * non lo sappiamo.
+         *
+         * 💡 `amount_total` è quello che il cliente ha **davvero pagato**:
+         * comprende lo sconto di un'eventuale promozione, che è esattamente
+         * quello che deve entrare in cassa.
+         */
+        $this->registro->segna(
+            tenant: $utente->tenant_id,
+            tipo: PagamentoIncassato::GETTONI,
+            importoCent: (int) ($sessione['amount_total'] ?? 0),
+            stripeId: $sessione['id'] ?? null,
+            utente: $utente,
+            cosa: $gettoni.' gettoni',
+        );
     }
 
     /**
@@ -968,6 +1031,21 @@ class Cassa
      */
     private function accendiLAbbonamento(User $utente, array $sessione): void
     {
+        /*
+         * 🆕 💰 Il primo pagamento dell'abbonamento personale — fase F3.
+         *
+         * ⚠️ I **rinnovi** non passano di qui: arrivano con `invoice.paid`, e
+         * si segnano là (vedi `rinnovo()`).
+         */
+        $this->registro->segna(
+            tenant: $utente->tenant_id,
+            tipo: PagamentoIncassato::CANONE,
+            importoCent: (int) ($sessione['amount_total'] ?? 0),
+            stripeId: $sessione['id'] ?? null,
+            utente: $utente,
+            cosa: Plan::PLUS,
+        );
+
         $piano = Plan::where('code', Plan::PLUS)->first();
 
         if ($piano === null) {

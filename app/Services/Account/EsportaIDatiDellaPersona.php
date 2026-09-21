@@ -46,6 +46,17 @@ final class EsportaIDatiDellaPersona
         'allegati_cifrati' => [['sender_id'], ['token']],
         // 💡 Anche l'IP e il browser: sono dati della persona, e l'art. 15 li comprende.
         'audit_logs' => [['actor_id'], []],
+        /*
+         * 🆕 💰 **I pagamenti** — 22/09/2026, fase F3.
+         *
+         * 🚨 Sono **suoi**: quanto ha speso, quando e per cosa. L'art. 15
+         * comprende i dati di pagamento, e questa è la riga che li riassume.
+         *
+         * ⚠️ L'id di Stripe esce: non è una chiave d'accesso, è il numero
+         * che le serve se contesta un addebito.
+         */
+        'pagamenti_incassati' => [['user_id'], []],
+
         'campagne' => [['user_id'], []],
         // La chiave PUBBLICA: è fatta per essere data a chiunque.
         'chat_keys' => [['user_id'], []],

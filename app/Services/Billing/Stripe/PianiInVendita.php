@@ -8,11 +8,13 @@ use App\Enums\PlanKind;
 use App\Enums\SuCosaVale;
 use App\Enums\UserRole;
 use App\Models\OffertaDiPiano;
+use App\Models\PagamentoIncassato;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\ContoDegliIscritti;
+use App\Services\Billing\RegistroDeiPagamenti;
 use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
@@ -420,6 +422,21 @@ class PianiInVendita
         }
 
         $this->chiudiIPianiDiPrima($tenant, Carbon::now());
+
+        /*
+         * 🆕 💰 **L'incasso nel registro** — 22/09/2026, fase F3.
+         *
+         * ⚠️ `amount_total` è quello che il cliente ha **davvero pagato**:
+         * comprende lo sconto di un'eventuale promozione, che è esattamente
+         * quello che entra in cassa. 💡 I rinnovi passano da `Cassa::rinnovo()`.
+         */
+        app(RegistroDeiPagamenti::class)->segna(
+            tenant: $tenant,
+            tipo: PagamentoIncassato::CANONE,
+            importoCent: (int) ($sessione['amount_total'] ?? $piano->price_cents),
+            stripeId: $sessione['id'] ?? null,
+            cosa: $piano->code,
+        );
 
         PlanSubscription::withoutGlobalScopes()->create([
             'tenant_id' => $tenant->getKey(),

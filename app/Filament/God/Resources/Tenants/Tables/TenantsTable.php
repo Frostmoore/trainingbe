@@ -7,6 +7,7 @@ namespace App\Filament\God\Resources\Tenants\Tables;
 use App\Enums\AuditAction;
 use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
+use App\Filament\God\Resources\Tenants\TenantResource;
 use App\Filament\Support\VoceDiScheda;
 use App\Models\Plan;
 use App\Models\Tenant;
@@ -14,8 +15,10 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Billing\ContoDegliIscritti;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\RestoreAction;
 use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\Layout\Stack;
@@ -95,7 +98,15 @@ class TenantsTable
              * `recordUrl(null)` toglie il collegamento dall'intera area:
              * l'unico modo di entrare in modifica resta il suo pulsante.
              */
-            ->recordUrl(null)
+            /*
+             * 🆕 **Si apre la scheda** — 22/09/2026, fase F3.
+             *
+             * ⛔ Qui c'era `recordUrl(null)`, e il motivo era buono: toccando
+             * la scheda ci si ritrovava dentro un **modulo di modifica** senza
+             * averlo chiesto. 💡 Adesso ci si ritrova dentro una pagina che si
+             * **guarda**, e il modulo resta dietro il suo pulsante.
+             */
+            ->recordUrl(fn (Tenant $r): string => TenantResource::getUrl('view', ['record' => $r]))
             ->contentGrid(['sm' => 1, 'md' => 2, 'xl' => 3])
             ->columns([
                 Stack::make([
@@ -315,6 +326,58 @@ class TenantsTable
                             tenant: $r,
                         );
                     }),
+
+                /*
+                 * ══ 🗑️ IL CESTINO — 22/09/2026, fase F3 ═══════════════════
+                 *
+                 * 📌 Il committente: *«mi serve anche un tasto per rimuovere
+                 * proprio la palestra, però non deve essere davvero cancellata,
+                 * deve andare in una specie di "cestino" (rimozione logica) ma
+                 * devo poterle ripristinare quando voglio»*.
+                 *
+                 * 💡 `Tenant` usa già `SoftDeletes`: qui si aggiunge il gesto,
+                 * non il meccanismo.
+                 *
+                 * ⚠️ **Non è la stessa cosa di «sospendi»**, e il pannello deve
+                 * farlo sentire: sospesa = nessuno entra, ma è lì e si vede;
+                 * nel cestino = sparisce dagli elenchi e dai conti. ⛔ Due
+                 * pulsanti che sembrano uguali portano a premere quello
+                 * sbagliato.
+                 *
+                 * 🚨 **Niente conservazione a termine**: 📌 *«no no, se non li
+                 * devo conservare non li conserviamo»*. Il cestino serve a
+                 * tornare indietro da un errore, non a tenere i dati dieci
+                 * anni. I documenti contabili hanno la loro regola, e stanno
+                 * altrove.
+                 */
+                DeleteAction::make()
+                    ->button()
+                    ->outlined()
+                    ->label('Cestina')
+                    ->modalHeading(fn (Tenant $r): string => "Cestina {$r->name}")
+                    ->modalDescription(
+                        'Sparisce dagli elenchi e nessuno dei suoi entra più. '
+                        .'⚠️ I dati restano: si ripristina quando vuoi, dal filtro «Cancellate».'
+                    )
+                    ->successNotificationTitle('Palestra cestinata')
+                    ->after(fn (Tenant $r) => app(AuditLogger::class)->log(
+                        AuditAction::TenantSuspended,
+                        $r,
+                        ['gesto' => 'cestinata', 'utenti_coinvolti' => $r->users()->count()],
+                        tenant: $r,
+                    )),
+
+                RestoreAction::make()
+                    ->button()
+                    ->outlined()
+                    ->label('Ripristina')
+                    ->successNotificationTitle('Palestra ripristinata')
+                    ->after(fn (Tenant $r) => app(AuditLogger::class)->log(
+                        AuditAction::TenantReactivated,
+                        $r,
+                        ['gesto' => 'ripristinata'],
+                        tenant: $r,
+                    )),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -323,6 +386,6 @@ class TenantsTable
             ])
             ->defaultSort('name')
             ->emptyStateHeading('Nessuna palestra')
-            ->emptyStateDescription('Creane una: le servirà il codice d\'invito per far entrare gli iscritti.');
+            ->emptyStateDescription('Creane una, e falle entrare gli iscritti con un link d\'invito.');
     }
 }
