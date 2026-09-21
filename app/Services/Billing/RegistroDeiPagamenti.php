@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Jobs\EmettiLaFattura;
 use App\Models\PagamentoIncassato;
 use App\Models\Tenant;
 use App\Models\User;
@@ -53,7 +54,7 @@ class RegistroDeiPagamenti
         $tenantId = $tenant instanceof Tenant ? $tenant->getKey() : $tenant;
 
         try {
-            return $this->context->runWithoutTenant(function () use (
+            $riga = $this->context->runWithoutTenant(function () use (
                 $tenantId, $tipo, $importoCent, $stripeId, $utente, $cosa, $scontoCent, $quando
             ): PagamentoIncassato {
                 /*
@@ -98,6 +99,30 @@ class RegistroDeiPagamenti
 
             return null;
         }
+
+        /*
+         * 🆕 🧾 **E dall'incasso nasce la fattura** — 23/09/2026, fase F8.
+         *
+         * 💡 Qui e non nei quattro webhook: questa è già **l'unica porta** da
+         * cui passano i soldi, ed è il motivo per cui esiste. Mettere la
+         * fattura accanto a ciascun chiamante vorrebbe dire quattro occasioni
+         * di dimenticarla.
+         *
+         * ⚠️ **In coda e dopo il commit** (`EmettiLaFattura`), e dentro un
+         * `try`: come la riga del registro, la fattura non deve mai far fallire
+         * un pagamento. Chi la emette, e se tocca a noi farlo, lo decide
+         * `EmissioneDelleFatture`.
+         */
+        try {
+            EmettiLaFattura::dispatch((int) $riga->getKey());
+        } catch (Throwable $e) {
+            Log::error('Registro dei pagamenti: fattura non messa in coda.', [
+                'pagamento' => $riga->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
+
+        return $riga;
     }
 
     /** Quanto ha dato questa palestra, dall'inizio. */

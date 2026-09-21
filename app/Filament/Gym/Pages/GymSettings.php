@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Pages;
 
 use App\Models\Tenant;
+use App\Services\Fatturazione\EmissioneDelleFatture;
 use App\Support\Fatturazione\ControlliFiscali;
 use App\Support\Tenancy\TenantContext;
 use BackedEnum;
@@ -19,6 +20,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
+use Throwable;
 
 /**
  * Le impostazioni della palestra — B3.2.
@@ -257,9 +259,28 @@ class GymSettings extends Page
 
         $palestra->update($this->form->getState());
 
+        /*
+         * 🆕 🧾 **E le fatture che aspettavano questi dati partono** — F8.
+         *
+         * 💡 Un pagamento arrivato prima che la palestra compilasse i dati
+         * fiscali ha una fattura «in attesa». Appena i dati ci sono, si emette
+         * da sola: nessuno se ne deve ricordare. ⚠️ Dentro un `try`: salvare le
+         * impostazioni non deve fallire perché una fattura non è partita — la
+         * vede comunque il super admin, fra quelle in attesa.
+         */
+        $emesse = 0;
+
+        try {
+            $emesse = app(EmissioneDelleFatture::class)->emettiQuelleInAttesa($palestra->refresh());
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         Notification::make()
             ->title('Impostazioni salvate')
-            ->body('I nuovi colori arrivano subito nell\'app degli iscritti.')
+            ->body($emesse > 0
+                ? ($emesse === 1 ? 'È partita anche la fattura che aspettava i tuoi dati: la trovi in «Il tuo piano».' : "Sono partite anche le {$emesse} fatture che aspettavano i tuoi dati: le trovi in «Il tuo piano».")
+                : 'I nuovi colori arrivano subito nell\'app degli iscritti.')
             ->success()
             ->send();
     }

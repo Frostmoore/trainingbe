@@ -14,6 +14,7 @@ use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\ContoDegliIscritti;
+use App\Services\Billing\Exceptions\AbbonamentoNonSuStripeException;
 use App\Services\Billing\RegistroDeiPagamenti;
 use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
@@ -97,7 +98,7 @@ class PianiInVendita
 
         $tenant = $this->tenantCheCompra($utente, $piano);
 
-        if (! $piano->aConsumo() && $this->abbonamentoStripeAttivo($tenant) !== null) {
+        if (! $piano->aConsumo() && $this->abbonamentoStripeVero($tenant) !== null) {
             /*
              * 🚨 La regola del docblock: con un canone già pagato su Stripe, si
              * **cambia**. Un secondo checkout sarebbe un secondo abbonamento.
@@ -572,7 +573,12 @@ class PianiInVendita
     {
         $this->pretendiCheCiStianoTutti($tenant, $nuovo);
 
-        $voce = $this->stripe()->subscriptions->retrieve((string) $attuale->stripe_subscription_id)->items->data[0] ?? null;
+        try {
+            $voce = $this->stripe()->subscriptions->retrieve((string) $attuale->stripe_subscription_id)->items->data[0] ?? null;
+        } catch (InvalidRequestException) {
+            // 🆕 F8.6 — l'id salvato su Stripe non c'è: niente da cambiare, un piano da comprare.
+            throw new AbbonamentoNonSuStripeException('Il tuo abbonamento non risulta su Stripe: scegli il piano e lo paghi da capo.');
+        }
 
         if ($voce === null) {
             throw new InvalidArgumentException('Non riesco a leggere il tuo abbonamento. Riprova fra poco.');
@@ -832,14 +838,53 @@ class PianiInVendita
             ->first();
     }
 
+    /**
+     * 🆕 L'abbonamento attivo **che su Stripe esiste davvero** — 23/09/2026, F8.6.
+     *
+     * 🚨 **Il vicolo cieco dietro «passa a questo non funziona».** Con un id
+     * salvato che Stripe non conosce, `cambia()` falliva (niente da cambiare)
+     * e `apri()` rifiutava (*«hai già un piano attivo: cambialo»*): la palestra
+     * non poteva né cambiare né comprare. 🔬 Riprodotto nel browser sulla
+     * palestra dimostrativa (`sub_finto_demo`).
+     *
+     * 💡 Solo qui si chiede a Stripe, non in `abbonamentoStripeAttivo()`: quello
+     * lo legge anche il listino a ogni apertura di pagina, e una chiamata di
+     * rete per disegnare un pulsante non vale. ⚠️ Solo «non esiste» si
+     * perdona: un errore di rete resta un errore, come in
+     * `Cassa::clienteEsistente()`.
+     */
+    private function abbonamentoStripeVero(Tenant $tenant): ?PlanSubscription
+    {
+        $attuale = $this->abbonamentoStripeAttivo($tenant);
+
+        if ($attuale === null) {
+            return null;
+        }
+
+        try {
+            $sul = $this->stripe()->subscriptions->retrieve((string) $attuale->stripe_subscription_id);
+        } catch (InvalidRequestException) {
+            Log::warning('Stripe: abbonamento salvato che Stripe non conosce, si lascia comprare.', [
+                'tenant' => $tenant->getKey(),
+                'abbonamento' => $attuale->stripe_subscription_id,
+            ]);
+
+            return null;
+        }
+
+        // Un abbonamento già chiuso su Stripe non è un piano da cambiare.
+        return in_array($sul->status ?? 'active', ['canceled', 'incomplete_expired'], true) ? null : $attuale;
+    }
+
     /** Il cliente Stripe di questo spazio, se ne ha uno. */
     private function clienteDel(Tenant $tenant): ?string
     {
-        return PlanSubscription::withoutGlobalScopes()
+        // 🆕 F8.6: solo se su Stripe esiste davvero — vedi `Cassa::clienteEsistente()`.
+        return app(Cassa::class)->clienteEsistente(PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $tenant->getKey())
             ->whereNotNull('stripe_customer_id')
             ->orderByDesc('starts_at')
-            ->value('stripe_customer_id');
+            ->value('stripe_customer_id'));
     }
 
     /**

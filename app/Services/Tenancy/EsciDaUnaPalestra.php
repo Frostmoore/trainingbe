@@ -127,6 +127,16 @@ final class EsciDaUnaPalestra
          */
         'abbonamenti_tolti',
 
+        /*
+         * 🆕 🧾 **Le fatture** — 23/09/2026, F8.
+         *
+         * 🚨 Sono intestate **alla palestra** e si conservano dieci anni: chi
+         * esce non se ne porta via nessuna. ⛔ E non hanno nemmeno una persona
+         * da seguire: una fattura è della palestra che ha pagato, non di chi
+         * l'ha cliccata.
+         */
+        'fatture',
+
         'addebiti_mensili',
         'ai_credit_movements',
         'ai_usage_logs',

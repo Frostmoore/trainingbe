@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Sostituto minimo dello schema xmldsig del W3C, SOLO per validare nei test.
+
+  Lo schema ufficiale della FatturaPA importa xmldsig-core-schema.xsd dal sito del
+  W3C, che a sua volta carica una DTD da internet: validare offline sarebbe
+  impossibile, e un test che dipende dalla rete fallisce quando la rete manca.
+  Le nostre fatture NON sono firmate (niente SDI, D2): ds:Signature e' opzionale
+  (minOccurs="0") e non compare mai, quindi basta che l'elemento sia dichiarato.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://www.w3.org/2000/09/xmldsig#"
+           elementFormDefault="qualified">
+  <xs:element name="Signature" type="xs:anyType"/>
+</xs:schema>

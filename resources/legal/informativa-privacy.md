@@ -326,8 +326,14 @@ palestra**. Da Stripe teniamo solo i riferimenti che servono a riconoscere il tu
 tue fatture, e la data di un eventuale pagamento non riuscito — per avvisarti, non per spegnerti il
 servizio: Stripe riprova per qualche giorno.
 
-Carta, ricevute e disdetta si gestiscono dal portale di Stripe, che raggiungi dall'app o dal
-pannello.
+Per un abbonamento personale, carta, ricevute e disdetta si gestiscono dal portale di Stripe, che
+raggiungi dall'app.
+
+**Se sei una palestra**, per ogni pagamento emettiamo una **fattura elettronica**, intestata con i
+dati che inserisci nelle impostazioni del pannello: ragione sociale, partita IVA o codice fiscale,
+sede legale, codice destinatario o PEC. La fattura li conserva **come erano quel giorno**, e si
+tiene **per dieci anni** anche se chiudi l'account, perché lo impone la legge (art. 2220 del Codice
+civile). Il PDF lo scarichi dal pannello, in «Il tuo piano».
 
 ### 3.12 ✉️ Il modulo di contatto del sito
 

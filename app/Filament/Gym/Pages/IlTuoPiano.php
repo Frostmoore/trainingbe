@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Pages;
 
+use App\Enums\TipoDiRichiesta;
+use App\Mail\RichiestaDalPannello;
+use App\Models\Fattura;
 use App\Models\PlanSubscription;
+use App\Models\RichiestaDiContatto;
 use App\Models\User;
+use App\Services\Billing\Exceptions\AbbonamentoNonSuStripeException;
 use App\Services\Billing\Stripe\Cassa;
 use App\Services\Billing\Stripe\PianiInVendita;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
 use Throwable;
 
@@ -94,19 +104,37 @@ class IlTuoPiano extends Page
         $vendita = app(PianiInVendita::class);
         $listino = $vendita->listinoPer($this->utente());
 
-        $consumo = collect($listino['piani'])->firstWhere('codice', $codice)['a_consumo'] ?? false;
+        $voce = collect($listino['piani'])->firstWhere('codice', $codice) ?? [];
+        $consumo = $voce['a_consumo'] ?? false;
+
+        // 🆕 F8.6 — il su misura si chiede, non si compra: anche se qualcuno
+        // chiamasse `scegli` a mano, il server non apre il pagamento.
+        if ($voce !== [] && $this->eSuMisura($voce)) {
+            $this->mountAction('suMisura');
+
+            return;
+        }
 
         try {
             if ($listino['puo_cambiare'] && ! $consumo) {
-                $vendita->cambia($this->utente(), $codice);
+                try {
+                    $vendita->cambia($this->utente(), $codice);
 
-                Notification::make()
-                    ->title('Piano cambiato')
-                    ->body('Stripe calcola da solo la differenza per i giorni che restano.')
-                    ->success()
-                    ->send();
+                    Notification::make()
+                        ->title('Piano cambiato')
+                        ->body('Stripe calcola da solo la differenza per i giorni che restano.')
+                        ->success()
+                        ->send();
 
-                return;
+                    return;
+                } catch (AbbonamentoNonSuStripeException) {
+                    /*
+                     * 🆕 F8.6 — il piano in corso ha un id Stripe che Stripe
+                     * non conosce: per Stripe non c'è niente da cambiare. Si
+                     * apre il pagamento qui sotto, e al ritorno
+                     * `accendiIlCanone()` chiude il piano di prima.
+                     */
+                }
             }
 
             $this->redirect($vendita->apri($this->utente(), $codice, url()->current()));
@@ -123,27 +151,114 @@ class IlTuoPiano extends Page
         }
     }
 
-    /**
-     * La gestione di Stripe: carta, ricevute, disdetta.
+    /*
+     * ⛔ **Via «Carte, ricevute e disdetta»** (il portale di Stripe) —
+     * 23/09/2026, F8.5.
      *
-     * 💡 Il portale e non pulsanti nostri, per la ragione scritta su
-     * `Cassa::portale()`: «disdici» è anche «cambia carta» e «scarica le
-     * ricevute», e rifarlo vorrebbe dire sbagliarne un pezzo.
+     * 📌 *«Carte, ricevute e disdetta dà errore… al massimo ci mettiamo
+     * fatture»*. 🔬 L'errore veniva da un cliente Stripe salvato che su Stripe
+     * non esisteva (vedi `Cassa::clienteEsistente()`); il committente ha
+     * comunque scelto di non avere il portale qui. Le ricevute ora sono **le
+     * fatture** qui sotto. ⏳ Cambiare carta e disdire restano da decidere
+     * (debito dichiarato nell'atlante §115).
      */
-    public function gestisci(): void
-    {
-        try {
-            $this->redirect(app(Cassa::class)->portale($this->utente(), url()->current()));
-        } catch (Throwable $e) {
-            report($e);
 
-            Notification::make()->title('Non riesco ad aprire la gestione. Riprova fra poco.')->danger()->send();
+    /**
+     * 🆕 🧾 Le fatture della palestra, dalla più recente — F8.4.
+     *
+     * 💡 Anche quelle **in attesa**: la palestra deve vedere che c'è un
+     * pagamento senza fattura, e perché (le mancano i dati).
+     *
+     * @return Collection<int, Fattura>
+     */
+    public function fatture(): Collection
+    {
+        $tenantId = $this->utente()->tenant_id;
+
+        if ($tenantId === null) {
+            return new Collection;
         }
+
+        return Fattura::query()
+            ->where('tenant_id', $tenantId)
+            ->orderByRaw("case when stato = 'in_attesa' then 0 else 1 end")
+            ->orderByDesc('id')
+            ->limit(36)
+            ->get();
     }
 
-    public function haUnClienteStripe(): bool
+    /**
+     * Cosa manca per ricevere le fatture, in parole (vuoto = niente).
+     *
+     * @return list<string>
+     */
+    public function datiMancanti(): array
     {
-        return app(Cassa::class)->clienteDi($this->utente()) !== null;
+        return $this->utente()->tenant?->datiDiFatturazioneMancanti() ?? [];
+    }
+
+    /**
+     * 🆕 Il piano **su misura** delle palestre non si compra: si chiede — F8.6.
+     *
+     * 📌 *«per il piano palestra su misura, il tasto deve rimandare a un modulo
+     * di contatto che manda un'email a me (info@smp-digital.it)»*.
+     *
+     * ⚠️ Solo per le **palestre**: il «Trainer su misura» resta com'è, perché
+     * la richiesta parla del piano palestra.
+     *
+     * @param  array<string, mixed>  $piano  una voce di `listino()`
+     */
+    public function eSuMisura(array $piano): bool
+    {
+        return ($piano['a_consumo'] ?? false) === true
+            && $this->utente()->tenant?->ePersonale() === false;
+    }
+
+    public function suMisuraAction(): Action
+    {
+        return Action::make('suMisura')
+            ->label('Scrivici')
+            ->icon('heroicon-m-envelope')
+            ->modalHeading('Un piano su misura')
+            ->modalDescription('Raccontaci com\'è la tua palestra: ti rispondiamo noi, di solito entro un giorno lavorativo.')
+            ->modalSubmitActionLabel('Manda la richiesta')
+            ->schema([
+                TextInput::make('iscritti')->label('Quanti iscritti, più o meno')->numeric()->minValue(0)->maxValue(100000),
+                TextInput::make('trainer')->label('Quanti trainer')->numeric()->minValue(0)->maxValue(100000),
+                TextInput::make('telefono')->label('Un telefono, se preferisci essere chiamato')->tel()->maxLength(40),
+                Textarea::make('messaggio')->label('Cosa ti serve')->required()->minLength(10)->maxLength(4000)->rows(5),
+            ])
+            ->action(function (array $data): void {
+                $utente = $this->utente();
+
+                /*
+                 * 💡 La richiesta **resta anche nel database** («Richieste dal
+                 * sito» in `/god`): se la mail non parte, o finisce nel log
+                 * finché non c'è Zeptomail, non si perde.
+                 */
+                $richiesta = RichiestaDiContatto::create([
+                    'tipo' => TipoDiRichiesta::Palestra,
+                    'nome' => $utente->name,
+                    'email' => $utente->email,
+                    'telefono' => $data['telefono'] ?? null,
+                    'organizzazione' => $utente->tenant?->name,
+                    'iscritti' => filled($data['iscritti'] ?? null) ? (int) $data['iscritti'] : null,
+                    'trainer' => filled($data['trainer'] ?? null) ? (int) $data['trainer'] : null,
+                    'messaggio' => (string) $data['messaggio'],
+                ]);
+
+                try {
+                    Mail::to((string) config('services.contatti.email'))->send(new RichiestaDalPannello($richiesta));
+                } catch (Throwable $e) {
+                    report($e);
+                }
+
+                Notification::make()
+                    ->title('Richiesta mandata')
+                    ->body('Ti rispondiamo a '.$utente->email.'.')
+                    ->success()
+                    ->send();
+            });
     }
 
     private function utente(): User

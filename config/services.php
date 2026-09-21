@@ -203,4 +203,16 @@ return [
      */
     'cambio_usd_eur' => (float) env('CAMBIO_USD_EUR', 0.92),
 
+    /*
+    | 🆕 📬 A chi arrivano le richieste — 23/09/2026, F8.6.
+    |
+    | 📌 *«per il piano palestra su misura, il tasto deve rimandare a un modulo
+    | di contatto che manda un'email a me (info@smp-digital.it)»*. ⚠️ Finché
+    | `MAIL_MAILER=log` la mail finisce nel log: la richiesta però resta anche
+    | in «Richieste dal sito», quindi non si perde.
+    */
+    'contatti' => [
+        'email' => env('CONTATTI_EMAIL', 'info@smp-digital.it'),
+    ],
+
 ];

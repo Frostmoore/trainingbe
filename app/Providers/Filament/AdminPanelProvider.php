@@ -6,6 +6,7 @@ namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
 use App\Http\Controllers\DocumentoDellImport;
+use App\Http\Controllers\FattureDaScaricare;
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\PretendeLaLiberatoria;
 use App\Http\Middleware\ResolveTenant;
@@ -163,6 +164,11 @@ class AdminPanelProvider extends PanelProvider
                 Route::get('/import/{import}/documento', DocumentoDellImport::class)
                     ->whereNumber('import')
                     ->name('documento-import');
+
+                // 🆕 🧾 F8 — il PDF di una fattura, per il titolare della palestra.
+                Route::get('/fatture/{fattura}/pdf', [FattureDaScaricare::class, 'pdfDellaPalestra'])
+                    ->whereNumber('fattura')
+                    ->name('fattura-pdf');
             });
     }
 }

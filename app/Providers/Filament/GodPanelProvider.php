@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
+use App\Http\Controllers\FattureDaScaricare;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -18,6 +19,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -64,6 +66,23 @@ class GodPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+
+            /*
+             * 🆕 🧾 **Le fatture da scaricare** — 23/09/2026, F8.
+             *
+             * ⛔ L'XML **solo qui** (D2): è il documento fiscale, e il cliente
+             * non deve poterlo prendere da solo. `authenticatedRoutes` = la
+             * catena di questo pannello, cioè solo il super admin.
+             */
+            ->authenticatedRoutes(function (): void {
+                Route::get('/fatture/{fattura}/pdf', [FattureDaScaricare::class, 'pdfPerLaPiattaforma'])
+                    ->whereNumber('fattura')
+                    ->name('fattura-pdf');
+
+                Route::get('/fatture/{fattura}/xml', [FattureDaScaricare::class, 'xmlPerLaPiattaforma'])
+                    ->whereNumber('fattura')
+                    ->name('fattura-xml');
+            });
     }
 }

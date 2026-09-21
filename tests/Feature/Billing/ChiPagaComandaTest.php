@@ -13,6 +13,7 @@ use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
+use Tests\Concerns\UsaStripeFinto;
 use Tests\TestCase;
 
 /**
@@ -45,6 +46,7 @@ final class ChiPagaComandaTest extends TestCase
 {
     use CreaAmbiente;
     use RefreshDatabase;
+    use UsaStripeFinto;
 
     protected function setUp(): void
     {
@@ -97,6 +99,10 @@ final class ChiPagaComandaTest extends TestCase
         $capo = $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@test.it');
 
         self::assertTrue(Cassa::loPuoGestire($capo));
+
+        // 🆕 F8.6: `clienteDi()` chiede a Stripe se il cliente esiste ancora —
+        // col finto, perché un test non deve uscire in rete.
+        $this->stripeFinto();
         self::assertSame('cus_finto', app(Cassa::class)->clienteDi($capo));
     }
 

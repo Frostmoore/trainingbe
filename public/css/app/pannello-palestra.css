@@ -180,3 +180,141 @@ img.tc-documento {
     font-size: 0.875rem;
     font-weight: 600;
 }
+
+/* ── F8: «Il tuo piano» ─────────────────────────────────────────────────── */
+
+/*
+ * Il committente: «Le cose sotto vanno bene ma devono avere il margine
+ * giusto». La pagina usava `grid gap-4 sm:grid-cols-2 lg:grid-cols-3`,
+ * `mt-4`, `flex h-full`: nessuna di queste classi esiste nel CSS di
+ * Filament, e le card uscivano una sotto l'altra, attaccate.
+ */
+.tc-pagina {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.tc-piani {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+    .tc-piani {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1024px) {
+    .tc-piani {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.tc-piano {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: 100%;
+}
+
+.tc-piano-nome {
+    font-weight: 600;
+}
+
+.tc-prezzo {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 700;
+}
+
+.tc-prezzo small {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: var(--gray-500);
+}
+
+.tc-piano-testo {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+}
+
+.dark .tc-piano-testo {
+    color: var(--gray-400);
+}
+
+.tc-piano-azione {
+    margin-top: auto;
+    padding-top: 0.5rem;
+}
+
+.tc-avviso {
+    border-radius: 0.75rem;
+    border: 1px solid var(--warning-300);
+    background: var(--warning-50);
+    color: var(--warning-800);
+    padding: 1rem;
+    font-size: 0.875rem;
+}
+
+.tc-avviso.tc-avviso-pericolo {
+    border-color: var(--danger-300);
+    background: var(--danger-50);
+    color: var(--danger-800);
+}
+
+.dark .tc-avviso {
+    border-color: var(--warning-700);
+    background: var(--warning-950);
+    color: var(--warning-200);
+}
+
+.dark .tc-avviso.tc-avviso-pericolo {
+    border-color: var(--danger-700);
+    background: var(--danger-950);
+    color: var(--danger-200);
+}
+
+.tc-avviso a {
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.tc-tabella {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+
+.tc-tabella th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--gray-500);
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.tc-tabella td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--gray-100);
+    vertical-align: top;
+}
+
+.dark .tc-tabella th {
+    border-bottom-color: rgb(255 255 255 / 0.1);
+}
+
+.dark .tc-tabella td {
+    border-bottom-color: rgb(255 255 255 / 0.05);
+}
+
+.tc-tabella .tc-destra {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.tc-scorre {
+    overflow-x: auto;
+}

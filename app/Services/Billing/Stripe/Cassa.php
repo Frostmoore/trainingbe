@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Stripe\Checkout\Session;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\StripeClient;
 
 /**
@@ -550,11 +551,49 @@ class Cassa
             return null;
         }
 
-        return PlanSubscription::withoutGlobalScopes()
+        return $this->clienteEsistente(PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $tenantId)
             ->whereNotNull('stripe_customer_id')
             ->orderByDesc('starts_at')
-            ->value('stripe_customer_id');
+            ->value('stripe_customer_id'));
+    }
+
+    /**
+     * 🆕 **Il cliente Stripe, solo se su Stripe esiste davvero** — 23/09/2026, F8.6.
+     *
+     * 🚨 **Il difetto dietro «passa a questo» e «Carte, ricevute e disdetta»
+     * che davano errore.** Il cliente si legge dall'ultimo abbonamento, anche
+     * scaduto; ma un id salvato può non esistere più su Stripe — un
+     * abbonamento assegnato a mano con un id di prova, un cliente cancellato
+     * dalla dashboard, un id della modalità live letto con le chiavi di test.
+     * Stripe rispondeva *«No such customer»* e il pagamento non si apriva.
+     * 🔬 Riprodotto in locale col cliente `cus_finto_demo` della palestra
+     * dimostrativa, e con la sandbox vera.
+     *
+     * 💡 Se non esiste si torna `null`, e chi chiama fa quello che fa per un
+     * cliente nuovo (Stripe ne crea uno dall'email). ⚠️ Solo «non esiste» si
+     * perdona: un errore di rete **resta un errore**, e la pagina dice di
+     * riprovare — creare un cliente nuovo perché la rete ha avuto un singhiozzo
+     * vorrebbe dire due clienti per la stessa palestra.
+     */
+    public function clienteEsistente(?string $id): ?string
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        try {
+            $cliente = $this->stripe()->customers->retrieve($id);
+        } catch (InvalidRequestException $e) {
+            Log::warning('Stripe: il cliente salvato non esiste, se ne usa uno nuovo.', [
+                'cliente' => $id,
+                'errore' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        return ($cliente->deleted ?? false) === true ? null : $id;
     }
 
     /**
