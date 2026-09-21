@@ -6,6 +6,8 @@ namespace Tests\Feature\Pannello;
 
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
+use App\Filament\Gym\Resources\Inviti\InvitoResource;
+use App\Filament\Gym\Resources\Inviti\Pages\ListInviti;
 use App\Filament\Gym\Resources\Members\Pages\CreateMember;
 use App\Filament\Gym\Resources\Members\Pages\ListMembers;
 use App\Filament\Gym\Resources\Members\Pages\ViewMember;
@@ -506,6 +508,86 @@ final class IlPannelloDellaPalestraTest extends TestCase
         $this->assertNotEmpty($stato['errore'], 'La finestra deve dire perché il link non c\'è.');
 
         $this->assertSame(0, app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->count()));
+    }
+
+    // ─────────────── 🆕 la pagina degli inviti, con la revoca ───────────────
+
+    /**
+     * 🔗 **La lista degli inviti fatti, e la revoca libera il posto.** 📌 *«mi
+     * serve anche una pagina con la lista degli inviti fatti così li posso
+     * revocare»*.
+     */
+    #[Test]
+    public function gli_inviti_si_vedono_e_si_revocano(): void
+    {
+        $inviti = app(InvitiInPalestra::class);
+        $mio = $inviti->invita($this->palestra, $this->gestore, 'tizio@esempio.test');
+
+        $altra = $this->creaPalestra('Beta', 'beta', 'BETA2345');
+        $capoBeta = $this->creaUtente($altra, UserRole::GymAdmin, 'capo@beta.test');
+        $suo = $inviti->invita($altra, $capoBeta, 'segreto@beta.test');
+
+        $prima = $inviti->iPosti($this->palestra)['occupati'];
+
+        $this->entra($this->gestore);
+
+        Livewire::test(ListInviti::class)
+            ->assertSuccessful()
+            ->assertCanSeeTableRecords([$mio])
+            ->assertCanNotSeeTableRecords([$suo])
+            ->assertDontSee('segreto@beta.test')
+            ->callTableAction('revoca', $mio)
+            ->assertHasNoTableActionErrors();
+
+        $this->assertNotNull($mio->refresh()->revoked_at);
+        $this->assertSame($prima - 1, $inviti->iPosti($this->palestra)['occupati'], 'Revocato, il posto torna libero.');
+        $this->assertSame('Revocato', InvitoResource::stato($mio));
+    }
+
+    /** 📧 Dalla lista un invito si rimanda per email: lo **stesso** link, non uno nuovo. */
+    #[Test]
+    public function dalla_lista_un_invito_si_rimanda_per_email(): void
+    {
+        Mail::fake();
+        $invito = app(InvitiInPalestra::class)->invita($this->palestra, $this->gestore);
+
+        $this->entra($this->gestore);
+
+        Livewire::test(ListInviti::class)
+            ->assertTableActionVisible('copia', $invito)
+            ->callTableAction('manda', $invito, ['email' => 'mario@esempio.test'])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('mario@esempio.test', $invito->refresh()->email);
+        $this->assertSame(1, app(TenantContext::class)->runWithoutTenant(fn () => InvitoInPalestra::query()->count()), 'Nessun link nuovo.');
+        Mail::assertSent(InvitoInPalestraMail::class, fn (InvitoInPalestraMail $m): bool => $m->hasTo('mario@esempio.test')
+            && $m->invito->is($invito));
+    }
+
+    /** Un invito revocato non si copia e non si rimanda. */
+    #[Test]
+    public function un_invito_finito_non_si_copia_ne_si_rimanda(): void
+    {
+        $invito = app(InvitiInPalestra::class)->invita($this->palestra, $this->gestore);
+        app(InvitiInPalestra::class)->revoca($invito);
+
+        $this->entra($this->gestore);
+
+        Livewire::test(ListInviti::class)
+            ->assertTableActionHidden('copia', $invito)
+            ->assertTableActionHidden('manda', $invito)
+            ->assertTableActionHidden('revoca', $invito);
+    }
+
+    /** ⛔ Lo staff non gestisce gli inviti della palestra. */
+    #[Test]
+    public function un_trainer_non_vede_gli_inviti(): void
+    {
+        $trainer = $this->creaUtente($this->palestra, UserRole::Trainer, 'anna@alfa.test');
+
+        $this->entra($trainer);
+
+        $this->assertFalse(InvitoResource::canAccess());
     }
 
     // ───────────────────────── aiuti ─────────────────────────
