@@ -834,6 +834,11 @@ final class Prompts
            Se il nome e' cosi' illeggibile da non farti capire che esercizio sia,
            metti `null` e un elenco vuoto: un muscolo indovinato colora una figura
            del corpo con una cosa falsa, ed e' peggio di una zona grigia.
+        9. CARICHI SEMPRE IN CHILOGRAMMI. `target_weight` e' in kg. Se il documento
+           usa le libbre («lb», «lbs»), converti (1 lb = 0,4536 kg), arrotonda a
+           0,5 kg e scrivi il valore originale nelle note della riga («135 lb»).
+           Un carico in libbre scritto come se fossero chili e' quasi il doppio:
+           nessun errore lo segnala, e chi lo segue si fa male.
         TXT;
 
     /**

@@ -244,7 +244,7 @@ class PdfImportTest extends TestCase
     // ───────────────────────── la pubblicazione ─────────────────────────
 
     #[Test]
-    public function publishing_the_draft_creates_a_draft_plan_with_reconciled_exercises(): void
+    public function publishing_the_draft_creates_a_published_plan_with_reconciled_exercises(): void
     {
         $panca = $this->esercizioGlobale('Panca piana');
 
@@ -268,7 +268,10 @@ class PdfImportTest extends TestCase
         $piano = $this->ctx()->runAs($this->alfa,
             fn () => $import->publishAsPlan(null, $this->trainer));
 
-        $this->assertSame(PlanStatus::Draft, $piano->status, 'La scheda importata e\' nata pubblicata.');
+        // 🆕 F7 (23/09/2026): nasce pubblicata. Dopo R2 e' un modello della
+        // palestra, e lo stato non si cambia piu' dal pannello: nata bozza,
+        // sarebbe rimasta bozza per sempre, invisibile all'API.
+        $this->assertSame(PlanStatus::Published, $piano->status, 'La scheda importata e\' nata bozza.');
         $this->assertSame(PlanSource::PdfImport, $piano->source);
         $this->assertSame($this->iscritto->id, $piano->member_id);
         $this->assertSame(2, $piano->exercises()->count());

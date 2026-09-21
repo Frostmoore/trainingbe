@@ -5,6 +5,11 @@
     richiesta: si guarda «3 su 10» e si invita lì, senza attraversare il menù.
 
     ⚠️ Niente query qui dentro: tutto arriva da `getViewData()`.
+
+    ⛔ Niente classi di Tailwind (`grid-cols-3`, `gap-4`…): il CSS di Filament
+    v5 è precompilato e non le contiene. Le classi `tc-*` stanno in
+    resources/css/pannello-palestra.css — il perché per esteso è in cima a
+    quel foglio.
 --}}
 @php
     /** Scrive un importo in centesimi, o un trattino se non c'è. */
@@ -18,15 +23,15 @@
         : $p['occupati'] . ' su ' . $p['totali'];
 
     /** Rosso quando restano pochi posti: è la cosa su cui si agisce. */
-    $colore = static function (array $p): string {
+    $tono = static function (array $p): string {
         if ($p['totali'] === null || $p['rimasti'] === null) {
-            return 'text-gray-500 dark:text-gray-400';
+            return '';
         }
 
         return match (true) {
-            $p['rimasti'] === 0 => 'text-danger-600 dark:text-danger-400',
-            $p['rimasti'] <= 2 => 'text-warning-600 dark:text-warning-400',
-            default => 'text-gray-500 dark:text-gray-400',
+            $p['rimasti'] === 0 => 'tc-pericolo',
+            $p['rimasti'] <= 2 => 'tc-attenzione',
+            default => '',
         };
     };
 @endphp
@@ -34,27 +39,23 @@
 <x-filament-widgets::widget>
     @if ($palestra === null)
         <x-filament::section>
-            <p class="text-sm text-gray-500 dark:text-gray-400">
-                Nessuna palestra nel contesto.
-            </p>
+            <p class="tc-nota">Nessuna palestra nel contesto.</p>
         </x-filament::section>
     @else
-        <div class="grid gap-4 md:grid-cols-3">
+        <div class="tc-posti">
 
             {{-- ───────────────── Iscritti ───────────────── --}}
             <x-filament::section>
                 <x-slot name="heading">Iscritti</x-slot>
 
-                <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold tracking-tight">{{ $iscritti['occupati'] }}</span>
+                <div class="tc-numero">
+                    <span class="tc-numero-grande">{{ $iscritti['occupati'] }}</span>
                     @if ($iscritti['totali'] !== null)
-                        <span class="text-sm {{ $colore($iscritti) }}">
-                            su {{ $iscritti['totali'] }} posti
-                        </span>
+                        <span class="tc-nota {{ $tono($iscritti) }}">su {{ $iscritti['totali'] }} posti</span>
                     @endif
                 </div>
 
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p class="tc-nota">
                     @if ($iscritti['totali'] === null)
                         Il vostro piano non mette limiti.
                     @elseif ($iscritti['rimasti'] === 0)
@@ -64,7 +65,7 @@
                     @endif
                 </p>
 
-                <div class="mt-4">
+                <div class="tc-azione">
                     {{ $this->invitaIscrittoAction }}
                 </div>
             </x-filament::section>
@@ -73,12 +74,12 @@
             <x-filament::section>
                 <x-slot name="heading">Trainer</x-slot>
 
-                <div class="flex items-baseline gap-2">
-                    <span class="text-3xl font-bold tracking-tight">{{ $trainerAttivi }}</span>
-                    <span class="text-sm text-gray-500 dark:text-gray-400">attivi</span>
+                <div class="tc-numero">
+                    <span class="tc-numero-grande">{{ $trainerAttivi }}</span>
+                    <span class="tc-nota">attivi</span>
                 </div>
 
-                <p class="mt-1 text-xs {{ $colore($trainer) }}">
+                <p class="tc-nota {{ $tono($trainer) }}">
                     Posti: {{ $suTotale($trainer) }}.
                     @if ($trainerAttivi < $trainer['occupati'])
                         {{-- 💡 La differenza è la domanda: un posto pagato che non lavora. --}}
@@ -86,7 +87,7 @@
                     @endif
                 </p>
 
-                <div class="mt-4">
+                <div class="tc-azione">
                     {{ $this->invitaTrainerAction }}
                 </div>
             </x-filament::section>
@@ -95,24 +96,22 @@
             <x-filament::section>
                 <x-slot name="heading">Per ogni iscritto</x-slot>
 
-                <dl class="space-y-2 text-sm">
-                    <div class="flex items-baseline justify-between gap-4">
-                        <dt class="text-gray-500 dark:text-gray-400">Ti costa</dt>
-                        <dd class="font-medium">{{ $euro($costo) }}</dd>
+                <dl class="tc-conti">
+                    <div>
+                        <dt>Ti costa</dt>
+                        <dd>{{ $euro($costo) }}</dd>
                     </div>
-                    <div class="flex items-baseline justify-between gap-4">
-                        <dt class="text-gray-500 dark:text-gray-400">Fai pagare</dt>
-                        <dd class="font-medium">{{ $euro($prezzo) }}</dd>
+                    <div>
+                        <dt>Fai pagare</dt>
+                        <dd>{{ $euro($prezzo) }}</dd>
                     </div>
-                    <div class="flex items-baseline justify-between gap-4 border-t border-gray-200 pt-2 dark:border-white/10">
-                        <dt class="text-gray-500 dark:text-gray-400">Ti resta</dt>
-                        <dd class="text-lg font-bold {{ ($margine ?? 0) < 0 ? 'text-danger-600 dark:text-danger-400' : '' }}">
-                            {{ $euro($margine) }}
-                        </dd>
+                    <div class="tc-totale">
+                        <dt>Ti resta</dt>
+                        <dd class="{{ ($margine ?? 0) < 0 ? 'tc-pericolo' : '' }}">{{ $euro($margine) }}</dd>
                     </div>
                 </dl>
 
-                <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                <p class="tc-nota tc-azione">
                     @if ($prezzo === null)
                         {{-- ⚠️ D9: il prezzo lo scrive la palestra, noi non lo verifichiamo. --}}
                         Scrivi la tua quota mensile in <strong>Impostazioni</strong> e qui comparirà

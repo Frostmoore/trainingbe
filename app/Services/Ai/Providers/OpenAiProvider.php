@@ -119,8 +119,16 @@ class OpenAiProvider implements AiProvider
      * cioe' esattamente il caso in cui l'import PDF serve. Meglio un errore
      * chiaro: chi ha bisogno dell'import usa il driver Anthropic, che e' il
      * default.
+     *
+     * ⚠️ `array $percorsi` e non `string`: la firma dell'interfaccia è cambiata
+     * con K1 (le foto dell'app, più file per volta) e questa era rimasta
+     * indietro — PHP rifiutava di caricare la classe con un errore fatale, così
+     * `AI_DRIVER=openai` faceva cadere tutto invece di questo errore chiaro.
+     * Corretto il 23/09/2026 (F7); lo sorveglia `OpenAiProviderSiCaricaTest`.
+     *
+     * @param  list<string>  $percorsi
      */
-    public function parseWorkoutPdf(string $absolutePath, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
+    public function parseWorkoutPdf(array $percorsi, AiCallContext $ctx, ?string $forceModel = null): ParsedWorkoutPlan
     {
         throw new AiUnavailableException(
             'ai_pdf_unsupported',
@@ -128,8 +136,9 @@ class OpenAiProvider implements AiProvider
         );
     }
 
+    /** @param  list<string>  $percorsi */
     public function trascriviPianoAlimentare(
-        string $absolutePath,
+        array $percorsi,
         AiCallContext $ctx,
         ?string $forceModel = null,
     ): PianoTrascritto {

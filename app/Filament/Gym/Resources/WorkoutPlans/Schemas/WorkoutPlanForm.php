@@ -209,7 +209,7 @@ class WorkoutPlanForm
                 )
                 ->schema([
                     Repeater::make('days')
-                        ->label('')
+                        ->hiddenLabel() // ⚠️ `label('')` in Filament v5 ricade sull'etichetta automatica («Days»)
                         ->relationship()
                         ->orderColumn('position')
                         ->reorderable()

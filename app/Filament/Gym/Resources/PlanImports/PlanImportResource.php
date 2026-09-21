@@ -8,6 +8,7 @@ use App\Enums\ImportStatus;
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\PlanImports\Pages\ListPlanImports;
 use App\Filament\Gym\Resources\PlanImports\Pages\ReviewPlanImport;
+use App\Filament\Gym\Resources\WorkoutPlans\Pages\EditWorkoutPlan;
 use App\Jobs\ParseWorkoutPdf;
 use App\Models\User;
 use App\Models\WorkoutPlanImport;
@@ -46,6 +47,9 @@ class PlanImportResource extends Resource
 
     protected static ?string $navigationLabel = 'Import da PDF';
 
+    // 💡 F7: senza, le briciole dicevano «Import Da PDF» (maiuscole all'inglese).
+    protected static ?string $breadcrumb = 'Schede da importare';
+
     protected static ?int $navigationSort = 5;
 
     public static function getEloquentQuery(): Builder
@@ -69,13 +73,22 @@ class PlanImportResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
+            /*
+             * 🆕 **Anche una foto** — 23/09/2026, F7.
+             *
+             * 📌 *«visualizzatore pdf o immagine»*. 💡 Il modello sa già leggere
+             * le foto (è così che importa l'app); mancava che il pannello le
+             * accettasse. ⚠️ I tipi sono **gli stessi** del modello
+             * (`WorkoutPlanImport::TIPI_ACCETTATI`): uno accettato qui e non là
+             * fallirebbe nel job, dopo aver riservato i gettoni.
+             */
             FileUpload::make('pdf')
-                ->label('Il PDF della scheda')
-                ->acceptedFileTypes(['application/pdf'])
+                ->label('La scheda: un PDF o una foto')
+                ->acceptedFileTypes(WorkoutPlanImport::TIPI_ACCETTATI)
                 ->maxSize(20480)
                 ->required()
                 ->storeFiles(false)
-                ->helperText('Massimo 20 MB. I PDF scansionati funzionano peggio: se possibile usare l\'originale digitale.')
+                ->helperText('Massimo 20 MB. Una foto dritta e ben illuminata funziona quasi come un PDF digitale; una scansione storta molto peggio.')
                 ->columnSpanFull(),
 
             /*
@@ -97,27 +110,43 @@ class PlanImportResource extends Resource
             ->columns([
                 TextColumn::make('id')->label('#')->sortable(),
 
+                /*
+                 * 🚨 **`$state`, non `$s`** — 23/09/2026, F7.
+                 *
+                 * ⛔ Filament inietta i parametri delle closure **per nome**
+                 * (`$state`, `$record`, …) e, se il nome non lo conosce, prova
+                 * a costruire il **tipo** dal container. Con `ImportStatus $s`
+                 * provava a istanziare un enum: *«Target [ImportStatus] is not
+                 * instantiable»*, e **l'elenco degli import dava 500** a
+                 * chiunque lo aprisse. Idem `?float $s` sulla confidenza.
+                 */
                 TextColumn::make('status')
                     ->label('Stato')
                     ->badge()
-                    ->formatStateUsing(fn (ImportStatus $s): string => $s->label())
-                    ->color(fn (ImportStatus $s): string => $s->color()),
+                    ->formatStateUsing(fn (ImportStatus $state): string => $state->label())
+                    ->color(fn (ImportStatus $state): string => $state->color()),
 
-                TextColumn::make('member.name')
-                    ->label('Per')
-                    ->placeholder('Modello')
-                    ->badge()
-                    ->color('gray'),
+                /*
+                 * ⛔ Via la colonna «Per» (l'iscritto): dopo R2 un import non è
+                 * per nessuno, e la colonna diceva «Modello» su ogni riga. Al
+                 * suo posto il nome della scheda letta, che è quello con cui
+                 * la si riconosce.
+                 */
+                TextColumn::make('parsed_payload.name')
+                    ->label('Scheda')
+                    ->placeholder('—')
+                    ->limit(50)
+                    ->wrap(),
 
                 TextColumn::make('confidence')
                     ->label('Confidenza')
-                    ->formatStateUsing(fn (?float $s): string => $s === null ? '—' : number_format($s * 100, 0).'%')
+                    ->formatStateUsing(fn (?float $state): string => $state === null ? '—' : number_format($state * 100, 0).'%')
                     // Sotto soglia il numero e' rosso: e' la riga da guardare
                     // per prima, non una curiosita' statistica.
-                    ->color(fn (?float $s): string => match (true) {
-                        $s === null => 'gray',
-                        $s < (float) config('ai.pdf.escalation_confidence') => 'danger',
-                        $s < 0.85 => 'warning',
+                    ->color(fn (?float $state): string => match (true) {
+                        $state === null => 'gray',
+                        $state < (float) config('ai.pdf.escalation_confidence') => 'danger',
+                        $state < 0.85 => 'warning',
                         default => 'success',
                     })
                     ->alignCenter(),
@@ -141,6 +170,13 @@ class PlanImportResource extends Resource
                     ->color('warning')
                     ->visible(fn (WorkoutPlanImport $r): bool => $r->status === ImportStatus::Review)
                     ->url(fn (WorkoutPlanImport $r): string => ReviewPlanImport::getUrl(['record' => $r])),
+
+                // 🆕 F7 — una volta creata, la scheda si apre da qui nel builder.
+                Action::make('apri')
+                    ->label('Apri la scheda')
+                    ->icon('heroicon-m-pencil-square')
+                    ->visible(fn (WorkoutPlanImport $r): bool => $r->workout_plan_id !== null)
+                    ->url(fn (WorkoutPlanImport $r): string => EditWorkoutPlan::getUrl(['record' => $r->workout_plan_id])),
 
                 Action::make('riprova')
                     ->label('Riprova')

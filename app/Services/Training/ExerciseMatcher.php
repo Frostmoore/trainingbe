@@ -26,9 +26,10 @@ use App\Support\Training\MuscoliDegliEsercizi;
  *     palestra ha gia' un suo esercizio con quel nome, e' quello che intende;
  *  2. corrispondenza esatta **fra i globali**;
  *  3. sinonimi noti, prima palestra poi globali;
- *  4. contenimento: il nome letto contiene quello di un esercizio noto (o
- *     viceversa), scegliendo il piu' lungo — «panca piana bilanciere» trova
- *     «panca piana»;
+ *  4. contenimento **dall'inizio e a parole intere** (F7.4): il nome letto
+ *     comincia con quello di un esercizio noto, scegliendo il piu' lungo —
+ *     «panca piana bilanciere» trova «panca piana», ma «crunch su panca
+ *     inclinata» non trova «panca inclinata»;
  *  5. **si crea** un esercizio custom della palestra.
  *
  * Il quinto passo e' un fallimento parziale, non un successo: per questo la riga
@@ -187,7 +188,24 @@ class ExerciseMatcher
         if (MuscoliDegliEsercizi::di(trim($nome)) === null) {
             $trovato = $this->cercaPerContenimento($canonico, $tenantId);
 
-            if ($trovato !== null) {
+            /*
+             * 🆕 **E il muscolo deve tornare** — 23/09/2026, F7.4.
+             *
+             * 🚨 «Corda al cavo basso» (un curl per i bicipiti, dal PDF vero di
+             * una palestra) comincia con «corda», e finiva sul salto con la
+             * corda. 💡 Chi chiama il primario **lo sa** (il modello lo legge
+             * insieme alla riga): se quello trovato per somiglianza allena
+             * un'altra cosa, la somiglianza è solo nel nome, e si crea.
+             *
+             * ⚠️ Solo per il contenimento: una corrispondenza esatta o un
+             * sinonimo restano validi anche se il modello sbaglia muscolo.
+             */
+            $altroMuscolo = $trovato !== null
+                && $primario !== null
+                && $trovato->muscle_group !== null
+                && $trovato->muscle_group !== $primario;
+
+            if ($trovato !== null && ! $altroMuscolo) {
                 return $this->completa($trovato, $tenantId, $primario, $secondari);
             }
         }
@@ -212,7 +230,7 @@ class ExerciseMatcher
         // cose da riconciliare a mano invece di lasciarle sedimentare.
         return Exercise::withoutGlobalScopes()->create([
             'tenant_id' => $tenantId,
-            'name' => trim($nome) !== '' ? trim($nome) : 'Esercizio',
+            'name' => self::nomeDaScrivere($nome),
             'slug_normalized' => $canonico,
             'is_custom' => true,
             'created_by' => $da?->getKey(),
@@ -326,15 +344,35 @@ class ExerciseMatcher
     }
 
     /**
-     * Il nome letto contiene quello di un esercizio noto, o viceversa.
+     * Il nome letto **comincia** con quello di un esercizio noto, o viceversa.
      *
-     * Vince il **piu' lungo** fra i candidati: fra «panca» e «panca piana», per
-     * «panca piana bilanciere» quello giusto e' il secondo. Con il piu' corto si
-     * finirebbe per far collassare mezza libreria su «panca».
+     * ══ 🚨 A PAROLE INTERE, E DALL'INIZIO — 23/09/2026, F7.4 ═════════════════
      *
-     * ⚠️ Sotto i cinque caratteri non si tenta: «curl» dentro «curl bicipiti» va
-     * bene, ma «dip» dentro «dip barre parallele» e «dip panca» sarebbe una
-     * corrispondenza fortuita su nomi troppo corti per essere significativi.
+     * ⛔ Prima bastava che un nome fosse **dentro** l'altro, in qualunque punto
+     * e anche a metà parola. Il primo giro vero dell'import dal pannello (nove
+     * schede, F7.4) ha trovato tre abbinamenti falsi:
+     *  - «tricipiti ai cavi con la corda» → **Corda** (il salto con la corda,
+     *    cardio): «corda» stava in fondo alla frase;
+     *  - «crunch inversi su panca inclinata» → **Panca inclinata**: l'attrezzo
+     *    scambiato per l'esercizio;
+     *  - «panca» → **Panca inclinata con manubri**: nel verso inverso vinceva il
+     *    nome **più lungo** che conteneva quello letto, cioè il più specifico —
+     *    il contrario di quello che il foglio diceva.
+     *
+     * 💡 In un nome d'esercizio italiano **la testa è davanti**: «panca piana
+     * bilanciere» è una panca piana, «crunch su panca inclinata» è un crunch.
+     * Quindi:
+     *  1. **il letto comincia col noto** (a parola intera): vince il noto **più
+     *     lungo** — fra «panca» e «panca piana», per «panca piana bilanciere» è
+     *     il secondo;
+     *  2. altrimenti **il noto comincia col letto** (a parola intera): vince il
+     *     **più corto**, cioè il meno specifico — «panca» è «Panca piana», non
+     *     «Panca inclinata con manubri».
+     *
+     * ⚠️ Sotto i cinque caratteri non si tenta, come prima: «dip» davanti a
+     * «dip barre parallele» e a «dip panca» sarebbe una corrispondenza fortuita.
+     * ⚠️ Un nome che non combacia così **non si forza**: si crea l'esercizio
+     * della palestra col nome del foglio, e il trainer lo vede scritto com'era.
      */
     private function cercaPerContenimento(string $canonico, ?int $tenantId): ?Exercise
     {
@@ -353,26 +391,64 @@ class ExerciseMatcher
             ->where('is_custom', false)
             ->get();
 
-        $migliore = null;
+        $piuLungoDavanti = null;
+        $piuCortoDopo = null;
 
         foreach ($candidati as $e) {
             $suo = (string) $e->slug_normalized;
 
-            if ($suo === '' || mb_strlen($suo) < 5) {
+            if (mb_strlen($suo) < 5) {
                 continue;
             }
 
-            $combacia = str_contains($canonico, $suo) || str_contains($suo, $canonico);
-
-            if (! $combacia) {
-                continue;
-            }
-
-            if ($migliore === null || mb_strlen((string) $e->slug_normalized) > mb_strlen((string) $migliore->slug_normalized)) {
-                $migliore = $e;
+            if (self::cominciaCon($canonico, $suo)) {
+                if ($piuLungoDavanti === null || mb_strlen($suo) > mb_strlen((string) $piuLungoDavanti->slug_normalized)) {
+                    $piuLungoDavanti = $e;
+                }
+            } elseif (self::cominciaCon($suo, $canonico)) {
+                if ($piuCortoDopo === null || mb_strlen($suo) < mb_strlen((string) $piuCortoDopo->slug_normalized)) {
+                    $piuCortoDopo = $e;
+                }
             }
         }
 
-        return $migliore;
+        return $piuLungoDavanti ?? $piuCortoDopo;
+    }
+
+    /**
+     * `$nome` comincia con `$testa` **a parola intera**: «panca piana
+     * bilanciere» comincia con «panca piana», «pancafit» non comincia con
+     * «panca».
+     */
+    private static function cominciaCon(string $nome, string $testa): bool
+    {
+        return $nome === $testa || str_starts_with($nome, $testa.' ');
+    }
+
+    /**
+     * Il nome con cui nasce un esercizio nuovo.
+     *
+     * 🆕 23/09/2026, F7.4: **un nome TUTTO MAIUSCOLO si riscrive** («PANCA
+     * ORIZZONTALE» → «Panca orizzontale»). Molte schede di palestra sono
+     * impaginate in maiuscolo, e l'esercizio che nasce da lì resta nella
+     * libreria per sempre: in un elenco di nomi normali, uno che urla si legge
+     * come un errore. ⚠️ Un nome misto («Curl alla panca Scott») si lascia
+     * com'è: le maiuscole lì sono volute.
+     */
+    private static function nomeDaScrivere(string $nome): string
+    {
+        $nome = trim($nome);
+
+        if ($nome === '') {
+            return 'Esercizio';
+        }
+
+        if ($nome === mb_strtoupper($nome) && $nome !== mb_strtolower($nome)) {
+            $minuscolo = mb_strtolower($nome);
+
+            return mb_strtoupper(mb_substr($minuscolo, 0, 1)).mb_substr($minuscolo, 1);
+        }
+
+        return $nome;
     }
 }

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
  * Un PDF caricato, la bozza che ne e' uscita, e la scheda che ne nascera'.
@@ -80,14 +81,64 @@ class WorkoutPlanImport extends Model implements HasMedia
 
     // ───────────────────────── file ─────────────────────────
 
+    /**
+     * ══ 🚨 SUL DISCO PRIVATO — 23/09/2026, fase F7 ═════════════════════════
+     *
+     * ⛔ **Fino a oggi questo PDF stava sul disco PUBBLICO**, e nessuno se n'era
+     * accorto. Il commento in `ListPlanImports` diceva il contrario — *«va a
+     * medialibrary, non sul disco pubblico: è la scheda di una persona»* — ma
+     * medialibrary, senza `useDisk()`, usa **proprio** `public`
+     * (`config/media-library.php`, `MEDIA_DISK` non impostato).
+     *
+     * 🚨 Voleva dire: raggiungibile da chiunque all'indirizzo
+     * `/storage/{id}/{nome}.pdf`, con `id` **sequenziali** — cioè enumerabili
+     * uno per uno. E dentro c'è la scheda di una persona, spesso con
+     * l'intestazione dello studio e il nome del paziente (vedi la DPIA).
+     *
+     * ✅ Adesso `local` (`storage/app/private`): non ha un URL, e si legge solo
+     * da `DocumentoDellImport`, che passa dall'autenticazione del pannello e dal
+     * filtro della palestra. I file già caricati li sposta la migrazione
+     * `i_pdf_importati_sul_disco_privato`.
+     *
+     * ── 🆕 E anche le foto ─────────────────────────────────────────────────
+     *
+     * 📌 Il committente: *«visualizzatore pdf o immagine»*. 💡 Il provider sa
+     * già leggere le foto (`AnthropicProvider::blocchiDelDocumento`, per l'import
+     * dall'app): mancava solo che il pannello le accettasse.
+     */
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection(self::COLLECTION)
+            ->useDisk('local')
             ->singleFile()
-            ->acceptsMimeTypes(['application/pdf']);
+            ->acceptsMimeTypes(self::TIPI_ACCETTATI);
     }
 
-    /** Il percorso del PDF sul disco, o `null` se non c'e'. */
+    /**
+     * I documenti che il pannello accetta — F7.
+     *
+     * ⚠️ Sono **gli stessi** che `AnthropicProvider::blocchiDelDocumento` sa
+     * spedire al modello: un tipo accettato qui e non là si caricherebbe e poi
+     * fallirebbe nel job, con i gettoni già riservati.
+     */
+    public const TIPI_ACCETTATI = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    /** Il documento caricato, se c'è ancora. */
+    public function documento(): ?Media
+    {
+        return $this->getFirstMedia(self::COLLECTION);
+    }
+
+    /**
+     * 🖼️ È una foto e non un PDF? — decide come mostrarlo accanto alla scheda:
+     * un PDF va in un riquadro col lettore del browser, una foto in un `<img>`.
+     */
+    public function eUnaImmagine(): bool
+    {
+        return str_starts_with((string) $this->documento()?->mime_type, 'image/');
+    }
+
+    /** Il percorso del documento sul disco, o `null` se non c'e'. */
     public function pdfPath(): ?string
     {
         $media = $this->getFirstMedia(self::COLLECTION);
@@ -131,28 +182,54 @@ class WorkoutPlanImport extends Model implements HasMedia
      * matcher fallisce a meta', non deve restare una scheda con tre esercizi su
      * venti: sarebbe peggio di nessuna scheda, perche' sembra completa.
      *
+     * ══ 🆕 📅 I GIORNI ARRIVANO NELLA SCHEDA — 23/09/2026, F7.4 ══════════════
+     *
+     * 🚨 **Prima tutti gli esercizi finivano in un giorno solo.** Il modello i
+     * giorni li legge (`day` su ogni riga, `day_names` sulla scheda — K2), l'app
+     * li usa, ma qui si chiamava solo `giornoPredefinito()`: una scheda A/B/C da
+     * diciannove esercizi diventava **un unico allenamento da diciannove
+     * esercizi**, e il builder la mostrava così. Trovato al primo giro vero
+     * dell'import dal pannello (F7.4).
+     *
+     * 💡 Adesso un giorno per ogni numero di giorno che compare nelle righe,
+     * col nome letto dal foglio (`day_names`) o «Giorno n». ⚠️ Una scheda di
+     * **un giorno solo** resta senza nome, come la scrive il builder
+     * (*«una scheda a un giorno solo si scrive lasciando il nome vuoto»*).
+     *
      * @param  array<int, array<string, mixed>>|null  $righe  la bozza eventualmente corretta a mano
+     * @param  list<string>|null  $nomiDeiGiorni  i nomi dei giorni corretti a mano (`null` = quelli letti)
      */
-    public function publishAsPlan(?array $righe = null, ?User $da = null): WorkoutPlan
+    public function publishAsPlan(?array $righe = null, ?User $da = null, ?array $nomiDeiGiorni = null): WorkoutPlan
     {
         $payload = $this->parsed_payload ?? [];
         $righe ??= $payload['exercises'] ?? [];
+        $nomiDeiGiorni ??= $payload['day_names'] ?? [];
 
         $matcher = app(ExerciseMatcher::class);
 
-        return DB::transaction(function () use ($payload, $righe, $da, $matcher): WorkoutPlan {
+        return DB::transaction(function () use ($payload, $righe, $da, $matcher, $nomiDeiGiorni): WorkoutPlan {
             $piano = WorkoutPlan::create([
                 'tenant_id' => $this->tenant_id,
                 'member_id' => $this->member_id,
                 'created_by' => $da?->getKey() ?? $this->uploaded_by,
                 'name' => $payload['name'] ?? 'Scheda importata',
                 'notes' => $payload['notes'] ?? null,
-                'status' => PlanStatus::Draft,
+
+                /*
+                 * 🆕 **Nasce `published`** — 23/09/2026, F7 (come in F5.14).
+                 *
+                 * ⛔ Prima nasceva `draft`, «perché l'iscritto non la veda
+                 * finché non è pronta». Dopo R2 non c'è nessun iscritto: è un
+                 * **modello della palestra**, e lo stato non si cambia più dal
+                 * pannello. Una scheda importata nata bozza sarebbe rimasta
+                 * bozza per sempre — invisibile all'API, senza un campo per
+                 * sbloccarla.
+                 */
+                'status' => PlanStatus::Published,
                 'source' => PlanSource::PdfImport,
             ]);
 
-            // G4 — un giorno per la scheda che nasce dall'import.
-            $giorno = $piano->giornoPredefinito();
+            $giorni = $this->creaIGiorni($piano, $righe, $nomiDeiGiorni);
 
             $posizione = 1;
 
@@ -162,6 +239,8 @@ class WorkoutPlanImport extends Model implements HasMedia
                 if ($nome === '') {
                     continue;
                 }
+
+                $giorno = $giorni[self::giornoDellaRiga($riga)];
 
                 /*
                  * 🆕 3b-A.3.4 — i muscoli letti dal modello entrano nella
@@ -204,5 +283,65 @@ class WorkoutPlanImport extends Model implements HasMedia
 
             return $piano;
         });
+    }
+
+    /**
+     * I giorni della scheda nuova, indicizzati dal numero di giorno (da 1).
+     *
+     * 💡 `max` e non «quelli che compaiono»: se il modello salta il giorno 2 i
+     * giorni restano tre, e il secondo si vede **vuoto** nel builder invece di
+     * sparire — stessa regola di `ParsedWorkoutPlan::quantiGiorni()`.
+     *
+     * @param  array<int, array<string, mixed>>  $righe
+     * @param  list<string>  $nomi
+     * @return array<int, WorkoutPlanDay>
+     */
+    private function creaIGiorni(WorkoutPlan $piano, array $righe, array $nomi): array
+    {
+        $quanti = 1;
+
+        foreach ($righe as $riga) {
+            if (trim((string) ($riga['name'] ?? '')) !== '') {
+                $quanti = max($quanti, self::giornoDellaRiga($riga));
+            }
+        }
+
+        // G4 — una scheda di un giorno solo usa il giorno che il piano crea da sé.
+        if ($quanti === 1) {
+            $solo = $piano->giornoPredefinito();
+            $nome = trim((string) ($nomi[0] ?? ''));
+
+            if ($nome !== '') {
+                $solo->forceFill(['name' => mb_substr($nome, 0, 120)])->save();
+            }
+
+            return [1 => $solo];
+        }
+
+        $giorni = [];
+
+        for ($n = 1; $n <= $quanti; $n++) {
+            $nome = trim((string) ($nomi[$n - 1] ?? ''));
+
+            $giorni[$n] = $piano->days()->create([
+                'position' => $n - 1,
+                'name' => mb_substr($nome !== '' ? $nome : 'Giorno '.$n, 0, 120),
+            ]);
+        }
+
+        return $giorni;
+    }
+
+    /**
+     * Il giorno di una riga, contando da 1.
+     *
+     * ⚠️ Una riga aggiunta a mano nella revisione può non averlo, o averlo
+     * scritto come stringa: vale 1, come in `ParsedWorkoutExercise::fromArray()`.
+     *
+     * @param  array<string, mixed>  $riga
+     */
+    private static function giornoDellaRiga(array $riga): int
+    {
+        return max(1, (int) ($riga['day'] ?? 1));
     }
 }

@@ -1,0 +1,182 @@
+/*
+ * Lo stile delle pagine su misura del pannello — 23/09/2026, fasi F5 e F7.
+ *
+ * == PERCHE' UN FOGLIO NOSTRO, E NON LE CLASSI DI TAILWIND ==
+ *
+ * Il CSS di Filament v5 arriva PRECOMPILATO, e contiene solo le classi che
+ * usano i suoi componenti. `grid-cols-3`, `gap-4`, `mt-4`, `justify-between`
+ * NON CI SONO: misurato il 23/09 cercandole in public/css/filament/filament/
+ * app.css. Scritte in una vista Blade non danno nessun errore -- semplicemente
+ * non fanno niente, e tre card pensate affiancate escono una sotto l'altra,
+ * appiccicate.
+ *
+ * E' esattamente cio' che era successo alle card del cruscotto di F5: la
+ * vista usava classi di Tailwind che il pannello non carica.
+ *
+ * Le alternative erano due: un tema di Tailwind compilato con Vite (una
+ * catena di build in piu' da mantenere e da ricordarsi a ogni deploy), oppure
+ * questo -- classi con un prefisso nostro, in un foglio che `filament:assets`
+ * copia gia' come quello delle schede.
+ *
+ * I COLORI SONO DI FILAMENT: le variabili `--gray-*`, `--danger-*` sono quelle
+ * del pannello, e seguono il colore della palestra e il tema scuro da sole.
+ *
+ * ATTENZIONE: il file esce in public/ solo con `php artisan filament:assets`,
+ * che il deploy esegue a ogni giro. In locale va lanciato a mano dopo averlo
+ * cambiato.
+ */
+
+/* ── Il cruscotto della palestra: tre card affiancate ───────────────────── */
+
+.tc-posti {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 768px) {
+    .tc-posti {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.tc-numero {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.tc-numero-grande {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.tc-nota {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--gray-500);
+}
+
+.tc-attenzione {
+    color: var(--warning-600);
+}
+
+.tc-pericolo {
+    color: var(--danger-600);
+}
+
+.dark .tc-nota {
+    color: var(--gray-400);
+}
+
+.dark .tc-attenzione {
+    color: var(--warning-400);
+}
+
+.dark .tc-pericolo {
+    color: var(--danger-400);
+}
+
+.tc-azione {
+    margin-top: 1rem;
+}
+
+.tc-conti {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.tc-conti > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.tc-conti dt {
+    color: var(--gray-500);
+}
+
+.dark .tc-conti dt {
+    color: var(--gray-400);
+}
+
+.tc-conti dd {
+    font-weight: 500;
+}
+
+.tc-conti .tc-totale {
+    border-top: 1px solid var(--gray-200);
+    padding-top: 0.5rem;
+}
+
+.dark .tc-conti .tc-totale {
+    border-top-color: rgb(255 255 255 / 0.1);
+}
+
+.tc-conti .tc-totale dd {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+/* ── F7: il documento accanto alla scheda ───────────────────────────────── */
+
+/*
+ * Il committente: «deve avere la scheda vicino (visualizzatore pdf o
+ * immagine) per poterla confrontare con il risultato dell'import».
+ *
+ * Su uno schermo largo il documento sta a SINISTRA e resta fermo mentre si
+ * scorre il modulo (`position: sticky`): chi confronta guarda una riga del
+ * PDF e la cerca a destra, e un documento che scorre via insieme al modulo
+ * costringerebbe a ritrovare il punto ogni volta.
+ *
+ * Su un telefono i due vanno uno sotto l'altro, documento prima: affiancati
+ * sarebbero due colonne larghe tre dita l'una.
+ */
+.tc-confronto {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+@media (min-width: 1024px) {
+    .tc-confronto {
+        grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        align-items: start;
+    }
+
+    .tc-confronto-documento {
+        position: sticky;
+        top: 5rem;
+    }
+}
+
+.tc-documento {
+    width: 100%;
+    height: 75vh;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.75rem;
+    background: var(--gray-50);
+}
+
+.dark .tc-documento {
+    border-color: rgb(255 255 255 / 0.1);
+    background: var(--gray-900);
+}
+
+img.tc-documento {
+    height: auto;
+    max-height: 75vh;
+    object-fit: contain;
+}
+
+.tc-documento-titolo {
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}

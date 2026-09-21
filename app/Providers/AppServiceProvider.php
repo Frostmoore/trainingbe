@@ -142,6 +142,15 @@ class AppServiceProvider extends ServiceProvider
     {
         FilamentAsset::register([
             Css::make('pannello-a-schede', resource_path('css/pannello-a-schede.css')),
+
+            /*
+             * 🆕 23/09/2026 — le pagine su misura (cruscotto della palestra,
+             * documento accanto all'import). ⚠️ Il CSS di Filament v5 è
+             * precompilato e **non contiene** le classi generiche di Tailwind:
+             * scritte in una vista non fanno niente, senza errori. Il perché
+             * per esteso sta in cima al foglio.
+             */
+            Css::make('pannello-palestra', resource_path('css/pannello-palestra.css')),
         ]);
     }
 

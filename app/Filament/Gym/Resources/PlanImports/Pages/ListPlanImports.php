@@ -20,12 +20,22 @@ class ListPlanImports extends ListRecords
 {
     protected static string $resource = PlanImportResource::class;
 
+    /**
+     * 💡 Scritto a mano: dal nome della risorsa Filament ricavava «Import Da
+     * PDF», con le maiuscole all'inglese — e dal 23/09/2026 (F7) si importano
+     * anche le foto.
+     */
+    public function getTitle(): string
+    {
+        return 'Schede da importare';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
             CreateAction::make()
-                ->label('Carica un PDF')
-                ->modalHeading('Importa una scheda da PDF')
+                ->label('Carica una scheda')
+                ->modalHeading('Importa una scheda da un PDF o da una foto')
                 /*
                  * ⚠️ **Il prezzo si dice prima, non si scopre dal saldo** —
                  * U.6.3. E' la stessa regola gia' scritta per il piano
@@ -83,9 +93,18 @@ class ListPlanImports extends ListRecords
                         'paga_con_gettoni' => $conGettoni,
                     ]);
 
-                    // Il file arriva come oggetto caricato (`storeFiles(false)`)
-                    // e va a medialibrary, non sul disco pubblico: e' la scheda
-                    // di una persona, non un allegato qualsiasi.
+                    /*
+                     * Il file arriva come oggetto caricato (`storeFiles(false)`)
+                     * e va a medialibrary.
+                     *
+                     * 🚨 **Corretto il 23/09/2026 (F7): qui c'era scritto il
+                     * falso.** Il commento diceva *«non sul disco pubblico»*, ma
+                     * medialibrary senza `useDisk()` usa **proprio** `public`:
+                     * la scheda di una persona era raggiungibile per URL, con id
+                     * sequenziali. ✅ Adesso il disco privato lo impone la
+                     * collezione (`WorkoutPlanImport::registerMediaCollections`),
+                     * e non dipende più da chi scrive questa riga.
+                     */
                     $import->addMedia($data['pdf']->getRealPath())
                         ->usingFileName($data['pdf']->getClientOriginalName())
                         ->toMediaCollection(WorkoutPlanImport::COLLECTION);

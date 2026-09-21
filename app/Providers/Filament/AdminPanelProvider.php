@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
+use App\Http\Controllers\DocumentoDellImport;
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\PretendeLaLiberatoria;
 use App\Http\Middleware\ResolveTenant;
@@ -23,6 +24,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
@@ -147,6 +149,20 @@ class AdminPanelProvider extends PanelProvider
             ->persistentMiddleware([
                 ResolveTenant::class,
                 SpazioDelPannello::class,
-            ]);
+            ])
+
+            /*
+             * 🆕 📄 **Il documento di un import** — 23/09/2026, F7.2.
+             *
+             * 🚨 `authenticatedRoutes` e non `routes`: così passa dalla stessa
+             * catena di questo pannello — autenticazione, palestra, liberatoria.
+             * ⛔ Il documento sta sul disco privato, ed è la scheda di una
+             * persona: una rotta fuori da qui sarebbe la porta che F7 ha chiuso.
+             */
+            ->authenticatedRoutes(function (): void {
+                Route::get('/import/{import}/documento', DocumentoDellImport::class)
+                    ->whereNumber('import')
+                    ->name('documento-import');
+            });
     }
 }
