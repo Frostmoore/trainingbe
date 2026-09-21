@@ -28,11 +28,12 @@ class PromozioneBersaglio extends Model
 {
     protected $table = 'promozione_bersagli';
 
-    protected $fillable = ['promozione_id', 'tipo', 'ruolo', 'tenant_id', 'user_id'];
+    // 🆕 P5 — `escludi`: la riga toglie invece di aggiungere.
+    protected $fillable = ['promozione_id', 'tipo', 'escludi', 'ruolo', 'tenant_id', 'user_id'];
 
     protected function casts(): array
     {
-        return ['tipo' => TipoBersaglio::class];
+        return ['tipo' => TipoBersaglio::class, 'escludi' => 'boolean'];
     }
 
     public function promozione(): BelongsTo
@@ -53,7 +54,8 @@ class PromozioneBersaglio extends Model
     /** Come si legge nel pannello: «Palestra Demo», «tutti i member», … */
     public function descrizione(): string
     {
-        return match ($this->tipo) {
+        // 🆕 P5 — una riga che esclude si legge «tranne …».
+        return ($this->escludi ? 'tranne ' : '').match ($this->tipo) {
             TipoBersaglio::Tutti => 'tutti',
             TipoBersaglio::Ruolo => 'chi è '.($this->ruolo ?? '?'),
             TipoBersaglio::Palestra => 'la palestra '.($this->tenant?->name ?? '?'),

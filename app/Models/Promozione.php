@@ -85,6 +85,12 @@ class Promozione extends Model
         return $this->hasMany(PromozionePremio::class);
     }
 
+    /** 🆕 P5 — le condizioni sui destinatari, in AND. */
+    public function condizioni(): HasMany
+    {
+        return $this->hasMany(PromozioneCondizione::class);
+    }
+
     /** 🆕 P1 — chi l'ha presa. */
     public function assegnazioni(): HasMany
     {

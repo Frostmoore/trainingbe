@@ -14,6 +14,7 @@ use App\Filament\God\Resources\Promozioni\Schemas\ModuloDellaPromozione;
 use App\Filament\Support\VoceDiScheda;
 use App\Jobs\ConsegnaLaPromozioneATutti;
 use App\Models\Promozione;
+use App\Services\Promozioni\ChiLaRiceve;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -27,6 +28,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Js;
 
 /**
@@ -87,7 +89,7 @@ class PromozioneResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['premi.pacchetto', 'premi.plan', 'bersagli.tenant', 'bersagli.user']);
+        return parent::getEloquentQuery()->with(['premi.pacchetto', 'premi.plan', 'bersagli.tenant', 'bersagli.user', 'condizioni']);
     }
 
     /** 🆕 P1 — i campi stanno in `ModuloDellaPromozione`: la creazione li usa a passi, qui a sezioni. */
@@ -120,7 +122,9 @@ class PromozioneResource extends Resource
 
                     VoceDiScheda::make('A chi', TextColumn::make('a_chi')
                         ->label('A chi')
-                        ->state(fn (Promozione $p): string => $p->bersagli->map->descrizione()->join(', ') ?: 'nessuno')
+                        // 🆕 P5 — e le condizioni, in AND.
+                        ->state(fn (Promozione $p): string => ($p->bersagli->map->descrizione()->join(', ') ?: 'nessuno')
+                            .($p->condizioni->isNotEmpty() ? ' — solo se '.$p->condizioni->map->descrizione()->join(' e ') : ''))
                         ->wrap()),
 
                     /*
@@ -221,6 +225,22 @@ class PromozioneResource extends Resource
                             ->send();
                     }),
 
+                /*
+                 * 🆕 🔎 P5 — **Anteprima**: quante persone la prendono oggi, e le
+                 * prime venti. 📌 Con bersagli, esclusioni e condizioni insieme
+                 * è l'unico modo di sapere a chi arriva prima di premere «Esegui».
+                 */
+                Action::make('anteprima')
+                    ->button()
+                    ->outlined()
+                    ->label('Anteprima')
+                    ->icon('heroicon-m-users')
+                    ->color('gray')
+                    ->modalHeading(fn (Promozione $p): string => "A chi arriva «{$p->nome}», oggi")
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Chiudi')
+                    ->modalContent(fn (Promozione $p): HtmlString => self::anteprima($p)),
+
                 Action::make('sospendi')
                     ->button()
                     ->outlined()
@@ -251,6 +271,38 @@ class PromozioneResource extends Resource
             ! $p->eNelPeriodo() => 'Non ancora',
             default => 'Attiva',
         };
+    }
+
+    /**
+     * 🆕 P5 — il contenuto dell'anteprima: il numero e le prime venti persone.
+     *
+     * ⚠️ Conta **adesso**: chi si iscrive domani e rientra nei destinatari
+     * domani ci sarà.
+     */
+    public static function anteprima(Promozione $p): HtmlString
+    {
+        $tutte = app(ChiLaRiceve::class)->destinatari($p);
+        $quante = 0;
+        $prime = [];
+
+        foreach ($tutte as $utente) {
+            $quante++;
+
+            if (count($prime) < 20) {
+                $prime[] = e($utente->name).' <span style="opacity:.6">'.e($utente->email).'</span>';
+            }
+        }
+
+        $elenco = $prime === [] ? '' : '<ul style="margin-top:.75rem">'.implode('', array_map(
+            static fn (string $riga): string => "<li>{$riga}</li>",
+            $prime,
+        )).'</ul>';
+
+        return new HtmlString(
+            '<p><strong>'.$quante.'</strong> '.($quante === 1 ? 'persona' : 'persone').' la prendono oggi.</p>'
+            .$elenco
+            .($quante > 20 ? '<p style="margin-top:.5rem;opacity:.6">…e altre '.($quante - 20).'.</p>' : ''),
+        );
     }
 
     /** L'indirizzo che porta l'offerta, nel pannello. */

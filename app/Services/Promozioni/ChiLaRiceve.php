@@ -5,10 +5,19 @@ declare(strict_types=1);
 namespace App\Services\Promozioni;
 
 use App\Enums\TipoBersaglio;
+use App\Enums\TipoDiCondizione;
+use App\Enums\TipoDiPremio;
+use App\Models\AiCreditMovement;
+use App\Models\PlanSubscription;
 use App\Models\Promozione;
+use App\Models\PromozioneAssegnazione;
 use App\Models\PromozioneBersaglio;
+use App\Models\PromozioneCondizione;
+use App\Models\PromozionePremio;
 use App\Models\User;
+use App\Services\Billing\PianoAttivo;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
 
@@ -24,11 +33,16 @@ use Illuminate\Support\LazyCollection;
  *
  *     almeno un bersaglio incluso  →  nessun bersaglio escluso  →  tutte le condizioni vere
  *
- * In P1 c'è solo il primo passo; P5 aggiunge esclusioni e condizioni.
+ * 🆕 P5: i bersagli con `escludi = true` tolgono, e le **condizioni** (tabella
+ * `promozione_condizioni`) filtrano in AND. ⚠️ Una promozione con **solo**
+ * esclusioni vale per «tutti tranne…»: è il modo in cui la si scrive.
  */
 class ChiLaRiceve
 {
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly PianoAttivo $piano,
+    ) {}
 
     /**
      * 🎯 **Questa persona rientra?**
@@ -39,13 +53,134 @@ class ChiLaRiceve
      */
     public function prende(Promozione $promozione, User $utente): bool
     {
-        foreach ($promozione->bersagli as $bersaglio) {
-            if ($this->rientra($bersaglio, $utente)) {
-                return true;
+        $inclusi = $promozione->bersagli->reject(fn (PromozioneBersaglio $b): bool => (bool) $b->escludi);
+        $esclusi = $promozione->bersagli->filter(fn (PromozioneBersaglio $b): bool => (bool) $b->escludi);
+
+        // Nessun bersaglio affatto: nessuno. Solo esclusioni: tutti tranne loro.
+        $dentro = $inclusi->isEmpty()
+            ? $esclusi->isNotEmpty()
+            : $inclusi->contains(fn (PromozioneBersaglio $b): bool => $this->rientra($b, $utente));
+
+        if (! $dentro) {
+            return false;
+        }
+
+        // 🆕 P5 — ⛔ un'esclusione batte qualunque inclusione.
+        if ($esclusi->contains(fn (PromozioneBersaglio $b): bool => $this->rientra($b, $utente))) {
+            return false;
+        }
+
+        // 🆕 P5 — le condizioni, tutte vere.
+        foreach ($promozione->condizioni as $condizione) {
+            if (! $this->soddisfa($condizione, $utente)) {
+                return false;
             }
         }
 
-        return false;
+        return true;
+    }
+
+    /**
+     * 🆕 🔎 **Questa condizione è vera per questa persona?** — P5.
+     *
+     * ⚠️ «Inattivo» guarda `users.last_login_at`, che scrive **l'accesso
+     * all'app** (e il social): l'accesso al pannello non lo aggiorna. Per chi
+     * usa solo il pannello, «inattivo» vuol dire «non apre l'app».
+     */
+    public function soddisfa(PromozioneCondizione $condizione, User $utente): bool
+    {
+        $giorni = (int) $condizione->parametro('giorni');
+
+        return match ($condizione->tipo) {
+            TipoDiCondizione::Abbonamento => $this->statoDellAbbonamento($utente, (string) $condizione->parametro('stato')),
+
+            TipoDiCondizione::RegistratoDaMenoDi => $utente->created_at !== null
+                && $utente->created_at->gt(now()->subDays($giorni)),
+
+            TipoDiCondizione::RegistratoDopo => $utente->created_at !== null
+                && $condizione->parametro('data') !== null
+                && $utente->created_at->gte(Carbon::parse((string) $condizione->parametro('data'))->startOfDay()),
+
+            TipoDiCondizione::ClienteDaPiuDi => ($primo = $this->primoAbbonamentoPagato($utente)) !== null
+                && $primo->lte(now()->subMonthsNoOverflow((int) $condizione->parametro('mesi'))),
+
+            TipoDiCondizione::PianoAttuale => in_array(
+                $this->piano->per($utente)->getKey(),
+                array_map('intval', (array) $condizione->parametro('plan_ids')),
+                true,
+            ),
+
+            TipoDiCondizione::InattivoDa => $utente->last_login_at === null
+                || $utente->last_login_at->lt(now()->subDays($giorni)),
+
+            TipoDiCondizione::MaiCompratoGettoni => ! AiCreditMovement::withoutGlobalScopes()
+                ->where('user_id', $utente->getKey())
+                ->where('causale', AiCreditMovement::ACQUISTO)
+                ->exists(),
+
+            TipoDiCondizione::GettoniFiniti => (int) $utente->ai_credits === 0,
+
+            TipoDiCondizione::GettoniComprati => (int) AiCreditMovement::withoutGlobalScopes()
+                ->where('user_id', $utente->getKey())
+                ->where('causale', AiCreditMovement::ACQUISTO)
+                ->sum('delta') >= (int) $condizione->parametro('gettoni'),
+        };
+    }
+
+    private function statoDellAbbonamento(User $utente, string $stato): bool
+    {
+        $abbonato = $this->piano->eAbbonato($utente);
+
+        return match ($stato) {
+            'abbonato' => $abbonato,
+            'non_abbonato' => ! $abbonato,
+            'ex_abbonato' => ! $abbonato && $this->primoAbbonamentoPagato($utente) !== null,
+            'pagamento_fallito' => $this->context->runWithoutTenant(fn (): bool => $utente->tenant_id !== null
+                && PlanSubscription::query()
+                    ->where('tenant_id', $utente->tenant_id)
+                    ->attivi()
+                    ->whereNotNull('pagamento_fallito_il')
+                    ->exists()),
+            'in_prova' => $this->eInProva($utente),
+            default => false,
+        };
+    }
+
+    /** Quando ha cominciato a pagare un abbonamento, se l'ha mai fatto. */
+    private function primoAbbonamentoPagato(User $utente): ?Carbon
+    {
+        if ($utente->tenant_id === null) {
+            return null;
+        }
+
+        $inizio = $this->context->runWithoutTenant(fn (): mixed => PlanSubscription::query()
+            ->where('tenant_id', $utente->tenant_id)
+            ->whereNotNull('stripe_subscription_id')
+            ->min('starts_at'));
+
+        return $inizio === null ? null : Carbon::parse($inizio);
+    }
+
+    /**
+     * «In prova»: ha usato una promozione con la prova gratuita, e i suoi giorni
+     * non sono ancora finiti. 💡 Le prove nascono **solo** dalle promozioni (P3),
+     * quindi è da lì che si leggono.
+     */
+    private function eInProva(User $utente): bool
+    {
+        return PromozioneAssegnazione::query()
+            ->cheContano()
+            ->where('user_id', $utente->getKey())
+            ->whereNotNull('usata_il')
+            ->with('promozione.premi')
+            ->get()
+            ->contains(function (PromozioneAssegnazione $a): bool {
+                $giorni = (int) $a->promozione?->premi
+                    ->filter(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::ProvaGratuita)
+                    ->max('giorni');
+
+                return $giorni > 0 && $a->usata_il->copy()->addDays($giorni)->isFuture();
+            });
     }
 
     /**
@@ -60,7 +195,7 @@ class ChiLaRiceve
      */
     public function destinatari(Promozione $promozione): LazyCollection
     {
-        $promozione->loadMissing('bersagli');
+        $promozione->loadMissing(['bersagli', 'condizioni']);
 
         return User::withoutGlobalScopes()
             ->where('is_active', true)

@@ -9,6 +9,7 @@ use App\Enums\DurataDelloSconto;
 use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\TipoBersaglio;
+use App\Enums\TipoDiCondizione;
 use App\Enums\TipoDiPremio;
 use App\Enums\TipoDiSconto;
 use App\Enums\UserRole;
@@ -17,6 +18,7 @@ use App\Models\Plan;
 use App\Models\Promozione;
 use App\Models\Tenant;
 use App\Models\User;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Radio;
@@ -68,7 +70,7 @@ final class ModuloDellaPromozione
                 ->schema([self::premi()]),
 
             Step::make('A chi')
-                ->schema([self::bersagli()]),
+                ->schema([self::bersagli(), self::condizioni()]),
 
             Step::make('Come si attiva')
                 ->schema([self::attivazione()]),
@@ -89,7 +91,7 @@ final class ModuloDellaPromozione
         return [
             Section::make('Cosa promuovi')->schema([self::genere()]),
             Section::make('Cosa si dà')->schema([self::premi()]),
-            Section::make('A chi')->schema([self::bersagli()]),
+            Section::make('A chi')->schema([self::bersagli(), self::condizioni()]),
             Section::make('Come si attiva')->schema([self::attivazione()]),
             Section::make('Limiti')->columns(2)->schema(self::limiti()),
             Section::make('Il testo')->columns(2)->schema(self::testo()),
@@ -317,6 +319,7 @@ final class ModuloDellaPromozione
             ->defaultItems(1)
             ->minItems(1)
             ->columns(2)
+            ->helperText('Si sommano: basta rientrare in uno. Una riga «togli» esclude, e vince su tutte. Solo righe «togli» = tutti tranne loro.')
             ->schema([
                 Select::make('tipo')
                     ->label('Chi')
@@ -325,6 +328,12 @@ final class ModuloDellaPromozione
                     ->required()
                     ->live()
                     ->native(false),
+
+                // 🆕 P5 — opzione 26: «tutti tranne…».
+                Toggle::make('escludi')
+                    ->label('Togli invece di aggiungere')
+                    ->inline(false)
+                    ->default(false),
 
                 Select::make('ruolo')
                     ->label('Ruolo')
@@ -372,6 +381,75 @@ final class ModuloDellaPromozione
                         [TipoBersaglio::Utente->value, TipoBersaglio::AllieviDiTrainer->value],
                         true,
                     )),
+            ]);
+    }
+
+    /**
+     * 🆕 🔎 **Le condizioni** — P5 (opzioni 20-24). In **AND**: restringono i
+     * destinatari. I parametri stanno nella colonna json `parametri`, e i campi
+     * si chiamano `parametri.<chiave>` perché Filament li scriva lì dentro.
+     */
+    private static function condizioni(): Repeater
+    {
+        $usa = static fn (?string $tipo, string $parametro): bool => TipoDiCondizione::tryFrom((string) $tipo)?->usa($parametro) ?? false;
+
+        return Repeater::make('condizioni')
+            ->label('Solo se')
+            ->relationship()
+            ->addActionLabel('Aggiungi una condizione')
+            ->defaultItems(0)
+            ->columns(2)
+            ->helperText('Devono essere vere tutte. Nessuna condizione: valgono solo i destinatari qui sopra.')
+            ->schema([
+                Select::make('tipo')
+                    ->label('Condizione')
+                    ->options(TipoDiCondizione::options())
+                    ->required()
+                    ->live()
+                    ->native(false),
+
+                Select::make('parametri.stato')
+                    ->label('Chi')
+                    ->options(TipoDiCondizione::STATI_ABBONAMENTO)
+                    ->native(false)
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'stato'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'stato')),
+
+                TextInput::make('parametri.giorni')
+                    ->label('Giorni')
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'giorni'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'giorni')),
+
+                DatePicker::make('parametri.data')
+                    ->label('Dal giorno')
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'data'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'data')),
+
+                TextInput::make('parametri.mesi')
+                    ->label('Mesi')
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'mesi'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'mesi')),
+
+                Select::make('parametri.plan_ids')
+                    ->label('Piani')
+                    ->multiple()
+                    ->options(fn (): array => Plan::query()->orderBy('price_cents')->pluck('name', 'id')->all())
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'plan_ids'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'plan_ids')),
+
+                TextInput::make('parametri.gettoni')
+                    ->label('Gettoni')
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->visible(fn (callable $get): bool => $usa($get('tipo'), 'gettoni'))
+                    ->required(fn (callable $get): bool => $usa($get('tipo'), 'gettoni')),
             ]);
     }
 
