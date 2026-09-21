@@ -14,9 +14,17 @@ return [
     'driver' => env('PUSH_DRIVER', 'log'),
 
     'fcm' => [
+        // Vuoto: si legge dalla chiave di servizio.
         'project_id' => env('FCM_PROJECT_ID'),
-        // Token OAuth di servizio. In produzione va generato dal service account
-        // e rinnovato: tenerlo in `.env` va bene per staging, non oltre.
+
+        /*
+         * 🆕 24/09/2026 — **il percorso della chiave di servizio** di Firebase (il
+         * JSON della console). Da lì `TokenDiFirebase` ricava e rinnova il token
+         * OAuth. ⚠️ È un segreto: fuori dal repository, mai sul Projects Tracker.
+         */
+        'credentials' => env('FIREBASE_CREDENTIALS'),
+
+        // Ripiego per le prove brevi: un token OAuth scritto a mano, che scade in un'ora.
         'access_token' => env('FCM_ACCESS_TOKEN'),
     ],
 ];

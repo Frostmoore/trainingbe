@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Pages;
 
+use App\Enums\ComeSiAttiva;
 use App\Enums\SuCosaVale;
 use App\Models\Promozione;
 use App\Services\Billing\LePromozioni;
@@ -34,7 +35,7 @@ use Illuminate\Support\Collection;
  *
  * ⛔ Senza il controllo sui bersagli un codice inoltrato varrebbe per chiunque,
  * e una promozione «per gli allievi della palestra Tal dei Tali» finirebbe su
- * mezza piattaforma. 💡 Il controllo lo fa `LePromozioni::conIlCodice()`, che
+ * mezza piattaforma. 💡 Il controllo lo fa `LePromozioni::dalLink()`, che
  * è lo stesso che decide lo sconto al pagamento: una regola sola, due usi.
  */
 class OffertaPerTe extends Page
@@ -81,7 +82,7 @@ class OffertaPerTe extends Page
          * particolare. 🆕 P1 — e un'offerta di soli regali non sconta niente,
          * quindi chiederla «sui gettoni» o «sul canone» non la troverebbe.
          */
-        return app(LePromozioni::class)->conIlCodice($this->codice, $utente);
+        return app(LePromozioni::class)->dalLink($this->codice, $utente);
     }
 
     /**
@@ -104,16 +105,16 @@ class OffertaPerTe extends Page
     }
 
     /**
-     * 🆕 🎁 **«Riscatta»** — P2 di `plan_promozioni.md`.
+     * 🆕 🎁 **«Attiva»** — P2, e senza codici dal 24/09/2026.
      *
-     * Per le offerte con un link che **regalano** qualcosa (gettoni, mesi):
-     * chi apre il link li prende da qui. Gli sconti invece si usano pagando,
-     * e per quelli il tasto non c'è.
+     * Per le offerte **col link**: i regali arrivano subito, lo sconto (o il
+     * bonus) resta pronto e il prossimo pagamento lo usa da solo. ⛔ Le
+     * automatiche non hanno il tasto: arrivano da sole.
      */
-    public function riscattaAction(): Action
+    public function attivaAction(): Action
     {
-        return Action::make('riscatta')
-            ->label('Riscatta')
+        return Action::make('attiva')
+            ->label('Attiva')
             ->icon('heroicon-m-gift')
             ->color('primary')
             ->visible(function (): bool {
@@ -122,6 +123,7 @@ class OffertaPerTe extends Page
 
                 return $offerta !== null
                     && $utente !== null
+                    && $offerta->attivazione === ComeSiAttiva::Link
                     && app(ConsegnaDeiPremi::class)->percheNo($offerta, $utente) === null;
             })
             ->action(function (): void {
@@ -129,12 +131,12 @@ class OffertaPerTe extends Page
                 $utente = auth()->user();
 
                 $fatta = $offerta !== null && $utente !== null
-                    ? app(ConsegnaDeiPremi::class)->riscatta($offerta, $utente)
+                    ? app(ConsegnaDeiPremi::class)->attiva($offerta, $utente)
                     : null;
 
                 if ($fatta === null) {
                     Notification::make()
-                        ->title('Non è stato possibile riscattarla')
+                        ->title('Non è stato possibile attivarla')
                         ->body($offerta !== null && $utente !== null
                             ? app(ConsegnaDeiPremi::class)->percheNo($offerta, $utente)
                             : null)
@@ -145,8 +147,12 @@ class OffertaPerTe extends Page
                 }
 
                 Notification::make()
-                    ->title('Fatto!')
-                    ->body($fatta->gettoni > 0 ? "Hai ricevuto {$fatta->gettoni} gettoni." : 'L\'offerta è tua.')
+                    ->title('Attivata!')
+                    ->body(match (true) {
+                        $fatta->gettoni > 0 => "Hai ricevuto {$fatta->gettoni} gettoni.",
+                        $fatta->acquisto_in_sospeso => 'Lo sconto si applica da solo al prossimo pagamento.',
+                        default => 'L\'offerta è tua.',
+                    })
                     ->success()
                     ->send();
             });

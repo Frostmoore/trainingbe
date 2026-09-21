@@ -352,10 +352,17 @@ class PromozioneResource extends Resource
         );
     }
 
-    /** L'indirizzo che porta l'offerta, nel pannello. */
+    /**
+     * Il **link di attivazione** dell'offerta.
+     *
+     * ⛔ Niente codici sconto (24/09/2026): questo link è l'unico modo di
+     * prendere un'offerta che non è automatica. Porta al sito (`/promo/{codice}`),
+     * che con l'app installata apre l'app e senza spiega come attivarla — dal
+     * pannello per chi ce l'ha.
+     */
     public static function link(Promozione $p): string
     {
-        return rtrim((string) config('app.url'), '/').'/admin/offerta/'.$p->codice;
+        return rtrim((string) config('app.url'), '/').'/promo/'.$p->codice;
     }
 
     public static function getPages(): array

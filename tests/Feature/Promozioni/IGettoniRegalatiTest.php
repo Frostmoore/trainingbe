@@ -214,15 +214,15 @@ final class IGettoniRegalatiTest extends TestCase
         $this->assertSame(30, $tizio->refresh()->ai_credits);
     }
 
-    /** 🔗 **Il link si riscatta una volta**, e poi dice «l'hai già ricevuta». */
+    /** 🔗 **Il link si attiva una volta**, e poi dice «l'hai già ricevuta». */
     #[Test]
-    public function il_link_si_riscatta_una_volta(): void
+    public function il_link_si_attiva_una_volta(): void
     {
         $tizio = $this->persona('tizio@esempio.test');
         $promozione = $this->promo([['tipo' => TipoDiPremio::GettoniRegalo, 'gettoni' => 40]], ['attivazione' => ComeSiAttiva::Link]);
 
-        $this->assertNotNull($this->consegna()->riscatta($promozione, $tizio));
-        $this->assertNull($this->consegna()->riscatta($promozione->fresh(), $tizio));
+        $this->assertNotNull($this->consegna()->attiva($promozione, $tizio));
+        $this->assertNull($this->consegna()->attiva($promozione->fresh(), $tizio));
 
         $this->assertSame(40, $tizio->refresh()->ai_credits);
         $this->assertSame('Hai già ricevuto questa offerta.', $this->consegna()->percheNo($promozione->fresh(), $tizio));
@@ -384,11 +384,11 @@ final class IGettoniRegalatiTest extends TestCase
             ['tipo' => TipoDiPremio::ScontoGettoni, 'tipo_sconto' => TipoDiSconto::Percentuale, 'valore' => 50],
         ], ['attivazione' => ComeSiAttiva::Link]);
 
-        $this->consegna()->riscatta($promozione, $tizio);
+        $this->consegna()->attiva($promozione, $tizio);
         $this->assertSame(10, $tizio->refresh()->ai_credits);
 
         $servizio = app(LePromozioni::class);
-        $this->assertNotNull($servizio->conIlCodice($promozione->codice, $tizio, SuCosaVale::Gettoni));
+        $this->assertNotNull($servizio->dalLink($promozione->codice, $tizio, SuCosaVale::Gettoni));
 
         $servizio->segnaUsate($promozione->codice, $tizio, 'cs_misto', 300);
 
@@ -396,7 +396,7 @@ final class IGettoniRegalatiTest extends TestCase
         $this->assertFalse($assegnazione->acquisto_in_sospeso);
         $this->assertSame(300, $assegnazione->scontato_cent);
         $this->assertSame(1, $promozione->fresh()->usata_volte);
-        $this->assertNull($servizio->conIlCodice($promozione->codice, $tizio, SuCosaVale::Gettoni));
+        $this->assertNull($servizio->dalLink($promozione->codice, $tizio, SuCosaVale::Gettoni));
     }
 
     // ═════════════════════════ il modulo ═════════════════════════

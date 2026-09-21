@@ -67,7 +67,6 @@ class Cassa
      * Apre una sessione di pagamento e restituisce dove mandare la persona.
      *
      * @param  int|null  $gettoni  il taglio scelto, solo per [GETTONI]
-     * @param  string|null  $promozione  il codice di un'offerta ricevuta per link
      */
     /**
      * @param  User|null  $perConto  🆕 **R1**, fase F5.8 — chi riceve i gettoni,
@@ -77,7 +76,6 @@ class Cassa
         User $utente,
         string $tipo,
         ?int $gettoni = null,
-        ?string $promozione = null,
         ?User $perConto = null,
     ): string {
         $tenant = $utente->tenant;
@@ -106,7 +104,6 @@ class Cassa
             $utente,
             $suCosa,
             $importo,
-            $promozione,
             pacchettoId: $tipo === self::ABBONAMENTO ? null : PacchettoGettoni::query()->inVendita()->where('gettoni', $gettoni)->value('id'),
             planId: $tipo === self::ABBONAMENTO ? Plan::query()->where('code', Plan::PLUS)->value('id') : null,
             // 🆕 P2 — per il bonus in gettoni, che dipende da quanti se ne comprano.

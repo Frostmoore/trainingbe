@@ -104,57 +104,78 @@ final class LeOfferteVisteDaFuoriTest extends TestCase
         $this->assertTrue($risposta->json('data.0.si_usa_pagando'));
     }
 
-    /** 🎟️ **«Hai un codice?»**: vale, o dice perché no. */
+    /** 🔗 **L'anteprima di un link** aperto nell'app: vale, o dice perché no. */
     #[Test]
-    public function la_verifica_del_codice(): void
+    public function l_anteprima_del_link(): void
     {
         $tizio = $this->libero();
-        $promozione = $this->promo([$this->sconto()], ['attivazione' => ComeSiAttiva::Codice]);
+        $promozione = $this->promo([$this->sconto()], ['attivazione' => ComeSiAttiva::Link]);
 
-        $this->comeApp($tizio)->postJson('/api/v1/promozioni/verifica', ['codice' => strtolower($promozione->codice)])
+        $this->comeApp($tizio)->getJson("/api/v1/promozioni/{$promozione->codice}")
             ->assertOk()
-            ->assertJsonPath('data.codice', $promozione->codice);
+            ->assertJsonPath('data.codice', $promozione->codice)
+            ->assertJsonPath('data.attivabile', true);
 
-        $this->comeApp($tizio)->postJson('/api/v1/promozioni/verifica', ['codice' => 'NONESISTE'])
+        $this->comeApp($tizio)->getJson('/api/v1/promozioni/NONESISTE')
             ->assertUnprocessable()
-            ->assertJsonPath('message', 'Questo codice non esiste.');
+            ->assertJsonPath('message', 'Questo link non porta a nessuna offerta.');
     }
 
-    /** 🎁 **Il riscatto dall'app**, una volta sola. */
+    /** 🎁 **Attivare un regalo dall'app**, una volta sola. */
     #[Test]
-    public function il_riscatto_dall_app(): void
+    public function l_attivazione_di_un_regalo(): void
     {
         $tizio = $this->libero();
         $promozione = $this->promo([['tipo' => TipoDiPremio::GettoniRegalo, 'gettoni' => 15]], ['attivazione' => ComeSiAttiva::Link]);
 
-        $this->comeApp($tizio)->postJson("/api/v1/promozioni/{$promozione->codice}/riscatta")
+        $this->comeApp($tizio)->postJson("/api/v1/promozioni/{$promozione->codice}/attiva")
             ->assertCreated()
             ->assertJsonPath('data.gettoni', 15)
             ->assertJsonPath('data.saldo', 15);
 
-        $this->comeApp($tizio)->postJson("/api/v1/promozioni/{$promozione->codice}/riscatta")
+        $this->comeApp($tizio)->postJson("/api/v1/promozioni/{$promozione->codice}/attiva")
             ->assertUnprocessable()
             ->assertJsonPath('message', 'Hai già ricevuto questa offerta.');
     }
 
-    /** 💳 **Il codice scritto al pagamento** arriva allo sconto di Stripe. Opzione 29. */
+    /**
+     * ⛔ **Niente codici sconto**: uno sconto col link si **attiva**, e poi il
+     * pagamento lo usa da solo. Prima dell'attivazione non vale; il checkout
+     * non accetta nessun codice.
+     */
     #[Test]
-    public function il_codice_al_pagamento_sconta(): void
+    public function lo_sconto_col_link_si_attiva_e_si_applica_da_solo(): void
     {
         $tizio = $this->libero();
         $pacchetto = PacchettoGettoni::query()->inVendita()->orderByDesc('gettoni')->first();
-        $promozione = $this->promo([$this->sconto()], ['attivazione' => ComeSiAttiva::Codice]);
+        $promozione = $this->promo([$this->sconto()], ['attivazione' => ComeSiAttiva::Link]);
 
-        $this->comeApp($tizio)->postJson('/api/v1/billing/checkout', ['tipo' => 'gettoni', 'gettoni' => $pacchetto->gettoni])->assertOk();
-        $this->assertSame([], $this->stripe->chiamateA('coupons.create'));
-
+        // Un codice nel corpo del checkout non conta più: nessuno sconto.
         $this->comeApp($tizio)->postJson('/api/v1/billing/checkout', [
             'tipo' => 'gettoni',
             'gettoni' => $pacchetto->gettoni,
             'promozione' => $promozione->codice,
         ])->assertOk();
+        $this->assertSame([], $this->stripe->chiamateA('coupons.create'));
+
+        $this->comeApp($tizio)->postJson("/api/v1/promozioni/{$promozione->codice}/attiva")
+            ->assertCreated()
+            ->assertJsonPath('data.sconto_pronto', true);
+
+        $this->comeApp($tizio)->postJson('/api/v1/billing/checkout', ['tipo' => 'gettoni', 'gettoni' => $pacchetto->gettoni])->assertOk();
 
         $this->assertSame((int) round($pacchetto->prezzo_cent * 0.2), $this->stripe->ultima('coupons.create')[0]['amount_off']);
+    }
+
+    /** 🔗 La pagina `/promo/{codice}` del sito: cos'è e come attivarla, senza attivare niente. */
+    #[Test]
+    public function la_pagina_del_link_sul_sito(): void
+    {
+        $promozione = $this->promo([$this->sconto()], ['nome' => 'Autunno', 'attivazione' => ComeSiAttiva::Link]);
+
+        $this->get("/promo/{$promozione->codice}")->assertOk()->assertSee('Autunno')->assertSee('Attivala dal pannello');
+        $this->get('/promo/NONESISTE')->assertOk()->assertSee('non è più disponibile');
+        $this->assertSame(0, $promozione->fresh()->usata_volte);
     }
 
     // ═════════════════════════ gli avvisi ═════════════════════════

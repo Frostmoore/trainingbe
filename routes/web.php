@@ -196,6 +196,16 @@ Route::get('/amico/{codice}', [SitoController::class, 'amico'])
 
 Route::get('/offerte', [SitoController::class, 'offerte'])->name('sito.offerte');
 
+/*
+| 🆕 🔗 Il link di attivazione di una promozione — 24/09/2026. ⛔ Niente codici
+| sconto: le promozioni si attivano da sole o da questo link. `GET` che non
+| attiva niente (come gli inviti); con l'app installata lo apre l'app.
+*/
+Route::get('/promo/{codice}', [SitoController::class, 'promo'])
+    ->where('codice', '[A-Za-z0-9]{1,40}')
+    ->middleware('throttle:30,1')
+    ->name('sito.promo');
+
 Route::get('/invito/{token}', [SitoController::class, 'invito'])
     ->where('token', '[A-Za-z0-9]{32}')
     ->name('sito.invito');

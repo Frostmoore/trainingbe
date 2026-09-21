@@ -84,8 +84,10 @@ class PushSender
      */
     private function sendViaFcm(DeviceToken $dispositivo, string $titolo, string $corpo, array $data): bool
     {
-        $progetto = config('push.fcm.project_id');
-        $token = config('push.fcm.access_token');
+        // 🆕 24/09/2026 — dalla chiave di servizio, rinnovato da solo (`TokenDiFirebase`).
+        $firebase = app(TokenDiFirebase::class);
+        $progetto = $firebase->progetto();
+        $token = $firebase->token();
 
         if (! is_string($progetto) || ! is_string($token) || $progetto === '' || $token === '') {
             Log::warning('push: FCM non configurato, notifica non inviata.');
@@ -100,7 +102,17 @@ class PushSender
                     'message' => [
                         'token' => $dispositivo->token,
                         'notification' => ['title' => $titolo, 'body' => $corpo],
+
+                        /*
+                         * ⚠️ I `data` viaggiano come stringhe (FCM non accetta
+                         * altro), e sono quello che l'app legge al **tocco**:
+                         * `tipo` dice dove portare, il resto è l'indirizzo
+                         * (`codice` di un'offerta, id di una conversazione…).
+                         */
                         'data' => array_map(static fn ($v): string => (string) $v, $data),
+
+                        // 🍎 Per iOS, quando ci sarà: il suono va chiesto ad APNs.
+                        'apns' => ['payload' => ['aps' => ['sound' => 'default']]],
                     ],
                 ]);
         } catch (Throwable $e) {

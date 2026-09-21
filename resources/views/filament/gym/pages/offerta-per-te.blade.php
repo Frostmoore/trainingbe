@@ -33,14 +33,18 @@
                 <p class="fi-ta-text-item fi-size-md">{{ $offerta->descrizione }}</p>
             @endif
 
-            {{-- 🆕 P2 — le offerte che regalano si riscattano da qui. --}}
-            @if ($offerta->haRegali())
-                <div style="margin-top: .75rem;">{{ $this->riscattaAction }}</div>
+            {{-- 🆕 Le offerte col link si attivano da qui (regali subito, sconto al prossimo pagamento). --}}
+            @if ($offerta->attivazione === \App\Enums\ComeSiAttiva::Link)
+                <div style="margin-top: .75rem;">{{ $this->attivaAction }}</div>
             @endif
 
             @if ($offerta->haPremiDAcquisto())
             <p class="fi-ta-text-item fi-size-sm" style="margin-top: .75rem; opacity: .75;">
-                Lo sconto si applica da solo al prossimo pagamento
+                @if ($offerta->attivazione === \App\Enums\ComeSiAttiva::Link)
+                    Attivala: lo sconto si applica da solo al prossimo pagamento
+                @else
+                    Lo sconto si applica da solo al prossimo pagamento
+                @endif
                 ({{ mb_strtolower($offerta->genere->label()) }}).
                 @if (! $offerta->cumulabile)
                     ⚠️ Non si somma ad altre offerte: se ne hai già una migliore, resta quella.

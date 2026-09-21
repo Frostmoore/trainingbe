@@ -17,7 +17,15 @@ c'è un'offerta per te, **{{ $titolo }}**: {{ $cosa }}.
 @endif
 
 @if (! $ricevuta)
+@if ($link)
+<x-mail::button :url="$link">
+Attivala
+</x-mail::button>
+
+Una volta attivata, lo sconto si applica da solo al prossimo pagamento.@if ($scade) Vale fino al {{ $scade }}.@endif
+@else
 Si applica da sola al prossimo pagamento nell'app.@if ($scade) Vale fino al {{ $scade }}.@endif
+@endif
 @endif
 
 —<br>

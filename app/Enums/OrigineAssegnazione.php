@@ -8,7 +8,6 @@ namespace App\Enums;
 enum OrigineAssegnazione: string
 {
     case Automatica = 'automatica';
-    case Codice = 'codice';
     case Link = 'link';
     case Massa = 'massa';
     case Evento = 'evento';
@@ -18,7 +17,6 @@ enum OrigineAssegnazione: string
     {
         return match ($this) {
             self::Automatica => 'Automatica',
-            self::Codice => 'Codice',
             self::Link => 'Link',
             self::Massa => 'Accredito di massa',
             self::Evento => 'Evento',

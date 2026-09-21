@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
+use App\Enums\ComeSiAttiva;
+use App\Filament\God\Resources\Promozioni\PromozioneResource;
 use App\Models\Promozione;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
@@ -51,6 +53,11 @@ class PromozionePerTeMail extends Mailable
                 'descrizione' => $this->promozione->descrizione,
                 'ricevuta' => $this->ricevuta,
                 'scade' => $this->promozione->scade_il?->format('d/m/Y'),
+
+                // ⛔ Niente codici (24/09/2026): un'offerta col link si attiva dal link, e il link sta nella mail.
+                'link' => $this->promozione->attivazione === ComeSiAttiva::Link
+                    ? PromozioneResource::link($this->promozione)
+                    : null,
             ],
         );
     }

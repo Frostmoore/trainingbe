@@ -626,13 +626,16 @@ final class ModuloDellaPromozione
                 ->helperText('Come la chiami tu, e come compare in ricevuta.'),
 
             TextInput::make('codice')
-                ->label('Codice')
+                // ⛔ Non è un codice sconto da scrivere (24/09/2026): è quello che il link di attivazione porta dentro.
+                ->label('Codice del link')
                 ->required()
                 ->maxLength(40)
+                // ⚠️ Solo lettere e numeri: finisce in un indirizzo (`/promo/{codice}`).
+                ->alphaNum()
                 ->default(fn (): string => Promozione::nuovoCodice())
                 ->unique(Promozione::class, 'codice', ignoreRecord: true)
                 ->dehydrateStateUsing(fn (?string $state): string => mb_strtoupper(trim((string) $state)))
-                ->helperText('È il link. Chi ce l\'ha può aprire l\'offerta: trattalo come una password.'),
+                ->helperText('Sta dentro il link di attivazione. Chi ha il link può attivare l\'offerta: trattalo come una password.'),
 
             Textarea::make('descrizione')
                 ->label('Cosa dice al cliente')

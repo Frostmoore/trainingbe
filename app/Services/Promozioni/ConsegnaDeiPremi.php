@@ -39,12 +39,12 @@ use Throwable;
  * | Strada | Chi chiama | Riferimento (unico per promozione) |
  * |---|---|---|
  * | automatica | `promozioni:consegna-automatiche`, ogni 15 minuti | `auto:<user>` → **una volta per persona**, sempre |
- * | link | «Riscatta» nella pagina dell'offerta | `link:<user>:<n>` → fino al massimo per persona |
+ * | link | «Attiva» dal link (app o pannello) | `link:<user>:<n>` → fino al massimo per persona |
  * | massa | «Esegui» nel pannello → `ConsegnaLaPromozioneATutti` | `massa:<ts>:<user>` → due «Esegui» sono due giri |
  * | evento | P6 | |
  *
  * 🚨 **Il riferimento unico è la difesa contro i doppioni**: un comando che
- * gira due volte, un doppio clic su «Riscatta», un job ritentato. ⛔ Senza,
+ * gira due volte, un doppio clic su «Attiva», un job ritentato. ⛔ Senza,
  * ognuno di questi regalerebbe due volte.
  *
  * ⚠️ **Il budget in gettoni taglia, non rifiuta**: se ne restano 30 e il regalo
@@ -172,8 +172,14 @@ class ConsegnaDeiPremi
         $promozione->loadMissing(['premi', 'bersagli']);
 
         return match (true) {
-            // 🆕 P6 — uno sconto sbloccato da un evento si «consegna» anche senza regali.
-            ! $promozione->haRegali($aChi) && ! ($aChi === 'destinatario' && $promozione->haSblocchi()) => 'Questa offerta non regala niente: si usa pagando.',
+            /*
+             * 🆕 P6 — uno sconto sbloccato da un evento si «consegna» anche senza
+             * regali. ⛔ Da quando i codici non esistono più (24/09/2026) anche uno
+             * sconto col link si **attiva**: l'assegnazione resta in sospeso, e il
+             * pagamento dopo lo usa da solo.
+             */
+            ! $promozione->haRegali($aChi) && ! $promozione->haPremiDAcquisto($aChi)
+                && ! ($aChi === 'destinatario' && $promozione->haSblocchi()) => 'Questa offerta non dà niente.',
             ($motivo = $promozione->perchePiuNonVale()) !== null => $motivo,
             // ⚠️ Chi ha invitato non deve rientrare nei destinatari: i destinatari sono chi arriva.
             $aChi === 'destinatario' && ! $this->chiLaRiceve->prende($promozione, $utente) => 'Questa offerta non è per il tuo account.',
@@ -451,12 +457,14 @@ class ConsegnaDeiPremi
     }
 
     /**
-     * 🔗 «Riscatta» dalla pagina dell'offerta.
+     * 🔗 **«Attiva» dal link** — nell'app o nel pannello.
      *
-     * Il riferimento conta le volte (`link:<user>:<n>`), così il massimo per
-     * persona decide quante, e un doppio clic non ne dà due.
+     * I regali arrivano subito; lo sconto (o il bonus) resta **in sospeso**
+     * sull'assegnazione e il prossimo pagamento lo usa da solo — ⛔ niente
+     * codice da riscrivere. Il riferimento conta le volte (`link:<user>:<n>`),
+     * così il massimo per persona decide quante, e un doppio clic non ne dà due.
      */
-    public function riscatta(Promozione $promozione, User $utente): ?PromozioneAssegnazione
+    public function attiva(Promozione $promozione, User $utente): ?PromozioneAssegnazione
     {
         $volta = $promozione->usiDi($utente) + 1;
 

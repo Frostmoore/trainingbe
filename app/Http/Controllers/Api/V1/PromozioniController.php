@@ -18,13 +18,14 @@ use Illuminate\Http\Request;
  *
  * | Rotta | Cosa fa |
  * |---|---|
- * | `GET promozioni` | le offerte di questa persona, visibili nell'app (e quelle già sue) |
- * | `POST promozioni/verifica` | «Hai un codice?»: vale per me? — prima di pagare |
- * | `POST promozioni/{codice}/riscatta` | prende i regali di un'offerta col link o col codice |
+ * | `GET promozioni` | le offerte di questa persona, visibili nell'app (e quelle già attivate) |
+ * | `GET promozioni/{codice}` | l'offerta di un **link** aperto nell'app: vale per me? |
+ * | `POST promozioni/{codice}/attiva` | la attiva: i regali arrivano, lo sconto resta pronto per il pagamento |
  *
- * 🚨 La verifica **non** è il pagamento: al checkout il codice si riverifica
- * (`BillingController::checkout()` → `ScontiSuStripe`), e un codice sbagliato lì
- * fa pagare a prezzo pieno invece di bloccare.
+ * ⛔ **Niente codici sconto** (24/09/2026): 📌 *«il codice sconto non deve
+ * esistere, le promo si attivano solo in automatico o con il link di
+ * attivazione»*. Il `{codice}` qui è quello **dentro il link**, non uno che si
+ * scrive: l'app lo riceve aprendo `…/promo/{codice}`.
  */
 class PromozioniController extends Controller
 {
@@ -42,46 +43,45 @@ class PromozioniController extends Controller
         ]);
     }
 
-    public function verifica(Request $request): JsonResponse
+    public function mostra(Request $request, string $codice): JsonResponse
     {
-        $dati = $request->validate(['codice' => ['required', 'string', 'max:40']]);
-
         /** @var User $utente */
         $utente = $request->user();
-        $promozione = app(LePromozioni::class)->conIlCodice($dati['codice'], $utente);
+        $promozione = app(LePromozioni::class)->dalLink($codice, $utente);
 
         if ($promozione === null) {
             return response()->json([
-                'message' => $this->offerte->perche($dati['codice'], $utente),
-                'code' => 'codice_non_valido',
+                'message' => $this->offerte->perche($codice, $utente),
+                'code' => 'link_non_valido',
             ], 422);
         }
 
         return response()->json(['data' => $this->offerte->perLApp($promozione, $utente)]);
     }
 
-    public function riscatta(Request $request, string $codice): JsonResponse
+    public function attiva(Request $request, string $codice): JsonResponse
     {
         /** @var User $utente */
         $utente = $request->user();
         $promozione = Promozione::query()->with(['premi', 'bersagli', 'condizioni'])->where('codice', mb_strtoupper(trim($codice)))->first();
 
         if ($promozione === null) {
-            return response()->json(['message' => 'Questo codice non esiste.', 'code' => 'codice_non_valido'], 422);
+            return response()->json(['message' => 'Questo link non porta a nessuna offerta.', 'code' => 'link_non_valido'], 422);
         }
 
         $consegna = app(ConsegnaDeiPremi::class);
-        $fatta = $consegna->riscatta($promozione, $utente);
+        $fatta = $consegna->attiva($promozione, $utente);
 
         if ($fatta === null) {
             return response()->json([
-                'message' => $consegna->percheNo($promozione->fresh(['premi', 'bersagli', 'condizioni']), $utente) ?? 'Non è stato possibile riscattarla.',
-                'code' => 'non_riscattabile',
+                'message' => $consegna->percheNo($promozione->fresh(['premi', 'bersagli', 'condizioni']), $utente) ?? 'Non è stato possibile attivarla.',
+                'code' => 'non_attivabile',
             ], 422);
         }
 
         return response()->json(['data' => [
             'gettoni' => $fatta->gettoni,
+            'sconto_pronto' => $fatta->acquisto_in_sospeso,
             'saldo' => (int) User::withoutGlobalScopes()->whereKey($utente->getKey())->value('ai_credits'),
         ]], 201);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Promozioni;
 
+use App\Enums\ComeSiAttiva;
 use App\Models\Promozione;
 use App\Models\User;
 use App\Services\Billing\LePromozioni;
@@ -80,7 +81,7 @@ class LeOfferteDellaPersona
     }
 
     /**
-     * Perché un codice non vale per questa persona — `null` se vale.
+     * Perché il link di un'offerta non vale per questa persona — `null` se vale.
      *
      * ⚠️ **Motivi diversi, messaggi diversi** (F2): «scaduta», «esaurita», «non è
      * per te», «l'hai già ricevuta» sono quattro telefonate diverse.
@@ -91,14 +92,14 @@ class LeOfferteDellaPersona
             return 'Questo indirizzo non porta a nessuna offerta.';
         }
 
-        if ($this->promozioni->conIlCodice($codice, $utente) !== null) {
+        if ($this->promozioni->dalLink($codice, $utente) !== null) {
             return null;
         }
 
         $promozione = Promozione::query()->with(['bersagli', 'condizioni', 'premi'])->where('codice', mb_strtoupper(trim($codice)))->first();
 
         if ($promozione === null) {
-            return 'Questo codice non esiste.';
+            return 'Questo link non porta a nessuna offerta.';
         }
 
         if (($motivo = $promozione->perchePiuNonVale()) !== null) {
@@ -126,7 +127,12 @@ class LeOfferteDellaPersona
             'cosa' => ucfirst($p->scrittoBene()),
             'genere' => $p->genere->value,
             'scade_il' => $p->scade_il?->toIso8601String(),
-            'riscattabile' => $this->consegna->percheNo($p, $utente) === null,
+            /*
+             * ⚠️ «Attiva» solo per le promozioni **col link**: le automatiche
+             * arrivano da sole, massa ed eventi pure — un tasto lì sarebbe un
+             * secondo modo di prenderle che nessuno ha deciso.
+             */
+            'attivabile' => $p->attivazione === ComeSiAttiva::Link && $this->consegna->percheNo($p, $utente) === null,
             'in_sospeso' => $p->haUnAcquistoInSospeso($utente) !== null,
             'si_usa_pagando' => $p->haPremiDAcquisto(),
         ];

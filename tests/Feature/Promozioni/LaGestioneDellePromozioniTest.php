@@ -171,7 +171,7 @@ final class LaGestioneDellePromozioniTest extends TestCase
         PromozioneAssegnazione::query()->create([
             'promozione_id' => $promozione->getKey(),
             'user_id' => $tizio->getKey(),
-            'origine' => OrigineAssegnazione::Codice,
+            'origine' => OrigineAssegnazione::Link,
             'riferimento' => 'cs_pagata',
             'stato' => StatoAssegnazione::Usata,
             'scontato_cent' => 200,

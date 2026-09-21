@@ -367,8 +367,8 @@ class LePromozioniTest extends TestCase
 
         $servizio = app(LePromozioni::class);
 
-        $this->assertNotNull($servizio->conIlCodice($promozione->codice, $dentro, SuCosaVale::Gettoni));
-        $this->assertNull($servizio->conIlCodice($promozione->codice, $estraneo, SuCosaVale::Gettoni));
+        $this->assertNotNull($servizio->dalLink($promozione->codice, $dentro, SuCosaVale::Gettoni));
+        $this->assertNull($servizio->dalLink($promozione->codice, $estraneo, SuCosaVale::Gettoni));
     }
 
     /**

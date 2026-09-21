@@ -619,13 +619,13 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:10,1');
 
         /*
-         * 🆕 🎁 P8 di plan_promozioni.md — le offerte nell'app, «Hai un codice?» e
-         * il riscatto dei regali. ⚠️ `verifica` e `riscatta` sotto un tetto
-         * stretto: senza, sono il modo più comodo per provare codici a tappeto.
+         * 🆕 🎁 P8 di plan_promozioni.md — le offerte nell'app e l'attivazione
+         * da link. ⛔ Niente codici sconto da scrivere (24/09/2026). ⚠️ Sotto un
+         * tetto stretto: senza, sono il modo più comodo per provare link a tappeto.
          */
         Route::get('promozioni', [PromozioniController::class, 'index']);
-        Route::post('promozioni/verifica', [PromozioniController::class, 'verifica'])->middleware('throttle:10,1');
-        Route::post('promozioni/{codice}/riscatta', [PromozioniController::class, 'riscatta'])->middleware('throttle:10,1');
+        Route::get('promozioni/{codice}', [PromozioniController::class, 'mostra'])->middleware('throttle:30,1');
+        Route::post('promozioni/{codice}/attiva', [PromozioniController::class, 'attiva'])->middleware('throttle:10,1');
 
         // 🔁 Disdetta, carta, ricevute: si va da Stripe. Vedi `Cassa::portale`.
         Route::post('billing/portale', [BillingController::class, 'portale'])

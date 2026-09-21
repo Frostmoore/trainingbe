@@ -88,18 +88,17 @@ class LePromozioni
     }
 
     /**
-     * Una promozione presa dal suo codice, se questa persona può usarla.
+     * La promozione di un **link**, se questa persona può averla.
      *
-     * 🚨 **Il codice non basta**: dice *quale* offerta, non *a chi* spetta. ⛔
-     * Senza il controllo sui bersagli, un codice inoltrato varrebbe per
-     * chiunque — e una promozione «per gli allievi della palestra Tal dei
-     * Tali» finirebbe su mezza piattaforma.
+     * ⛔ Non è più un «codice sconto» da scrivere (24/09/2026): il codice sta
+     * dentro il link, e il link si **apre**. 🚨 E il codice da solo non basta:
+     * dice *quale* offerta, non *a chi* spetta — senza il controllo sui
+     * bersagli un link inoltrato varrebbe per chiunque.
      *
-     * 🆕 P1 — `$cosa` `null` = «su qualunque cosa»: la pagina dell'offerta la
-     * spiega, non vende niente. E chi l'ha già presa quante volte poteva non la
-     * ritrova.
+     * `$cosa` `null` = «su qualunque cosa»: la pagina dell'offerta la spiega,
+     * non vende niente.
      */
-    public function conIlCodice(string $codice, User $utente, ?SuCosaVale $cosa = null): ?Promozione
+    public function dalLink(string $codice, User $utente, ?SuCosaVale $cosa = null): ?Promozione
     {
         $promozione = Promozione::query()
             ->with(['bersagli', 'premi'])
@@ -450,7 +449,7 @@ class LePromozioni
                         'stato' => StatoAssegnazione::Usata,
                         'origine' => $promozione->attivazione === ComeSiAttiva::Automatica
                             ? OrigineAssegnazione::Automatica
-                            : OrigineAssegnazione::Codice,
+                            : OrigineAssegnazione::Link,
                         'riferimento' => $riferimento,
                         'scontato_cent' => $quota,
                         'usata_il' => now(),

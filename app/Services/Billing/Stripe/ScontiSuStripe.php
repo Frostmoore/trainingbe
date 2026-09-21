@@ -55,21 +55,16 @@ class ScontiSuStripe
         User $utente,
         SuCosaVale $cosa,
         int $importoCent,
-        ?string $codice = null,
         ?int $pacchettoId = null,
         ?int $planId = null,
         ?int $gettoni = null,
     ): array {
-        $candidate = $this->promozioni->automaticheDi($utente, $cosa)->all();
-
         /*
-         * 💡 Il codice si somma alle automatiche: chi ha un'offerta sua e
-         * riceve anche un link non deve perdere una delle due. ⚠️ Poi
-         * decidono le regole di cumulabilità, che restano le stesse.
+         * ⛔ **Niente codice al pagamento** (24/09/2026): le candidate sono le
+         * automatiche **più** quelle attivate col link (che `automaticheDi()`
+         * comprende, perché hanno un acquisto in sospeso). Nessuno scrive niente.
          */
-        if ($codice !== null && ($conCodice = $this->promozioni->conIlCodice($codice, $utente, $cosa)) !== null) {
-            $candidate[] = $conCodice;
-        }
+        $candidate = $this->promozioni->automaticheDi($utente, $cosa)->all();
 
         $conto = $this->promozioni->applica($importoCent, $candidate, $cosa, $pacchettoId, $planId);
 

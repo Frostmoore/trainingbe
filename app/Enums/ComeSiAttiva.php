@@ -7,18 +7,21 @@ namespace App\Enums;
 /**
  * ⚡ **Come arriva una promozione a chi la riceve** — 24/09/2026, fase P1.
  *
+ * ⛔ **Niente codici sconto** (24/09/2026): 📌 *«il codice sconto non deve
+ * esistere, le promo si attivano solo in automatico o con il link di
+ * attivazione»*. Massa ed evento sono due modi dell'automatico: nessuno scrive
+ * niente.
+ *
  * | Caso | Cosa succede |
  * |---|---|
  * | `automatica` | vale da sola per chi rientra nei destinatari |
- * | `codice` | si scrive il codice al pagamento (il campo arriva in P8) |
- * | `link` | si apre l'indirizzo che la porta |
+ * | `link` | chi apre l'indirizzo la **attiva**: i regali arrivano, lo sconto resta pronto per il pagamento |
  * | `massa` | «Esegui»: i regali arrivano adesso a tutti i destinatari (P2) |
  * | `evento` | quando succede qualcosa: registrazione, rinnovo… (P6) |
  */
 enum ComeSiAttiva: string
 {
     case Automatica = 'automatica';
-    case Codice = 'codice';
     case Link = 'link';
     case Massa = 'massa';
     case Evento = 'evento';
@@ -27,7 +30,6 @@ enum ComeSiAttiva: string
     {
         return match ($this) {
             self::Automatica => 'Automatica',
-            self::Codice => 'Con un codice',
             self::Link => 'Con un link',
             self::Massa => 'Accredito di massa',
             self::Evento => 'Quando succede qualcosa',
@@ -38,8 +40,7 @@ enum ComeSiAttiva: string
     {
         return match ($this) {
             self::Automatica => 'Vale da sola per chi rientra nei destinatari.',
-            self::Codice => 'Chi ha il codice lo scrive al pagamento.',
-            self::Link => 'Si manda l\'indirizzo: chi lo apre vede l\'offerta nel suo pannello.',
+            self::Link => 'Si manda il link: chi lo apre la attiva, dall\'app o dal pannello.',
             self::Massa => 'Premi «Esegui» e i regali arrivano subito a tutti i destinatari.',
             self::Evento => 'Scatta da sola quando la persona fa qualcosa.',
         };
@@ -47,19 +48,10 @@ enum ComeSiAttiva: string
 
     /**
      * 🚧 **Funziona già?** Come per i premi: una scelta che non fa niente non
-     * compare. `codice` aspetta il campo al pagamento (P8), `evento` gli
-     * agganci (P6).
+     * compare. Da P8 sono tutte costruite (massa da P2, evento da P6).
      */
     public function costruito(): bool
     {
-        // 🆕 P2 — `massa`, con i regali.
-        // 🆕 P8 — tutte: anche `codice`, col campo «Hai un codice?» al pagamento.
         return true;
-    }
-
-    /** Si spende solo presentando il codice (a mano o dal link). */
-    public function serveIlCodice(): bool
-    {
-        return $this === self::Codice || $this === self::Link;
     }
 }

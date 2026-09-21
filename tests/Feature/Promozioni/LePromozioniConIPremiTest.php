@@ -238,7 +238,7 @@ final class LePromozioniConIPremiTest extends TestCase
 
         $this->assertCount(0, $servizio->automaticheDi($tizio, SuCosaVale::Gettoni));
         $this->assertCount(1, $servizio->automaticheDi($caio, SuCosaVale::Gettoni));
-        $this->assertNull($servizio->conIlCodice($promozione->codice, $tizio));
+        $this->assertNull($servizio->dalLink($promozione->codice, $tizio));
     }
 
     /** 💡 Vuoto vuol dire senza limite: la stessa persona la riusa. */

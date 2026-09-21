@@ -247,10 +247,10 @@ class BillingController extends Controller
      * canone rifiutato — stanno tutte in `PianiInVendita`. Qui si traducono i
      * suoi rifiuti in risposte: il messaggio è già scritto per chi lo leggerà.
      */
-    private function apriIlPiano(Request $request, string $codice, ?string $promozione = null): JsonResponse
+    private function apriIlPiano(Request $request, string $codice): JsonResponse
     {
         try {
-            $url = app(PianiInVendita::class)->apri($request->user(), $codice, promozione: $promozione);
+            $url = app(PianiInVendita::class)->apri($request->user(), $codice);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
@@ -317,19 +317,12 @@ class BillingController extends Controller
              * Stripe.
              */
             'gettoni' => ['required_if:tipo,'.Cassa::GETTONI, 'integer'],
-
-            /*
-             * 🆕 🎟️ P8 di `plan_promozioni.md` — **«Hai un codice?»**. ⚠️ Un codice
-             * sbagliato o non suo **non blocca** il pagamento: si paga a prezzo
-             * pieno. La verifica prima di pagare la fa `POST promozioni/verifica`.
-             */
-            'promozione' => ['nullable', 'string', 'max:40'],
         ]);
 
         $tipo = $dati['tipo'];
 
         if ($tipo === PianiInVendita::TIPO) {
-            return $this->apriIlPiano($request, (string) $dati['piano'], $dati['promozione'] ?? null);
+            return $this->apriIlPiano($request, (string) $dati['piano']);
         }
 
         // ⛔ Non si vende due volte la stessa cosa.
@@ -369,7 +362,6 @@ class BillingController extends Controller
                 $request->user(),
                 $tipo,
                 isset($dati['gettoni']) ? (int) $dati['gettoni'] : null,
-                $dati['promozione'] ?? null,
             );
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
