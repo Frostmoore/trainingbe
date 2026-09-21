@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Enums\SuCosaVale;
 use App\Models\AddebitoMensile;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
+use App\Models\Promozione;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -179,8 +182,21 @@ class AddebitoDelMese
         $fatturati = max($contati, $piano->minimo_iscritti ?? 0);
         $importo = $piano->costoDelMese($contati);
 
+        /*
+         * 🆕 🎁 **Lo sconto sul consumo** — P3.4 di `plan_promozioni.md` (opzione 14).
+         *
+         * ⛔ F2 lo offriva già («vale su: piano a consumo»), ma questo metodo non
+         * leggeva le promozioni: lo sconto si salvava e non toglieva niente.
+         *
+         * 💡 Le promozioni sono di **persone**: qui conta il **titolare** dello
+         * spazio, che è chi paga. Solo le automatiche — non c'è un checkout in
+         * cui presentare un codice. Il massimo per persona dice per quanti mesi
+         * (1 = solo questo mese; vuoto = finché la promozione vale).
+         */
+        $sconto = $this->scontoDelConsumo($palestra, $piano, (int) $importo, $periodo);
+
         try {
-            return $this->context->runWithoutTenant(
+            $addebito = $this->context->runWithoutTenant(
                 fn (): AddebitoMensile => AddebitoMensile::withoutGlobalScopes()->create([
                     'tenant_id' => $palestra->getKey(),
                     'plan_id' => $piano->getKey(),
@@ -188,10 +204,24 @@ class AddebitoDelMese
                     'iscritti_contati' => $contati,
                     'iscritti_fatturati' => $fatturati,
                     'prezzo_iscritto_cent' => (int) $piano->prezzo_iscritto_cent,
-                    'importo_cent' => (int) $importo,
+                    'importo_cent' => (int) $importo - $sconto['sconto'],
+                    'sconto_cent' => $sconto['sconto'],
+                    'promozioni' => $sconto['codici'] ?: null,
                     'stato' => AddebitoMensile::DA_INCASSARE,
                 ]),
             );
+
+            // 🧾 L'uso si segna una volta per mese e per spazio: il riferimento lo rende idempotente.
+            if ($sconto['sconto'] > 0 && $sconto['titolare'] !== null) {
+                app(LePromozioni::class)->segnaUsate(
+                    $sconto['codici'],
+                    $sconto['titolare'],
+                    "consumo:{$periodo}:{$palestra->getKey()}",
+                    $sconto['sconto'],
+                );
+            }
+
+            return $addebito;
         } catch (QueryException $e) {
             /*
              * ⛔ **Due giri insieme.** Il vincolo ha fatto il suo mestiere: la
@@ -212,6 +242,38 @@ class AddebitoDelMese
 
             return $riga;
         }
+    }
+
+    /**
+     * 🆕 🎁 Lo sconto del mese, dalle promozioni automatiche del titolare — P3.4.
+     *
+     * @return array{sconto: int, codici: string, titolare: ?User}
+     */
+    private function scontoDelConsumo(Tenant $palestra, Plan $piano, int $importo, string $periodo): array
+    {
+        $titolare = $this->context->runWithoutTenant(
+            fn (): ?User => $palestra->proprietario_id !== null
+                ? User::withoutGlobalScopes()->find($palestra->proprietario_id)
+                : null,
+        );
+
+        if ($titolare === null || $importo <= 0) {
+            return ['sconto' => 0, 'codici' => '', 'titolare' => null];
+        }
+
+        $promozioni = app(LePromozioni::class);
+        $conto = $promozioni->applica(
+            $importo,
+            $promozioni->automaticheDi($titolare, SuCosaVale::Consumo),
+            SuCosaVale::Consumo,
+            planId: $piano->getKey(),
+        );
+
+        return [
+            'sconto' => $conto['sconto'],
+            'codici' => implode(',', array_map(fn (Promozione $p): string => $p->codice, $conto['applicate'])),
+            'titolare' => $titolare,
+        ];
     }
 
     /**
@@ -390,7 +452,12 @@ class AddebitoDelMese
             ."{$addebito->iscritti_fatturati} iscritti × {$prezzo} €";
 
         if ($addebito->haPagatoIlMinimo()) {
-            return $base." (iscritti effettivi: {$addebito->iscritti_contati}, minimo del piano: {$addebito->iscritti_fatturati})";
+            $base .= " (iscritti effettivi: {$addebito->iscritti_contati}, minimo del piano: {$addebito->iscritti_fatturati})";
+        }
+
+        // 🆕 🎁 P3.4 — lo sconto si dice: senza, l'importo non tornerebbe con «iscritti × prezzo».
+        if ((int) $addebito->sconto_cent > 0) {
+            $base .= ' — sconto promozione '.number_format($addebito->sconto_cent / 100, 2, ',', '.').' €';
         }
 
         return $base;

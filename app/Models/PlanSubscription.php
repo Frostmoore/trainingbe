@@ -32,6 +32,9 @@ class PlanSubscription extends Model
 
         // 🆕 3b-AH 8.1.6 — la pausa di chi entra in una palestra.
         'in_pausa_dal', 'in_pausa_per_tenant_id', 'restavano_giorni',
+
+        // 🆕 🎁 P3 di plan_promozioni.md — il premio «prezzo bloccato».
+        'prezzo_bloccato',
     ];
 
     protected function casts(): array
@@ -41,6 +44,7 @@ class PlanSubscription extends Model
             'ends_at' => 'datetime',
             'in_pausa_dal' => 'datetime',
             'restavano_giorni' => 'integer',
+            'prezzo_bloccato' => 'boolean',
 
             // 🆕 §9.4 — la prima volta che un rinnovo è stato rifiutato.
             'pagamento_fallito_il' => 'datetime',

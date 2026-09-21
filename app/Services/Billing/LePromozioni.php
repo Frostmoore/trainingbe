@@ -270,6 +270,46 @@ class LePromozioni
     }
 
     /**
+     * 🆕 🧪 **La prova gratuita per questo piano** — P3 di `plan_promozioni.md` (opzione 9).
+     *
+     * Fra le candidate, quella con la priorità più alta e poi con più giorni.
+     * ⚠️ Una sola: Stripe accetta un `trial_period_days`, e due prove non si
+     * sommano (sarebbe regalare un mese a chi ne ha ricevute due da 15 giorni).
+     *
+     * @param  iterable<Promozione>  $candidate
+     * @return array{giorni: int, promozione: Promozione}|null
+     */
+    public function provaPer(iterable $candidate, ?int $planId): ?array
+    {
+        $giorni = static fn (Promozione $p): int => (int) $p->premi
+            ->filter(fn (PromozionePremio $r): bool => $r->tipo === TipoDiPremio::ProvaGratuita && $r->valeSulPiano($planId))
+            ->max('giorni');
+
+        $scelta = collect($candidate)
+            ->filter(fn (Promozione $p): bool => $giorni($p) > 0)
+            ->sort(fn (Promozione $a, Promozione $b): int => [$b->priorita, $giorni($b)] <=> [$a->priorita, $giorni($a)])
+            ->first();
+
+        return $scelta === null ? null : ['giorni' => $giorni($scelta), 'promozione' => $scelta];
+    }
+
+    /**
+     * 🆕 🔒 **Le promozioni che bloccano il prezzo di questo piano** — P3 (opzione 12).
+     *
+     * @param  iterable<Promozione>  $candidate
+     * @return list<Promozione>
+     */
+    public function bloccanoIlPrezzo(iterable $candidate, ?int $planId): array
+    {
+        return collect($candidate)
+            ->filter(fn (Promozione $p): bool => $p->premi->contains(
+                fn (PromozionePremio $r): bool => $r->tipo === TipoDiPremio::PrezzoBloccato && $r->valeSulPiano($planId),
+            ))
+            ->values()
+            ->all();
+    }
+
+    /**
      * 🪙 Quanti gettoni in più dà questa promozione su questo acquisto.
      *
      * 💡 «+N fissi» e «+N%» si sommano se il premio li ha tutti e due; la

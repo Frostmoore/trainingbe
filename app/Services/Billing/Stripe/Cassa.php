@@ -184,6 +184,10 @@ class Cassa
 
                 // 🆕 🪙 P2 — quelle che danno gettoni in più: li accredita il webhook.
                 'bonus' => $this->sconti->perIMetadata($sconto['bonus']),
+
+                // 🆕 🧪🔒 P3 — prova gratuita e prezzo bloccato, letti da `accendiLAbbonamento()`.
+                'prova_giorni' => (string) ($sconto['prova_giorni'] ?? ''),
+                'prezzo_bloccato' => $sconto['prezzo_bloccato'] ? '1' : '',
             ],
 
             /*
@@ -213,7 +217,12 @@ class Cassa
                  * sopravvive alla sessione — e sono la rete di sicurezza se
                  * un giorno `stripe_subscription_id` non fosse stato salvato.
                  */
-                'subscription_data' => ['metadata' => $comune['metadata']],
+                'subscription_data' => [
+                    'metadata' => $comune['metadata'],
+
+                    // 🆕 🧪 P3 — la prova gratuita: carta subito, addebito dopo N giorni.
+                    ...($sconto['prova_giorni'] !== null ? ['trial_period_days' => $sconto['prova_giorni']] : []),
+                ],
 
                 'line_items' => [[
                     'quantity' => 1,
@@ -1215,14 +1224,21 @@ class Cassa
                 'stripe_customer_id' => $sessione['customer'] ?? null,
                 'rinnova' => true,
 
+                // 🆕 🔒 P3 — il premio «prezzo bloccato».
+                'prezzo_bloccato' => ($sessione['metadata']['prezzo_bloccato'] ?? '') === '1',
+
                 'starts_at' => now(),
                 /*
                  * 💡 Un mese e un giorno, non un mese esatto: il rinnovo di
                  * Stripe puo' arrivare qualche ora dopo la scadenza, e un
                  * abbonato che resta senza AI per mezza giornata **mentre sta
                  * pagando** e' il modo piu' rapido per farsi disdire.
+                 *
+                 * 🆕 🧪 P3 — con la prova, fino alla fine della prova; `invoice.paid` allunga dopo.
                  */
-                'ends_at' => (Plan::query()->where('code', Plan::PLUS)->first()?->finePeriodo(now()) ?? now()->addMonthNoOverflow())->addDay(),
+                'ends_at' => ((($giorni = (int) ($sessione['metadata']['prova_giorni'] ?? 0)) > 0
+                    ? now()->addDays($giorni)
+                    : Plan::query()->where('code', Plan::PLUS)->first()?->finePeriodo(now())) ?? now()->addMonthNoOverflow())->addDay(),
             ],
         );
 

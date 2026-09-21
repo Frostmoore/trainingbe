@@ -225,6 +225,10 @@ class PianiInVendita
 
         $meta['promozioni'] = $this->sconti->perIMetadata($sconto['promozioni']);
 
+        // 🆕 P3 — prova gratuita e prezzo bloccato, letti da `accendiIlCanone()`.
+        $meta['prova_giorni'] = (string) ($sconto['prova_giorni'] ?? '');
+        $meta['prezzo_bloccato'] = $sconto['prezzo_bloccato'] ? '1' : '';
+
         $sessione = $this->stripe()->checkout->sessions->create([
             'mode' => 'subscription',
 
@@ -243,7 +247,17 @@ class PianiInVendita
              * della sessione valgono per il primo pagamento, e `invoice.paid`
              * del mese dopo non li vede.
              */
-            'subscription_data' => ['metadata' => $meta],
+            /*
+             * 🆕 🧪 P3 — **la prova gratuita**: Stripe chiede la carta subito e
+             * addebita dopo N giorni. Nei metadata anche i giorni, perché il
+             * webhook accenda l'abbonamento **fino alla fine della prova** e non
+             * per un periodo intero (se poi la carta viene rifiutata, un mese
+             * regalato in più sarebbe un errore nostro).
+             */
+            'subscription_data' => [
+                'metadata' => $meta,
+                ...($sconto['prova_giorni'] !== null ? ['trial_period_days' => $sconto['prova_giorni']] : []),
+            ],
 
             /*
              * 💡 **Il cliente di prima, se c'è.** Una palestra che passa dal
@@ -448,12 +462,21 @@ class PianiInVendita
             'rinnova' => true,
             'starts_at' => Carbon::now(),
 
+            // 🆕 🔒 P3 — il premio «prezzo bloccato» (vedi la migration).
+            'prezzo_bloccato' => ($sessione['metadata']['prezzo_bloccato'] ?? '') === '1',
+
             /*
              * ⚠️ **Un giorno di grazia**, come per il piano personale: un
              * rinnovo che arriva con qualche ora di ritardo non deve lasciare
              * nessuno fuori. La data vera la scrive `invoice.paid` al rinnovo.
              */
-            'ends_at' => $piano->finePeriodo(Carbon::now())->addDay(),
+            /*
+             * 🆕 🧪 P3 — con la prova gratuita finisce **alla fine della prova**:
+             * il primo addebito vero arriva allora, e `invoice.paid` allunga da lì.
+             */
+            'ends_at' => (($giorni = (int) ($sessione['metadata']['prova_giorni'] ?? 0)) > 0
+                ? Carbon::now()->addDays($giorni)
+                : $piano->finePeriodo(Carbon::now()))->addDay(),
         ]);
     }
 

@@ -110,7 +110,8 @@ enum TipoDiPremio: string
      */
     public function siUsaAllAcquisto(): bool
     {
-        return $this->eUnoSconto() || $this === self::GettoniBonus;
+        // 🆕 P3 — anche la prova gratuita e il prezzo bloccato: vivono nel checkout dell'abbonamento.
+        return $this->eUnoSconto() || in_array($this, [self::GettoniBonus, self::ProvaGratuita, self::PrezzoBloccato], true);
     }
 
     /** Si consegna senza acquisto: passa da `ConsegnaDeiPremi` (P2, P4). */
@@ -204,14 +205,16 @@ enum TipoDiPremio: string
     public function costruito(): bool
     {
         /*
-         * ⚠️ `ScontoConsumo` **non** c'è, anche se F2 lo offriva: `AddebitoDelMese`
-         * non ha mai letto le promozioni, e uno sconto «su consumo» si salvava
-         * senza togliere niente. Arriva con P3.4.
+         * ⚠️ `ScontoConsumo` è arrivato solo con P3.4, anche se F2 lo offriva:
+         * `AddebitoDelMese` non leggeva le promozioni, e uno sconto «su consumo»
+         * si salvava senza togliere niente.
          */
         return in_array($this, [
             self::ScontoGettoni, self::ScontoAbbonamento,
             // 🆕 P2 — i gettoni.
             self::GettoniRegalo, self::GettoniBonus, self::PrezzoPacchetto, self::GettoniRicorrenti,
+            // 🆕 P3 — gli abbonamenti su Stripe, e il consumo.
+            self::ProvaGratuita, self::PrezzoBloccato, self::ScontoConsumo,
         ], true);
     }
 

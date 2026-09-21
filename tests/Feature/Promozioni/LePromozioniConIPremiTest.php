@@ -345,11 +345,23 @@ final class LePromozioniConIPremiTest extends TestCase
     #[Test]
     public function i_premi_non_ancora_costruiti_non_si_scelgono(): void
     {
-        $this->assertArrayNotHasKey(TipoDiPremio::ScontoConsumo->value, TipoDiPremio::optionsPer(GenereDiPromozione::Abbonamenti));
+        /*
+         * ⚠️ Scritto sui casi, non su un tipo preciso: ogni fase ne accende
+         * altri, e un test legato a «sconto sul consumo» è diventato falso il
+         * giorno in cui P3 l'ha costruito.
+         */
+        $scelte = TipoDiPremio::optionsPer(GenereDiPromozione::Entrambi);
 
-        $conQuello = TipoDiPremio::optionsPer(GenereDiPromozione::Abbonamenti, TipoDiPremio::ScontoConsumo->value);
-        $this->assertArrayHasKey(TipoDiPremio::ScontoConsumo->value, $conQuello);
-        $this->assertStringContainsString('in arrivo', $conQuello[TipoDiPremio::ScontoConsumo->value]);
+        foreach (TipoDiPremio::cases() as $tipo) {
+            $tipo->costruito()
+                ? $this->assertArrayHasKey($tipo->value, $scelte, $tipo->value.' è costruito: deve comparire')
+                : $this->assertArrayNotHasKey($tipo->value, $scelte, $tipo->value.' non è costruito: non deve comparire');
+
+            if (! $tipo->costruito()) {
+                $conQuello = TipoDiPremio::optionsPer(GenereDiPromozione::Entrambi, $tipo->value);
+                $this->assertStringContainsString('in arrivo', $conQuello[$tipo->value]);
+            }
+        }
     }
 
     /** 🧹 Un premio cambiato di tipo non si porta dietro i valori di prima. */

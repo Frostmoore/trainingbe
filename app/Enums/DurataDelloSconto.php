@@ -25,10 +25,10 @@ enum DurataDelloSconto: string
         };
     }
 
-    /** 🚧 `n_volte` e `per_sempre` arrivano con P3 (il coupon di Stripe con la durata). */
+    /** 🆕 P3 — tutte e tre: diventano la `duration` del coupon di Stripe. */
     public function costruito(): bool
     {
-        return $this === self::UnaVolta;
+        return true;
     }
 
     /** @return array<string, string> */

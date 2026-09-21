@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
+use App\Enums\DurataDelloSconto;
 use App\Enums\SuCosaVale;
+use App\Enums\TipoDiPremio;
+use App\Models\Plan;
 use App\Models\Promozione;
+use App\Models\PromozionePremio;
 use App\Models\User;
 use App\Services\Billing\LePromozioni;
 use Illuminate\Support\Facades\Log;
@@ -88,8 +92,16 @@ class ScontiSuStripe
         $applicate = $conto['applicate'];
         $discounts = null;
 
+        /*
+         * 🆕 🧪🔒 **Prova gratuita e prezzo bloccato** — P3. Solo sul canone:
+         * sono premi dell'abbonamento, e Stripe li capisce solo lì.
+         */
+        $piano = $planId !== null ? Plan::query()->find($planId) : null;
+        $prova = $cosa === SuCosaVale::Canone ? $this->promozioni->provaPer($candidate, $planId) : null;
+        $bloccano = $cosa === SuCosaVale::Canone ? $this->promozioni->bloccanoIlPrezzo($candidate, $planId) : [];
+
         if ($conto['sconto'] > 0) {
-            $coupon = $this->coupon($conto['sconto'], $conto['applicate']);
+            $coupon = $this->coupon($conto['sconto'], $conto['applicate'], $this->durataPerStripe($conto['applicate'], $cosa, $piano));
 
             /*
              * ⚠️ **Se Stripe non dà il coupon, si vende comunque a prezzo
@@ -104,8 +116,11 @@ class ScontiSuStripe
             }
         }
 
-        // Nei metadata vanno tutte e due: il webhook segna l'uso di ognuna.
-        $tutte = collect([...$applicate, ...$bonus])->unique(fn (Promozione $p): int => $p->getKey())->values()->all();
+        // Nei metadata vanno tutte: il webhook segna l'uso di ognuna.
+        $tutte = collect([...$applicate, ...$bonus, ...($prova !== null ? [$prova['promozione']] : []), ...$bloccano])
+            ->unique(fn (Promozione $p): int => $p->getKey())
+            ->values()
+            ->all();
 
         return [
             ...($discounts !== null ? ['discounts' => $discounts] : []),
@@ -113,7 +128,62 @@ class ScontiSuStripe
             'sconto' => $discounts !== null ? $conto['sconto'] : 0,
             'bonus' => $bonus,
             'gettoni_bonus' => $gettoniBonus,
+            'prova_giorni' => $prova['giorni'] ?? null,
+            'prezzo_bloccato' => $bloccano !== [],
         ];
+    }
+
+    /**
+     * 🆕 ⏳ **Per quanto vale lo sconto, detto a Stripe** — P3 (opzione 8, §4.6 del piano).
+     *
+     * | Durata del premio | Coupon |
+     * |---|---|
+     * | solo il primo pagamento | `once` |
+     * | per N rinnovi | `repeating` + `duration_in_months` |
+     * | per sempre | `forever` |
+     *
+     * ⚠️ **Più premi, un coupon**: Stripe ne accetta uno per sessione, e vince
+     * la durata **più lunga** fra quelli applicati — la promozione più generosa
+     * nel tempo è quella che il cliente si aspetta di vedere rispettata.
+     *
+     * 🚨 `duration_in_months` è in **mesi**, i rinnovi no: per un piano annuale
+     * N rinnovi sono N×12 mesi, per uno settimanale o giornaliero si arrotonda
+     * per eccesso (mai meno di 1). I pacchetti di gettoni e il consumo sono
+     * pagamenti singoli: sempre `once`.
+     *
+     * @param  list<Promozione>  $applicate
+     * @return array{duration: string, duration_in_months?: int}
+     */
+    public function durataPerStripe(array $applicate, SuCosaVale $cosa, ?Plan $piano): array
+    {
+        if ($cosa !== SuCosaVale::Canone) {
+            return ['duration' => 'once'];
+        }
+
+        $premi = collect($applicate)
+            ->flatMap(fn (Promozione $p) => $p->premi)
+            ->filter(fn (PromozionePremio $r): bool => $r->tipo === TipoDiPremio::ScontoAbbonamento);
+
+        if ($premi->contains(fn (PromozionePremio $r): bool => $r->durata === DurataDelloSconto::PerSempre)) {
+            return ['duration' => 'forever'];
+        }
+
+        $rinnovi = (int) $premi
+            ->filter(fn (PromozionePremio $r): bool => $r->durata === DurataDelloSconto::NVolte)
+            ->max('volte');
+
+        if ($rinnovi <= 0) {
+            return ['duration' => 'once'];
+        }
+
+        $mesi = match ($piano?->intervalloStripe() ?? 'month') {
+            'year' => $rinnovi * 12,
+            'week' => (int) ceil($rinnovi * 7 / 30),
+            'day' => (int) ceil($rinnovi / 30),
+            default => $rinnovi,
+        };
+
+        return ['duration' => 'repeating', 'duration_in_months' => max(1, $mesi)];
     }
 
     /**
@@ -139,7 +209,10 @@ class ScontiSuStripe
      *
      * @param  list<Promozione>  $promozioni
      */
-    private function coupon(int $scontoCent, array $promozioni): ?string
+    /**
+     * @param  array{duration: string, duration_in_months?: int}  $durata  🆕 P3
+     */
+    private function coupon(int $scontoCent, array $promozioni, array $durata = ['duration' => 'once']): ?string
     {
         $nome = $promozioni === []
             ? 'Sconto'
@@ -150,8 +223,13 @@ class ScontiSuStripe
                 'amount_off' => $scontoCent,
                 'currency' => 'eur',
 
-                // ⚠️ Vedi il docblock: sul primo pagamento, non per sempre.
-                'duration' => 'once',
+                /*
+                 * 🆕 P3 — la durata viene dal premio (`durataPerStripe()`).
+                 * ⚠️ Il default resta `once`: «per sempre» è una decisione da
+                 * prendere su una promozione, non l'effetto di un parametro
+                 * dimenticato.
+                 */
+                ...$durata,
 
                 'name' => mb_substr($nome, 0, 40),
 

@@ -56,6 +56,8 @@ class AddebitoMensile extends Model
         'tenant_id', 'plan_id', 'periodo',
         'iscritti_contati', 'iscritti_fatturati',
         'prezzo_iscritto_cent', 'importo_cent',
+        // 🆕 🎁 P3 di plan_promozioni.md — lo sconto sul consumo, e da quali promozioni.
+        'sconto_cent', 'promozioni',
         'stato', 'stripe_invoice_id', 'errore', 'incassato_il',
     ];
 
@@ -66,6 +68,7 @@ class AddebitoMensile extends Model
             'iscritti_fatturati' => 'integer',
             'prezzo_iscritto_cent' => 'integer',
             'importo_cent' => 'integer',
+            'sconto_cent' => 'integer',
             'incassato_il' => 'datetime',
         ];
     }
