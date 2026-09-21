@@ -221,8 +221,9 @@ class FakeAiProvider implements AiProvider
             'name' => 'Scheda importata',
             'notes' => null,
             'exercises' => [
-                ['name' => 'Panca piana', 'sets' => 4, 'reps' => '8-12', 'rest_sec' => 90, 'muscle_group' => 'chest', 'secondary_muscles' => ['triceps', 'shoulders'], 'confidence' => 0.95],
-                ['name' => 'Lat machine', 'sets' => 3, 'reps' => '10', 'rest_sec' => 60, 'muscle_group' => 'back', 'secondary_muscles' => ['biceps'], 'confidence' => 0.9],
+                // 🆕 23/09/2026 — una riga per serie, come risponde il modello vero.
+                ['name' => 'Panca piana', 'carico' => 'peso', 'serie' => array_fill(0, 4, ['reps' => 8, 'weight' => null, 'iso_sec' => null, 'rest_sec' => 90]), 'muscle_group' => 'chest', 'secondary_muscles' => ['triceps', 'shoulders'], 'confidence' => 0.95],
+                ['name' => 'Lat machine', 'carico' => 'peso', 'serie' => array_fill(0, 3, ['reps' => 10, 'weight' => null, 'iso_sec' => null, 'rest_sec' => 60]), 'muscle_group' => 'back', 'secondary_muscles' => ['biceps'], 'confidence' => 0.9],
             ],
         ]);
     }

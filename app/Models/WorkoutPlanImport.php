@@ -9,6 +9,7 @@ use App\Enums\MuscleGroup;
 use App\Enums\PlanSource;
 use App\Enums\PlanStatus;
 use App\Models\Concerns\BelongsToTenant;
+use App\Services\Ai\Data\ParsedWorkoutExercise;
 use App\Services\Ai\Data\ParsedWorkoutPlan;
 use App\Services\Training\ExerciseMatcher;
 use Illuminate\Database\Eloquent\Model;
@@ -263,16 +264,29 @@ class WorkoutPlanImport extends Model implements HasMedia
                         : null,
                 );
 
+                /*
+                 * 🆕 🚨 **Una riga per serie** — 23/09/2026.
+                 *
+                 * 📌 *«5x8 non deve diventare "serie 5" "ripetizioni 8" ma 5
+                 * righe di serie con 8 ripetizioni»*. ⛔ Niente più `sets` /
+                 * `reps` scritti qui: si scrive `serie`, e il riassunto lo
+                 * ricalcola `PlanExercise::saving()` dalle righe.
+                 *
+                 * 💡 Passa da `ParsedWorkoutExercise::fromArray()` perché la
+                 * riga può arrivare in tre forme — la risposta del modello, una
+                 * bozza salvata prima del cambio, il modulo di revisione — ed è
+                 * l'unico posto che le sa leggere tutte.
+                 */
+                $letta = ParsedWorkoutExercise::fromArray($riga);
+
                 $piano->exercises()->create([
                     // G4 — la colonna e' NOT NULL: il giorno lo crea il piano.
                     'workout_plan_day_id' => $giorno->getKey(),
                     'exercise_id' => $esercizio->getKey(),
                     'position' => $posizione++,
-                    'sets' => $riga['sets'] ?? null,
-                    'reps' => $riga['reps'] ?? null,
-                    'rest_sec' => $riga['rest_sec'] ?? null,
-                    'target_weight' => $riga['target_weight'] ?? null,
-                    'notes' => $riga['notes'] ?? null,
+                    'serie' => $letta->serie,
+                    'carico' => $letta->carico,
+                    'notes' => $letta->notes,
                 ]);
             }
 

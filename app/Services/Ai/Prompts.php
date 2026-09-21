@@ -793,9 +793,23 @@ final class Prompts
         2. Il nome dell'esercizio va trascritto COSI' COM'E' scritto nel documento. Non
            tradurlo, non normalizzarlo, non correggerlo: la riconciliazione con la
            libreria la fa un altro passaggio, e per farlo ha bisogno del testo originale.
-        3. Le ripetizioni sono una STRINGA. «8-12», «cedimento», «max», «10+10» sono
-           prescrizioni legittime e vanno riportate come sono, non convertite in un
-           numero.
+        3. UNA RIGA PER SERIE. `serie` contiene una riga per ogni serie da fare, con
+           le ripetizioni come NUMERO INTERO. Mai «serie: 5, ripetizioni: 8»: cinque
+           righe da 8.
+           - «5x8», «5 serie da 8» → cinque righe, reps 8.
+           - Piramide «12-10-8-6-4» (o «5 x 12-10-8-6-4») → una riga per numero:
+             12, 10, 8, 6, 4.
+           - Intervallo «4x8-12» → quattro righe con il numero PIU' BASSO (8), e
+             nelle note «8-12 ripetizioni».
+           - «3x10+10» o «10 per gamba» → tre righe da 10, e nelle note «per lato».
+           - «max», «a cedimento» → reps null, e nelle note «a cedimento».
+           - A tempo («3x45 secondi», «plank 40"») → reps null e `iso_sec` coi
+             secondi; «10 minuti di tapis roulant» → una riga con iso_sec 600.
+           - Se il numero di serie non c'è, UNA riga, e abbassa la confidenza.
+           `weight` (kg) e `rest_sec` vanno su OGNI riga a cui si applicano; null
+           se il documento non li dice.
+           `carico`: «peso» se si usa un carico, «niente» a corpo libero, «iso» per
+           gli esercizi a tempo.
         4. I recuperi vanno in secondi. «1'30» sono 90 secondi.
         5. CONFIDENZA PER OGNI RIGA, da 0 a 1. Una riga chiaramente leggibile vale 0.9 o
            piu'; una riga che hai dovuto interpretare, o dove il numero di serie non era
@@ -834,7 +848,7 @@ final class Prompts
            Se il nome e' cosi' illeggibile da non farti capire che esercizio sia,
            metti `null` e un elenco vuoto: un muscolo indovinato colora una figura
            del corpo con una cosa falsa, ed e' peggio di una zona grigia.
-        9. CARICHI SEMPRE IN CHILOGRAMMI. `target_weight` e' in kg. Se il documento
+        9. CARICHI SEMPRE IN CHILOGRAMMI. `weight` e' in kg. Se il documento
            usa le libbre («lb», «lbs»), converti (1 lb = 0,4536 kg), arrotonda a
            0,5 kg e scrivi il valore originale nelle note della riga («135 lb»).
            Un carico in libbre scritto come se fossero chili e' quasi il doppio:
@@ -1271,8 +1285,15 @@ TXT;
                          * modello costa zero token in ingresso e li fa arrivare
                          * gia' insieme alla riga giusta.
                          */
+                        /*
+                         * 🆕 🚨 **Una riga per serie** — 23/09/2026. ⛔ Via `sets`,
+                         * `reps`, `rest_sec`, `target_weight`: chiedere «serie» e
+                         * «ripetizioni» come due campi produceva «5 × 6-10», che
+                         * non vuol dire niente. Adesso il modello scrive le serie
+                         * **una per una**, con le ripetizioni come numero intero.
+                         */
                         'required' => [
-                            'name', 'sets', 'reps', 'rest_sec', 'target_weight', 'notes',
+                            'name', 'serie', 'carico', 'notes',
                             'muscle_group', 'secondary_muscles', 'confidence', 'day',
                         ],
                         'properties' => [
@@ -1298,10 +1319,27 @@ TXT;
                             'day' => ['type' => ['integer', 'null']],
                             'muscle_group' => ['type' => ['string', 'null']],
                             'secondary_muscles' => ['type' => 'array', 'items' => ['type' => 'string']],
-                            'sets' => ['type' => ['integer', 'null']],
-                            'reps' => ['type' => ['string', 'null']],
-                            'rest_sec' => ['type' => ['integer', 'null']],
-                            'target_weight' => ['type' => ['number', 'null']],
+                            /*
+                             * Le serie, **una riga per serie** (regola 3). Le
+                             * stesse chiavi di `PlanExercise::serieRighe()` e
+                             * dell'app (`SeriePrevista`): nessuna conversione ai
+                             * confini.
+                             */
+                            'serie' => [
+                                'type' => 'array',
+                                'items' => [
+                                    'type' => 'object',
+                                    'additionalProperties' => false,
+                                    'required' => ['reps', 'weight', 'iso_sec', 'rest_sec'],
+                                    'properties' => [
+                                        'reps' => ['type' => ['integer', 'null']],
+                                        'weight' => ['type' => ['number', 'null']],
+                                        'iso_sec' => ['type' => ['integer', 'null']],
+                                        'rest_sec' => ['type' => ['integer', 'null']],
+                                    ],
+                                ],
+                            ],
+                            'carico' => ['type' => 'string', 'enum' => ['peso', 'niente', 'iso']],
                             'notes' => ['type' => ['string', 'null']],
                             'confidence' => ['type' => 'number'],
                         ],

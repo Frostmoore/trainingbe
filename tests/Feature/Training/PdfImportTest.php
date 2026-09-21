@@ -280,7 +280,10 @@ class PdfImportTest extends TestCase
         $righe = $piano->exercises()->with('exercise')->get();
 
         $this->assertSame($panca->id, $righe[0]->exercise_id);
-        $this->assertSame('8-12', $righe[0]->reps);
+        // 🆕 23/09/2026 — «4 × 8-12» sono quattro righe da 8 (il più basso
+        // dell'intervallo), non una riga «8-12» che non dice quante farne.
+        $this->assertCount(4, $righe[0]->serie);
+        $this->assertSame([8, 8, 8, 8], array_column($righe[0]->serie, 'reps'));
         $this->assertTrue($righe[1]->exercise->is_custom);
 
         $this->assertSame(ImportStatus::Done, $import->refresh()->status);

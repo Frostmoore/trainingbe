@@ -18,7 +18,6 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 
@@ -386,75 +385,25 @@ class WorkoutPlanForm
                 }),
 
             /*
-             * ══ 🚨 IL MODO SVELTO, E QUELLO PRECISO — 3b-D.10, 25/08/2026 ══
+             * ══ ⛔ VIA LA TESTATA «SERIE · RIPETIZIONI · RECUPERO · CARICO» ══
              *
-             * 📌 *«queste modifiche devono riguardare anche l'editor del trainer
-             * e quello del server, mi pare ovvio»*.
+             * 📌 Il committente, 23/09/2026: *«Ti avevo detto di non usare la
+             * sezione serie ripetizioni recupero e carico sopra perchè è
+             * possibile aggiungere serie riga per riga … mi trovo con "serie 5"
+             * "ripetizioni 6-10" che non significa niente … Togli sta sezione
+             * generale, che fa solo danni»*.
              *
-             * 💡 **Restano tutti e due**, e non e' indecisione: «4 × 8-12» e' il
-             * modo in cui si scrive la maggior parte delle schede, e
-             * costringere a compilare quattro righe identiche sarebbe un
-             * peggioramento per il caso normale.
+             * 🚨 Prima (3b-D.10, F5.12) la testata restava come «modo svelto»
+             * e spariva quando c'erano le righe. ⛔ Il danno era proprio il
+             * modo svelto: «5 × 6-10» non dice quante ripetizioni fare in
+             * nessuna serie. Adesso un esercizio si scrive **solo** riga per
+             * riga, e le ripetizioni di una riga sono un numero.
              *
-             * ⚠️ Quando si compilano le righe, **vincono loro**: questi quattro
-             * campi diventano il riassunto e li ricalcola `PlanExercise` a ogni
-             * salvataggio. 🚨 Per questo l'aiuto sotto lo dice — un campo che si
-             * riscrive da solo senza avvisare sembra un difetto.
+             * 💡 `sets`, `reps`, `rest_sec`, `target_weight` restano in tabella
+             * come **riassunto**, ricalcolato da `PlanExercise::saving()` dalle
+             * righe: li leggono ancora l'API vecchia e `prescription()`. Nessuno
+             * li scrive più a mano.
              */
-            /*
-             * ══ 🚨 LA TESTATA SPARISCE QUANDO CI SONO LE RIGHE — F5.12 ═════
-             *
-             * 📌 Il committente: via serie / ripetizioni / recupero / carico
-             * **quando c'è la riga per riga**.
-             *
-             * ⛔ Prima c'erano tutti e due insieme, e chiedevano la stessa cosa
-             * due volte con due risposte possibili: «4 × 8-12» in cima e
-             * «12·10·8» sotto. 💡 `PlanExercise::saving()` risolve il conflitto
-             * — **vincono le righe**, e la testata si riscrive da sola — ma
-             * vederla lì, compilabile e poi sovrascritta, fa sembrare un difetto
-             * una cosa che difetto non è.
-             *
-             * ✅ Adesso: niente righe → la testata; righe → solo le righe.
-             *
-             * 🚨 **Nascondere qui NON perde niente**, ed è l'unico motivo per
-             * cui si può fare: quando `serie` è pieno, quei quattro valori li
-             * **ricalcola il modello al salvataggio** da `riassuntoDelle()`.
-             * ⛔ Se un domani quel gancio sparisse, questa scelta cancellerebbe
-             * i dati in silenzio.
-             *
-             * ⚠️ «Tipo di carico» **resta sempre visibile**: non è deducibile
-             * dalle righe — «peso coi campi vuoti» e «a corpo libero» hanno le
-             * stesse righe e vogliono dire due cose diverse.
-             */
-            TextInput::make('sets')
-                ->label('Serie')
-                ->numeric()
-                ->minValue(1)
-                ->maxValue(50)
-                ->visible(fn (Get $get): bool => self::senzaRighe($get))
-                ->helperText('Se compili le righe qui sotto, questo lo calcolo io.'),
-
-            TextInput::make('reps')
-                ->label('Ripetizioni')
-                ->maxLength(32)
-                ->placeholder('8-12')
-                ->visible(fn (Get $get): bool => self::senzaRighe($get))
-                ->helperText('Anche «cedimento» o «max».'),
-
-            TextInput::make('rest_sec')
-                ->label('Recupero (s)')
-                ->numeric()
-                ->minValue(0)
-                ->maxValue(3600)
-                ->visible(fn (Get $get): bool => self::senzaRighe($get)),
-
-            TextInput::make('target_weight')
-                ->label('Carico (kg)')
-                ->numeric()
-                ->minValue(0)
-                ->maxValue(999)
-                ->visible(fn (Get $get): bool => self::senzaRighe($get)),
-
             Select::make('carico')
                 ->label('Tipo di carico')
                 ->options([
@@ -483,17 +432,22 @@ class WorkoutPlanForm
              * deve nemmeno vederlo.
              */
             Repeater::make('serie')
-                ->label('Serie riga per riga')
-                ->helperText('Facoltative. Se ci sono, comandano loro: la testata qui sopra sparisce.')
+                ->label('Serie')
+                ->helperText('Una riga per serie. «5 × 8» sono cinque righe da 8.')
                 /*
-                 * 🚨 `live()` **serve a F5.12**: senza, aggiungere la prima
-                 * riga non fa sparire la testata finché non si ricarica la
-                 * pagina — e chi la vede ancora lì ci scrive dentro.
+                 * 🆕 23/09/2026 — una scheda scritta col formato vecchio
+                 * («4 × 8-12», senza righe) si apre **già in righe**, espansa da
+                 * `PlanExercise::serieRighe()`: al primo salvataggio diventano
+                 * righe vere. ⚠️ Solo se vuoto: righe scritte non si toccano.
                  */
-                ->live()
+                ->afterStateHydrated(function (Repeater $component, mixed $state, mixed $record): void {
+                    if ((! is_array($state) || $state === []) && $record instanceof PlanExercise) {
+                        $component->state($record->serieRighe());
+                    }
+                })
                 ->columnSpanFull()
-                ->collapsed()
-                ->defaultItems(0)
+                ->minItems(1)
+                ->defaultItems(1)
                 ->maxItems(30)
                 ->addActionLabel('Aggiungi serie')
                 ->itemLabel(fn (array $state): string => trim(
@@ -504,7 +458,7 @@ class WorkoutPlanForm
                 ->schema([
                     TextInput::make('reps')
                         ->label('Ripetizioni')
-                        ->numeric()
+                        ->integer()
                         ->minValue(0)
                         ->maxValue(999),
 
@@ -565,20 +519,6 @@ class WorkoutPlanForm
         ];
     }
 
-    /**
-     * Questa riga ha le **serie scritte una per una**? — F5.12.
-     *
-     * ⚠️ `$get('serie')` dentro un `Repeater` legge lo stato **di quell'elemento**,
-     * non della scheda intera: è quello che serve, perché la testata sparisce
-     * per l'esercizio che ha le righe, non per tutti.
-     */
-    private static function senzaRighe(Get $get): bool
-    {
-        $righe = $get('serie');
-
-        return ! is_array($righe) || $righe === [];
-    }
-
     /** @param array<string, mixed> $state */
     private static function etichetta(array $state): ?string
     {
@@ -589,10 +529,15 @@ class WorkoutPlanForm
         }
 
         $nome = Exercise::find($id)?->name ?? 'Esercizio';
-        $serie = $state['sets'] ?? null;
-        $rip = $state['reps'] ?? null;
 
-        return trim($nome.' '.($serie !== null ? "· {$serie}×" : '').($rip !== null ? $rip : ''));
+        // 🆕 23/09/2026 — dalle righe: «Panca piana · 12·10·8».
+        $righe = is_array($state['serie'] ?? null) ? array_values($state['serie']) : [];
+        $rip = array_values(array_filter(array_map(
+            static fn (mixed $r): ?string => is_array($r) && is_numeric($r['reps'] ?? null) ? (string) (int) $r['reps'] : null,
+            $righe,
+        )));
+
+        return $righe === [] ? $nome : $nome.' · '.($rip === [] ? count($righe).' serie' : implode('·', $rip));
     }
 
     /** @return array<int, string> */

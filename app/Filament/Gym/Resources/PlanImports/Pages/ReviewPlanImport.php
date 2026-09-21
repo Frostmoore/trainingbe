@@ -9,6 +9,7 @@ use App\Enums\MuscleGroup;
 use App\Filament\Gym\Resources\PlanImports\PlanImportResource;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\EditWorkoutPlan;
 use App\Models\WorkoutPlanImport;
+use App\Services\Ai\Data\ParsedWorkoutExercise;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -75,7 +76,15 @@ class ReviewPlanImport extends Page
         $this->form->fill([
             'name' => $payload['name'] ?? 'Scheda importata',
             'notes' => $payload['notes'] ?? null,
-            'exercises' => $payload['exercises'] ?? [],
+            /*
+             * 🆕 23/09/2026 — ogni riga passa da `ParsedWorkoutExercise`: una
+             * bozza salvata prima del cambio (con «5 × 8») si apre **già in
+             * cinque righe da 8**, come una letta oggi.
+             */
+            'exercises' => array_map(
+                static fn (array $r): array => ParsedWorkoutExercise::fromArray($r)->toArray(),
+                array_values(array_filter($payload['exercises'] ?? [], 'is_array')),
+            ),
             // ⚠️ Stringhe semplici: un `Repeater::simple()` tiene una lista di
             // valori, non di righe — con `['nome' => …]` mostrava «[object Object]».
             'day_names' => array_values(array_map(strval(...), $payload['day_names'] ?? [])),
@@ -147,7 +156,7 @@ class ReviewPlanImport extends Page
                             ->columns(5)
                             ->itemLabel(fn (array $state): ?string => isset($state['name'])
                                 ? (static::eIncerta($state['confidence'] ?? null) ? '⚠️ ' : '')
-                                    .'Giorno '.max(1, (int) ($state['day'] ?? 1)).' · '.$state['name'].' · '.static::percentuale($state['confidence'] ?? null)
+                                    .'Giorno '.max(1, (int) ($state['day'] ?? 1)).' · '.$state['name'].' · '.static::quanteSerie($state).' · '.static::percentuale($state['confidence'] ?? null)
                                 : null)
                             ->schema([
                                 TextInput::make('name')
@@ -197,11 +206,42 @@ class ReviewPlanImport extends Page
                                     ->columnSpan(3)
                                     ->helperText('Vuoto = l\'esercizio isola. E\' una risposta, non un campo saltato.'),
 
-                                TextInput::make('sets')->label('Serie')->numeric(),
-                                TextInput::make('reps')->label('Ripetizioni'),
-                                TextInput::make('rest_sec')->label('Recupero (s)')->numeric(),
+                                /*
+                                 * 🆕 🚨 **Una riga per serie** — 23/09/2026.
+                                 *
+                                 * 📌 *«Se una scheda dice hack squat 5x8 non deve
+                                 * diventare "serie 5" "ripetizioni 8" ma deve
+                                 * aggiungere 5 righe di serie con 8 ripetizioni»*.
+                                 * ⛔ Via «Serie», «Ripetizioni», «Recupero»,
+                                 * «Carico»: le stesse righe del builder, e le
+                                 * ripetizioni sono un numero.
+                                 */
+                                Select::make('carico')
+                                    ->label('Tipo di carico')
+                                    ->options([
+                                        'peso' => 'Peso (kg)',
+                                        'niente' => 'Nessuno (corpo libero)',
+                                        'iso' => 'Isometria (secondi)',
+                                    ])
+                                    ->default('peso')
+                                    ->selectablePlaceholder(false)
+                                    ->native(false)
+                                    ->columnSpan(2),
 
-                                TextInput::make('target_weight')->label('Carico (kg)')->numeric(),
+                                Repeater::make('serie')
+                                    ->label('Serie')
+                                    ->addActionLabel('Aggiungi serie')
+                                    ->minItems(1)
+                                    ->maxItems(30)
+                                    ->reorderable()
+                                    ->columns(4)
+                                    ->columnSpanFull()
+                                    ->schema([
+                                        TextInput::make('reps')->label('Ripetizioni')->integer()->minValue(0)->maxValue(999),
+                                        TextInput::make('weight')->label('Kg')->numeric()->minValue(0)->maxValue(1000),
+                                        TextInput::make('iso_sec')->label('Secondi (iso)')->integer()->minValue(0)->maxValue(7200),
+                                        TextInput::make('rest_sec')->label('Recupero (s)')->integer()->minValue(0)->maxValue(1200),
+                                    ]),
 
                                 /*
                                  * 🚨 **Era una select con due valori, «1» e «0.5»**
@@ -297,6 +337,14 @@ class ReviewPlanImport extends Page
     private static function eIncerta(mixed $c): bool
     {
         return is_numeric($c) && (float) $c < 0.85;
+    }
+
+    /** «5 serie», per l'intestazione della riga. @param array<string, mixed> $state */
+    private static function quanteSerie(array $state): string
+    {
+        $n = is_array($state['serie'] ?? null) ? count($state['serie']) : 0;
+
+        return $n === 1 ? '1 serie' : $n.' serie';
     }
 
     private static function percentuale(mixed $c): string

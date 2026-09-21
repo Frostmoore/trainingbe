@@ -300,6 +300,136 @@ final class LImportDalPannelloTest extends TestCase
             ->assertDontSee('Il documento originale');
     }
 
+    // ─────────────────── 🆕 una riga per serie (23/09/2026) ───────────────────
+
+    /**
+     * 🚨 **«5x8» sono cinque righe da 8**, e una piramide è una riga per
+     * numero. 📌 *«Deve essere una riga per serie e il numero di ripetizioni
+     * giusto»*.
+     */
+    #[Test]
+    public function la_scheda_importata_nasce_riga_per_riga(): void
+    {
+        $import = $this->importCon('scheda.pdf', '%PDF-1.4 finto');
+
+        $import->storeDraft(ParsedWorkoutPlan::fromArray([
+            'name' => 'Riga per riga',
+            'exercises' => [
+                [
+                    'name' => 'Hack squat', 'carico' => 'peso', 'day' => 1, 'confidence' => 0.9,
+                    'muscle_group' => 'quads', 'secondary_muscles' => [],
+                    'serie' => array_fill(0, 5, ['reps' => 8, 'weight' => null, 'iso_sec' => null, 'rest_sec' => 90]),
+                ],
+                [
+                    'name' => 'Panca piana', 'carico' => 'peso', 'day' => 1, 'confidence' => 0.9,
+                    'muscle_group' => 'chest', 'secondary_muscles' => [],
+                    'serie' => array_map(
+                        static fn (int $r): array => ['reps' => $r, 'weight' => null, 'iso_sec' => null, 'rest_sec' => 90],
+                        [12, 10, 8, 6, 4],
+                    ),
+                ],
+                [
+                    'name' => 'Plank', 'carico' => 'iso', 'day' => 1, 'confidence' => 0.9,
+                    'muscle_group' => 'abs', 'secondary_muscles' => [],
+                    'serie' => array_fill(0, 3, ['reps' => null, 'weight' => null, 'iso_sec' => 45, 'rest_sec' => 60]),
+                ],
+            ],
+            'confidence' => 0.9,
+        ]), 'claude-sonnet-5');
+
+        $piano = $this->runAs(fn () => $import->publishAsPlan(null, $this->gestore));
+        $righe = $piano->exercises()->orderBy('position')->get();
+
+        $this->assertSame([8, 8, 8, 8, 8], array_column($righe[0]->serie, 'reps'));
+        $this->assertSame([12, 10, 8, 6, 4], array_column($righe[1]->serie, 'reps'));
+        $this->assertSame('iso', $righe[2]->carico);
+        $this->assertSame([45, 45, 45], array_column($righe[2]->serie, 'iso_sec'));
+
+        // Il riassunto è ricalcolato dalle righe, non scritto dall'import.
+        $this->assertSame(5, $righe[0]->sets);
+        $this->assertSame('12-4', $righe[1]->reps);
+    }
+
+    /**
+     * ⏪ **Una bozza salvata prima del cambio** («5 × 6-10») si apre nella
+     * revisione **già in righe**, e così nasce la scheda.
+     */
+    #[Test]
+    public function una_bozza_vecchia_si_apre_in_righe(): void
+    {
+        $import = $this->importCon('scheda.pdf', '%PDF-1.4 finto');
+
+        // Il payload come lo scriveva l'importer prima del 23/09: sets × reps.
+        $import->forceFill(['status' => 'review', 'parsed_payload' => [
+            'name' => 'Vecchia',
+            'day_names' => [],
+            'exercises' => [[
+                'name' => 'Hack squat', 'sets' => 5, 'reps' => '6-10', 'rest_sec' => 90, 'target_weight' => null,
+                'muscle_group' => 'quads', 'secondary_muscles' => [], 'confidence' => 0.9, 'day' => 1,
+            ]],
+        ]])->save();
+
+        $this->entra($this->gestore);
+
+        $pagina = Livewire::test(ReviewPlanImport::class, ['record' => $import->getKey()])
+            ->assertSuccessful()
+            ->assertSee('5 serie')
+            ->assertDontSee('6-10');
+
+        $esercizi = $pagina->get('data.exercises');
+        $this->assertCount(5, array_values($esercizi)[0]['serie']);
+
+        $pagina->callAction('pubblica')->assertHasNoErrors();
+
+        $piano = $this->runAs(fn () => WorkoutPlan::query()->findOrFail($import->refresh()->workout_plan_id));
+        $this->assertSame([6, 6, 6, 6, 6], array_column($piano->exercises()->first()->serie, 'reps'));
+    }
+
+    /**
+     * ⛔ **Nel builder la testata non c'è più**, e una scheda scritta col
+     * formato vecchio («4 × 8-12») si apre in quattro righe.
+     */
+    #[Test]
+    public function il_builder_ha_solo_le_righe(): void
+    {
+        $piano = $this->runAs(fn () => WorkoutPlan::create([
+            'name' => 'Scritta prima',
+            'status' => PlanStatus::Published,
+            'created_by' => $this->gestore->getKey(),
+        ]));
+
+        $panca = $this->globale('Panca piana', MuscleGroup::Chest);
+
+        $this->runAs(fn () => $piano->exercises()->create([
+            'workout_plan_day_id' => $piano->giornoPredefinito()->getKey(),
+            'exercise_id' => $panca->getKey(),
+            'position' => 0,
+            'sets' => 4,
+            'reps' => '8-12',
+            'rest_sec' => 90,
+        ]));
+
+        $this->entra($this->gestore);
+
+        $pagina = Livewire::test(EditWorkoutPlan::class, ['record' => $piano->getKey()])
+            ->assertSuccessful()
+            ->assertDontSee('Se compili le righe qui sotto')
+            ->assertSee('Una riga per serie');
+
+        $campi = array_keys($pagina->instance()->form->getFlatFields(withHidden: true));
+        $testata = array_filter($campi, static fn (string $c): bool => (bool) preg_match('/\.(sets|reps|rest_sec|target_weight)$/', $c)
+            && ! str_contains($c, '.serie.'));
+        // ⚠️ Prima di fidarsi del «non c'è»: i campi dentro gli esercizi vengono elencati davvero.
+        $this->assertNotSame([], array_filter($campi, static fn (string $c): bool => str_ends_with($c, '.exercise_id')));
+        $this->assertSame([], array_values($testata), 'La testata «serie · ripetizioni · recupero · carico» è tornata.');
+
+        // Salvando, le quattro righe diventano righe vere.
+        $pagina->call('save')->assertHasNoErrors();
+
+        $riga = $this->runAs(fn () => $piano->exercises()->first()->refresh());
+        $this->assertSame([8, 8, 8, 8], array_column((array) $riga->serie, 'reps'));
+    }
+
     // ─────────────────── F7.4, la riconciliazione degli esercizi ───────────────────
 
     /**
