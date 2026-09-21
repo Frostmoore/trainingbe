@@ -64,6 +64,15 @@ class Tenant extends Model
         'logo_path', 'color_primary', 'color_secondary', 'color_accent',
         'contact_email', 'locale', 'timezone',
         'ai_driver', 'settings', 'trial_ends_at',
+
+        /*
+         * 🆕 💶 23/09/2026, F5.1 — quanto fa pagare la palestra ai suoi.
+         *
+         * ✅ **D9**: *«lo scrive la palestra e noi non lo verifichiamo nemmeno.
+         * Sono dati suoi e a noi non interessano»*. ⛔ Non entra in nessuna
+         * fattura e non cambia nessun prezzo: serve solo al **loro** cruscotto.
+         */
+        'prezzo_per_allievo_cent',
         // G2 — la quota in chiamate (D6/D7).
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
         /*
@@ -86,6 +95,7 @@ class Tenant extends Model
             'trial_ends_at' => 'datetime',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
+            'prezzo_per_allievo_cent' => 'integer',
         ];
     }
 

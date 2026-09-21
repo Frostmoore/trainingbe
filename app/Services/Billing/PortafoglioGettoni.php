@@ -159,12 +159,18 @@ class PortafoglioGettoni
      * ⛔ Prima il primo parametro era un `Tenant`, e chiunque comprasse riempiva
      * il portafoglio della **palestra**, dove li spendeva chiunque altro.
      */
+    /**
+     * @param  Tenant|int|null  $pagatoDa  🆕 F5.8 — la palestra che
+     *                                     ha pagato, quando non è la persona stessa (**R1**). ⚠️ Non cambia
+     *                                     di chi sono i gettoni: cambia solo cosa resta scritto.
+     */
     public function accredita(
         User $utente,
         int $gettoni,
         ?User $operatore = null,
         ?string $nota = null,
         string $causale = AiCreditMovement::ACQUISTO,
+        Tenant|int|null $pagatoDa = null,
     ): AiCreditMovement {
         if ($gettoni === 0) {
             // ⚠️ Un movimento da zero sporca il registro senza dire niente: chi
@@ -172,7 +178,7 @@ class PortafoglioGettoni
             throw new \InvalidArgumentException('Un accredito da zero gettoni non e\' un movimento.');
         }
 
-        return DB::transaction(function () use ($utente, $gettoni, $operatore, $nota, $causale): AiCreditMovement {
+        return DB::transaction(function () use ($utente, $gettoni, $operatore, $nota, $causale, $pagatoDa): AiCreditMovement {
             $bloccato = User::withoutGlobalScopes()
                 ->whereKey($utente->getKey())
                 ->lockForUpdate()
@@ -203,6 +209,17 @@ class PortafoglioGettoni
                 'causale' => $causale,
                 'operatore_id' => $operatore?->getKey(),
                 'nota' => $nota,
+
+                /*
+                 * 🆕 🎁 F5.8 — **`tenant_id` resta quello di CHI LI RICEVE**, e
+                 * questa è un'altra colonna. ⛔ Scrivere qui sopra la palestra
+                 * che paga sposterebbe il movimento nel suo spazio, e da lì il
+                 * `TenantScope` lo nasconderebbe alla persona che quei gettoni
+                 * li ha davvero in tasca.
+                 */
+                'pagato_da_tenant_id' => $pagatoDa instanceof Tenant
+                    ? $pagatoDa->getKey()
+                    : $pagatoDa,
             ]);
         });
     }

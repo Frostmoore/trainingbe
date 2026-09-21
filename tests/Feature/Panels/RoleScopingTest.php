@@ -145,25 +145,40 @@ class RoleScopingTest extends TestCase
     }
 
     /**
-     * ⚖️ **Vederli sì, aprirli no** — e vale anche per i propri assegnati.
+     * ⚖️ **Vederli sì, modificarli no** — 🆕 e adesso vale per **tutti**.
      *
-     * ⛔ **Questo test chiedeva un 404** sull'iscritto di un collega, e lo
-     * otteneva perché l'elenco lo nascondeva. 🆕 Adesso quella persona si vede,
-     * quindi la porta non è più «non esiste» ma «non è cosa tua»: la scheda di
-     * un iscritto la modifica **il gestore**, e `UserPolicy::update()` lo dice
-     * dal primo giorno.
+     * ══ 🚨 COSA È CAMBIATO — 23/09/2026, F5.7 ═══════════════════════════
      *
-     * 🚨 **È la metà che rende accettabile l'allargamento della vista**: quello
-     * che B3.5 proteggeva davvero non era il vedere — in sala quelle persone il
-     * trainer le incontra tutte — ma il **poterci fare qualcosa**.
+     * ⛔ **La pagina di modifica di un iscritto non esiste più**, per nessuno:
+     * né per il trainer né per il gestore. 📌 *«⛔ niente identità modificabile,
+     * ⛔ niente password»*.
+     *
+     * ⚠️ Cambiare l'email di un account è **prenderne il controllo** (il reset
+     * della password arriva lì), e scegliere la password di qualcun altro
+     * significa poter entrare al posto suo. ⛔ L'account non dipende dalla
+     * palestra (D4).
+     *
+     * 💡 Prima la difesa era `UserPolicy::update()` — una regola che si poteva
+     * dimenticare di chiamare. Adesso **la porta non c'è**: è la stessa
+     * protezione, ma non richiede che qualcuno si ricordi di applicarla.
      */
     #[Test]
-    public function a_trainer_cannot_open_any_member_not_even_their_own(): void
+    public function la_pagina_di_modifica_di_un_iscritto_non_esiste_per_nessuno(): void
+    {
+        $this->entraCome($this->trainerA);
+        $this->get("/admin/members/{$this->mioIscritto->id}/edit")->assertNotFound();
+
+        $this->entraCome($this->admin);
+        $this->get("/admin/members/{$this->mioIscritto->id}/edit")->assertNotFound();
+    }
+
+    /** 👁️ La scheda invece si apre: è una pagina che si guarda. */
+    #[Test]
+    public function la_scheda_di_un_iscritto_si_apre(): void
     {
         $this->entraCome($this->trainerA);
 
-        $this->get("/admin/members/{$this->suoIscritto->id}/edit")->assertForbidden();
-        $this->get("/admin/members/{$this->mioIscritto->id}/edit")->assertForbidden();
+        $this->get("/admin/members/{$this->mioIscritto->id}")->assertOk();
     }
 
     #[Test]
@@ -172,7 +187,7 @@ class RoleScopingTest extends TestCase
         $this->entraCome($this->admin);
 
         $this
-            ->get("/admin/members/{$this->iscrittoBeta->id}/edit")
+            ->get("/admin/members/{$this->iscrittoBeta->id}")
             ->assertNotFound();
     }
 
@@ -207,14 +222,24 @@ class RoleScopingTest extends TestCase
     // ───────────────────────── schede ─────────────────────────
 
     /**
-     * Le schede: i **modelli** sono di tutti, le **assegnate** solo dei propri.
+     * ══ 📄 L'ELENCO CONTIENE SOLO MODELLI — 23/09/2026, F5.14 ═════════════
      *
-     * E' una regola diversa da quella degli iscritti, e la differenza e' voluta:
-     * un modello e' patrimonio comune della palestra, una scheda assegnata e' il
-     * programma di una persona precisa.
+     * 📌 **R2**: *«Le schede vivono sui telefoni. Non ci sono destinatari.
+     * Quando un trainer (o una palestra) creano una scheda, questa va a finire
+     * tra le schede di tutti i trainer della palestra, e dal telefono questi le
+     * possono inviare a chi vogliono.»*
+     *
+     * 🚨 **Questo test diceva il contrario**, ed era giusto quando lo diceva:
+     * i modelli a tutti, le assegnate solo ai propri. ⛔ Adesso le schede con un
+     * destinatario **non compaiono affatto** — sono quelle che l'iscritto
+     * scrive per sé dall'app, e sono sue.
+     *
+     * 💡 **E questo chiude anche F5.10**: se tutto quello che c'è è un modello
+     * della palestra, la palestra vede le schede dei suoi trainer per
+     * costruzione.
      */
     #[Test]
-    public function a_trainer_sees_the_templates_but_only_their_own_assigned_plans(): void
+    public function l_elenco_delle_schede_contiene_solo_i_modelli(): void
     {
         $modello = $this->piano(null, 'Modello full body');
         $mia = $this->piano($this->mioIscritto, 'Scheda di Mario');
@@ -223,20 +248,22 @@ class RoleScopingTest extends TestCase
         $this->entraCome($this->trainerA);
 
         Livewire::test(ListWorkoutPlans::class)
-            ->assertCanSeeTableRecords([$modello, $mia])
-            ->assertCanNotSeeTableRecords([$sua]);
+            ->assertCanSeeTableRecords([$modello])
+            ->assertCanNotSeeTableRecords([$mia, $sua]);
     }
 
+    /** 🏢 E il gestore vede gli stessi modelli, non di più e non di meno. */
     #[Test]
     public function the_gym_admin_sees_every_plan(): void
     {
+        $modello = $this->piano(null, 'Modello full body');
         $mia = $this->piano($this->mioIscritto, 'Scheda di Mario');
-        $sua = $this->piano($this->suoIscritto, 'Scheda di Luigi');
 
         $this->entraCome($this->admin);
 
         Livewire::test(ListWorkoutPlans::class)
-            ->assertCanSeeTableRecords([$mia, $sua]);
+            ->assertCanSeeTableRecords([$modello])
+            ->assertCanNotSeeTableRecords([$mia]);
     }
 
     #[Test]

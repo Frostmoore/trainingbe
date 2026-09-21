@@ -4,15 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Resources\Members\Schemas;
 
-use App\Enums\UserRole;
-use App\Models\User;
 use App\Support\Tenancy\TenantContext;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\DB;
 
 /**
  * La scheda anagrafica di un iscritto — B3.4.
@@ -63,14 +59,26 @@ class MemberForm
                         ->tel()
                         ->maxLength(32),
 
-                    TextInput::make('password')
-                        ->label('Password')
-                        ->password()
-                        ->revealable()
-                        ->minLength(8)
-                        ->required(fn (string $operation): bool => $operation === 'create')
-                        ->dehydrated(fn (?string $state): bool => filled($state))
-                        ->helperText('In modifica: lasciare vuoto per non cambiarla.'),
+                    /*
+                     * ══ ⛔ LA PASSWORD NON LA SCEGLIE LA PALESTRA — F5.7 ════
+                     *
+                     * 📌 Il committente, sulla pagina dell'iscritto: *«⛔ niente
+                     * identità modificabile, ⛔ niente password»*.
+                     *
+                     * 🚨 **Scegliere la password di qualcun altro significa
+                     * conoscerla**: poter entrare nell'app al posto suo, e da lì
+                     * leggere le sue chat e i suoi allenamenti. ⛔ L'account non
+                     * dipende dalla palestra (D4): è della persona, anche
+                     * mentre si allena lì.
+                     *
+                     * ✅ Al suo posto: l'account nasce **senza password**, e a
+                     * lui parte il link per sceglierne una. Lo fa
+                     * `CreateMember::afterCreate()`.
+                     *
+                     * 💡 E la strada normale resta l'**invito**: questo modulo
+                     * serve a chi ha già l'elenco su carta e non vuole mandare
+                     * venti link uno per uno.
+                     */
 
                     Toggle::make('is_active')
                         ->label('Attivo')
@@ -78,15 +86,18 @@ class MemberForm
                         ->helperText('Disattivato: non entra piu\' dall\'app.'),
                 ]),
 
-            Section::make('Chi lo segue')
-                ->schema([
-                    Select::make('trainers')
-                        ->label('Trainer assegnati')
-                        ->multiple()
-                        ->options(fn (): array => static::trainerDellaPalestra())
-                        ->helperText('Un trainer vede solo gli iscritti che gli sono assegnati.')
-                        ->columnSpanFull(),
-                ]),
+            /*
+             * ⛔ **Via «Chi lo segue»** — 23/09/2026, F5.6.
+             *
+             * 🚨 **Non governava più niente.** Dal 16/09 un trainer vede tutta
+             * la palestra, come già la vede nell'app; e dopo R2 nemmeno le
+             * schede passano dall'assegnazione. ⚠️ Un campo che sembra
+             * decidere chi vede cosa, e non lo decide, è peggio di un campo
+             * che manca.
+             *
+             * 💡 La tabella `member_trainer` **resta**: la usa la chat, per
+             * sapere con chi può parlare un iscritto.
+             */
 
             /*
              * 🆕 ⛔ **Qui c'era il profilo dell'iscritto** — tolto il 19/09/2026.
@@ -98,27 +109,10 @@ class MemberForm
         ]);
     }
 
-    /**
-     * I trainer di questa palestra.
+    /*
+     * ⛔ **`trainerDellaPalestra()` non c'è più** — 23/09/2026, F5.6.
      *
-     * Legge la pivot dei ruoli invece della relazione di spatie: qui il contesto
-     * c'e' (siamo nel pannello della palestra), ma una `whereIn` esplicita non
-     * cambia forma quando cambia il pacchetto.
-     *
-     * @return array<int, string>
+     * Riempiva la tendina «Trainer assegnati», che è sparita con la sezione
+     * «Chi lo segue»: vedi sopra il perché.
      */
-    private static function trainerDellaPalestra(): array
-    {
-        $tenantId = app(TenantContext::class)->id();
-
-        return User::query()
-            ->whereIn('id', DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('roles.name', UserRole::Trainer->value)
-                ->where('model_has_roles.tenant_id', $tenantId)
-                ->select('model_has_roles.model_id'))
-            ->orderBy('name')
-            ->pluck('name', 'id')
-            ->all();
-    }
 }

@@ -7,10 +7,10 @@ namespace App\Filament\Gym\Resources\Members;
 use App\Enums\UserRole;
 use App\Filament\Gym\Concerns\ScopedToTrainer;
 use App\Filament\Gym\Resources\Members\Pages\CreateMember;
-use App\Filament\Gym\Resources\Members\Pages\EditMember;
 use App\Filament\Gym\Resources\Members\Pages\ListMembers;
-use App\Filament\Gym\Resources\Members\RelationManagers\WorkoutPlansRelationManager;
+use App\Filament\Gym\Resources\Members\Pages\ViewMember;
 use App\Filament\Gym\Resources\Members\Schemas\MemberForm;
+use App\Filament\Gym\Resources\Members\Schemas\SchedaDellIscritto;
 use App\Filament\Gym\Resources\Members\Tables\MembersTable;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -99,11 +99,37 @@ class MemberResource extends Resource
         return MembersTable::configure($table);
     }
 
+    /**
+     * ⛔ **Niente schede dentro la pagina dell'iscritto** — 22/09/2026, F5.14.
+     *
+     * 📌 R2: *«Le schede vivono sui telefoni. Non ci sono destinatari.»*
+     *
+     * 🚨 Questo riquadro faceva esattamente la cosa che R2 vieta: mostrava
+     * *«questa persona segue questo programma»*, e da lì permetteva di
+     * scriverne uno nuovo già legato a lei. ⛔ Da un programma post-infortunio
+     * si capisce cos'è successo a chi lo esegue, e quel legame sul server non
+     * lo teniamo.
+     *
+     * 💡 La domanda *«che scheda ha questa persona?»* non ha più risposta sul
+     * server — **di proposito**. Ce l'ha il suo telefono.
+     */
     public static function getRelations(): array
     {
-        return [
-            WorkoutPlansRelationManager::class,
-        ];
+        return [];
+    }
+
+    /**
+     * 👤 **La scheda si guarda, non si compila** — 23/09/2026, F5.7.
+     *
+     * ⛔ **La pagina di modifica non c'è più.** Permetteva alla palestra di
+     * cambiare nome, email e **password** di una persona: cambiare l'email è
+     * prendere il controllo dell'account (il reset arriva lì), e scegliere la
+     * password è poter entrare al posto suo. 💡 Il perché per esteso sta in
+     * `SchedaDellIscritto`.
+     */
+    public static function infolist(Schema $schema): Schema
+    {
+        return SchedaDellIscritto::configure($schema);
     }
 
     public static function getPages(): array
@@ -111,7 +137,7 @@ class MemberResource extends Resource
         return [
             'index' => ListMembers::route('/'),
             'create' => CreateMember::route('/create'),
-            'edit' => EditMember::route('/{record}/edit'),
+            'view' => ViewMember::route('/{record}'),
         ];
     }
 }

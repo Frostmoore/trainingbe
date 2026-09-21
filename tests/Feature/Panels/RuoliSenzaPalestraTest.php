@@ -6,7 +6,6 @@ namespace Tests\Feature\Panels;
 
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\Members\MemberResource;
-use App\Filament\Gym\Resources\NutritionPlans\NutritionPlanResource;
 use App\Filament\Gym\Resources\WorkoutPlans\WorkoutPlanResource;
 use App\Models\NutritionPlan;
 use App\Models\Tenant;
@@ -234,8 +233,6 @@ class RuoliSenzaPalestraTest extends TestCase
             $this->assertSame([], WorkoutPlanResource::getEloquentQuery()->pluck('id')->all(),
                 'Un trainer indipendente sta vedendo una scheda.');
 
-            $this->assertSame([], NutritionPlanResource::getEloquentQuery()->pluck('id')->all(),
-                'Un trainer indipendente sta vedendo un piano alimentare.');
         });
     }
 

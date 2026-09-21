@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Tenancy;
 
 use App\Enums\UserRole;
+use App\Mail\InvitoInPalestraMail;
 use App\Models\InvitoInPalestra;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
@@ -16,7 +17,10 @@ use App\Services\Tenancy\Exceptions\SeiGiaInUnaPalestraException;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Gli inviti di una palestra — 3b-V.
@@ -67,28 +71,7 @@ class InvitiInPalestra
      */
     public function postiRimasti(Tenant $palestra): ?int
     {
-        $massimo = $this->pianoDi($palestra)?->max_members;
-
-        if ($massimo === null) {
-            return null;
-        }
-
-        /*
-         * ══ 🆕 I TRAINER NON CONSUMANO POSTI ALLIEVO — AH.1-quater ══════════
-         *
-         * ⛔ Qui si contavano **tutti** gli utenti del tenant, staff compreso.
-         * 🚨 Da quando una palestra può invitare anche dei trainer, quel conto
-         * direbbe che una palestra da cinquanta posti ne ha quarantasette
-         * perché ha tre allenatori — cioè le farebbe pagare i propri dipendenti
-         * come se fossero clienti.
-         *
-         * 💡 I due contatori si comprano insieme e si contano separati:
-         * `max_members` le persone iscritte, `max_trainers` lo staff.
-         */
-        $occupati = $this->quanteNePorta($palestra, UserRole::Member)
-            + $this->invitiValidiPer($palestra, UserRole::Member);
-
-        return max(0, $massimo - $occupati);
+        return $this->iPosti($palestra, UserRole::Member)['rimasti'];
     }
 
     /**
@@ -105,16 +88,89 @@ class InvitiInPalestra
      */
     public function postiTrainerRimasti(Tenant $palestra): ?int
     {
-        $massimo = $this->pianoDi($palestra)?->max_trainers;
+        return $this->iPosti($palestra, UserRole::Trainer)['rimasti'];
+    }
 
-        if ($massimo === null) {
-            return null;
+    /**
+     * 🆕 **I posti, per intero: occupati, totali e liberi** — 23/09/2026, F5.1.
+     *
+     * 📌 Il committente vuole nel cruscotto della palestra gli **slot allievo e
+     * trainer, occupati su totali**.
+     *
+     * ⛔ `postiRimasti()` da solo non bastava: dice **quanti ne restano**, e
+     * «restano 3» non si capisce se è tanto o poco finché non si sa se il piano
+     * ne ha 5 o 500. 💡 Le due risposte vengono dallo stesso conto, e questo è
+     * il motivo per cui stanno in un metodo solo — due conti separati sarebbero
+     * due occasioni di dire numeri che non tornano fra loro.
+     *
+     * ⚠️ **Occupati = iscritti + inviti ancora validi**, come dappertutto qui
+     * dentro: un invito in mano a qualcuno è un posto già promesso.
+     *
+     * @return array{occupati: int, totali: ?int, rimasti: ?int} `totali`/`rimasti`
+     *                                                           a `null` quando il piano non mette limiti
+     */
+    public function iPosti(Tenant $palestra, UserRole $ruolo = UserRole::Member): array
+    {
+        $piano = $this->pianoDi($palestra);
+
+        $totali = $ruolo === UserRole::Trainer
+            ? $piano?->max_trainers
+            : $piano?->max_members;
+
+        $occupati = $this->quanteNePorta($palestra, $ruolo)
+            + $this->invitiValidiPer($palestra, $ruolo);
+
+        return [
+            'occupati' => $occupati,
+            'totali' => $totali,
+
+            /*
+             * 🚨 **Mai sotto zero.** I posti si possono superare per davvero —
+             * un piano che si rimpicciolisce, un invito riscattato al limite —
+             * e un «-2 posti liberi» in un cruscotto sembra un difetto di
+             * conto invece che una palestra piena.
+             */
+            'rimasti' => $totali === null ? null : max(0, $totali - $occupati),
+        ];
+    }
+
+    /**
+     * 📧 **Manda il link d'invito per email** — 23/09/2026, fase F5.5.
+     *
+     * 📌 Il committente: l'invito deve **generare un link nuovo ogni volta** e
+     * poter essere **spedito**.
+     *
+     * ══ ⚠️ PERCHÉ FINO A IERI IL LINK SI COPIAVA A MANO ══════════════════
+     *
+     * Era scritto, e la ragione era vera: *«mandare le email d'invito vorrebbe
+     * dire un mittente, un template, la reputazione del dominio e la gestione
+     * dei rimbalzi»*. 💡 Adesso quel pezzo c'è — è lo stesso che manda il link
+     * della password (F4.0) — e resta solo da usarlo.
+     *
+     * 🚨 **Non fa fallire l'invito.** Oggi `MAIL_MAILER=log`: la mail «parte»
+     * finendo in un file. ⛔ Se il trasporto è rotto, il link è comunque già
+     * valido e chi l'ha creato lo vede a schermo: si copia, come prima.
+     *
+     * @return bool se la mail è partita davvero (`false` = copialo a mano)
+     */
+    public function mandaIlLink(InvitoInPalestra $invito): bool
+    {
+        if ($invito->email === null) {
+            return false;
         }
 
-        $occupati = $this->quanteNePorta($palestra, UserRole::Trainer)
-            + $this->invitiValidiPer($palestra, UserRole::Trainer);
+        try {
+            Mail::to($invito->email)->send(new InvitoInPalestraMail($invito));
 
-        return max(0, $massimo - $occupati);
+            return true;
+        } catch (Throwable $e) {
+            Log::error('Invito in palestra: mail non partita.', [
+                'invito' => $invito->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     /** Il piano in corso di questa palestra, `null` se non ne ha. */

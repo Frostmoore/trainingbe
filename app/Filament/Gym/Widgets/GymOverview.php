@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Widgets;
 
-use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -30,12 +29,6 @@ class GymOverview extends StatsOverviewWidget
         $iscritti = $this->idIscritti();
         $totale = count($iscritti);
 
-        $senzaScheda = $totale === 0 ? 0 : User::query()
-            ->whereIn('id', $iscritti)
-            ->whereDoesntHave('workoutPlans',
-                fn ($q) => $q->where('status', PlanStatus::Published->value))
-            ->count();
-
         /*
          * ⛔ **«Non si allenano da 30 giorni» e «Allenamenti questa settimana»
          * non ci sono piu'** — FASE 11.6, 21/08/2026.
@@ -52,16 +45,28 @@ class GymOverview extends StatsOverviewWidget
          * 💡 Resta «Senza scheda», che nasce dalle schede — quelle restano.
          */
 
+        /*
+         * ══ ⛔ VIA «SENZA SCHEDA PUBBLICATA» — 22/09/2026, F5.4 ════════════
+         *
+         * 🚨 **Contava una cosa che non esiste più.** Cercava gli iscritti
+         * senza una scheda in stato `published` *legata a loro*: ma dopo R2 le
+         * schede non hanno destinatari — vivono sui telefoni, e il server tiene
+         * solo i **modelli** della palestra.
+         *
+         * ⛔ Quindi quel numero era **il totale degli iscritti**, sempre, per
+         * tutti: un allarme arancione permanente sotto cui non c'era niente da
+         * fare. ⚠️ È lo stesso errore che nel 2026-08 aveva già portato a
+         * togliere «non si allenano da 30 giorni»: un cruscotto che mostra zero
+         * (o tutti) a tutti è peggio di un cruscotto che non lo mostra.
+         *
+         * 💡 I numeri che lo sostituiscono — posti, costo, guadagno — stanno in
+         * `IPostiDellaPalestra` e `IlGiroDiSoldiDellaPalestra` (F5.1, F5.2).
+         */
         return [
             Stat::make('Iscritti attivi', (string) $totale)
                 ->description('Persone con un account funzionante')
                 ->icon('heroicon-m-user-group')
                 ->color('primary'),
-
-            Stat::make('Senza scheda pubblicata', (string) $senzaScheda)
-                ->description($senzaScheda > 0 ? 'Aprono l\'app e non trovano niente' : 'Tutti hanno una scheda')
-                ->icon('heroicon-m-clipboard-document-list')
-                ->color($senzaScheda > 0 ? 'warning' : 'success'),
 
         ];
     }

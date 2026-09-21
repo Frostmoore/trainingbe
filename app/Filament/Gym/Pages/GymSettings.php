@@ -58,6 +58,9 @@ class GymSettings extends Page
         $this->form->fill($this->palestra()?->only([
             'name', 'contact_email', 'logo_path',
             'color_primary', 'color_secondary', 'color_accent',
+
+            // 💶 F5.1 — la quota che la palestra fa ai suoi (D9).
+            'prezzo_per_allievo_cent',
         ]) ?? []);
     }
 
@@ -72,6 +75,50 @@ class GymSettings extends Page
                     ->schema([
                         TextInput::make('name')->label('Nome')->required()->maxLength(120),
                         TextInput::make('contact_email')->label('Email di contatto')->email()->maxLength(255),
+                    ]),
+
+                /*
+                 * ══ 💶 LA QUOTA CHE FATE PAGARE VOI — 23/09/2026, F5.1 ══════
+                 *
+                 * ✅ **D9**: *«lo scrive la palestra e noi non lo verifichiamo
+                 * nemmeno. Sono dati suoi e a noi non interessano»*.
+                 *
+                 * 💡 Serve **solo a loro**: è l'unico numero che manca per
+                 * rispondere a *«questo iscritto mi conviene?»*. ⛔ Senza, il
+                 * cruscotto può mostrare solo il costo — metà del conto, quella
+                 * che fa sembrare il servizio una spesa e basta.
+                 *
+                 * 🚨 **In centesimi in tabella, in euro a schermo.** ⚠️ La
+                 * conversione sta qui e non nel modello: l'euro è il modo in cui
+                 * la gente scrive i soldi, il centesimo è il modo in cui si
+                 * contano senza perderne uno per strada.
+                 */
+                Section::make('La tua quota')
+                    ->description(
+                        'Quanto fai pagare al mese a un iscritto. Lo usi solo tu, nel tuo cruscotto: '
+                        .'noi non lo vediamo, non lo verifichiamo e non lo usiamo per fatturare niente.'
+                    )
+                    ->schema([
+                        TextInput::make('prezzo_per_allievo_cent')
+                            ->label('Quota mensile per iscritto')
+                            ->numeric()
+                            ->prefix('€')
+                            ->minValue(0)
+                            ->maxValue(9999)
+                            ->step('0.01')
+                            ->helperText('Puoi lasciarlo vuoto: il cruscotto mostrera\' solo il costo.')
+                            /*
+                             * ⚠️ `null` resta `null`, e non diventa zero:
+                             * «non l'ho scritto» e «li alleno gratis» sono due
+                             * cose diverse, e il cruscotto le dice in due modi
+                             * diversi.
+                             */
+                            ->formatStateUsing(fn (?int $state): ?string => $state === null
+                                ? null
+                                : number_format($state / 100, 2, '.', ''))
+                            ->dehydrateStateUsing(fn (?string $state): ?int => filled($state)
+                                ? (int) round(((float) $state) * 100)
+                                : null),
                     ]),
 
                 Section::make('Aspetto nell\'app')

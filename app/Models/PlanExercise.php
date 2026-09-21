@@ -8,6 +8,8 @@ use App\Models\Concerns\PuoAvereAlternative;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * Una riga di una scheda: quale esercizio, quante serie, quante ripetizioni.
@@ -28,10 +30,30 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * quindi la protezione e' quella scritta sopra e i test di dominio (B4.6) che
  * la verificano.
  */
-class PlanExercise extends Model
+class PlanExercise extends Model implements HasMedia
 {
     use HasFactory;
+    use InteractsWithMedia;
     use PuoAvereAlternative;
+
+    /**
+     * 🖼️ **L'immagine di QUESTA riga** — 22/09/2026, fase F5.13 (A1).
+     *
+     * 📌 Il committente: *«nel builder delle schede devo poter aggiungere
+     * un'immagine a ogni esercizio»*.
+     *
+     * ══ 🚨 PERCHÉ NON BASTAVA QUELLA DI `Exercise` ═══════════════════════
+     *
+     * ⛔ Perché quella è del **catalogo**, e il catalogo è condiviso: la panca
+     * piana della piattaforma è la stessa per tutte le palestre. Chi ci
+     * caricasse sopra la foto della propria presa la cambierebbe **a tutti**.
+     *
+     * 💡 Questa invece è della **riga**: la presa esatta, l'altezza del
+     * sedile, l'elastico che vuole quel trainer in quella scheda. ⚠️ Chi
+     * esegue vede questa se c'è, altrimenti quella del catalogo — la regola
+     * sta in `imageUrl()`.
+     */
+    public const COLLECTION_IMMAGINE = 'image';
 
     protected $fillable = [
         'workout_plan_id', 'workout_plan_day_id', 'alternativa_di_id',
@@ -342,5 +364,35 @@ class PlanExercise extends Model
         }
 
         return $serie !== '' ? rtrim($serie, ' × ') : '—';
+    }
+
+    // ───────────────────────── immagine ─────────────────────────
+
+    /**
+     * Stessa forma di `WorkoutPlan` ed `Exercise`: un file solo, URL pubblico.
+     *
+     * ⚠️ **Un file solo** (`singleFile`): caricandone un altro il precedente
+     * sparisce. ⛔ Una raccolta di immagini per una riga di scheda sarebbe una
+     * galleria da sfogliare mentre si è sotto un bilanciere.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::COLLECTION_IMMAGINE)
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->singleFile();
+    }
+
+    /**
+     * L'immagine da mostrare per questa riga: **la sua**, altrimenti quella
+     * dell'esercizio in catalogo.
+     *
+     * 💡 La precedenza è questa e non il contrario: se un trainer si è preso
+     * la briga di caricare una foto **su quella riga**, ha voluto dire qualcosa
+     * che il catalogo non dice.
+     */
+    public function imageUrl(): ?string
+    {
+        return ($this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null)
+            ?? $this->exercise?->imageUrl();
     }
 }

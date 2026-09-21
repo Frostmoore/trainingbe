@@ -119,6 +119,19 @@ enum AuditAction: string
      */
     case ResetPasswordMandato = 'user.reset_password_mandato';
 
+    /**
+     * 🆕 🎁 **La palestra ha comprato gettoni per un suo iscritto** — F5.8.
+     *
+     * 🚨 È un gesto che **muove soldi veri** e che accredita valore a una
+     * persona diversa da chi paga. ⚠️ Il movimento dei gettoni lo scrive già
+     * `ai_credit_movements`, ma quello nasce **al ritorno da Stripe**: se il
+     * pagamento non si conclude, di questo tentativo non resterebbe niente.
+     *
+     * 💡 Qui resta scritto **chi ha premuto e per chi**, che è la domanda
+     * che si fa un gestore quando trova un addebito che non riconosce.
+     */
+    case GettoniRegalatiDallaPalestra = 'tenant.gettoni_regalati';
+
     public function label(): string
     {
         return match ($this) {
@@ -141,6 +154,7 @@ enum AuditAction: string
             self::UscitoDallaPalestra => 'Uscito dalla palestra',
             self::PianoSuMisuraAssegnato => 'Piano su misura assegnato',
             self::ResetPasswordMandato => 'Link per la password mandato',
+            self::GettoniRegalatiDallaPalestra => 'Gettoni regalati dalla palestra',
         };
     }
 

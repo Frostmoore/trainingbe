@@ -5,20 +5,20 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\WorkoutPlans\Schemas;
 
 use App\Enums\MuscleGroup;
-use App\Enums\PlanStatus;
 use App\Enums\UserRole;
 use App\Models\Exercise;
+use App\Models\PlanExercise;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Services\Training\ExerciseMatcher;
 use App\Support\Tenancy\TenantContext;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\DB;
 
@@ -131,8 +131,24 @@ class WorkoutPlanForm
                      *
                      * ⚠️ La regola generale: nascondere non e\' non mandare.
                      */
+                    /*
+                     * ══ 🏷️ «RIFERIMENTO», NON «RIF. ALLIEVO» — 22/09/2026, F5.11 ══
+                     *
+                     * 📌 Il committente vuole che si chiami **Riferimento**.
+                     *
+                     * 💡 Non è un ritocco di stile: dopo R2 *«le schede vivono
+                     * sui telefoni, non ci sono destinatari»* — quindi non
+                     * esiste nessun «allievo» a cui riferirsi. ⛔ Chiamarlo
+                     * ancora «Rif. Allievo» inviterebbe a scriverci dentro il
+                     * nome di una persona, che è **esattamente** la cosa che
+                     * questo campo serve a evitare.
+                     *
+                     * ⚠️ La colonna resta `rif_allievo`: rinominarla vorrebbe
+                     * dire una migration, l'API e l'app in fila per un nome —
+                     * e il nome che conta è quello che si legge a schermo.
+                     */
                     TextInput::make('rif_allievo')
-                        ->label('Rif. Allievo')
+                        ->label('Riferimento')
                         ->maxLength(120)
                         ->placeholder('M.R. spalla dx')
                         ->helperText(
@@ -144,19 +160,44 @@ class WorkoutPlanForm
                         ->visible(fn (?WorkoutPlan $record): bool => $record === null
                             || $record->created_by === auth()->id()),
 
-                    Select::make('status')
-                        ->label('Stato')
-                        ->options(PlanStatus::options())
-                        ->default(PlanStatus::Draft->value)
-                        ->required()
-                        ->native(false)
-                        ->helperText('Finche\' e\' una bozza l\'iscritto non la vede nell\'app.'),
+                    /*
+                     * ══ ⛔ VIA LO «STATO» — 22/09/2026, F5.14 ═══════════════
+                     *
+                     * 📌 R2: *«Le schede vivono sui telefoni. Non ci sono
+                     * destinatari. Quando un trainer (o una palestra) creano
+                     * una scheda, questa va a finire tra le schede di tutti i
+                     * trainer della palestra, e dal telefono questi le possono
+                     * inviare a chi vogliono.»*
+                     *
+                     * 🚨 **«Bozza / pubblicata» rispondeva a una domanda che non
+                     * esiste più**: pubblicata *per chi*? Il testo d'aiuto lo
+                     * diceva da solo — *«finché è una bozza l'iscritto non la
+                     * vede nell'app»* — e quell'iscritto non c'è: quello che
+                     * sta qui è un **modello della palestra**, e la consegna la
+                     * fa il trainer dal telefono, in chat.
+                     *
+                     * ⚠️ La colonna `status` resta in tabella per ora: la
+                     * tolgono i passi 3 e 4 di §6.6 del piano, quando l'app in
+                     * giro avrà smesso di leggerla. 💡 Le schede nuove nascono
+                     * `published` — vedi `CreateWorkoutPlan`.
+                     *
+                     * ── ⛔ E via anche «valida dal / valida fino al» (F5.11) ──
+                     *
+                     * 🚨 Stessa ragione: una validità è un periodo **per una
+                     * persona**. Un modello non scade, e due date sempre vuote
+                     * in cima al modulo sono due campi che chiedono di essere
+                     * compilati senza avere una risposta giusta.
+                     */
 
-                    DatePicker::make('starts_at')->label('Valida dal'),
-                    DatePicker::make('ends_at')->label('Valida fino al'),
-
+                    /*
+                     * 📝 **«Note», non «Note per l'iscritto»** — F5.11.
+                     *
+                     * ⛔ L'iscritto non le legge: la scheda parte da qui come
+                     * modello, e quello che arriva sul telefono lo decide il
+                     * trainer. 💡 Sono le note **della scheda**.
+                     */
                     Textarea::make('notes')
-                        ->label('Note per l\'iscritto')
+                        ->label('Note')
                         ->rows(3)
                         ->columnSpanFull(),
                 ]),
@@ -360,30 +401,59 @@ class WorkoutPlanForm
              * salvataggio. 🚨 Per questo l'aiuto sotto lo dice — un campo che si
              * riscrive da solo senza avvisare sembra un difetto.
              */
+            /*
+             * ══ 🚨 LA TESTATA SPARISCE QUANDO CI SONO LE RIGHE — F5.12 ═════
+             *
+             * 📌 Il committente: via serie / ripetizioni / recupero / carico
+             * **quando c'è la riga per riga**.
+             *
+             * ⛔ Prima c'erano tutti e due insieme, e chiedevano la stessa cosa
+             * due volte con due risposte possibili: «4 × 8-12» in cima e
+             * «12·10·8» sotto. 💡 `PlanExercise::saving()` risolve il conflitto
+             * — **vincono le righe**, e la testata si riscrive da sola — ma
+             * vederla lì, compilabile e poi sovrascritta, fa sembrare un difetto
+             * una cosa che difetto non è.
+             *
+             * ✅ Adesso: niente righe → la testata; righe → solo le righe.
+             *
+             * 🚨 **Nascondere qui NON perde niente**, ed è l'unico motivo per
+             * cui si può fare: quando `serie` è pieno, quei quattro valori li
+             * **ricalcola il modello al salvataggio** da `riassuntoDelle()`.
+             * ⛔ Se un domani quel gancio sparisse, questa scelta cancellerebbe
+             * i dati in silenzio.
+             *
+             * ⚠️ «Tipo di carico» **resta sempre visibile**: non è deducibile
+             * dalle righe — «peso coi campi vuoti» e «a corpo libero» hanno le
+             * stesse righe e vogliono dire due cose diverse.
+             */
             TextInput::make('sets')
                 ->label('Serie')
                 ->numeric()
                 ->minValue(1)
                 ->maxValue(50)
+                ->visible(fn (Get $get): bool => self::senzaRighe($get))
                 ->helperText('Se compili le righe qui sotto, questo lo calcolo io.'),
 
             TextInput::make('reps')
                 ->label('Ripetizioni')
                 ->maxLength(32)
                 ->placeholder('8-12')
+                ->visible(fn (Get $get): bool => self::senzaRighe($get))
                 ->helperText('Anche «cedimento» o «max».'),
 
             TextInput::make('rest_sec')
                 ->label('Recupero (s)')
                 ->numeric()
                 ->minValue(0)
-                ->maxValue(3600),
+                ->maxValue(3600)
+                ->visible(fn (Get $get): bool => self::senzaRighe($get)),
 
             TextInput::make('target_weight')
                 ->label('Carico (kg)')
                 ->numeric()
                 ->minValue(0)
-                ->maxValue(999),
+                ->maxValue(999)
+                ->visible(fn (Get $get): bool => self::senzaRighe($get)),
 
             Select::make('carico')
                 ->label('Tipo di carico')
@@ -414,7 +484,13 @@ class WorkoutPlanForm
              */
             Repeater::make('serie')
                 ->label('Serie riga per riga')
-                ->helperText('Facoltative. Se ci sono, comandano loro.')
+                ->helperText('Facoltative. Se ci sono, comandano loro: la testata qui sopra sparisce.')
+                /*
+                 * 🚨 `live()` **serve a F5.12**: senza, aggiungere la prima
+                 * riga non fa sparire la testata finché non si ricarica la
+                 * pagina — e chi la vede ancora lì ci scrive dentro.
+                 */
+                ->live()
                 ->columnSpanFull()
                 ->collapsed()
                 ->defaultItems(0)
@@ -456,11 +532,51 @@ class WorkoutPlanForm
                 ])
                 ->columns(4),
 
+            /*
+             * ══ 🖼️ UN'IMMAGINE PER OGNI ESERCIZIO — 22/09/2026, F5.13 (A1) ══
+             *
+             * 📌 *«nel builder delle schede devo poter aggiungere un'immagine a
+             * ogni esercizio»*.
+             *
+             * 💡 **Non è la foto dell'esercizio in libreria**, ed è la
+             * distinzione che conta: quella è del catalogo e vale per tutti.
+             * Questa è di **questa riga di questa scheda** — la presa esatta,
+             * l'altezza del sedile, l'elastico che vuole quel trainer. ⛔ Con
+             * una sola immagine per esercizio, chi la cambia per la propria
+             * scheda la cambierebbe a tutta la palestra.
+             *
+             * ⛔ **Niente `->imageEditor()`**: uccide il JavaScript della pagina
+             * al salvataggio e il pulsante «Salva» smette di fare qualunque
+             * cosa, in silenzio. Il perché per esteso è sopra, sull'immagine
+             * della scheda (fase F0, atlante §106.3).
+             */
+            SpatieMediaLibraryFileUpload::make('immagine')
+                ->label('Immagine')
+                ->collection(PlanExercise::COLLECTION_IMMAGINE)
+                ->image()
+                ->maxSize(4096)
+                ->helperText('Facoltativa. La vede chi esegue la scheda, sopra le serie.')
+                ->columnSpanFull(),
+
             Textarea::make('notes')
                 ->label('Note')
                 ->rows(2)
                 ->columnSpanFull(),
         ];
+    }
+
+    /**
+     * Questa riga ha le **serie scritte una per una**? — F5.12.
+     *
+     * ⚠️ `$get('serie')` dentro un `Repeater` legge lo stato **di quell'elemento**,
+     * non della scheda intera: è quello che serve, perché la testata sparisce
+     * per l'esercizio che ha le righe, non per tutti.
+     */
+    private static function senzaRighe(Get $get): bool
+    {
+        $righe = $get('serie');
+
+        return ! is_array($righe) || $righe === [];
     }
 
     /** @param array<string, mixed> $state */

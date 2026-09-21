@@ -7,7 +7,6 @@ namespace Tests\Feature\Panels;
 use App\Enums\MealType;
 use App\Enums\PlanStatus;
 use App\Enums\UserRole;
-use App\Filament\Gym\Resources\NutritionPlans\Pages\CreateNutritionPlan;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\CreateWorkoutPlan;
 use App\Models\Exercise;
 use App\Models\NutritionPlan;
@@ -96,19 +95,27 @@ final class PannelloDeiPianiTest extends TestCase
         });
     }
 
+    /**
+     * ⛔ **I piani alimentari non stanno più nel pannello della palestra** —
+     * 22/09/2026, fase F5.15.
+     *
+     * 📌 Il committente: *«Non esistono quelli vecchi, quindi si tolgono e
+     * basta»*.
+     *
+     * 💡 **Le tabelle restano**, e non è un'incoerenza: i piani alimentari
+     * vivono ancora nell'app, dove li scrive l'AI su richiesta della persona.
+     * ⛔ Quello che sparisce è **la palestra che li scrive per qualcun altro** —
+     * cioè un professionista che prescrive una dieta a una persona, che è una
+     * cosa che non possiamo tenere sul server e che nessuno stava usando.
+     *
+     * 🚨 Il test guarda la **rotta**, non la classe: una risorsa cancellata e
+     * una risorsa nascosta si distinguono solo così.
+     */
     #[Test]
-    public function the_nutrition_plan_editor_opens(): void
+    public function il_pannello_della_palestra_non_ha_piu_i_piani_alimentari(): void
     {
-        $piano = $this->pianoAlimentare();
-
-        /*
-         * 🚨 **E' il test che sarebbe stato rosso prima di G6.** Il modulo
-         * puntava a `alternatives`, una colonna tolta: aprire questa pagina
-         * dava un errore di colonna sconosciuta.
-         */
-        $this->actingAs($this->trainer)
-            ->get("/admin/nutrition-plans/{$piano->getKey()}/edit")
-            ->assertOk();
+        $this->actingAs($this->trainer)->get('/admin/nutrition-plans')->assertNotFound();
+        $this->actingAs($this->trainer)->get('/admin/nutrition-plans/create')->assertNotFound();
     }
 
     #[Test]
@@ -121,7 +128,6 @@ final class PannelloDeiPianiTest extends TestCase
          * pagine diverse: su `/create` non c'e' nessun record, quindi i
          * `Repeater` annidati partono da zero invece che da righe esistenti.
          */
-        $this->actingAs($this->trainer)->get('/admin/nutrition-plans/create')->assertOk();
         $this->actingAs($this->trainer)->get('/admin/workout-plans/create')->assertOk();
     }
 
@@ -162,56 +168,6 @@ final class PannelloDeiPianiTest extends TestCase
     }
 
     #[Test]
-    public function a_nutrition_plan_can_actually_be_saved_from_the_panel(): void
-    {
-        // 🚨 Stesso difetto, altra tabella: `nutrition_plan_meals.nutrition_plan_id`
-        // e' `NOT NULL`, e il `Repeater` annidato scrive solo il giorno.
-        $this->actingAs($this->trainer);
-        app(TenantContext::class)->set($this->palestra);
-
-        Livewire::test(CreateNutritionPlan::class)
-            ->fillForm([
-                'name' => 'Definizione',
-                'status' => PlanStatus::Draft->value,
-                'days' => [
-                    [
-                        'name' => 'Giorno 1',
-                        'meals' => [
-                            [
-                                'meal' => MealType::Lunch->value,
-                                'items' => [
-                                    ['description' => '120 g di petto di pollo', 'kcal' => 198],
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
-
-        $piano = NutritionPlan::withoutGlobalScopes()->where('name', 'Definizione')->firstOrFail();
-
-        $this->assertSame(1, $piano->days()->count());
-        $this->assertSame(1, $piano->meals()->count());
-        $this->assertSame(1, $piano->meals()->first()->items()->count());
-
-        // 💡 E le due colonne sono d'accordo: il pasto conosce sia il giorno sia
-        // il piano, che e' cio' che l'hook garantisce.
-        $this->assertSame($piano->getKey(), $piano->meals()->first()->nutrition_plan_id);
-    }
-
-    #[Test]
-    public function the_nutrition_plan_list_opens(): void
-    {
-        $this->pianoAlimentare();
-
-        $this->actingAs($this->trainer)
-            ->get('/admin/nutrition-plans')
-            ->assertOk();
-    }
-
-    #[Test]
     public function the_workout_plan_editor_opens(): void
     {
         $piano = $this->ctx()->runAs($this->palestra, fn (): WorkoutPlan => WorkoutPlan::create([
@@ -225,6 +181,14 @@ final class PannelloDeiPianiTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * ⚠️ **Da F5.15 questi tre non parlano più del pannello**, e restano.
+     *
+     * 💡 I ganci di `NutritionPlan::booted()` — identità stabile, giorno
+     * predefinito, nessun destinatario — servono ancora: i piani alimentari
+     * **vivono nell'app**, dove li scrive l'AI su richiesta della persona.
+     * ⛔ Quello che è sparito è la palestra che li scrive per qualcun altro.
+     */
     #[Test]
     public function creating_a_plan_from_the_panel_gives_it_a_stable_identity(): void
     {
@@ -275,18 +239,20 @@ final class PannelloDeiPianiTest extends TestCase
         $this->actingAs($this->trainer);
         app(TenantContext::class)->set($this->palestra);
 
-        foreach ([CreateNutritionPlan::class, CreateWorkoutPlan::class] as $pagina) {
-            $campi = array_keys(Livewire::test($pagina)->instance()->form->getFlatFields());
+        /*
+         * 🆕 ⛔ **Dal 22/09/2026 la pagina è una sola** (F5.15): i piani
+         * alimentari non si scrivono più dal pannello della palestra.
+         */
+        $campi = array_keys(Livewire::test(CreateWorkoutPlan::class)->instance()->form->getFlatFields());
 
-            $this->assertNotContains(
-                'member_id',
-                $campi,
-                $pagina.": il modulo puo' ancora legare un piano a una persona",
-            );
+        $this->assertNotContains(
+            'member_id',
+            $campi,
+            "il modulo puo' ancora legare una scheda a una persona",
+        );
 
-            // 💡 E al suo posto c'e' la pseudonimizzazione.
-            $this->assertContains('rif_allievo', $campi, $pagina.': manca il Rif. Allievo');
-        }
+        // 💡 E al suo posto c'e' la pseudonimizzazione.
+        $this->assertContains('rif_allievo', $campi, 'manca il Riferimento');
     }
 
     #[Test]
@@ -302,7 +268,13 @@ final class PannelloDeiPianiTest extends TestCase
     #[Test]
     public function the_private_note_is_hidden_from_the_other_trainers(): void
     {
-        $piano = $this->pianoAlimentare();
+        $scheda = $this->ctx()->runAs($this->palestra, fn (): WorkoutPlan => WorkoutPlan::create([
+            'name' => 'Riabilitazione',
+            'status' => PlanStatus::Draft,
+            'created_by' => $this->trainer->getKey(),
+            'rif_allievo' => 'M.R. spalla dx',
+        ]));
+
         $altro = $this->creaUtente($this->palestra, UserRole::Trainer, 'altro@alfa.test');
 
         /*
@@ -314,7 +286,7 @@ final class PannelloDeiPianiTest extends TestCase
          * cosa un trainer puo' aprire: quello che questo test difende e' che il
          * **contenuto del campo** non compaia.
          */
-        $risposta = $this->actingAs($altro)->get("/admin/nutrition-plans/{$piano->getKey()}/edit");
+        $risposta = $this->actingAs($altro)->get("/admin/workout-plans/{$scheda->getKey()}/edit");
 
         if ($risposta->status() === 200) {
             $risposta->assertDontSee('M.R. spalla dx');

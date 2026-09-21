@@ -147,11 +147,49 @@ class TrainerResource extends Resource
                     ->weight('bold')
                     ->description(fn (User $r): ?string => $r->email),
 
-                TextColumn::make('assigned_members_count')
-                    ->label('Iscritti seguiti')
-                    ->counts('assignedMembers')
+                /*
+                 * ══ ⛔ VIA «ISCRITTI SEGUITI» — 23/09/2026, F5.9 ════════════
+                 *
+                 * 📌 Il committente la vuole fuori, e dall'altro lato sparisce
+                 * «seguito da» dall'elenco degli iscritti (F5.6).
+                 *
+                 * 🚨 **Non misurava più niente.** Dal 16/09 un trainer vede
+                 * **tutta** la palestra, come già la vede nell'app; e dopo R2
+                 * nemmeno le schede passano dall'assegnazione. ⛔ Quel numero
+                 * diceva «ne segue 3» a chi in sala li allena tutti.
+                 *
+                 * ── ✅ Al suo posto: COSA HA PRODOTTO ────────────────────────
+                 *
+                 * 💡 È la domanda vera davanti a un elenco di trainer: chi sta
+                 * scrivendo il patrimonio della palestra, e chi no.
+                 */
+                TextColumn::make('schede_create')
+                    ->label('Schede scritte')
                     ->alignCenter()
-                    ->sortable(),
+                    ->badge()
+                    ->color('info')
+                    ->state(fn (User $r): int => static::quante($r, 'workout_plans')),
+
+                /*
+                 * ⚠️ **Questo numero oggi può solo essere zero**, e va detto.
+                 *
+                 * 📌 Il committente lo ha chiesto (F5.9) nella stessa sessione
+                 * in cui ha deciso F5.15: *«Non esistono quelli vecchi, quindi
+                 * si tolgono e basta»* — i piani alimentari sono usciti dal
+                 * pannello della palestra, quindi da qui non ne nascono più.
+                 *
+                 * 💡 Resta perché conta **quelli scritti prima**, e perché se un
+                 * giorno la funzione tornasse, la colonna è già al suo posto.
+                 * 🚨 Se questa riga scrive 0 a tutti per sempre, va tolta: è la
+                 * stessa regola che ha fatto sparire «senza scheda pubblicata».
+                 */
+                TextColumn::make('consigli_creati')
+                    ->label('Consigli alimentari')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('gray')
+                    ->state(fn (User $r): int => static::quante($r, 'nutrition_plans'))
+                    ->toggleable(),
 
                 IconColumn::make('is_active')->label('Attivo')->boolean()->alignCenter(),
 
@@ -218,7 +256,26 @@ class TrainerResource extends Resource
             ])
             ->defaultSort('name')
             ->emptyStateHeading('Nessun trainer')
-            ->emptyStateDescription('Aggiungine uno per poter assegnare gli iscritti.');
+            ->emptyStateDescription('Mandagli un link d\'invito: vale per una persona sola e scade dopo sette giorni.');
+    }
+
+    /**
+     * Quante righe di questa tabella ha scritto questa persona — F5.9.
+     *
+     * ⚠️ **`created_by`, non `tenant_id`**: la domanda è «quanto ha prodotto
+     * lui», e un trainer con un portfolio suo scrive dentro due spazi diversi.
+     *
+     * 💡 `DB::table()` e non il modello: qui serve un conteggio, e passare da
+     * Eloquent vorrebbe dire trascinarsi dietro i global scope — compreso
+     * quello del tenant, che su un trainer con due cappelli darebbe il numero
+     * sbagliato.
+     */
+    private static function quante(User $trainer, string $tabella): int
+    {
+        return (int) DB::table($tabella)
+            ->where('created_by', $trainer->getKey())
+            ->whereNull('deleted_at')
+            ->count();
     }
 
     public static function getPages(): array

@@ -5,12 +5,8 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\WorkoutPlans\Tables;
 
 use App\Enums\PlanSource;
-use App\Enums\PlanStatus;
-use App\Enums\UserRole;
 use App\Filament\Support\VoceDiScheda;
-use App\Models\User;
 use App\Models\WorkoutPlan;
-use App\Support\Tenancy\TenantContext;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -19,7 +15,6 @@ use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\DB;
 
 /**
  * L'elenco delle schede della palestra.
@@ -64,18 +59,35 @@ class WorkoutPlansTable
                         ->sortable()
                         ->weight('bold'),
 
-                    VoceDiScheda::make('Assegnata a', TextColumn::make('member.name')
-                        ->label('Assegnata a')
-                        ->placeholder('Modello')
+                    /*
+                     * ══ 🚨 VIA «ASSEGNATA A» E «STATO» — 22/09/2026, F5.14 ══
+                     *
+                     * 📌 R2: *«Le schede vivono sui telefoni. Non ci sono
+                     * destinatari.»*
+                     *
+                     * ⛔ **«Assegnata a» scriveva "Modello" su ogni singola
+                     * riga**, perché è l'unica cosa che questo elenco contiene:
+                     * una colonna che dice sempre la stessa parola non
+                     * distingue niente, occupa spazio e fa credere che esista
+                     * un caso in cui direbbe un nome.
+                     *
+                     * ⛔ **«Stato» rispondeva a "pubblicata per chi?"**, e quel
+                     * «chi» non esiste: la consegna la fa il trainer dal
+                     * telefono, in chat.
+                     *
+                     * ── ✅ Al loro posto: CHI L'HA SCRITTA (F5.10) ───────────
+                     *
+                     * 📌 *«questa va a finire tra le schede di tutti i trainer
+                     * della palestra»*. 💡 Se il patrimonio è comune, l'unica
+                     * domanda che resta davanti a sei «Full body A» è **chi
+                     * l'ha fatta** — per sapere a chi chiedere.
+                     */
+                    VoceDiScheda::make('Scritta da', TextColumn::make('creator.name')
+                        ->label('Scritta da')
+                        ->placeholder('non si sa')
                         ->badge()
-                        ->color(fn (?string $state): string => $state === null ? 'gray' : 'info')
+                        ->color('info')
                         ->searchable()),
-
-                    VoceDiScheda::make('Stato', TextColumn::make('status')
-                        ->label('Stato')
-                        ->badge()
-                        ->formatStateUsing(fn (PlanStatus $state): string => $state->label())
-                        ->color(fn (PlanStatus $state): string => $state->color())),
 
                     VoceDiScheda::make('Esercizi', TextColumn::make('exercises_count')
                         ->label('Esercizi')
@@ -98,9 +110,7 @@ class WorkoutPlansTable
                 ])->space(3),
             ])
             ->filters([
-                SelectFilter::make('status')
-                    ->label('Stato')
-                    ->options(PlanStatus::options()),
+                // ⛔ Il filtro «Stato» è sparito con la colonna: vedi sopra.
 
                 SelectFilter::make('source')
                     ->label('Origine')
@@ -166,9 +176,17 @@ class WorkoutPlansTable
                     ->outlined()
                     ->label('Duplica')
                     ->excludeAttributes(['published_at'])
+                    /*
+                     * ⚠️ **La copia NON torna bozza** — 22/09/2026, F5.14.
+                     *
+                     * ⛔ Prima sì, e aveva senso quando «bozza» voleva dire
+                     * *«l'iscritto non la vede»*. Adesso nessuno la vede finché
+                     * non gliela mandano, e una copia in stato `draft` sarebbe
+                     * un modello che l'API si rifiuta di servire — bloccato in
+                     * uno stato che nessun campo del pannello può più cambiare.
+                     */
                     ->beforeReplicaSaved(function (WorkoutPlan $replica): void {
                         $replica->name = $replica->name.' (copia)';
-                        $replica->status = PlanStatus::Draft;
                     })
                     // Le righe non le duplica `replicate()`: vanno copiate a mano,
                     // altrimenti si ottiene una scheda vuota con lo stesso nome.
@@ -185,27 +203,17 @@ class WorkoutPlansTable
             ])
             ->defaultSort('updated_at', 'desc')
             ->emptyStateHeading('Nessuna scheda')
-            ->emptyStateDescription('Crea un modello riutilizzabile, oppure una scheda per un iscritto.');
+            ->emptyStateDescription(
+                'Qui stanno i modelli della palestra: li scrivi una volta e ogni trainer '
+                .'può mandarli dal telefono a chi vuole.'
+            );
     }
 
-    /** @return array<int, string> */
-    private static function iscrittiAssegnabili(): array
-    {
-        $tenantId = app(TenantContext::class)->id();
-
-        $query = User::query()
-            ->whereIn('id', DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('roles.name', UserRole::Member->value)
-                ->where('model_has_roles.tenant_id', $tenantId)
-                ->select('model_has_roles.model_id'));
-
-        $utente = auth()->user();
-
-        if ($utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin()) {
-            $query->whereIn('id', $utente->assignedMembers()->pluck('users.id')->all());
-        }
-
-        return $query->orderBy('name')->pluck('name', 'id')->all();
-    }
+    /*
+     * ⛔ **`iscrittiAssegnabili()` non c'è più** — 22/09/2026, F5.14.
+     *
+     * Costruiva la tendina dell'azione «Assegna», che è sparita il 14/08/2026:
+     * era codice morto da più di un mese, e adesso che questa tabella mostra
+     * **solo modelli** non c'è più nemmeno il caso a cui potrebbe servire.
+     */
 }

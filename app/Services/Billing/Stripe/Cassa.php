@@ -62,11 +62,16 @@ class Cassa
      * @param  int|null  $gettoni  il taglio scelto, solo per [GETTONI]
      * @param  string|null  $promozione  il codice di un'offerta ricevuta per link
      */
+    /**
+     * @param  User|null  $perConto  🆕 **R1**, fase F5.8 — chi riceve i gettoni,
+     *                               quando a pagare è la palestra. ⚠️ Paga `$utente`, incassa `$perConto`.
+     */
     public function apri(
         User $utente,
         string $tipo,
         ?int $gettoni = null,
         ?string $promozione = null,
+        ?User $perConto = null,
     ): string {
         $tenant = $utente->tenant;
 
@@ -139,6 +144,20 @@ class Cassa
                 'user_id' => (string) $utente->getKey(),
                 'tenant_id' => (string) $tenant->getKey(),
                 'gettoni' => (string) ($gettoni ?? 0),
+
+                /*
+                 * ══ 🎁 CHI LI RICEVE, SE NON È CHI PAGA — R1, fase F5.8 ════
+                 *
+                 * 📌 *«voglio che la palestra possa acquistare dei token da
+                 * dare all'allievo … Quelli acquistati in questo modo devono
+                 * andare direttamente all'allievo»*.
+                 *
+                 * 🚨 **Si verifica QUI che sia davvero un suo iscritto**, e si
+                 * riverifica al ritorno. ⛔ Un id scritto a mano in questo campo
+                 * accrediterebbe i gettoni a chiunque sulla piattaforma, pagati
+                 * da una palestra che voleva regalarli a un suo allievo.
+                 */
+                'beneficiario_id' => (string) ($this->beneficiarioValido($utente, $perConto)?->getKey() ?? ''),
 
                 /*
                  * 🆕 🎁 **Le promozioni usate, scritte qui** — fase F2.
@@ -641,7 +660,13 @@ class Cassa
         }
 
         match ($meta['tipo'] ?? null) {
-            self::GETTONI => $this->accreditaGettoni($utente, (int) ($meta['gettoni'] ?? 0), $sessione),
+            self::GETTONI => $this->accreditaGettoni(
+                $utente,
+                (int) ($meta['gettoni'] ?? 0),
+                $sessione,
+                // 🎁 R1 — a chi vanno davvero: vedi `accreditaGettoni()`.
+                $this->beneficiarioDi($utente, $meta),
+            ),
             self::ABBONAMENTO => $this->accendiLAbbonamento($utente, $sessione),
 
             /*
@@ -967,7 +992,11 @@ class Cassa
     }
 
     /** @param  array<string, mixed>  $sessione */
-    private function accreditaGettoni(User $utente, int $gettoni, array $sessione): void
+    /**
+     * @param  User|null  $perConto  🆕 R1 — l'iscritto a cui vanno i gettoni
+     *                               quando a pagarli è la palestra.
+     */
+    private function accreditaGettoni(User $utente, int $gettoni, array $sessione, ?User $perConto = null): void
     {
         if ($gettoni <= 0) {
             Log::error('Stripe: acquisto di gettoni senza taglio.', ['sessione' => $sessione['id'] ?? null]);
@@ -986,13 +1015,31 @@ class Cassa
          * compra»*. 💡 Questa riga e' il difetto, e questa riga e' la correzione:
          * chi ha comprato lo sappiamo gia', e' il parametro di questo metodo.
          */
+        /*
+         * ══ 🎁 IL REGALO DELLA PALESTRA — R1, fase F5.8 ════════════════════
+         *
+         * 🚨 **Il portafoglio resta personale.** Chi paga è `$utente` (la
+         * palestra, col suo cliente Stripe); chi riceve è `$perConto`, se c'è.
+         * ⛔ Da quel momento i gettoni **sono suoi**: la palestra non può
+         * riprenderseli, e se lui se ne va se li porta via.
+         *
+         * 💡 `pagato_da_tenant_id` resta scritto nel movimento: serve a
+         * rispondere a *«e questi da dove escono?»* guardando un saldo cresciuto
+         * senza nessun pagamento della persona. ✅ **A5**: agli allievi non si
+         * scrive niente — arrivano in silenzio, come un accredito qualunque.
+         */
+        $destinatario = $perConto ?? $utente;
+
         $this->portafoglio->accredita(
-            $utente,
+            $destinatario,
             $gettoni,
             // ⚠️ Nessun operatore: non l'ha accreditato una persona, l'ha
             // pagato il cliente. Metterci lui falserebbe il registro.
             nota: 'Stripe '.($sessione['id'] ?? '?'),
-            causale: AiCreditMovement::ACQUISTO,
+            causale: $perConto === null
+                ? AiCreditMovement::ACQUISTO
+                : AiCreditMovement::REGALO_PALESTRA,
+            pagatoDa: $perConto === null ? null : $utente->tenant_id,
         );
 
         /*
@@ -1007,13 +1054,21 @@ class Cassa
          * comprende lo sconto di un'eventuale promozione, che è esattamente
          * quello che deve entrare in cassa.
          */
+        /*
+         * ⚠️ **Nel registro degli incassi ci va CHI HA PAGATO**, non chi ha
+         * ricevuto: è una riga di cassa, e risponde a «quanto ci ha dato
+         * questa palestra». ⛔ Scriverci l'iscritto direbbe che ha speso soldi
+         * che non ha speso.
+         */
         $this->registro->segna(
             tenant: $utente->tenant_id,
             tipo: PagamentoIncassato::GETTONI,
             importoCent: (int) ($sessione['amount_total'] ?? 0),
             stripeId: $sessione['id'] ?? null,
             utente: $utente,
-            cosa: $gettoni.' gettoni',
+            cosa: $perConto === null
+                ? $gettoni.' gettoni'
+                : $gettoni.' gettoni per '.$perConto->name,
         );
     }
 
@@ -1087,5 +1142,53 @@ class Cassa
     private function stripe(): StripeClient
     {
         return app(StripeClient::class);
+    }
+
+    /**
+     * 🎁 **Questa persona può ricevere gettoni pagati da questo cliente?** — R1.
+     *
+     * 🚨 Sì **solo** se è un iscritto della sua stessa palestra. ⛔ Senza
+     * questo controllo, un id scritto a mano farebbe accreditare i gettoni a
+     * chiunque sulla piattaforma — pagati da una palestra che credeva di
+     * regalarli a un suo allievo.
+     *
+     * ⚠️ E una palestra non regala a se stessa: `$perConto === $utente`
+     * tornerebbe un movimento «regalo» su un acquisto normale, cioè una riga
+     * di registro che racconta una cosa che non è successa.
+     */
+    private function beneficiarioValido(User $chiPaga, ?User $perConto): ?User
+    {
+        if ($perConto === null || $perConto->is($chiPaga)) {
+            return null;
+        }
+
+        if ($chiPaga->tenant_id === null || $perConto->tenant_id !== $chiPaga->tenant_id) {
+            return null;
+        }
+
+        return $perConto;
+    }
+
+    /**
+     * Il beneficiario che torna da Stripe, **riverificato**.
+     *
+     * 🚨 **I metadata tornano indietro da fuori.** Li abbiamo scritti noi, e
+     * Stripe non li cambia — ma un webhook è una richiesta HTTP che arriva
+     * dalla rete, e fidarsi di un id dentro un corpo JSON per accreditare
+     * valore è la definizione del problema. 💡 Costa una query.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private function beneficiarioDi(User $chiPaga, array $meta): ?User
+    {
+        $id = (int) ($meta['beneficiario_id'] ?? 0);
+
+        if ($id === 0) {
+            return null;
+        }
+
+        $perConto = User::withoutGlobalScopes()->find($id);
+
+        return $perConto === null ? null : $this->beneficiarioValido($chiPaga, $perConto);
     }
 }

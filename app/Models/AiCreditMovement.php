@@ -32,9 +32,29 @@ class AiCreditMovement extends Model
 
     public const RETTIFICA = 'rettifica';
 
+    /**
+     * 🆕 🎁 **Comprati dalla palestra PER un suo iscritto** — 23/09/2026, F5.8.
+     *
+     * 📌 **R1**: *«voglio che la palestra possa acquistare dei token da dare
+     * all'allievo … Quelli acquistati in questo modo devono andare direttamente
+     * all'allievo»*.
+     *
+     * ⚠️ **Non è un `acquisto`**, e la differenza non è formale: un acquisto
+     * l'ha pagato **la persona** con la sua carta. Qui l'ha pagato qualcun
+     * altro, e chi legge il registro deve poterlo distinguere — per esempio
+     * per capire perché un saldo è cresciuto senza nessun pagamento suo.
+     *
+     * 🚨 **Ma i gettoni sono suoi lo stesso**: da qui in poi valgono come tutti
+     * gli altri, e la palestra non può riprenderseli.
+     */
+    public const REGALO_PALESTRA = 'regalo_palestra';
+
     protected $fillable = [
         'tenant_id', 'user_id', 'delta', 'saldo_dopo', 'causale',
         'ai_usage_log_id', 'operatore_id', 'nota',
+
+        // 🆕 🎁 F5.8 — chi li ha pagati, quando non è chi li riceve.
+        'pagato_da_tenant_id',
     ];
 
     protected function casts(): array
@@ -85,5 +105,20 @@ class AiCreditMovement extends Model
     public function eUnAccredito(): bool
     {
         return $this->delta > 0;
+    }
+
+    /**
+     * 🎁 La palestra che ha pagato questi gettoni, se non li ha pagati la
+     * persona stessa — F5.8.
+     *
+     * 🚨 `withoutGlobalScopes([TenantScope::class])`: si guarda **dall'altro
+     * lato** — dal pannello di piattaforma, o dallo spazio personale di chi se
+     * n'è andato dalla palestra. ⛔ Filtrata sul tenant corrente risponderebbe
+     * `null` proprio nei due casi in cui serve.
+     */
+    public function pagataDa(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'pagato_da_tenant_id')
+            ->withoutGlobalScopes([TenantScope::class]);
     }
 }

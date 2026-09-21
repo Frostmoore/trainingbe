@@ -697,6 +697,24 @@ class WorkoutPlanController extends Controller
             'id' => $r->id,
             'position' => $r->position,
             'name' => $r->exercise?->name,
+
+            /*
+             * ══ 🖼️ L'IMMAGINE DI QUESTA RIGA — 23/09/2026, F5.13 (A1) ══
+             *
+             * 📌 *«nel builder delle schede devo poter aggiungere
+             * un'immagine a ogni esercizio»*, e *«la scheda ricevuta deve
+             * mostrare quell'immagine durante l'allenamento»*.
+             *
+             * ⚠️ **Non è `exercise.image_url`**, che è quella del catalogo e
+             * vale per tutti. Questa è della **riga**: la presa esatta,
+             * l'altezza del sedile, l'elastico che vuole quel trainer.
+             *
+             * 💡 `PlanExercise::imageUrl()` ripiega già sul catalogo quando
+             * la riga non ne ha una sua: l'app può leggere questo campo e
+             * basta, senza dover scegliere fra due.
+             */
+            'image_url' => $r->imageUrl(),
+
             'exercise' => [
                 'id' => $r->exercise?->id,
                 'name' => $r->exercise?->name,

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Panels;
 
 use App\Enums\UserRole;
-use App\Filament\Gym\Resources\Members\Pages\EditMember;
 use App\Filament\Gym\Resources\Members\Pages\ListMembers;
+use App\Filament\Gym\Resources\Members\Pages\ViewMember;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\CreaTenantPersonale;
@@ -57,7 +57,7 @@ class DisiscrivereNonCancellaTest extends TestCase
         $this->actingAs($titolare);
         app(TenantContext::class)->set($palestra);
 
-        Livewire::test(EditMember::class, ['record' => $persona->getKey()])
+        Livewire::test(ViewMember::class, ['record' => $persona->getKey()])
             ->callAction('disiscrivi');
 
         $dopo = User::withoutGlobalScopes()->withTrashed()->findOrFail($persona->getKey());
@@ -83,7 +83,7 @@ class DisiscrivereNonCancellaTest extends TestCase
         $this->actingAs($titolare);
         app(TenantContext::class)->set($palestra);
 
-        $pagina = Livewire::test(EditMember::class, ['record' => $persona->getKey()]);
+        $pagina = Livewire::test(ViewMember::class, ['record' => $persona->getKey()]);
 
         foreach (['sex', 'birthdate', 'height_cm', 'activity_level', 'goal', 'target_weight_kg'] as $campo) {
             $pagina->assertFormFieldDoesNotExist("profile.{$campo}");
@@ -103,7 +103,7 @@ class DisiscrivereNonCancellaTest extends TestCase
         $this->actingAs($titolare);
         app(TenantContext::class)->set($palestra);
 
-        Livewire::test(EditMember::class, ['record' => $persona->getKey()])
+        Livewire::test(ViewMember::class, ['record' => $persona->getKey()])
             ->assertActionDoesNotExist('delete')
             ->assertActionExists('disiscrivi');
 

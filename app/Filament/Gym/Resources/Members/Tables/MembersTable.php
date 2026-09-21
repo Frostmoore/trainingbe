@@ -11,14 +11,12 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\EsciDaUnaPalestra;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -69,12 +67,25 @@ class MembersTable
                         ->weight('bold')
                         ->description(fn (User $r): ?string => $r->email),
 
-                    VoceDiScheda::make('Seguito da', TextColumn::make('trainers')
-                        ->label('Seguito da')
-                        ->badge()
-                        ->getStateUsing(fn (User $r): array => $r->assignedTrainers()->pluck('name')->all())
-                        ->placeholder('nessuno')
-                        ->color('info')),
+                    /*
+                     * ══ ⛔ VIA «SEGUITO DA» — 23/09/2026, F5.6 ══════════════
+                     *
+                     * 📌 Il committente lo vuole fuori, e dall'altro lato
+                     * sparisce «iscritti seguiti» dalla pagina del trainer
+                     * (F5.9): l'assegnazione non si governa più dal pannello.
+                     *
+                     * 🚨 **Non serviva più a niente.** Dal 16/09 un trainer
+                     * vede **tutta** la palestra, come già la vede nell'app: la
+                     * colonna prometteva una divisione del lavoro che il
+                     * pannello non applica più da nessuna parte. ⛔ E dopo R2
+                     * nemmeno le schede passano di lì — non c'è più niente che
+                     * dipenda da chi è assegnato a chi.
+                     *
+                     * ⚠️ **La tabella `member_trainer` resta**, e non è
+                     * dimenticanza: la usa la chat, per sapere con chi può
+                     * parlare un iscritto. Quello che sparisce è governarla da
+                     * qui.
+                     */
 
                     /*
                      * Qui c'era "Ultimo allenamento", e non e' stata tolta per
@@ -117,12 +128,18 @@ class MembersTable
                     ->trueLabel('Solo attivi')
                     ->falseLabel('Solo disattivati'),
 
-                // 🚨 I due filtri che valgono davvero: sono le due domande che
-                // una palestra si fa quando vuole non perdere un cliente.
-                Filter::make('senza_scheda')
-                    ->label('Senza scheda pubblicata')
-                    ->query(fn (Builder $q): Builder => $q->whereDoesntHave('workoutPlans',
-                        fn (Builder $p) => $p->where('status', 'published'))),
+                /*
+                 * ⛔ **«Senza scheda pubblicata» è sparito** — 22/09/2026, F5.4.
+                 *
+                 * 🚨 Selezionava **tutti**: dopo R2 le schede non sono legate a
+                 * nessuno sul server, quindi nessun iscritto ne ha una — il
+                 * filtro rispondeva sempre «tutti quanti».
+                 *
+                 * ⚠️ È la stessa trappola del filtro qui sotto, che dava
+                 * addirittura un errore SQL: un filtro che resta acceso dopo
+                 * che la cosa che filtrava è sparita **non dice niente e non si
+                 * lamenta**.
+                 */
 
                 /*
                  * 🆕 ⛔ Qui c'era «Non si allena da 30 giorni», su
@@ -149,7 +166,17 @@ class MembersTable
              * senza, quel foglio non esce e nulla lo segnala.
              */
             ->recordActions([
-                EditAction::make()
+                /*
+                 * 👁️ **«Scheda» al posto di «Modifica»** — F5.7.
+                 *
+                 * ⛔ La pagina di modifica non esiste più: la palestra non
+                 * cambia l'identità né la password di una persona. 💡 Quello
+                 * che si fa da dentro — sospendere, disiscrivere, regalare
+                 * gettoni, mandare il link della password — sono azioni, non
+                 * campi di un modulo.
+                 */
+                ViewAction::make()
+                    ->label('Scheda')
                     ->button()
                     ->outlined(),
             ])
@@ -191,6 +218,14 @@ class MembersTable
             ])
             ->defaultSort('name')
             ->emptyStateHeading('Nessun iscritto')
-            ->emptyStateDescription('Gli iscritti si registrano dall\'app con il codice della palestra, oppure si creano da qui.');
+            /*
+             * ⛔ **Via il «codice della palestra»** — 23/09/2026, F5.6.
+             *
+             * 📌 *«il tasto codice palestra non ha senso, non esiste più il
+             * codice palestra»* · *«Togliamo proprio tutto il discorso dei
+             * codici delle palestre»*. 💡 L'unica strada è il **link
+             * d'invito**: monouso, con scadenza, e revocabile uno per uno.
+             */
+            ->emptyStateDescription('Mandagli un link d\'invito: vale per una persona sola e scade dopo sette giorni.');
     }
 }
