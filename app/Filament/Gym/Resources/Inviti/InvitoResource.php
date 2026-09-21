@@ -173,6 +173,9 @@ class InvitoResource extends Resource
                  * dell'invito, non uno nuovo.
                  */
                 Action::make('copia')
+                    // Come gli altri tasti delle schede: bordati, e la griglia di pannello-a-schede.css li allarga.
+                    ->button()
+                    ->outlined()
                     ->label('Copia link')
                     ->icon('heroicon-m-clipboard-document')
                     ->color('gray')
@@ -182,6 +185,9 @@ class InvitoResource extends Resource
                         .'); $tooltip(\'Copiato\', { theme: $store.theme, timeout: 2000 })'),
 
                 Action::make('manda')
+                    // Come gli altri tasti delle schede: bordati, e la griglia di pannello-a-schede.css li allarga.
+                    ->button()
+                    ->outlined()
                     ->label('Manda per email')
                     ->icon('heroicon-m-envelope')
                     ->color('gray')
@@ -208,6 +214,9 @@ class InvitoResource extends Resource
                     }),
 
                 Action::make('revoca')
+                    // Come gli altri tasti delle schede: bordati, e la griglia di pannello-a-schede.css li allarga.
+                    ->button()
+                    ->outlined()
                     ->label('Revoca')
                     ->icon('heroicon-m-no-symbol')
                     ->color('danger')
