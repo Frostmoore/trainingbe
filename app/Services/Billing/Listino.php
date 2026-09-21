@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Billing;
 
 use App\Models\PacchettoGettoni;
+use App\Models\Plan;
 
 /**
  * Il listino — rifatto il 18/08/2026.
@@ -31,7 +32,60 @@ class Listino
     /** L'abbonamento del singolo, in centesimi. E' il perno di tutto il listino. */
     public function singolo(): int
     {
-        return (int) config('listino.singolo_cent');
+        // 🆕 F9.1 — il prezzo del Plus dal database, se c'è: il pannello lo può cambiare.
+        return (int) ($this->dalDatabase(Plan::PLUS)?->price_cents ?? config('listino.singolo_cent'));
+    }
+
+    /**
+     * 🆕 🔄 **Il piano com'è nel database** — F9.1, 23/09/2026.
+     *
+     * 🚨 Da quando i piani di listino si modificano dal pannello, il file è
+     * solo il **seme**: il sito che leggesse il file mostrerebbe un prezzo, e
+     * Stripe ne addebiterebbe un altro. ⚠️ Il file resta per quello che il
+     * database non ha (le note, l'ordine, i piani che il seeder non ha ancora
+     * scritto).
+     */
+    private function dalDatabase(string $codice): ?Plan
+    {
+        return $codice === '' ? null : Plan::query()->where('code', $codice)->first();
+    }
+
+    /**
+     * Una voce del file, coi numeri del database sopra.
+     *
+     * @param  array<string, mixed>  $voce
+     * @return array<string, mixed>
+     */
+    private function conINumeriVeri(array $voce): array
+    {
+        $piano = $this->dalDatabase((string) ($voce['codice'] ?? ''));
+
+        if ($piano === null) {
+            return $voce;
+        }
+
+        $voce['nome'] = $piano->name;
+        $voce['prezzo_cent'] = (int) $piano->price_cents;
+
+        if (array_key_exists('iscritti', $voce)) {
+            $voce['iscritti'] = $piano->max_members;
+        }
+
+        if (array_key_exists('allievi', $voce)) {
+            $voce['allievi'] = $piano->max_members;
+        }
+
+        if (array_key_exists('trainer', $voce)) {
+            $voce['trainer'] = $piano->max_trainers;
+        }
+
+        if ($piano->aConsumo()) {
+            $voce['prezzo_iscritto_cent'] = (int) $piano->prezzo_iscritto_cent;
+            $voce['canone_cent'] = (int) $piano->canone_cent;
+            $voce['minimo_iscritti'] = (int) $piano->minimo_iscritti;
+        }
+
+        return $voce;
     }
 
     /**
@@ -121,7 +175,8 @@ class Listino
                 'perSlot' => intdiv($p['prezzo_cent'], $p['iscritti'] ?? $p['allievi']),
                 'nota' => $p['nota'],
             ],
-            config("listino.{$platea}.piani"),
+            // 🆕 F9.1 — coi numeri del database.
+            array_map(fn (array $v): array => $this->conINumeriVeri($v), (array) config("listino.{$platea}.piani")),
         );
     }
 
@@ -138,7 +193,9 @@ class Listino
      */
     public function aConsumo(string $platea = 'palestre'): ?array
     {
-        return config("listino.{$platea}.a_consumo");
+        $voce = config("listino.{$platea}.a_consumo");
+
+        return is_array($voce) ? $this->conINumeriVeri($voce) : null;
     }
 
     /**
@@ -241,7 +298,7 @@ class Listino
      */
     public function suMisura(string $platea = 'palestre'): array
     {
-        $p = (array) config("listino.{$platea}.a_consumo");
+        $p = $this->conINumeriVeri((array) config("listino.{$platea}.a_consumo"));
 
         return [
             'codice' => (string) $p['codice'],

@@ -6,7 +6,8 @@ namespace Tests\Feature\Panels;
 
 use App\Enums\PlanKind;
 use App\Filament\God\Resources\Offerte\Pages\ListOfferte;
-use App\Filament\God\Resources\Plans\Pages\CreatePlan;
+use App\Filament\God\Resources\Plans\Pages\CreatePianoSuMisura;
+use App\Filament\God\Resources\Plans\Pages\ListPianiSuMisura;
 use App\Filament\God\Resources\Plans\Pages\ListPlans;
 use App\Filament\God\Resources\RichiesteDiContatto\Pages\ListRichiesteDiContatto;
 use App\Models\OffertaDiPiano;
@@ -111,7 +112,7 @@ class IlPannelloDeiPianiSuMisuraTest extends TestCase
             'cucito_a_mano' => true,
         ]);
 
-        Livewire::test(ListPlans::class)
+        Livewire::test(ListPianiSuMisura::class)
             ->callTableAction('manda_il_link', $piano, [
                 'tenant_id' => $palestra->getKey(),
                 'email' => 'capo@palestrademo.it',
@@ -171,7 +172,7 @@ class IlPannelloDeiPianiSuMisuraTest extends TestCase
     #[Test]
     public function un_piano_si_cuce_scrivendo_i_prezzi_in_euro(): void
     {
-        Livewire::test(CreatePlan::class)
+        Livewire::test(CreatePianoSuMisura::class)
             ->fillForm([
                 'code' => 'su_misura_powergym',
                 'name' => 'PowerGym — accordo 2026',

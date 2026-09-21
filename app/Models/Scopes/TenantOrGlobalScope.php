@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models\Scopes;
 
 use App\Models\Contracts\LibreriaCondivisaConGliIscritti;
+use App\Models\Exercise;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,8 +39,25 @@ final class TenantOrGlobalScope implements Scope
         $column = $model->qualifyColumn('tenant_id');
         $visibili = $this->tenantVisibili($model, $tenantId);
 
-        $builder->where(function (Builder $query) use ($column, $visibili): void {
-            $query->whereIn($column, $visibili)->orWhereNull($column);
+        $builder->where(function (Builder $query) use ($column, $visibili, $model): void {
+            $query->whereIn($column, $visibili);
+
+            /*
+             * 🆕 F9.5 — un esercizio della piattaforma può essere **riservato**
+             * ad alcune palestre: «globale» non vuol dire più «di tutti».
+             * ⚠️ La regola sta in `Exercise::condizioneDellaPiattaforma()`, non
+             * qui: la usa anche `ExerciseMatcher`, che cerca senza scope.
+             */
+            if ($model instanceof Exercise) {
+                $query->orWhere(function (Builder $globali) use ($column, $visibili, $model): void {
+                    $globali->whereNull($column);
+                    Exercise::condizioneDellaPiattaforma($globali, $visibili, $model->qualifyColumn('id'));
+                });
+
+                return;
+            }
+
+            $query->orWhereNull($column);
         });
     }
 

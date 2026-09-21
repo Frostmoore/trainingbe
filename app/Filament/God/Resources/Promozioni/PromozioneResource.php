@@ -63,9 +63,12 @@ class PromozioneResource extends Resource
 
     protected static ?string $pluralModelLabel = 'promozioni';
 
-    protected static ?string $navigationLabel = 'Promozioni e offerte';
+    // 🆕 F9.4 — 📌 *«qui andranno anche le promozioni»*: nel gruppo «Offerte su misura».
+    protected static ?string $navigationLabel = 'Promozioni';
 
-    protected static ?int $navigationSort = 7;
+    protected static string|\UnitEnum|null $navigationGroup = 'Offerte su misura';
+
+    protected static ?int $navigationSort = 3;
 
     public static function canAccess(): bool
     {

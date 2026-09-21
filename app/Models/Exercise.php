@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Str;
@@ -169,6 +170,52 @@ class Exercise extends Model implements HasMedia, LibreriaCondivisaConGliIscritt
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * 🆕 F9.5 — le palestre a cui un esercizio **della piattaforma** è
+     * riservato. Nessuna = tutte (vedi la migrazione `esercizi_delle_palestre`).
+     */
+    public function palestre(): BelongsToMany
+    {
+        return $this->belongsToMany(Tenant::class, 'esercizi_delle_palestre', 'exercise_id', 'tenant_id');
+    }
+
+    /**
+     * 🆕 F9.5 — **gli esercizi della piattaforma che questa palestra può vedere**:
+     * quelli senza restrizioni, e quelli riservati anche a lei.
+     *
+     * 🚨 **L'unico posto che lo sa.** Lo usano `TenantOrGlobalScope` (ogni
+     * ricerca con una palestra nel contesto) ed `ExerciseMatcher` (che cerca
+     * senza scope): due copie della stessa regola divergerebbero, e un
+     * esercizio riservato finirebbe nelle schede di una palestra che non doveva
+     * vederlo.
+     *
+     * @param  list<int>  $tenantIds  le palestre di chi guarda (di solito una)
+     */
+    public static function condizioneDellaPiattaforma(QueryBuilder|Builder $query, array $tenantIds, string $colonnaId = 'exercises.id'): void
+    {
+        $query->where(function ($q) use ($tenantIds, $colonnaId): void {
+            $q->whereNotExists(function (QueryBuilder $sub) use ($colonnaId): void {
+                $sub->selectRaw('1')->from('esercizi_delle_palestre')->whereColumn('esercizi_delle_palestre.exercise_id', $colonnaId);
+            })->orWhereExists(function (QueryBuilder $sub) use ($colonnaId, $tenantIds): void {
+                $sub->selectRaw('1')->from('esercizi_delle_palestre')
+                    ->whereColumn('esercizi_delle_palestre.exercise_id', $colonnaId)
+                    ->whereIn('esercizi_delle_palestre.tenant_id', $tenantIds === [] ? [0] : $tenantIds);
+            });
+        });
+    }
+
+    /** Il filtro qui sopra, come scope: `Exercise::query()->visibiliAllaPalestra($id)`. */
+    public function scopeVisibiliAllaPalestra(Builder $query, ?int $tenantId): Builder
+    {
+        if ($tenantId === null) {
+            return $query;
+        }
+
+        self::condizioneDellaPiattaforma($query, [$tenantId], $this->qualifyColumn('id'));
+
+        return $query;
     }
 
     // ───────────────────────── query ─────────────────────────

@@ -44,7 +44,12 @@ use Illuminate\Validation\Rule;
  */
 class PlanForm
 {
-    public static function configure(Schema $schema): Schema
+    /**
+     * 🆕 F9.1 — lo stesso modulo per i piani **di listino** e per quelli **su
+     * misura** (*«deve avere gli stessi campi di piani e listino»*): cambiano
+     * solo il segno `cucito_a_mano` e cosa dice «In vendita».
+     */
+    public static function configure(Schema $schema, bool $suMisura = true): Schema
     {
         return $schema->components([
 
@@ -96,14 +101,19 @@ class PlanForm
                         ->dehydrated(fn (?Plan $record): bool => $record === null)
                         ->helperText('Anche questo non si cambia: decide chi può riceverlo.'),
 
+                    /*
+                     * 🆕 F9.1 — 📌 *«a listino non so cosa sia»*. Ora si chiama
+                     * **«In vendita»** e dice cosa fa.
+                     */
                     Toggle::make('is_public')
-                        ->label('A listino sul sito')
-                        ->default(false)
-                        ->helperText(
-                            '⛔ Tienilo spento. Acceso, questo piano compare fra i prezzi del '
-                            .'sito e chiunque può comprarlo: un accordo cucito per un cliente '
-                            .'diventerebbe il prezzo per tutti.'
-                        ),
+                        ->label('In vendita')
+                        ->default(! $suMisura)
+                        ->helperText($suMisura
+                            ? '⛔ Tienilo spento. Acceso, questo piano compare fra i prezzi del sito e '
+                              .'nel pannello, e chiunque può comprarlo: un accordo cucito per un cliente '
+                              .'diventerebbe il prezzo per tutti.'
+                            : 'Acceso: compare fra i prezzi del sito e nel pannello, e chiunque lo può '
+                              .'comprare. Spento: chi ce l\'ha lo tiene, ma nessuno lo può più comprare.'),
 
                     /*
                      * ✂️ La colonna che dice «questa riga la comanda una
@@ -112,7 +122,7 @@ class PlanForm
                      * che il pannello si rifiuterebbe di modificare subito
                      * dopo averlo creato.
                      */
-                    Hidden::make('cucito_a_mano')->default(true),
+                    Hidden::make('cucito_a_mano')->default($suMisura),
                 ]),
 
             Section::make('Quanti posti')
@@ -146,8 +156,28 @@ class PlanForm
                      * salvataggio, cioè un modulo che si rifiuta di chiudersi
                      * senza spiegare perché.
                      */
-                    self::euro('price_cents', 'Canone al mese', vuotoEZero: true)
+                    self::euro('price_cents', 'Canone', vuotoEZero: true)
                         ->helperText('0 su un piano a consumo: lì il canone vero è quello qui sotto.'),
+
+                    /*
+                     * 🆕 📅 **Ogni quanto si paga** — F9.2. 📌 *«deve contenere la
+                     * temporalità (mese, settimana, giorno, anno...)»*. Stripe
+                     * addebita con questo intervallo (`Plan::intervalloStripe()`).
+                     * ⚠️ Vale per chi lo compra **da adesso**: chi l'ha già
+                     * continua col suo intervallo finché non cambia piano.
+                     */
+                    Select::make('intervallo')
+                        ->label('Ogni quanto si paga')
+                        ->options([
+                            'giorno' => 'Ogni giorno',
+                            'settimana' => 'Ogni settimana',
+                            'mese' => 'Ogni mese',
+                            'anno' => 'Ogni anno',
+                        ])
+                        ->default('mese')
+                        ->required()
+                        ->native(false)
+                        ->helperText('Il canone qui accanto si paga con questa cadenza. Il piano a consumo si paga sempre a mese chiuso.'),
 
                     self::euro('prezzo_iscritto_cent', 'Prezzo per iscritto')
                         ->helperText('Compilalo SOLO per un piano a consumo: è ciò che lo rende tale.'),

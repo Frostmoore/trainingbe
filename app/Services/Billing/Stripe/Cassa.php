@@ -204,7 +204,8 @@ class Cassa
                     'price_data' => [
                         'currency' => 'eur',
                         'unit_amount' => $this->listino->singolo(),
-                        'recurring' => ['interval' => 'month'],
+                        // 🆕 F9.2 — la temporalità del piano Plus, se è stata cambiata.
+                        'recurring' => ['interval' => Plan::query()->where('code', Plan::PLUS)->first()?->intervalloStripe() ?? 'month'],
                         'product_data' => [
                             'name' => 'Assistente AI',
                             'description' => $this->listino->chiamateMensili()
@@ -1171,7 +1172,7 @@ class Cassa
                  * abbonato che resta senza AI per mezza giornata **mentre sta
                  * pagando** e' il modo piu' rapido per farsi disdire.
                  */
-                'ends_at' => now()->addMonth()->addDay(),
+                'ends_at' => (Plan::query()->where('code', Plan::PLUS)->first()?->finePeriodo(now()) ?? now()->addMonthNoOverflow())->addDay(),
             ],
         );
 

@@ -83,7 +83,7 @@
                                 e paghi a mese chiuso per quelli che hai avuto.
                             </p>
                         @else
-                            <p class="tc-prezzo">{{ $euro($p['prezzo_cent']) }} <small>al mese</small></p>
+                            <p class="tc-prezzo">{{ $euro($p['prezzo_cent']) }} <small>{{ $p['per_intervallo'] ?? 'al mese' }}</small></p>
                             {{--
                                 ⚠️ Niente `@if` attaccato alle parole: `trainer@endif` non è
                                 una direttiva per Blade. L'ha trovato il test che la apre davvero.

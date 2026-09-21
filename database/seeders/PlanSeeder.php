@@ -59,6 +59,17 @@ class PlanSeeder extends Seeder
     public function run(): void
     {
         foreach ($this->listino() as $piano) {
+            /*
+             * 🆕 🚨 **Toccato dal pannello = non si riscrive più** — F9.1.
+             *
+             * ⛔ Senza questo `continue`, un prezzo cambiato dal pannello
+             * tornerebbe quello del file al primo deploy, in silenzio. Stessa
+             * regola dei gettoni (`PacchettiGettoniSeeder`).
+             */
+            if (Plan::query()->where('code', $piano['code'])->where('modificato_a_mano', true)->exists()) {
+                continue;
+            }
+
             Plan::updateOrCreate(['code' => $piano['code']], $piano);
         }
     }

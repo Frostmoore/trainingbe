@@ -26,6 +26,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -70,7 +71,7 @@ class ExerciseResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class, TenantOrGlobalScope::class])
-            ->with('tenant');
+            ->with(['tenant', 'creator', 'palestre']);
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
@@ -165,16 +166,35 @@ class ExerciseResource extends Resource
                         ->step(0.1)
                         ->helperText('Dispendio metabolico. Vuoto: si usa il valore generico 5.0 del calcolo calorie.'),
 
-                    // 🚨 `->palestre()` (F1.4): un esercizio si attribuisce a una
-                    // palestra o a nessuno. Attribuirlo a un tenant **personale**
-                    // non vuol dire niente — lo vedrebbe una persona sola — e la
-                    // tendina esporrebbe i nomi di tutti gli iscritti.
-                    Select::make('tenant_id')
-                        ->label('Palestra')
+                    /*
+                     * 🆕 🏋️ **Più palestre, vuoto = tutte** — F9.5, 23/09/2026.
+                     *
+                     * 📌 *«Palestra deve essere possibile metterne più di una (se è
+                     * vuoto diventa tutti)»*. Il campo non scrive da solo: lo
+                     * applica `applicaLePalestre()` dopo il salvataggio, perché
+                     * decide anche **di chi è** l'esercizio.
+                     *
+                     * 🚨 `->palestre()` (F1.4): solo palestre. Attribuirlo a un
+                     * tenant **personale** lo farebbe vedere a una persona sola, e
+                     * la tendina esporrebbe i nomi di tutti gli iscritti.
+                     */
+                    Select::make('palestre_scelte')
+                        ->label('Palestre')
+                        ->multiple()
                         ->options(fn (): array => Tenant::query()->palestre()->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
-                        ->placeholder('Nessuna — esercizio della piattaforma')
-                        ->helperText('Vuoto = visibile a tutte le palestre.'),
+                        ->placeholder('Tutte le palestre')
+                        ->helperText('Vuoto = lo vedono tutte. Con una o più palestre, lo vedono solo quelle.')
+                        ->dehydrated(false)
+                        ->afterStateHydrated(function (Select $component, ?Exercise $record): void {
+                            if ($record === null) {
+                                return;
+                            }
+
+                            $component->state($record->tenant_id !== null
+                                ? [(int) $record->tenant_id]
+                                : $record->palestre()->pluck('tenants.id')->map(fn ($id): int => (int) $id)->all());
+                        }),
 
                     Textarea::make('description')
                         ->label('Descrizione / esecuzione')
@@ -188,6 +208,14 @@ class ExerciseResource extends Resource
     {
         return $table
             ->columns([
+                // 🆕 F9.5 — *«voglio l'immagine dell'esercizio vicino al nome»*.
+                ImageColumn::make('immagine')
+                    ->label('')
+                    ->state(fn (Exercise $r): ?string => $r->imageUrl())
+                    ->circular()
+                    ->imageSize(40)
+                    ->defaultImageUrl(null),
+
                 TextColumn::make('name')
                     ->label('Esercizio')
                     ->searchable()
@@ -221,18 +249,23 @@ class ExerciseResource extends Resource
                     ->color('gray')
                     ->toggleable(),
 
-                TextColumn::make('tenant.name')
-                    ->label('Di chi e\'')
-                    ->placeholder('Piattaforma')
+                /*
+                 * 🆕 F9.5 — *«nel di chi è ci voglio tra parentesi l'utente che
+                 * l'ha creato»*; e se è della piattaforma ma riservato, a quante
+                 * palestre.
+                 */
+                TextColumn::make('di_chi_e')
+                    ->label('Di chi è')
+                    ->state(fn (Exercise $r): string => self::diChiE($r))
                     ->badge()
-                    ->color(fn (?string $state): string => $state === null ? 'success' : 'warning')
-                    ->sortable(),
+                    ->color(fn (Exercise $r): string => $r->tenant_id === null ? 'success' : 'warning'),
 
                 IconColumn::make('is_custom')
                     ->label('Nato da import')
                     ->boolean()
                     ->alignCenter()
-                    ->toggleable(),
+                    // F9.5 — nascosta di serie: con l'immagine in più spingeva i tasti fuori schermo.
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('met')
                     ->label('MET')
@@ -312,6 +345,8 @@ class ExerciseResource extends Resource
                     ->modalDescription('Diventera\' visibile a tutte le palestre. Resta collegato alle schede in cui e\' gia\' usato.')
                     ->action(function (Exercise $r): void {
                         $r->forceFill(['tenant_id' => null, 'is_custom' => false])->save();
+                        // 🆕 F9.5 — «globale» vuol dire di tutte: via le restrizioni.
+                        $r->palestre()->detach();
 
                         Notification::make()
                             ->title($r->name.' e\' ora della piattaforma')
@@ -325,6 +360,47 @@ class ExerciseResource extends Resource
             ->defaultSort('name')
             ->emptyStateHeading('Libreria vuota')
             ->emptyStateDescription('Aggiungi gli esercizi di base: ogni palestra nuova se li trovera\' gia\' pronti.');
+    }
+
+    /** «Palestra Olimpia (Mario Rossi)», «Piattaforma (…)», «Piattaforma · 2 palestre (…)». */
+    public static function diChiE(Exercise $r): string
+    {
+        $chi = match (true) {
+            $r->tenant_id !== null => (string) ($r->tenant?->name ?? 'Palestra'),
+            $r->palestre->isNotEmpty() => 'Piattaforma · '.($r->palestre->count() === 1 ? $r->palestre->first()->name : $r->palestre->count().' palestre'),
+            default => 'Piattaforma',
+        };
+
+        return $r->creator !== null ? $chi.' ('.$r->creator->name.')' : $chi;
+    }
+
+    /**
+     * 🆕 F9.5 — applica il campo «Palestre» dopo il salvataggio.
+     *
+     * | Scelto | Risultato |
+     * |---|---|
+     * | la sola palestra a cui l'esercizio già appartiene | **niente cambia**: resta suo |
+     * | vuoto | della piattaforma, per **tutte** |
+     * | una o più palestre | della piattaforma, **solo per quelle** |
+     *
+     * ⚠️ La prima riga conta: aprire e salvare un esercizio di una palestra
+     * senza toccare niente non deve regalarlo a tutte le altre.
+     *
+     * @param  list<int|string>  $scelte
+     */
+    public static function applicaLePalestre(Exercise $r, array $scelte): void
+    {
+        $scelte = array_values(array_unique(array_map('intval', $scelte)));
+
+        if ($r->tenant_id !== null && $scelte === [(int) $r->tenant_id]) {
+            return;
+        }
+
+        if ($r->tenant_id !== null) {
+            $r->forceFill(['tenant_id' => null])->save();
+        }
+
+        $r->palestre()->sync($scelte);
     }
 
     public static function getPages(): array

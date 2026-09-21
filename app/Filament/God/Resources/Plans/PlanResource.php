@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Filament\God\Resources\Plans;
 
-use App\Filament\God\Resources\Plans\Pages\CreatePlan;
 use App\Filament\God\Resources\Plans\Pages\EditPlan;
 use App\Filament\God\Resources\Plans\Pages\ListPlans;
 use App\Filament\God\Resources\Plans\Schemas\PlanForm;
@@ -67,9 +66,22 @@ class PlanResource extends Resource
      * qui e non solo sul pulsante: `canEdit()` è la fonte di tutte le strade —
      * il pulsante, l'URL diretto della pagina di modifica, un'azione di gruppo.
      */
+    /**
+     * 🆕 F9.1 — **tutti** si modificano: 📌 la pagina del piano *«deve
+     * contenere il prezzo, la temporalità, i tetti, in vendita»*. ⚠️ Prima
+     * solo quelli cuciti a mano, perché il seeder riscriveva gli altri a ogni
+     * deploy: adesso un piano toccato da qui è `modificato_a_mano` e il seeder
+     * lo salta (`PlanSeeder`).
+     */
     public static function canEdit(mixed $record): bool
     {
-        return $record instanceof Plan && $record->cucito_a_mano;
+        return $record instanceof Plan;
+    }
+
+    /** I piani di listino nascono dal seeder: qui si cuciono solo quelli su misura, altrove. */
+    public static function canCreate(): bool
+    {
+        return false;
     }
 
     public static function canDelete(mixed $record): bool
@@ -79,19 +91,18 @@ class PlanResource extends Resource
 
     public static function form(Schema $schema): Schema
     {
-        return PlanForm::configure($schema);
+        return PlanForm::configure($schema, suMisura: false);
     }
 
     public static function table(Table $table): Table
     {
-        return PlansTable::configure($table);
+        return PlansTable::configure($table, suMisura: false);
     }
 
     public static function getPages(): array
     {
         return [
             'index' => ListPlans::route('/'),
-            'create' => CreatePlan::route('/create'),
             'edit' => EditPlan::route('/{record}/edit'),
         ];
     }

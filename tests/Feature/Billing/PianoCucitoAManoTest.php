@@ -183,24 +183,36 @@ class PianoCucitoAManoTest extends TestCase
     }
 
     /**
-     * 🚨 **I piani del listino non si modificano dal pannello.**
+     * 🆕 F9.1 — **Tutti i piani si modificano, e il seeder non riscrive quelli
+     * toccati a mano.**
      *
-     * ⛔ `PlanSeeder` li riscrive `updateOrCreate` a ogni deploy: una modifica
-     * fatta a mano sopravvivrebbe fino al deploy successivo e poi sparirebbe
-     * **senza dire niente**. 💡 `cucito_a_mano` è la colonna che dice chi
-     * comanda su una riga, e `canEdit()` la legge.
+     * 📌 *«Pagina del piano specifico (Modifica): non esiste ma deve esistere ·
+     * deve contenere il prezzo…»*. ⛔ Prima i piani di listino non si potevano
+     * modificare perché `PlanSeeder` li riscriveva a ogni deploy; adesso chi li
+     * modifica dal pannello li segna `modificato_a_mano`, e il seeder li salta.
      */
     #[Test]
-    public function only_the_hand_stitched_plans_can_be_edited(): void
+    public function i_piani_si_modificano_e_il_seeder_non_li_riscrive(): void
     {
         $dalListino = Plan::query()->where('code', 'gym_10')->sole();
 
         $this->assertFalse($dalListino->cucito_a_mano, 'un piano del seeder risulta cucito a mano');
-        $this->assertFalse(PlanResource::canEdit($dalListino));
+        $this->assertTrue(PlanResource::canEdit($dalListino));
         $this->assertTrue(PlanResource::canEdit($this->pianoSuMisura()));
 
         // ⛔ E nessun piano si cancella: `plan_subscriptions` punta a `plans.id`.
         $this->assertFalse(PlanResource::canDelete($dalListino));
+
+        // Toccato a mano: il deploy dopo non lo rimette com'era.
+        $dalListino->forceFill(['price_cents' => 7777, 'modificato_a_mano' => true])->save();
+        $this->seed(PlanSeeder::class);
+        $this->assertSame(7777, $dalListino->refresh()->price_cents);
+
+        // Non toccato: il seeder resta la verità.
+        $altro = Plan::query()->where('code', 'gym_30')->sole();
+        $altro->forceFill(['price_cents' => 1])->save();
+        $this->seed(PlanSeeder::class);
+        $this->assertNotSame(1, $altro->refresh()->price_cents);
     }
 
     /**

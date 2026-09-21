@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\Billing;
 
 use App\Http\Controllers\Controller;
+use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\User;
 use App\Services\Billing\Listino;
@@ -79,6 +80,8 @@ class BillingController extends Controller
 
             'abbonamento' => [
                 'prezzo_cent' => $this->listino->singolo(),
+                // 🆕 F9.2 — la temporalità del Plus («al mese» finché nessuno la cambia).
+                'per_intervallo' => Plan::query()->where('code', Plan::PLUS)->first()?->perIntervallo() ?? 'al mese',
                 'chiamate_mensili' => $this->listino->chiamateMensili(),
             ],
 

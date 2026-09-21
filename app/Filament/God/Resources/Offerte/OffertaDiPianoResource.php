@@ -44,9 +44,12 @@ class OffertaDiPianoResource extends Resource
 
     protected static ?string $pluralModelLabel = 'offerte';
 
-    protected static ?string $navigationLabel = 'Offerte su misura';
+    // 🆕 F9.4 — nel gruppo «Offerte su misura», accanto ai piani e alle promozioni.
+    protected static ?string $navigationLabel = 'Link di pagamento';
 
-    protected static ?int $navigationSort = 5;
+    protected static string|\UnitEnum|null $navigationGroup = 'Offerte su misura';
+
+    protected static ?int $navigationSort = 2;
 
     public static function canAccess(): bool
     {

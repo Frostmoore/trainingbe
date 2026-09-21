@@ -8,6 +8,7 @@ use App\Enums\PlanKind;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Un piano del listino — F4.1.
@@ -68,6 +69,27 @@ class Plan extends Model
         // 🆕 3b-AH.6 — il piano a consumo: si paga a iscritto, con un minimo.
         'prezzo_iscritto_cent', 'canone_cent', 'minimo_iscritti',
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
+
+        // 🆕 F9.2 — ogni quanto si paga.
+        'intervallo',
+
+        // 🆕 F9.1 — modificato dal pannello: il seeder non lo riscrive più.
+        'modificato_a_mano',
+    ];
+
+    /**
+     * 🆕 📅 **Ogni quanto si paga** — F9.2, 23/09/2026.
+     *
+     * Chiave nostra → intervallo di Stripe (`recurring.interval`). ⚠️ Solo i
+     * quattro che Stripe accetta: un quinto fallirebbe al checkout.
+     *
+     * @var array<string, string>
+     */
+    public const INTERVALLI = [
+        'giorno' => 'day',
+        'settimana' => 'week',
+        'mese' => 'month',
+        'anno' => 'year',
     ];
 
     protected $attributes = [
@@ -88,6 +110,7 @@ class Plan extends Model
             'ai_enabled' => 'boolean',
             'is_public' => 'boolean',
             'cucito_a_mano' => 'boolean',
+            'modificato_a_mano' => 'boolean',
             'max_members' => 'integer',
             'price_cents' => 'integer',
             'max_trainers' => 'integer',
@@ -174,6 +197,41 @@ class Plan extends Model
      * c'è nessun canone. Chi mostra un prezzo deve chiedere **prima** questo
      * metodo, o scriverà «gratis» sul piano più caro del listino.
      */
+    /** L'intervallo per Stripe. ⚠️ `month` se il valore non è uno dei quattro. */
+    public function intervalloStripe(): string
+    {
+        return self::INTERVALLI[(string) $this->intervallo] ?? 'month';
+    }
+
+    /** «al mese», «alla settimana», «al giorno», «all'anno». */
+    public function perIntervallo(): string
+    {
+        return match ((string) $this->intervallo) {
+            'giorno' => 'al giorno',
+            'settimana' => 'alla settimana',
+            'anno' => 'all\'anno',
+            default => 'al mese',
+        };
+    }
+
+    /**
+     * La fine di un periodo pagato che parte da `$da`.
+     *
+     * ⚠️ `addMonthNoOverflow` e non `addMonth`: dal 31 gennaio, un mese è il 28
+     * febbraio, non il 3 marzo (la trappola è già scritta in `QuotaDelTrainer`).
+     */
+    public function finePeriodo(Carbon $da): Carbon
+    {
+        $da = $da->copy();
+
+        return match ((string) $this->intervallo) {
+            'giorno' => $da->addDay(),
+            'settimana' => $da->addWeek(),
+            'anno' => $da->addYearNoOverflow(),
+            default => $da->addMonthNoOverflow(),
+        };
+    }
+
     public function aConsumo(): bool
     {
         return $this->prezzo_iscritto_cent !== null;

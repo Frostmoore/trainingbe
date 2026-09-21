@@ -258,7 +258,8 @@ class PianiInVendita
                 'price_data' => [
                     'currency' => 'eur',
                     'unit_amount' => (int) $piano->price_cents,
-                    'recurring' => ['interval' => 'month'],
+                    // 🆕 F9.2 — ogni quanto lo dice il piano, non più «month» fisso.
+                    'recurring' => ['interval' => $piano->intervalloStripe()],
                     'product_data' => ['name' => $piano->name],
                 ],
             ]],
@@ -452,7 +453,7 @@ class PianiInVendita
              * rinnovo che arriva con qualche ora di ritardo non deve lasciare
              * nessuno fuori. La data vera la scrive `invoice.paid` al rinnovo.
              */
-            'ends_at' => Carbon::now()->addMonth()->addDay(),
+            'ends_at' => $piano->finePeriodo(Carbon::now())->addDay(),
         ]);
     }
 
@@ -590,7 +591,7 @@ class PianiInVendita
                 'price_data' => [
                     'currency' => 'eur',
                     'unit_amount' => (int) $nuovo->price_cents,
-                    'recurring' => ['interval' => 'month'],
+                    'recurring' => ['interval' => $nuovo->intervalloStripe()],
 
                     /*
                      * 🚨 **`product` e non `product_data`, e l'ha detto Stripe**
@@ -668,6 +669,9 @@ class PianiInVendita
                     'codice' => $p->code,
                     'nome' => $p->name,
                     'prezzo_cent' => (int) $p->price_cents,
+                    // 🆕 F9.2 — ogni quanto: «al mese», «alla settimana»…
+                    'intervallo' => (string) $p->intervallo,
+                    'per_intervallo' => $p->perIntervallo(),
                     'posti' => $p->max_members,
                     'posti_trainer' => $p->max_trainers,
                     'a_consumo' => $p->aConsumo(),

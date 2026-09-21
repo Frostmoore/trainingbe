@@ -337,8 +337,10 @@ class ExerciseMatcher
             }
         }
 
+        // 🆕 F9.5 — fra i globali, solo quelli che questa palestra può vedere.
         return Exercise::withoutGlobalScopes()
             ->whereNull('tenant_id')
+            ->visibiliAllaPalestra($tenantId)
             ->where('slug_normalized', $canonico)
             ->first();
     }
@@ -382,7 +384,14 @@ class ExerciseMatcher
 
         $candidati = Exercise::withoutGlobalScopes()
             ->where(function ($q) use ($tenantId): void {
-                $q->whereNull('tenant_id');
+                // 🆕 F9.5 — i globali, ma solo quelli che questa palestra può vedere.
+                $q->where(function ($globali) use ($tenantId): void {
+                    $globali->whereNull('tenant_id');
+
+                    if ($tenantId !== null) {
+                        Exercise::condizioneDellaPiattaforma($globali, [$tenantId]);
+                    }
+                });
 
                 if ($tenantId !== null) {
                     $q->orWhere('tenant_id', $tenantId);

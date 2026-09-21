@@ -6,6 +6,7 @@ namespace Tests\Feature\Api;
 
 use App\Enums\UserRole;
 use App\Models\PacchettoGettoni;
+use App\Models\Plan;
 use App\Services\Billing\Listino;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
@@ -13,6 +14,7 @@ use App\Support\ImmaginiDelSito;
 use Database\Seeders\PacchettiGettoniSeeder;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportAutoInjectedAssets\SupportAutoInjectedAssets;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -56,6 +58,19 @@ class SitoPubblicoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        /*
+         * 🚨 **Una variabile statica di Livewire, non il sito** — 23/09/2026.
+         *
+         * Livewire ricorda in `SupportAutoInjectedAssets::$hasRenderedAComponentThisRequest`
+         * di aver disegnato un componente, e da lì **inietta il suo script in
+         * ogni pagina HTML dello stesso processo**. ⚠️ Nei test il processo è
+         * uno solo: un `Livewire::test()` in un file precedente (le fatture, il
+         * cambio carta) faceva comparire `<script>` sul sito, e il test «il sito
+         * non ha JavaScript» falliva per un motivo che col sito non c'entra.
+         * Il sito vero non ce l'ha (verificato servendo la home).
+         */
+        SupportAutoInjectedAssets::$hasRenderedAComponentThisRequest = false;
 
         $this->seed(PlanSeeder::class);
 
@@ -227,6 +242,10 @@ class SitoPubblicoTest extends TestCase
     public function no_price_is_written_inside_a_view(): void
     {
         config()->set('listino.singolo_cent', 4321);
+
+        // 🆕 F9.1 — il prezzo del Plus si legge dal DATABASE (il pannello lo può
+        // cambiare): il numero finto va messo anche lì, dove il sito lo cerca.
+        Plan::query()->where('code', Plan::PLUS)->update(['price_cents' => 4321]);
 
         /*
          * 🆕 **La forma del listino è cambiata il 13/09/2026**: non più

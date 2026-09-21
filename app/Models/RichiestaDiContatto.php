@@ -8,6 +8,7 @@ use App\Enums\StatoDellaRichiesta;
 use App\Enums\TipoDiRichiesta;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * ✉️ **Una richiesta arrivata dal modulo di contatto del sito** — 21/09/2026.
@@ -54,6 +55,12 @@ class RichiestaDiContatto extends Model
     }
 
     /** Quelle che nessuno ha ancora guardato: il badge del pannello. */
+    /** 🆕 F9.3 — le risposte mandate dal pannello, dalla più recente. */
+    public function risposte(): HasMany
+    {
+        return $this->hasMany(RispostaAllaRichiesta::class, 'richiesta_di_contatto_id')->latest('id');
+    }
+
     public function scopeNuove(Builder $query): Builder
     {
         return $query->where('stato', StatoDellaRichiesta::Nuova->value);

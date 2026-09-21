@@ -137,6 +137,14 @@ final class EsciDaUnaPalestra
          */
         'fatture',
 
+        /*
+         * 🆕 🏋️ **Gli esercizi riservati a una palestra** — 23/09/2026, F9.5.
+         *
+         * 💡 Dicono quali esercizi della piattaforma **vede la palestra**, non
+         * una persona: chi esce non ha niente da portarsi via.
+         */
+        'esercizi_delle_palestre',
+
         'addebiti_mensili',
         'ai_credit_movements',
         'ai_usage_logs',
