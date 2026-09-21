@@ -29,7 +29,7 @@ class PromozioneAssegnazione extends Model
 
     protected $fillable = [
         'promozione_id', 'user_id', 'tenant_id', 'stato', 'origine', 'riferimento',
-        'gettoni', 'scontato_cent', 'plan_subscription_id', 'scade_il', 'prossimo_accredito_il',
+        'gettoni', 'scontato_cent', 'acquisto_in_sospeso', 'plan_subscription_id', 'scade_il', 'prossimo_accredito_il',
         'usata_il', 'revocata_il', 'revocata_da_id',
     ];
 
@@ -37,6 +37,7 @@ class PromozioneAssegnazione extends Model
         'stato' => 'assegnata',
         'gettoni' => 0,
         'scontato_cent' => 0,
+        'acquisto_in_sospeso' => false,
     ];
 
     protected function casts(): array
@@ -46,6 +47,7 @@ class PromozioneAssegnazione extends Model
             'origine' => OrigineAssegnazione::class,
             'gettoni' => 'integer',
             'scontato_cent' => 'integer',
+            'acquisto_in_sospeso' => 'boolean',
             'scade_il' => 'datetime',
             'prossimo_accredito_il' => 'datetime',
             'usata_il' => 'datetime',

@@ -47,12 +47,13 @@ enum ComeSiAttiva: string
 
     /**
      * 🚧 **Funziona già?** Come per i premi: una scelta che non fa niente non
-     * compare. `codice` aspetta il campo al pagamento (P8), `massa` i regali
-     * (P2), `evento` gli agganci (P6).
+     * compare. `codice` aspetta il campo al pagamento (P8), `evento` gli
+     * agganci (P6).
      */
     public function costruito(): bool
     {
-        return $this === self::Automatica || $this === self::Link;
+        // 🆕 P2 — `massa`, con i regali.
+        return in_array($this, [self::Automatica, self::Link, self::Massa], true);
     }
 
     /** Si spende solo presentando il codice (a mano o dal link). */

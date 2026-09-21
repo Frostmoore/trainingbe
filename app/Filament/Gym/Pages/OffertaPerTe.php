@@ -7,7 +7,11 @@ namespace App\Filament\Gym\Pages;
 use App\Enums\SuCosaVale;
 use App\Models\Promozione;
 use App\Services\Billing\LePromozioni;
+use App\Services\Promozioni\ChiLaRiceve;
+use App\Services\Promozioni\ConsegnaDeiPremi;
 use BackedEnum;
+use Filament\Actions\Action;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Panel;
 use Filament\Support\Icons\Heroicon;
@@ -97,10 +101,76 @@ class OffertaPerTe extends Page
             return null;
         }
 
-        $promozione = Promozione::query()->where('codice', mb_strtoupper(trim($this->codice)))->first();
+        $promozione = Promozione::query()->with('bersagli')->where('codice', mb_strtoupper(trim($this->codice)))->first();
 
-        return $promozione?->perchePiuNonVale()
+        if ($promozione === null) {
+            return 'Questo indirizzo non porta a nessuna offerta.';
+        }
+
+        /*
+         * 🆕 P2 — **«L'hai già ricevuta» non è «non è per te»**: chi ha già
+         * riscattato un regalo e riapre il link deve leggere la cosa vera.
+         */
+        $utente = auth()->user();
+
+        if ($promozione->perchePiuNonVale() === null
+            && $utente !== null
+            && app(ChiLaRiceve::class)->prende($promozione, $utente)
+            && ! $promozione->laPuoPrendereAncora($utente)) {
+            return 'Hai già ricevuto questa offerta.';
+        }
+
+        return $promozione->perchePiuNonVale()
             ?? 'Questa offerta non è per il tuo account.';
+    }
+
+    /**
+     * 🆕 🎁 **«Riscatta»** — P2 di `plan_promozioni.md`.
+     *
+     * Per le offerte con un link che **regalano** qualcosa (gettoni, mesi):
+     * chi apre il link li prende da qui. Gli sconti invece si usano pagando,
+     * e per quelli il tasto non c'è.
+     */
+    public function riscattaAction(): Action
+    {
+        return Action::make('riscatta')
+            ->label('Riscatta')
+            ->icon('heroicon-m-gift')
+            ->color('primary')
+            ->visible(function (): bool {
+                $offerta = $this->offerta();
+                $utente = auth()->user();
+
+                return $offerta !== null
+                    && $utente !== null
+                    && app(ConsegnaDeiPremi::class)->percheNo($offerta, $utente) === null;
+            })
+            ->action(function (): void {
+                $offerta = $this->offerta();
+                $utente = auth()->user();
+
+                $fatta = $offerta !== null && $utente !== null
+                    ? app(ConsegnaDeiPremi::class)->riscatta($offerta, $utente)
+                    : null;
+
+                if ($fatta === null) {
+                    Notification::make()
+                        ->title('Non è stato possibile riscattarla')
+                        ->body($offerta !== null && $utente !== null
+                            ? app(ConsegnaDeiPremi::class)->percheNo($offerta, $utente)
+                            : null)
+                        ->warning()
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title('Fatto!')
+                    ->body($fatta->gettoni > 0 ? "Hai ricevuto {$fatta->gettoni} gettoni." : 'L\'offerta è tua.')
+                    ->success()
+                    ->send();
+            });
     }
 
     /** Le altre offerte che questa persona ha già, senza fare niente. */

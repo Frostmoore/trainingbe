@@ -12,10 +12,12 @@ use App\Filament\God\Resources\Promozioni\Pages\EditPromozione;
 use App\Filament\God\Resources\Promozioni\Pages\ListPromozioni;
 use App\Filament\God\Resources\Promozioni\Schemas\ModuloDellaPromozione;
 use App\Filament\Support\VoceDiScheda;
+use App\Jobs\ConsegnaLaPromozioneATutti;
 use App\Models\Promozione;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -185,6 +187,39 @@ class PromozioneResource extends Resource
                     ->alpineClickHandler(fn (Promozione $p): string => 'window.navigator.clipboard.writeText('
                         .Js::from(self::link($p))
                         .'); $tooltip(\'Copiato\', { theme: $store.theme, timeout: 2000 })'),
+
+                /*
+                 * 🆕 🚀 P2 — **«Esegui»**: i regali a tutti i destinatari, adesso
+                 * (opzione 31). In coda, perché possono essere migliaia.
+                 * ⚠️ Ogni volta è un giro nuovo: chi l'ha già ricevuta in un giro
+                 * precedente la riceve di nuovo, se il massimo per persona lo
+                 * permette — e la finestra lo dice prima.
+                 */
+                Action::make('esegui')
+                    ->button()
+                    ->outlined()
+                    ->label('Esegui')
+                    ->icon('heroicon-m-rocket-launch')
+                    ->color('success')
+                    ->visible(fn (Promozione $p): bool => $p->attivazione === ComeSiAttiva::Massa && $p->haRegali())
+                    ->disabled(fn (Promozione $p): bool => ! $p->eSpendibile())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Promozione $p): string => "Consegnare «{$p->nome}» a tutti i destinatari?")
+                    ->modalDescription(fn (Promozione $p): string => 'Arriva adesso: '.$p->scrittoBene().'. '
+                        .($p->massimo_per_persona === null
+                            ? 'Senza massimo per persona: chi l\'ha già ricevuta la riceve di nuovo.'
+                            : 'Chi l\'ha già ricevuta '.$p->massimo_per_persona.' volte resta fuori.')
+                        .($p->eseguita_il !== null ? ' Ultimo giro: '.$p->eseguita_il->format('d/m/Y H:i').'.' : ''))
+                    ->modalSubmitActionLabel('Esegui')
+                    ->action(function (Promozione $p): void {
+                        ConsegnaLaPromozioneATutti::dispatch($p->getKey());
+
+                        Notification::make()
+                            ->title('Consegna partita')
+                            ->body('I regali arrivano nei prossimi secondi. Le persone raggiunte si contano nella promozione.')
+                            ->success()
+                            ->send();
+                    }),
 
                 Action::make('sospendi')
                     ->button()

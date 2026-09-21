@@ -16,6 +16,7 @@ use App\Services\Billing\LePromozioni;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Billing\RegistroDeiPagamenti;
+use App\Services\Promozioni\ConsegnaDeiPremi;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -105,6 +106,8 @@ class Cassa
             $promozione,
             pacchettoId: $tipo === self::ABBONAMENTO ? null : PacchettoGettoni::query()->inVendita()->where('gettoni', $gettoni)->value('id'),
             planId: $tipo === self::ABBONAMENTO ? Plan::query()->where('code', Plan::PLUS)->value('id') : null,
+            // 🆕 P2 — per il bonus in gettoni, che dipende da quanti se ne comprano.
+            gettoni: $tipo === self::ABBONAMENTO ? null : $gettoni,
         );
 
         $comune = [
@@ -178,6 +181,9 @@ class Cassa
                  * esiste.
                  */
                 'promozioni' => $this->sconti->perIMetadata($sconto['promozioni']),
+
+                // 🆕 🪙 P2 — quelle che danno gettoni in più: li accredita il webhook.
+                'bonus' => $this->sconti->perIMetadata($sconto['bonus']),
             ],
 
             /*
@@ -230,7 +236,9 @@ class Cassa
                     'price_data' => [
                         'currency' => 'eur',
                         'unit_amount' => $this->prezzoDelPacchetto($gettoni),
-                        'product_data' => ['name' => "{$gettoni} gettoni AI"],
+                        // 🆕 P2 — il bonus si vede già sulla pagina di pagamento.
+                        'product_data' => ['name' => "{$gettoni} gettoni AI"
+                            .($sconto['gettoni_bonus'] > 0 ? " (+{$sconto['gettoni_bonus']} in regalo)" : '')],
                     ],
                 ]],
             ]);
@@ -744,12 +752,28 @@ class Cassa
          * della sessione, che si può abbandonare — e l'id della sessione rende
          * la cosa idempotente se Stripe rimanda l'evento.
          */
-        app(LePromozioni::class)->segnaUsate(
+        $segnate = app(LePromozioni::class)->segnaUsate(
             (string) ($meta['promozioni'] ?? ''),
             $utente,
             (string) ($sessione['id'] ?? ''),
             (int) ($sessione['total_details']['amount_discount'] ?? 0),
         );
+
+        /*
+         * 🆕 🪙 **Il bonus in gettoni** — P2. Dopo l'accredito dei gettoni
+         * comprati, e a **chi li riceve** (l'allievo, se ha pagato la palestra).
+         */
+        if (($meta['tipo'] ?? null) === self::GETTONI && ($meta['bonus'] ?? '') !== '') {
+            $gettoni = (int) ($meta['gettoni'] ?? 0);
+
+            app(ConsegnaDeiPremi::class)->bonusDellAcquisto(
+                $segnate,
+                array_values(array_filter(array_map('trim', explode(',', (string) $meta['bonus'])))),
+                $this->beneficiarioDi($utente, $meta) ?? $utente,
+                $gettoni,
+                PacchettoGettoni::query()->where('gettoni', $gettoni)->value('id'),
+            );
+        }
     }
 
     /**

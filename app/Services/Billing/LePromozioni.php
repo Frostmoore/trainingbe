@@ -8,8 +8,10 @@ use App\Enums\ComeSiAttiva;
 use App\Enums\OrigineAssegnazione;
 use App\Enums\StatoAssegnazione;
 use App\Enums\SuCosaVale;
+use App\Enums\TipoDiPremio;
 use App\Models\Promozione;
 use App\Models\PromozioneAssegnazione;
+use App\Models\PromozionePremio;
 use App\Models\User;
 use App\Services\Promozioni\ChiLaRiceve;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -104,9 +106,15 @@ class LePromozioni
             return null;
         }
 
-        return $this->loPrende($promozione, $utente) && $promozione->laPuoPrendereAncora($utente)
-            ? $promozione
-            : null;
+        /*
+         * 🆕 P2 — pagando conta anche un premio d'acquisto **in sospeso**
+         * (regalo già dato, sconto ancora da usare).
+         */
+        $puo = $cosa === null
+            ? $promozione->laPuoPrendereAncora($utente) || $promozione->haUnAcquistoInSospeso($utente) !== null
+            : $promozione->laPuoUsareAllAcquisto($utente);
+
+        return $this->loPrende($promozione, $utente) && $puo ? $promozione : null;
     }
 
     /**
@@ -220,6 +228,62 @@ class LePromozioni
     }
 
     /**
+     * 🆕 🪙 **Le promozioni che danno un bonus su questo acquisto di gettoni** — P2.
+     *
+     * Stesse regole dello sconto, applicate ai gettoni in più: le cumulabili si
+     * sommano, fra le non cumulabili vince la priorità e poi la più generosa, e
+     * fra le due strade quella che dà di più (a parità di priorità).
+     *
+     * @param  iterable<Promozione>  $candidate
+     * @return list<Promozione>
+     */
+    public function bonusPer(iterable $candidate, int $gettoni, ?int $pacchettoId): array
+    {
+        $conBonus = collect($candidate)
+            ->filter(fn (Promozione $p): bool => $this->bonusDi($p, $gettoni, $pacchettoId) > 0)
+            ->values();
+
+        if ($conBonus->isEmpty()) {
+            return [];
+        }
+
+        $cumulabili = $conBonus->filter(fn (Promozione $p): bool => $p->cumulabile)->values();
+        $migliore = $conBonus
+            ->reject(fn (Promozione $p): bool => $p->cumulabile)
+            ->sort(fn (Promozione $a, Promozione $b): int => [$b->priorita, $this->bonusDi($b, $gettoni, $pacchettoId)]
+                <=> [$a->priorita, $this->bonusDi($a, $gettoni, $pacchettoId)])
+            ->first();
+
+        if ($migliore === null) {
+            return $cumulabili->all();
+        }
+
+        $sommaCumulabili = $cumulabili->sum(fn (Promozione $p): int => $this->bonusDi($p, $gettoni, $pacchettoId));
+
+        if ($cumulabili->isEmpty()
+            || $migliore->priorita > $cumulabili->max('priorita')
+            || $this->bonusDi($migliore, $gettoni, $pacchettoId) >= $sommaCumulabili) {
+            return [$migliore];
+        }
+
+        return $cumulabili->all();
+    }
+
+    /**
+     * 🪙 Quanti gettoni in più dà questa promozione su questo acquisto.
+     *
+     * 💡 «+N fissi» e «+N%» si sommano se il premio li ha tutti e due; la
+     * percentuale si arrotonda per difetto (un bonus non regala mezzo gettone).
+     */
+    public function bonusDi(Promozione $promozione, int $gettoni, ?int $pacchettoId): int
+    {
+        return (int) $promozione->premi
+            ->filter(fn (PromozionePremio $p): bool => $p->tipo === TipoDiPremio::GettoniBonus
+                && $p->valeSulPacchetto($pacchettoId))
+            ->sum(fn (PromozionePremio $p): int => (int) $p->gettoni + intdiv($gettoni * (int) $p->valore, 100));
+    }
+
+    /**
      * Tutte le spendibili che prendono questa persona su questo acquisto.
      *
      * 🆕 P1 — e che questa persona **può ancora prendere** (massimo per
@@ -236,7 +300,7 @@ class LePromozioni
             ->filter(fn (Promozione $p): bool => $p->valeSu($cosa)
                 && ! $p->eFuoriBudget()
                 && $this->loPrende($p, $utente)
-                && $p->laPuoPrendereAncora($utente))
+                && $p->laPuoUsareAllAcquisto($utente))
             ->values();
     }
 
@@ -267,26 +331,71 @@ class LePromozioni
      * restituisce solo il totale.
      *
      * @param  string  $codici  quelli scritti in `metadata['promozioni']`, separati da virgola
+     * @return list<PromozioneAssegnazione> le assegnazioni di questo pagamento (🆕 P2: il bonus ci scrive i gettoni)
      */
-    public function segnaUsate(string $codici, User $utente, string $riferimento, int $scontoCent): void
+    public function segnaUsate(string $codici, User $utente, string $riferimento, int $scontoCent): array
     {
         $elenco = array_values(array_filter(array_map('trim', explode(',', $codici))));
 
         if ($elenco === [] || $riferimento === '') {
-            return;
+            return [];
         }
 
-        $promozioni = Promozione::query()->whereIn('codice', $elenco)->get();
-        $quante = $promozioni->count();
+        $promozioni = Promozione::query()->with('premi')->whereIn('codice', $elenco)->get();
+
+        // 💡 Lo sconto si divide solo fra quelle che scontano: un bonus in gettoni non ha tolto euro.
+        $conSconto = $promozioni->filter(fn (Promozione $p): bool => $p->premi->contains(
+            fn (PromozionePremio $r): bool => $r->tipo->eUnoSconto(),
+        ))->values();
+
+        $quote = [];
         $resta = max(0, $scontoCent);
 
-        foreach ($promozioni->values() as $i => $promozione) {
-            $quota = $i === $quante - 1 ? $resta : intdiv(max(0, $scontoCent), max(1, $quante));
+        foreach ($conSconto as $i => $promozione) {
+            $quota = $i === $conSconto->count() - 1 ? $resta : intdiv(max(0, $scontoCent), max(1, $conSconto->count()));
             $resta -= $quota;
+            $quote[$promozione->getKey()] = $quota;
+        }
+
+        $segnate = [];
+
+        foreach ($promozioni as $promozione) {
+            $quota = $quote[$promozione->getKey()] ?? 0;
 
             try {
-                DB::transaction(function () use ($promozione, $utente, $riferimento, $quota): void {
-                    PromozioneAssegnazione::query()->create([
+                $segnate[] = DB::transaction(function () use ($promozione, $utente, $riferimento, $quota): PromozioneAssegnazione {
+                    // Già segnata per questa sessione? Stripe ha rimandato l'evento.
+                    $gia = PromozioneAssegnazione::query()
+                        ->where('promozione_id', $promozione->getKey())
+                        ->where('riferimento', $riferimento)
+                        ->first();
+
+                    if ($gia !== null) {
+                        return $gia;
+                    }
+
+                    /*
+                     * 🆕 P2 — **Un premio d'acquisto in sospeso si consuma sulla
+                     * sua assegnazione**: il regalo è già stato dato (e contato
+                     * in `usata_volte`), questo pagamento lo completa.
+                     */
+                    $sospesa = $promozione->haUnAcquistoInSospeso($utente);
+
+                    if ($sospesa !== null) {
+                        $sospesa->forceFill([
+                            'acquisto_in_sospeso' => false,
+                            'scontato_cent' => $sospesa->scontato_cent + $quota,
+                            'usata_il' => now(),
+                            // Finché arrivano gettoni ricorrenti resta «assegnata».
+                            'stato' => $sospesa->prossimo_accredito_il === null
+                                ? StatoAssegnazione::Usata
+                                : StatoAssegnazione::Assegnata,
+                        ])->save();
+
+                        return $sospesa;
+                    }
+
+                    $nuova = PromozioneAssegnazione::query()->create([
                         'promozione_id' => $promozione->getKey(),
                         'user_id' => $utente->getKey(),
                         'tenant_id' => $utente->tenant_id,
@@ -300,10 +409,14 @@ class LePromozioni
                     ]);
 
                     $promozione->increment('usata_volte');
+
+                    return $nuova;
                 });
             } catch (UniqueConstraintViolationException) {
-                // 💡 Già segnata per questa sessione: è Stripe che ha rimandato l'evento.
+                // 💡 Due eventi uguali nello stesso istante: l'altro ha già scritto.
             }
         }
+
+        return $segnate;
     }
 }

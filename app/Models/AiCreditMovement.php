@@ -49,6 +49,21 @@ class AiCreditMovement extends Model
      */
     public const REGALO_PALESTRA = 'regalo_palestra';
 
+    /**
+     * 🆕 🎁 **Dati da una promozione** — 24/09/2026, P2 di `plan_promozioni.md`.
+     *
+     * Gettoni in regalo, gettoni ricorrenti, bonus su un acquisto. ⚠️ Non è un
+     * `acquisto`: nessuno li ha pagati, e chi legge il registro deve saperlo.
+     * La `nota` porta il nome della promozione.
+     */
+    public const PROMOZIONE = 'promozione';
+
+    /** 🆕 ⏳ P2 — il residuo di un lotto di gettoni regalati, tolto a scadenza. */
+    public const SCADENZA = 'scadenza';
+
+    /** 🆕 ↩️ P7 — gettoni regalati e non spesi, tolti revocando la promozione. */
+    public const REVOCA_PROMOZIONE = 'revoca_promozione';
+
     protected $fillable = [
         'tenant_id', 'user_id', 'delta', 'saldo_dopo', 'causale',
         'ai_usage_log_id', 'operatore_id', 'nota',

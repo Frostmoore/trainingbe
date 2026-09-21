@@ -6,9 +6,11 @@ namespace App\Services\Billing;
 
 use App\Enums\AiFeature;
 use App\Models\AiCreditMovement;
+use App\Models\LottoDiGettoni;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\Exceptions\GettoniEsauritiException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -132,6 +134,9 @@ class PortafoglioGettoni
             // questo, un `saldo()` subito dopo direbbe ancora il valore vecchio.
             $utente->setAttribute('ai_credits', $dopo);
 
+            // 🆕 ⏳ P2 — prima i gettoni regalati che scadono prima.
+            $this->scalaDaiLotti($bloccato, $costo);
+
             return AiCreditMovement::withoutGlobalScopes()->create([
                 /*
                  * 💡 **`tenant_id` resta, e dice dove e' successo.** Il
@@ -171,6 +176,8 @@ class PortafoglioGettoni
         ?string $nota = null,
         string $causale = AiCreditMovement::ACQUISTO,
         Tenant|int|null $pagatoDa = null,
+        ?Carbon $scadeIl = null,
+        ?int $assegnazioneId = null,
     ): AiCreditMovement {
         if ($gettoni === 0) {
             // ⚠️ Un movimento da zero sporca il registro senza dire niente: chi
@@ -178,7 +185,7 @@ class PortafoglioGettoni
             throw new \InvalidArgumentException('Un accredito da zero gettoni non e\' un movimento.');
         }
 
-        return DB::transaction(function () use ($utente, $gettoni, $operatore, $nota, $causale, $pagatoDa): AiCreditMovement {
+        return DB::transaction(function () use ($utente, $gettoni, $operatore, $nota, $causale, $pagatoDa, $scadeIl, $assegnazioneId): AiCreditMovement {
             $bloccato = User::withoutGlobalScopes()
                 ->whereKey($utente->getKey())
                 ->lockForUpdate()
@@ -201,6 +208,26 @@ class PortafoglioGettoni
             $bloccato->forceFill(['ai_credits' => $dopo])->save();
             $utente->setAttribute('ai_credits', $dopo);
 
+            /*
+             * 🆕 ⏳ **I lotti** — P2 di `plan_promozioni.md`.
+             *
+             * Un accredito con scadenza apre un lotto; un movimento negativo
+             * (rettifica, scadenza, revoca) può lasciare i lotti più grandi del
+             * saldo, e allora si riallineano. ⛔ Senza, a scadenza si
+             * toglierebbero gettoni che la persona non ha più.
+             */
+            if ($gettoni > 0 && $scadeIl !== null) {
+                LottoDiGettoni::query()->create([
+                    'user_id' => $bloccato->getKey(),
+                    'promozione_assegnazione_id' => $assegnazioneId,
+                    'gettoni_iniziali' => $gettoni,
+                    'gettoni_restanti' => $gettoni,
+                    'scade_il' => $scadeIl,
+                ]);
+            } elseif ($gettoni < 0) {
+                $this->allineaILotti($bloccato, $dopo);
+            }
+
             return AiCreditMovement::withoutGlobalScopes()->create([
                 'tenant_id' => $bloccato->tenant_id,
                 'user_id' => $bloccato->getKey(),
@@ -222,5 +249,133 @@ class PortafoglioGettoni
                     : $pagatoDa,
             ]);
         });
+    }
+
+    /**
+     * 🆕 ⏳ **Quanti gettoni di questa persona scadono, e quando** — P2.
+     *
+     * @return list<array{gettoni: int, scade_il: Carbon}>
+     */
+    public function inScadenza(User $utente): array
+    {
+        return LottoDiGettoni::query()
+            ->aperti()
+            ->where('user_id', $utente->getKey())
+            ->orderBy('scade_il')
+            ->get()
+            ->map(fn (LottoDiGettoni $l): array => ['gettoni' => $l->gettoni_restanti, 'scade_il' => $l->scade_il])
+            ->all();
+    }
+
+    /**
+     * 🆕 ⏳ **I lotti scaduti: si toglie il residuo** — P2, `gettoni:scadenza`.
+     *
+     * 🚨 Si chiude il lotto **prima** del movimento negativo: altrimenti
+     * `allineaILotti()` lo vedrebbe ancora aperto e lo scalerebbe due volte.
+     * Si toglie `min(residuo, saldo)`: un portafoglio non va sotto zero.
+     *
+     * @return int quanti gettoni sono scaduti in tutto
+     */
+    public function faiScadere(?Carbon $quando = null): int
+    {
+        $quando ??= now();
+        $tolti = 0;
+
+        $scaduti = LottoDiGettoni::query()
+            ->aperti()
+            ->where('scade_il', '<=', $quando)
+            ->get();
+
+        foreach ($scaduti as $lotto) {
+            $tolti += DB::transaction(function () use ($lotto): int {
+                $bloccato = LottoDiGettoni::query()->lockForUpdate()->find($lotto->getKey());
+                $utente = User::withoutGlobalScopes()->lockForUpdate()->find($lotto->user_id);
+
+                if ($bloccato === null || $bloccato->chiuso_il !== null || $utente === null) {
+                    return 0;
+                }
+
+                $residuo = min($bloccato->gettoni_restanti, (int) $utente->ai_credits);
+                $bloccato->forceFill(['gettoni_restanti' => 0, 'chiuso_il' => now()])->save();
+
+                if ($residuo > 0) {
+                    $this->accredita(
+                        $utente,
+                        -$residuo,
+                        nota: 'Gettoni regalati scaduti',
+                        causale: AiCreditMovement::SCADENZA,
+                    );
+                }
+
+                return $residuo;
+            });
+        }
+
+        return $tolti;
+    }
+
+    /**
+     * Scala un consumo dai lotti aperti, **prima quelli che scadono prima**.
+     *
+     * 💡 È la scelta che conviene al cliente: spende per primi i gettoni che
+     * perderebbe, e quelli comprati (che non scadono) restano per dopo.
+     */
+    private function scalaDaiLotti(User $utente, int $quanti): void
+    {
+        $lotti = LottoDiGettoni::query()
+            ->aperti()
+            ->where('user_id', $utente->getKey())
+            ->orderBy('scade_il')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($lotti as $lotto) {
+            if ($quanti <= 0) {
+                break;
+            }
+
+            $tolti = min($quanti, $lotto->gettoni_restanti);
+            $quanti -= $tolti;
+            $resta = $lotto->gettoni_restanti - $tolti;
+
+            $lotto->forceFill([
+                'gettoni_restanti' => $resta,
+                'chiuso_il' => $resta === 0 ? now() : null,
+            ])->save();
+        }
+    }
+
+    /**
+     * 🚨 **La somma dei lotti non supera mai il saldo.**
+     *
+     * Dopo un movimento negativo che non è un consumo (una rettifica a mano,
+     * una revoca), si tolgono i gettoni in eccesso dai lotti che scadono
+     * **più tardi**: sono quelli che la persona avrebbe speso per ultimi.
+     */
+    private function allineaILotti(User $utente, int $saldo): void
+    {
+        $lotti = LottoDiGettoni::query()
+            ->aperti()
+            ->where('user_id', $utente->getKey())
+            ->orderByDesc('scade_il')
+            ->lockForUpdate()
+            ->get();
+
+        $eccesso = (int) $lotti->sum('gettoni_restanti') - $saldo;
+
+        foreach ($lotti as $lotto) {
+            if ($eccesso <= 0) {
+                break;
+            }
+
+            $tolti = min($eccesso, $lotto->gettoni_restanti);
+            $eccesso -= $tolti;
+            $resta = $lotto->gettoni_restanti - $tolti;
+
+            $lotto->forceFill([
+                'gettoni_restanti' => $resta,
+                'chiuso_il' => $resta === 0 ? now() : null,
+            ])->save();
+        }
     }
 }

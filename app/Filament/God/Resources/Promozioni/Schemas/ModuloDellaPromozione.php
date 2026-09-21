@@ -164,7 +164,11 @@ final class ModuloDellaPromozione
                  * cento volte tanto.
                  */
                 TextInput::make('valore')
-                    ->label(fn (callable $get): string => $inEuro($get) ? 'Quanto toglie (€)' : 'Percentuale')
+                    ->label(fn (callable $get): string => match (true) {
+                        $get('tipo') === TipoDiPremio::GettoniBonus->value => 'Gettoni in più (%)',
+                        $inEuro($get) => 'Quanto toglie (€)',
+                        default => 'Percentuale',
+                    })
                     ->numeric()
                     ->minValue(fn (callable $get): float => $inEuro($get) ? 0.01 : 1)
                     ->maxValue(fn (callable $get): int => $inEuro($get) ? 10_000 : 100)
@@ -177,12 +181,24 @@ final class ModuloDellaPromozione
                     ->required(fn (callable $get): bool => $pretende($get('tipo'), 'valore')),
 
                 TextInput::make('gettoni')
-                    ->label('Gettoni')
+                    ->label(fn (callable $get): string => match ($get('tipo')) {
+                        TipoDiPremio::GettoniBonus->value => 'Gettoni in più (fissi)',
+                        TipoDiPremio::GettoniRicorrenti->value => 'Gettoni al mese',
+                        default => 'Gettoni',
+                    })
                     ->numeric()
                     ->integer()
                     ->minValue(1)
                     ->visible(fn (callable $get): bool => $usa($get('tipo'), 'gettoni'))
-                    ->required(fn (callable $get): bool => $pretende($get('tipo'), 'gettoni')),
+                    /*
+                     * 🆕 P2 — il bonus è «+N fissi» **o** «+N%»: uno dei due
+                     * serve, e il modulo lo pretende sul primo se manca il secondo.
+                     */
+                    ->required(fn (callable $get): bool => $pretende($get('tipo'), 'gettoni')
+                        || ($get('tipo') === TipoDiPremio::GettoniBonus->value && blank($get('valore'))))
+                    ->helperText(fn (callable $get): ?string => $get('tipo') === TipoDiPremio::GettoniBonus->value
+                        ? 'Oppure lascia vuoto e metti la percentuale.'
+                        : null),
 
                 Select::make('pacchetto_id')
                     ->label('Pacchetto')
@@ -359,7 +375,26 @@ final class ModuloDellaPromozione
                 ->mapWithKeys(fn (ComeSiAttiva $c): array => [$c->value => $c->descrizione()])
                 ->all())
             ->default(ComeSiAttiva::Automatica->value)
-            ->required();
+            ->required()
+            /*
+             * 🆕 P2 — ⛔ **«Esegui» senza regali non consegna niente**: sconti e
+             * bonus si usano pagando, e un accredito di massa di sconti sarebbe
+             * un tasto che non fa nulla.
+             */
+            ->rules([
+                fn (callable $get): \Closure => function (string $attributo, mixed $valore, \Closure $fallisci) use ($get): void {
+                    if ($valore !== ComeSiAttiva::Massa->value) {
+                        return;
+                    }
+
+                    $regali = collect((array) $get('premi'))
+                        ->contains(fn (array $premio): bool => TipoDiPremio::tryFrom((string) ($premio['tipo'] ?? ''))?->eUnRegalo() === true);
+
+                    if (! $regali) {
+                        $fallisci('L\'accredito di massa consegna solo regali (gettoni, mesi, posti): aggiungine uno, o scegli un\'altra attivazione.');
+                    }
+                },
+            ]);
     }
 
     /** @return list<Component|Field> */

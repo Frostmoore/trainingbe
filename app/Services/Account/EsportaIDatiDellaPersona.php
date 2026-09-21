@@ -92,6 +92,8 @@ final class EsportaIDatiDellaPersona
          * un dato di chi chiede l'export.
          */
         'promozione_assegnazioni' => [['user_id'], ['revocata_da_id']],
+        // 🆕 ⏳ P2 — i suoi gettoni regalati che scadono, e quando: è il suo saldo.
+        'lotti_di_gettoni' => [['user_id'], []],
         // ⛔ Sale, nonce e chiave avvolta: materiale crittografico, non dati. Resta la data.
         'recovery_keys' => [['user_id'], ['salt', 'nonce', 'wrapped_key', 'ops_limit', 'mem_limit']],
         'social_identities' => [['user_id'], []],

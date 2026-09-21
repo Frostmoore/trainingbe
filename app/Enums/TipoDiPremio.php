@@ -101,6 +101,18 @@ enum TipoDiPremio: string
         return in_array($this, [self::ScontoGettoni, self::PrezzoPacchetto, self::ScontoAbbonamento, self::ScontoConsumo], true);
     }
 
+    /**
+     * 🆕 P2 — **Si usa pagando qualcosa**: uno sconto, o un bonus sull'acquisto.
+     *
+     * 💡 Diverso da [eUnoSconto]: il bonus non toglie soldi, aggiunge gettoni —
+     * ma vive nello stesso momento, il pagamento, e passa dagli stessi
+     * `metadata` di Stripe.
+     */
+    public function siUsaAllAcquisto(): bool
+    {
+        return $this->eUnoSconto() || $this === self::GettoniBonus;
+    }
+
     /** Si consegna senza acquisto: passa da `ConsegnaDeiPremi` (P2, P4). */
     public function eUnRegalo(): bool
     {
@@ -198,6 +210,8 @@ enum TipoDiPremio: string
          */
         return in_array($this, [
             self::ScontoGettoni, self::ScontoAbbonamento,
+            // 🆕 P2 — i gettoni.
+            self::GettoniRegalo, self::GettoniBonus, self::PrezzoPacchetto, self::GettoniRicorrenti,
         ], true);
     }
 

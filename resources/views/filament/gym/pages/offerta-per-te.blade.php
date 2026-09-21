@@ -33,13 +33,20 @@
                 <p class="fi-ta-text-item fi-size-md">{{ $offerta->descrizione }}</p>
             @endif
 
+            {{-- 🆕 P2 — le offerte che regalano si riscattano da qui. --}}
+            @if ($offerta->haRegali())
+                <div style="margin-top: .75rem;">{{ $this->riscattaAction }}</div>
+            @endif
+
+            @if ($offerta->haPremiDAcquisto())
             <p class="fi-ta-text-item fi-size-sm" style="margin-top: .75rem; opacity: .75;">
-                Si applica da solo al prossimo pagamento
+                Lo sconto si applica da solo al prossimo pagamento
                 ({{ mb_strtolower($offerta->genere->label()) }}).
                 @if (! $offerta->cumulabile)
                     ⚠️ Non si somma ad altre offerte: se ne hai già una migliore, resta quella.
                 @endif
             </p>
+            @endif
         </x-filament::section>
     @else
         <x-filament::section>

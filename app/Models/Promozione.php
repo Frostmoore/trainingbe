@@ -159,6 +159,56 @@ class Promozione extends Model
             || ($this->budget_gettoni !== null && (int) $speso?->gettoni >= $this->budget_gettoni);
     }
 
+    /** 🆕 P2 — ha almeno un premio che si consegna senza acquisto (e costruito)? */
+    public function haRegali(): bool
+    {
+        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->eUnRegalo() && $p->tipo->costruito());
+    }
+
+    /** 🆕 P2 — ha almeno un premio che si usa pagando (e costruito)? */
+    public function haPremiDAcquisto(): bool
+    {
+        return $this->premi->contains(fn (PromozionePremio $p): bool => $p->tipo->siUsaAllAcquisto() && $p->tipo->costruito());
+    }
+
+    /**
+     * 🆕 P2 — **Ha un premio d'acquisto in sospeso?**
+     *
+     * Una promozione che regala subito **e** sconta un acquisto: il regalo
+     * crea l'assegnazione, e lo sconto resta da usare su quella stessa
+     * assegnazione. ⛔ Senza, col massimo per persona a 1 il regalo chiuderebbe
+     * la porta allo sconto.
+     */
+    public function haUnAcquistoInSospeso(User $utente): ?PromozioneAssegnazione
+    {
+        return $this->assegnazioni()
+            ->cheContano()
+            ->where('user_id', $utente->getKey())
+            ->where('acquisto_in_sospeso', true)
+            ->oldest()
+            ->first();
+    }
+
+    /** 🆕 P2 — si può usare pagando: o la prende ora, o ne ha una in sospeso. */
+    public function laPuoUsareAllAcquisto(User $utente): bool
+    {
+        return $this->laPuoPrendereAncora($utente) || $this->haUnAcquistoInSospeso($utente) !== null;
+    }
+
+    /**
+     * 🆕 P2 — **Quanti gettoni si possono ancora regalare** col budget. `null` = nessun tetto.
+     */
+    public function gettoniRestantiNelBudget(): ?int
+    {
+        if ($this->budget_gettoni === null) {
+            return null;
+        }
+
+        $dati = (int) $this->assegnazioni()->cheContano()->sum('gettoni');
+
+        return max(0, $this->budget_gettoni - $dati);
+    }
+
     /** 🆕 P1 — quante volte questa persona l'ha già presa (revocate e scadute escluse). */
     public function usiDi(User $utente): int
     {

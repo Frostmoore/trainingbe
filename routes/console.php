@@ -268,3 +268,23 @@ Schedule::command('registri:pota')
     ->onFailure(function (): void {
         Log::error('Potatura dei registri fallita: restano piu\' a lungo di quanto l\'informativa promette.');
     });
+
+/*
+ * ══ 🎁 LE PROMOZIONI CHE LAVORANO DA SOLE — 24/09/2026, P2 di plan_promozioni.md ══
+ *
+ * 💡 **Alle 00:10 il giro intero**: prima i gettoni regalati scaduti, poi quelli
+ * ricorrenti del mese, poi le automatiche. Dieci minuti dopo la mezzanotte, così
+ * un lotto che «scade il 25» sparisce il 25 e non la sera del 24.
+ *
+ * ⚠️ **E le automatiche ogni 15 minuti**: chi si iscrive (o entra in una
+ * palestra) e rientra in una promozione con un regalo non deve aspettare la
+ * notte. Ogni persona la riceve una volta sola (riferimento `auto:<user>`),
+ * quindi i giri ripetuti non regalano due volte.
+ */
+Schedule::command('promozioni:giro')
+    ->dailyAt('0:10')
+    ->withoutOverlapping();
+
+Schedule::command('promozioni:giro --solo=automatiche')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();

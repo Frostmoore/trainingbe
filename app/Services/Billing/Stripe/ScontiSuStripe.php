@@ -45,7 +45,7 @@ class ScontiSuStripe
     /**
      * Le parti da aggiungere alla sessione di checkout.
      *
-     * @return array{discounts?: list<array{coupon: string}>, promozioni: list<Promozione>, sconto: int}
+     * @return array{discounts?: list<array{coupon: string}>, promozioni: list<Promozione>, sconto: int, bonus: list<Promozione>, gettoni_bonus: int}
      */
     public function perIlCheckout(
         User $utente,
@@ -54,6 +54,7 @@ class ScontiSuStripe
         ?string $codice = null,
         ?int $pacchettoId = null,
         ?int $planId = null,
+        ?int $gettoni = null,
     ): array {
         $candidate = $this->promozioni->automaticheDi($utente, $cosa)->all();
 
@@ -68,26 +69,50 @@ class ScontiSuStripe
 
         $conto = $this->promozioni->applica($importoCent, $candidate, $cosa, $pacchettoId, $planId);
 
-        if ($conto['sconto'] <= 0) {
-            return ['promozioni' => [], 'sconto' => 0];
-        }
+        /*
+         * 🆕 🪙 **Il bonus in gettoni** — P2 di `plan_promozioni.md`.
+         *
+         * Non tocca il prezzo, quindi Stripe non ne sa niente: si scrive nei
+         * `metadata` (chiave `bonus`) e lo accredita il webhook insieme ai
+         * gettoni comprati.
+         */
+        $bonus = $cosa === SuCosaVale::Gettoni && $gettoni !== null
+            ? $this->promozioni->bonusPer($candidate, $gettoni, $pacchettoId)
+            : [];
 
-        $coupon = $this->coupon($conto['sconto'], $conto['applicate']);
+        $gettoniBonus = array_sum(array_map(
+            fn (Promozione $p): int => $this->promozioni->bonusDi($p, (int) $gettoni, $pacchettoId),
+            $bonus,
+        ));
 
-        if ($coupon === null) {
+        $applicate = $conto['applicate'];
+        $discounts = null;
+
+        if ($conto['sconto'] > 0) {
+            $coupon = $this->coupon($conto['sconto'], $conto['applicate']);
+
             /*
              * ⚠️ **Se Stripe non dà il coupon, si vende comunque a prezzo
              * pieno.** ⛔ L'alternativa — fermare il pagamento — trasforma un
              * problema nostro in una vendita persa. 🚨 Ma resta nel registro:
              * uno sconto promesso e non applicato è una telefonata.
              */
-            return ['promozioni' => [], 'sconto' => 0];
+            if ($coupon === null) {
+                $applicate = [];
+            } else {
+                $discounts = [['coupon' => $coupon]];
+            }
         }
 
+        // Nei metadata vanno tutte e due: il webhook segna l'uso di ognuna.
+        $tutte = collect([...$applicate, ...$bonus])->unique(fn (Promozione $p): int => $p->getKey())->values()->all();
+
         return [
-            'discounts' => [['coupon' => $coupon]],
-            'promozioni' => $conto['applicate'],
-            'sconto' => $conto['sconto'],
+            ...($discounts !== null ? ['discounts' => $discounts] : []),
+            'promozioni' => $tutte,
+            'sconto' => $discounts !== null ? $conto['sconto'] : 0,
+            'bonus' => $bonus,
+            'gettoni_bonus' => $gettoniBonus,
         ];
     }
 
