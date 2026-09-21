@@ -19,6 +19,7 @@ use App\Models\Plan;
 use App\Models\Promozione;
 use App\Models\Tenant;
 use App\Models\User;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Field;
@@ -646,6 +647,25 @@ final class ModuloDellaPromozione
                 ->default(StatoPromozione::Attiva->value)
                 ->required()
                 ->native(false),
+
+            // 🆕 📣 P8 — opzione 37: come si avvisa chi la riceve. Niente spuntato = in silenzio.
+            CheckboxList::make('avviso')
+                ->label('Avvisa chi la riceve')
+                ->options([
+                    'app' => 'Notifica nell\'app',
+                    'email' => 'Email',
+                ])
+                ->helperText('Nessuno: arriva in silenzio. I regali avvisano quando arrivano; per gli sconti c\'è il tasto «Avvisa i destinatari».'),
+
+            // 🆕 👀 P8 — opzione 38: dove si vede. Niente spuntato = solo col link, nel pannello.
+            CheckboxList::make('visibile_in')
+                ->label('Dove si vede')
+                ->options([
+                    'app' => 'Nell\'app, fra le offerte',
+                    'pannello' => 'Nel pannello, fra le offerte',
+                    'sito' => 'Sul sito (solo se è per tutti, senza condizioni)',
+                ])
+                ->helperText('Nessuno: la vede solo chi apre il link.'),
         ];
     }
 

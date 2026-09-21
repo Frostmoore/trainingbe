@@ -146,6 +146,14 @@ class ConsegnaDeiPremi
 
                 $bloccata->increment('usata_volte');
 
+                /*
+                 * 🆕 📣 P8 — l'avviso parte **dopo il commit**: un avviso di un
+                 * regalo che poi torna indietro sarebbe una bugia.
+                 */
+                if ((array) $bloccata->avviso !== []) {
+                    DB::afterCommit(fn () => app(AvvisaIDestinatari::class)->dopoLaConsegna($assegnazione));
+                }
+
                 return $assegnazione;
             });
         } catch (UniqueConstraintViolationException|NienteDaConsegnare) {

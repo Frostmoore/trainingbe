@@ -12,6 +12,7 @@ use App\Filament\God\Resources\Promozioni\Pages\EditPromozione;
 use App\Filament\God\Resources\Promozioni\Pages\ListPromozioni;
 use App\Filament\God\Resources\Promozioni\Schemas\ModuloDellaPromozione;
 use App\Filament\Support\VoceDiScheda;
+use App\Jobs\AvvisaLaPromozioneATutti;
 use App\Jobs\ConsegnaLaPromozioneATutti;
 use App\Models\Promozione;
 use App\Services\Promozioni\ChiLaRiceve;
@@ -262,6 +263,28 @@ class PromozioneResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Chiudi')
                     ->modalContent(fn (Promozione $p): HtmlString => self::anteprima($p)),
+
+                /*
+                 * 🆕 📣 P8 — **«Avvisa i destinatari»**: per gli sconti e le
+                 * offerte col link, che non «arrivano» a nessuno da sole. Solo se
+                 * la promozione ha almeno un canale.
+                 */
+                Action::make('avvisa')
+                    ->button()
+                    ->outlined()
+                    ->label('Avvisa i destinatari')
+                    ->icon('heroicon-m-megaphone')
+                    ->color('gray')
+                    ->visible(fn (Promozione $p): bool => (array) $p->avviso !== [] && $p->eSpendibile())
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (Promozione $p): string => "Avvisare chi può usare «{$p->nome}»?")
+                    ->modalDescription('Parte a tutte le persone che la promozione prende oggi (vedi «Anteprima»), coi canali scelti. Mandarlo due volte vuol dire due avvisi.')
+                    ->modalSubmitActionLabel('Avvisa')
+                    ->action(function (Promozione $p): void {
+                        AvvisaLaPromozioneATutti::dispatch($p->getKey());
+
+                        Notification::make()->title('Avviso partito')->success()->send();
+                    }),
 
                 Action::make('sospendi')
                     ->button()

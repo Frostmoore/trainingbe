@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
 use App\Http\Controllers\Api\V1\Nutrition\TraslocoDelDiarioController;
 use App\Http\Controllers\Api\V1\PasswordDimenticataController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\PromozioniController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\TrainerController;
 use App\Http\Controllers\Api\V1\Training\CalendarController;
@@ -616,6 +617,15 @@ Route::prefix('v1')->group(function (): void {
         Route::get('billing/listino', [BillingController::class, 'listino']);
         Route::post('billing/checkout', [BillingController::class, 'checkout'])
             ->middleware('throttle:10,1');
+
+        /*
+         * 🆕 🎁 P8 di plan_promozioni.md — le offerte nell'app, «Hai un codice?» e
+         * il riscatto dei regali. ⚠️ `verifica` e `riscatta` sotto un tetto
+         * stretto: senza, sono il modo più comodo per provare codici a tappeto.
+         */
+        Route::get('promozioni', [PromozioniController::class, 'index']);
+        Route::post('promozioni/verifica', [PromozioniController::class, 'verifica'])->middleware('throttle:10,1');
+        Route::post('promozioni/{codice}/riscatta', [PromozioniController::class, 'riscatta'])->middleware('throttle:10,1');
 
         // 🔁 Disdetta, carta, ricevute: si va da Stripe. Vedi `Cassa::portale`.
         Route::post('billing/portale', [BillingController::class, 'portale'])

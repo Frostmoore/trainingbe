@@ -182,6 +182,20 @@ Route::get('/{quale}', [SitoController::class, 'documento'])
 | (nome, email, password); e un `GET` che consumasse l'invito lo brucerebbe al
 | primo servizio di messaggistica che apre il link per fare l'anteprima.
 */
+/*
+| 🆕 🤝 «Porta un amico» e 🎁 le offerte pubbliche — P8 di plan_promozioni.md.
+|
+| ⚠️ `/amico/{codice}` è un GET che non collega niente (come gli inviti): il
+| collegamento lo fa l'app dopo l'iscrizione. Codice vincolato a 8 caratteri
+| alfanumerici, come lo genera `User::codiceAmico()`.
+*/
+Route::get('/amico/{codice}', [SitoController::class, 'amico'])
+    ->where('codice', '[A-Za-z0-9]{8}')
+    ->middleware('throttle:30,1')
+    ->name('sito.amico');
+
+Route::get('/offerte', [SitoController::class, 'offerte'])->name('sito.offerte');
+
 Route::get('/invito/{token}', [SitoController::class, 'invito'])
     ->where('token', '[A-Za-z0-9]{32}')
     ->name('sito.invito');

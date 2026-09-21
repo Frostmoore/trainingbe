@@ -53,8 +53,8 @@ enum ComeSiAttiva: string
     public function costruito(): bool
     {
         // 🆕 P2 — `massa`, con i regali.
-        // 🆕 P6 — `evento`.
-        return in_array($this, [self::Automatica, self::Link, self::Massa, self::Evento], true);
+        // 🆕 P8 — tutte: anche `codice`, col campo «Hai un codice?» al pagamento.
+        return true;
     }
 
     /** Si spende solo presentando il codice (a mano o dal link). */

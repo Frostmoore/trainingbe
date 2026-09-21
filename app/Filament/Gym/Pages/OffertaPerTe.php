@@ -7,8 +7,8 @@ namespace App\Filament\Gym\Pages;
 use App\Enums\SuCosaVale;
 use App\Models\Promozione;
 use App\Services\Billing\LePromozioni;
-use App\Services\Promozioni\ChiLaRiceve;
 use App\Services\Promozioni\ConsegnaDeiPremi;
+use App\Services\Promozioni\LeOfferteDellaPersona;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
@@ -93,35 +93,14 @@ class OffertaPerTe extends Page
      */
     public function motivo(): ?string
     {
-        if (blank($this->codice)) {
-            return 'Questo indirizzo non porta a nessuna offerta.';
-        }
-
-        if ($this->offerta() !== null) {
-            return null;
-        }
-
-        $promozione = Promozione::query()->with('bersagli')->where('codice', mb_strtoupper(trim($this->codice)))->first();
-
-        if ($promozione === null) {
-            return 'Questo indirizzo non porta a nessuna offerta.';
-        }
-
-        /*
-         * 🆕 P2 — **«L'hai già ricevuta» non è «non è per te»**: chi ha già
-         * riscattato un regalo e riapre il link deve leggere la cosa vera.
-         */
         $utente = auth()->user();
 
-        if ($promozione->perchePiuNonVale() === null
-            && $utente !== null
-            && app(ChiLaRiceve::class)->prende($promozione, $utente)
-            && ! $promozione->laPuoPrendereAncora($utente)) {
-            return 'Hai già ricevuto questa offerta.';
+        if ($utente === null || blank($this->codice)) {
+            return 'Questo indirizzo non porta a nessuna offerta.';
         }
 
-        return $promozione->perchePiuNonVale()
-            ?? 'Questa offerta non è per il tuo account.';
+        // 🆕 P8 — la stessa regola dell'app: `LeOfferteDellaPersona::perche()`.
+        return app(LeOfferteDellaPersona::class)->perche((string) $this->codice, $utente);
     }
 
     /**
@@ -182,8 +161,13 @@ class OffertaPerTe extends Page
             return collect();
         }
 
+        /*
+         * 🆕 P8 — le automatiche di sempre, **più** quelle che la promozione dice
+         * di mostrare nel pannello (`visibile_in`) e quelle già sue in sospeso.
+         */
         return collect(SuCosaVale::cases())
             ->flatMap(fn (SuCosaVale $cosa) => app(LePromozioni::class)->automaticheDi($utente, $cosa))
+            ->merge(app(LeOfferteDellaPersona::class)->per($utente, 'pannello'))
             ->unique('id')
             ->values();
     }

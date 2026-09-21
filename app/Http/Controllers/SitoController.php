@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\TrainerInvite;
+use App\Models\User;
 use App\Services\Billing\Listino;
+use App\Services\Promozioni\LeOfferteDellaPersona;
 use App\Services\Tenancy\InvitiInPalestra;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
@@ -254,6 +256,41 @@ class SitoController extends Controller
      * 💡 E il token **non si mostra** nella pagina: viaggia già nell'URL, e
      * ripeterlo nel corpo lo farebbe finire negli screenshot.
      */
+    /**
+     * 🆕 🤝 **«Porta un amico», per chi non ha l'app** — P8 di `plan_promozioni.md`.
+     *
+     * 💡 Come gli inviti: con l'app installata il link apre l'app (App Links),
+     * e qui arriva chi non ce l'ha. Si dice **chi** l'ha invitato (il nome, non
+     * l'email) e il codice da scrivere dopo l'iscrizione.
+     *
+     * 🚨 `GET` e non collega niente: il collegamento lo fa l'app, dopo
+     * l'iscrizione, con `POST /api/v1/account/amico`.
+     */
+    public function amico(string $codice): View
+    {
+        $chi = User::withoutGlobalScopes()->where('codice_amico', mb_strtoupper($codice))->first();
+
+        return view('sito.amico', [
+            'valido' => $chi !== null,
+            'nome' => $chi !== null ? Str::before((string) $chi->name, ' ') : null,
+            'codice' => mb_strtoupper($codice),
+        ]);
+    }
+
+    /**
+     * 🆕 🎁 **Le offerte pubbliche** — P8 (opzione 38).
+     *
+     * ⚠️ Solo quelle «per tutti», senza condizioni e con `sito` fra i posti in
+     * cui si vedono: una promozione mirata qui sarebbe una promessa a chi non
+     * la può avere (`LeOfferteDellaPersona::pubbliche()`).
+     */
+    public function offerte(): View
+    {
+        return view('sito.offerte', [
+            'offerte' => app(LeOfferteDellaPersona::class)->pubbliche(),
+        ]);
+    }
+
     public function invito(string $token): View
     {
         $invito = TrainerInvite::withoutGlobalScopes()->where('token', $token)->first();

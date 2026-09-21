@@ -88,7 +88,10 @@ class PianiInVendita
      *
      * @throws InvalidArgumentException con un messaggio da mostrare
      */
-    public function apri(User $utente, string $codice, ?string $tornaA = null): string
+    /**
+     * @param  ?string  $promozione  🆕 P8 di `plan_promozioni.md` — il codice di una promozione scritto al pagamento
+     */
+    public function apri(User $utente, string $codice, ?string $tornaA = null, ?string $promozione = null): string
     {
         $piano = Plan::query()->pubblici()->where('code', $codice)->first();
 
@@ -110,7 +113,7 @@ class PianiInVendita
 
         return $piano->aConsumo()
             ? $this->apriIlConsumo($utente, $tenant, $piano, $tornaA)
-            : $this->apriIlCanone($utente, $tenant, $piano, $tornaA);
+            : $this->apriIlCanone($utente, $tenant, $piano, $tornaA, promozione: $promozione);
     }
 
     /**
@@ -205,6 +208,7 @@ class PianiInVendita
         Plan $piano,
         ?string $tornaA,
         ?OffertaDiPiano $offerta = null,
+        ?string $promozione = null,
     ): string {
         if ($piano->eGratuito()) {
             throw new InvalidArgumentException('Questo piano non si paga.');
@@ -221,7 +225,8 @@ class PianiInVendita
          * scontare ogni rinnovo per sempre è una decisione da prendere una
          * promozione alla volta, non il default di un metodo.
          */
-        $sconto = $this->sconti->perIlCheckout($utente, SuCosaVale::Canone, (int) $piano->price_cents, planId: $piano->getKey());
+        // 🆕 P8 — col codice scritto al pagamento, se c'è.
+        $sconto = $this->sconti->perIlCheckout($utente, SuCosaVale::Canone, (int) $piano->price_cents, $promozione, planId: $piano->getKey());
 
         $meta['promozioni'] = $this->sconti->perIMetadata($sconto['promozioni']);
 
