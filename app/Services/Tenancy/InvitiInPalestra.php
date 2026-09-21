@@ -348,6 +348,22 @@ class InvitiInPalestra
              */
             'palestra' => $palestra->branding(),
             'descrizione' => $this->descrizioneDi($palestra),
+
+            /*
+             * 🆕 🖼️ 📍 **La testata e l'indirizzo** — 23/09/2026, F6.2.
+             *
+             * 📌 *«mettiamoci anche un'immagine di testata (si dovrà vedere
+             * nell'app)»* · *«serve anche l'indirizzo preciso (con cap
+             * provincia e tutto)»*.
+             *
+             * 💡 **Qui e non (solo) nel catalogo**, perché è qui che oggi una
+             * persona incontra la scheda di una palestra: il catalogo, ha detto
+             * il committente, *«proprio non esiste ancora»*.
+             *
+             * ⚠️ Campi **in più**, non al posto di niente: un'app vecchia che
+             * non li conosce continua a mostrare l'invito come prima.
+             */
+            ...$this->schedaDi($palestra),
             'cosa_ottieni' => $this->cosaOttieni->per($palestra, $invito->ruolo ?? UserRole::Member),
 
             /*
@@ -581,6 +597,32 @@ class InvitiInPalestra
      * a chi invito io»*. 💡 Qui la palestra **sta scegliendo** di presentarsi a
      * quella persona: e' lei che ha generato il link.
      */
+    /**
+     * 🖼️ 📍 Testata, indirizzo e collegamento alle mappe della palestra — F6.2.
+     *
+     * ⚠️ Letti **anche se il profilo non è `visibile`**, per la stessa ragione
+     * della descrizione qui sotto: è la palestra che ha scelto di presentarsi a
+     * questa persona, generando il link.
+     *
+     * @return array{immagine_testata: ?string, indirizzo: ?string, mappa: ?string}
+     */
+    private function schedaDi(Tenant $palestra): array
+    {
+        $scheda = $this->context->runWithoutTenant(
+            fn (): ?ProfiloPubblico => ProfiloPubblico::query()
+                ->with('comune')
+                ->where('tenant_id', $palestra->id)
+                ->whereNull('user_id')
+                ->first(),
+        );
+
+        return [
+            'immagine_testata' => $scheda?->testataUrl(),
+            'indirizzo' => $scheda?->indirizzoPerEsteso(),
+            'mappa' => $scheda?->mappaUrl(),
+        ];
+    }
+
     private function descrizioneDi(Tenant $palestra): ?string
     {
         return $this->context->runWithoutTenant(

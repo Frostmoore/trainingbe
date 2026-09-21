@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -98,6 +99,8 @@ class ContoDegliIscritti
                 ->where('u.is_active', true)
                 ->where('mhr.model_type', (new User)->getMorphClass())
                 ->where('r.name', $ruolo->value)
+                // ✂️ Vedi `quanti()`: chi è senza abbonamento non occupa un posto.
+                ->whereNotExists(fn ($q) => $this->senzaAbbonamento($q))
                 ->groupBy('mhr.tenant_id')
                 ->selectRaw('mhr.tenant_id, COUNT(DISTINCT mhr.model_id) as quanti')
                 ->pluck('quanti', 'mhr.tenant_id')
@@ -124,8 +127,42 @@ class ContoDegliIscritti
                 ->where('mhr.tenant_id', $palestra->getKey())
                 ->where('mhr.model_type', (new User)->getMorphClass())
                 ->where('r.name', $ruolo->value)
+
+                /*
+                 * 🆕 ✂️ **Chi è senza abbonamento non occupa un posto** —
+                 * 23/09/2026, F5.
+                 *
+                 * 📌 *«mi serve il tasto per togliere l'abbonamento
+                 * all'allievo»*. 💡 È il motivo per cui una palestra lo toglie:
+                 * smettere di pagare per quella persona. ⛔ Un iscritto senza
+                 * abbonamento che continua a costare sarebbe il peggiore dei
+                 * due mondi.
+                 *
+                 * 🚨 **Questo numero finisce in fattura** sui piani a consumo,
+                 * e decide i posti liberi per gli inviti: la regola deve stare
+                 * **qui**, dove la leggono entrambi, e in `perOgniPalestra()`
+                 * identica — o il pannello dice un numero e la fattura un altro.
+                 */
+                ->whereNotExists(fn ($q) => $this->senzaAbbonamento($q))
                 ->distinct()
                 ->count('mhr.model_id'),
         );
+    }
+
+    /**
+     * ✂️ La sottoquery «questa persona, in questa palestra, è senza
+     * abbonamento adesso».
+     *
+     * 💡 Scritta una volta e usata dai due conti: il giorno che cambia, cambia
+     * per tutti e due.
+     *
+     * @param  Builder  $q
+     */
+    private function senzaAbbonamento($q): void
+    {
+        $q->from('abbonamenti_tolti as at')
+            ->whereColumn('at.user_id', 'mhr.model_id')
+            ->whereColumn('at.tenant_id', 'mhr.tenant_id')
+            ->whereNull('at.al');
     }
 }

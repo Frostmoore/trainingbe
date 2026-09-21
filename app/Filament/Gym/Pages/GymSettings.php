@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Pages;
 
-use App\Enums\AuditAction;
 use App\Models\Tenant;
-use App\Services\Audit\AuditLogger;
+use App\Support\Fatturazione\ControlliFiscali;
 use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -16,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Contracts\Support\Htmlable;
@@ -61,6 +61,9 @@ class GymSettings extends Page
 
             // 💶 F5.1 — la quota che la palestra fa ai suoi (D9).
             'prezzo_per_allievo_cent',
+
+            // 🧾 F6.4 — i dati per le fatture.
+            ...self::CAMPI_FISCALI,
         ]) ?? []);
     }
 
@@ -121,6 +124,110 @@ class GymSettings extends Page
                                 : null),
                     ]),
 
+                /*
+                 * ══ 🧾 I DATI PER LE FATTURE — 23/09/2026, F6.4 ═════════════
+                 *
+                 * 📌 Il committente: *«servono tutte le info per la
+                 * fatturazione (p.iva, pec, codice SDI, nome legale, sede
+                 * legale)»*.
+                 *
+                 * 🚨 **Sono i campi del `CessionarioCommittente` della
+                 * FatturaPA**, uno per uno: senza, la fattura XML (F8) non è
+                 * valida. ⚠️ E si controllano **qui**, mentre la persona sta
+                 * scrivendo: noi non trasmettiamo allo SDI (D2), quindi una
+                 * partita IVA sbagliata si scoprirebbe settimane dopo, allo
+                 * scarto — vedi `ControlliFiscali`.
+                 *
+                 * 💡 **«Nome legale» è diverso dal nome della palestra**: «Palestra
+                 * Olimpia» è il nome che vedono gli iscritti, «Olimpia Sport SSD
+                 * a r.l.» è quello che va in fattura.
+                 */
+                Section::make('Dati per le fatture')
+                    ->description('Vanno sulle fatture che ti mandiamo. Il nome e la sede sono quelli legali, non quelli della palestra.')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('fatt_ragione_sociale')
+                            ->label('Nome legale (ragione sociale)')
+                            ->maxLength(160)
+                            ->columnSpanFull(),
+
+                        TextInput::make('fatt_partita_iva')
+                            ->label('Partita IVA')
+                            ->maxLength(20)
+                            ->dehydrateStateUsing(fn (?string $state): ?string => filled($state)
+                                ? ControlliFiscali::pulisci($state)
+                                : null)
+                            ->rule(fn (Get $get): \Closure => function (string $attributo, mixed $valore, \Closure $fallisci) use ($get): void {
+                                if (filled($valore) && ! ControlliFiscali::partitaIva((string) $valore, (string) ($get('fatt_nazione') ?: 'IT'))) {
+                                    $fallisci('Questa partita IVA non torna: controlla di non aver invertito due cifre.');
+                                }
+                            }),
+
+                        TextInput::make('fatt_codice_fiscale')
+                            ->label('Codice fiscale')
+                            ->maxLength(20)
+                            ->helperText('Solo se è diverso dalla partita IVA (per esempio in una ditta individuale).')
+                            ->dehydrateStateUsing(fn (?string $state): ?string => filled($state)
+                                ? ControlliFiscali::pulisci($state)
+                                : null)
+                            ->rule(fn (): \Closure => function (string $attributo, mixed $valore, \Closure $fallisci): void {
+                                if (filled($valore) && ! ControlliFiscali::codiceFiscale((string) $valore)) {
+                                    $fallisci('Un codice fiscale ha 11 cifre (un\'impresa) o 16 caratteri (una persona).');
+                                }
+                            }),
+
+                        TextInput::make('fatt_indirizzo')
+                            ->label('Sede legale: via e numero')
+                            ->maxLength(200)
+                            ->columnSpanFull(),
+
+                        TextInput::make('fatt_cap')->label('CAP')->maxLength(12),
+
+                        TextInput::make('fatt_comune')->label('Comune')->maxLength(120),
+
+                        TextInput::make('fatt_provincia')
+                            ->label('Provincia (sigla)')
+                            ->maxLength(2)
+                            ->helperText('Due lettere, solo in Italia: RM, MI, VT.')
+                            ->dehydrateStateUsing(fn (?string $state): ?string => filled($state) ? strtoupper($state) : null),
+
+                        TextInput::make('fatt_nazione')
+                            ->label('Nazione')
+                            ->default('IT')
+                            ->maxLength(2)
+                            ->helperText('Il codice di due lettere: IT, CH, DE.')
+                            ->dehydrateStateUsing(fn (?string $state): string => strtoupper($state ?: 'IT')),
+
+                        /*
+                         * 📬 **Codice SDI oppure PEC, e il modulo lo sa.**
+                         *
+                         * 💡 `0000000` vuol dire «non ho un codice: mandatela
+                         * alla PEC». ⛔ Chi lo usa senza dare la PEC produce
+                         * una fattura che non può arrivare da nessuna parte —
+                         * la regola sta qui sotto, dove si vedono tutti e due i
+                         * campi insieme.
+                         */
+                        TextInput::make('fatt_codice_sdi')
+                            ->label('Codice destinatario (SDI)')
+                            ->maxLength(7)
+                            ->helperText('Sette caratteri. Se non ce l\'hai scrivi 0000000 e compila la PEC.')
+                            ->dehydrateStateUsing(fn (?string $state): ?string => filled($state)
+                                ? ControlliFiscali::pulisci($state)
+                                : null)
+                            ->rule(fn (): \Closure => function (string $attributo, mixed $valore, \Closure $fallisci): void {
+                                if (filled($valore) && ! ControlliFiscali::codiceSdi((string) $valore)) {
+                                    $fallisci('Il codice SDI ha sette caratteri, lettere e numeri.');
+                                }
+                            }),
+
+                        TextInput::make('fatt_pec')
+                            ->label('PEC')
+                            ->email()
+                            ->maxLength(255)
+                            ->required(fn (Get $get): bool => ControlliFiscali::pulisci((string) $get('fatt_codice_sdi')) === '0000000')
+                            ->validationMessages(['required' => 'Con il codice 0000000 serve la PEC: è l\'unico posto dove può arrivare la fattura.']),
+                    ]),
+
                 Section::make('Aspetto nell\'app')
                     ->description('E\' quello che vedono i tuoi iscritti quando aprono l\'app.')
                     ->columns(3)
@@ -165,59 +272,39 @@ class GymSettings extends Page
                 ->submit('save'),
 
             /*
-             * 🚨 Rigenerare il codice invalida quello gia' distribuito.
+             * ⛔ **Via «rigenera codice d'invito»** — 23/09/2026, F6.4.
              *
-             * E' l'azione che serve quando il codice e' finito dove non doveva —
-             * un volantino, una chat di gruppo — e per questo esiste; ma chi non
-             * si e' ancora iscritto con il vecchio resta fuori, quindi va
-             * chiesta conferma e va lasciata traccia.
+             * 📌 *«rigenera codice d'invito toglilo, non esiste più il codice
+             * d'invito»*. L'ingresso in palestra è solo il link d'invito, che è
+             * monouso e si revoca uno per uno; il codice, che entrava infinite
+             * volte, sparisce del tutto in F11.
              */
-            Action::make('rigenera_codice')
-                ->label('Rigenera codice d\'invito')
-                ->icon('heroicon-m-arrow-path')
-                ->color('danger')
-                ->requiresConfirmation()
-                ->modalHeading('Rigenerare il codice d\'invito?')
-                ->modalDescription(
-                    'Il codice attuale smettera\' di funzionare. Chi lo ha gia\' ricevuto e non si e\' '
-                    .'ancora iscritto non potra\' piu\' usarlo.'
-                )
-                ->action(function (): void {
-                    $palestra = $this->palestra();
-
-                    if ($palestra === null) {
-                        return;
-                    }
-
-                    $this->authorize('update', $palestra);
-
-                    $vecchio = $palestra->join_code;
-                    $palestra->update(['join_code' => Tenant::generateJoinCode()]);
-
-                    app(AuditLogger::class)->log(
-                        AuditAction::JoinCodeRegenerated,
-                        $palestra,
-                        ['precedente' => $vecchio],
-                        tenant: $palestra,
-                    );
-
-                    Notification::make()
-                        ->title('Nuovo codice: '.$palestra->join_code)
-                        ->warning()
-                        ->persistent()
-                        ->send();
-                }),
         ];
     }
 
+    /**
+     * ⛔ **Il sottotitolo col codice d'invito non c'è più** — F6.4.
+     *
+     * Mostrava il `join_code`: una chiave che entrava infinite volte, e che il
+     * committente ha tolto da tutto (F11).
+     */
     public function getSubheading(): string|Htmlable|null
     {
-        $palestra = $this->palestra();
-
-        return $palestra !== null
-            ? 'Codice d\'invito attuale: '.$palestra->join_code
-            : null;
+        return null;
     }
+
+    /**
+     * 🧾 I campi della FatturaPA che la palestra compila da sé — F6.4.
+     *
+     * 💡 Elencati una volta, e usati per riempire e per salvare: ⛔ due elenchi
+     * scritti a mano divergono, e il campo dimenticato nel secondo si
+     * scoprirebbe su una fattura senza partita IVA.
+     */
+    private const CAMPI_FISCALI = [
+        'fatt_ragione_sociale', 'fatt_partita_iva', 'fatt_codice_fiscale',
+        'fatt_indirizzo', 'fatt_cap', 'fatt_comune', 'fatt_provincia',
+        'fatt_nazione', 'fatt_codice_sdi', 'fatt_pec',
+    ];
 
     private function palestra(): ?Tenant
     {

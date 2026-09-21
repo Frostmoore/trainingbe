@@ -62,6 +62,19 @@ class ImportaComuni extends Command
      */
     private const QUANTI = 1000;
 
+    /**
+     * 🆕 🇮🇹 **Questo comando carica l'Italia, e solo l'Italia** — F6.1.
+     *
+     * 📌 Dal 23/09/2026 `comuni` è mondiale, ma le due fonti restano separate:
+     * l'ISTAT per l'Italia (che sa il CAP e la sigla di provincia) e GeoNames
+     * per il resto (`comuni:importa-mondo`).
+     *
+     * 🚨 La costante esiste perché questo valore compare in **cinque** punti di
+     * questo file, e uno di quei cinque — lo spegnimento — se si dimentica
+     * cancella duecentomila città.
+     */
+    private const PAESE = 'IT';
+
     public function handle(ChiaveComune $chiavi): int
     {
         $file = (string) ($this->option('file') ?: database_path('data/comuni.jsonl'));
@@ -113,6 +126,15 @@ class ImportaComuni extends Command
 
             $righe[] = [
                 'codice' => (string) $d['c'],
+
+                /*
+                 * 🆕 🇮🇹 **`IT` esplicito** — 23/09/2026, fase F6.1.
+                 *
+                 * ⚠️ La colonna ha `default('IT')`, quindi funzionerebbe anche
+                 * senza. ⛔ Ma `upsert` aggiorna righe che **esistono già**, e
+                 * su quelle il default non c'entra niente: bisogna scriverlo.
+                 */
+                'paese' => self::PAESE,
                 'nome' => $nome,
                 'nome_altro' => $altro,
                 'chiave' => $chiavi->da($nome),
@@ -141,13 +163,13 @@ class ImportaComuni extends Command
         }
 
         if ($secco) {
-            $adesso = Comune::query()->count();
+            $adesso = Comune::query()->where('paese', self::PAESE)->count();
             $this->info('Prova a secco: scriverei '.count($righe)." comuni (adesso in banca dati: {$adesso}).");
 
             return self::SUCCESS;
         }
 
-        $prima = Comune::query()->count();
+        $prima = Comune::query()->where('paese', self::PAESE)->count();
 
         foreach (array_chunk($righe, self::QUANTI) as $blocco) {
             /*
@@ -158,7 +180,16 @@ class ImportaComuni extends Command
              */
             Comune::query()->upsert(
                 $blocco,
-                ['codice'],
+
+                /*
+                 * 🆕 🌍 **`(paese, codice)`, non più `codice` da solo** — F6.1.
+                 *
+                 * ⛔ Da quando la tabella è mondiale, il codice ISTAT `001001`
+                 * e un geonameid sono numeri di due mondi diversi: nulla vieta
+                 * che coincidano, e l'`upsert` sovrascriverebbe una città
+                 * dall'altra parte del pianeta.
+                 */
+                ['paese', 'codice'],
                 [
                     'nome', 'nome_altro', 'chiave', 'chiave_altro',
                     'provincia', 'provincia_nome', 'regione', 'cap', 'popolazione',
@@ -177,15 +208,27 @@ class ImportaComuni extends Command
          * file.
          */
         $spenti = Comune::query()
+            /*
+             * 🆕 🚨 **SOLO L'ITALIA** — 23/09/2026, fase F6.1.
+             *
+             * ⛔ Senza questa riga, il primo `comuni:importa` dopo essere
+             * diventati mondiali **spegnerebbe duecentomila città del resto
+             * del mondo**: non sono nel file ISTAT, quindi risulterebbero «non
+             * più nell'elenco».
+             *
+             * 🚨 E sarebbe un guasto silenzioso: nessun errore, solo un
+             * selettore che da domani conosce solo l'Italia.
+             */
+            ->where('paese', self::PAESE)
             ->where('attivo', true)
             ->where('updated_at', '<', $inizio)
             ->update(['attivo' => false]);
 
-        $dopo = Comune::query()->count();
+        $dopo = Comune::query()->where('paese', self::PAESE)->count();
         $nuovi = $dopo - $prima;
 
-        $province = DB::table('comuni')->distinct()->count('provincia');
-        $senzaCoord = Comune::query()->whereNull('lat')->count();
+        $province = DB::table('comuni')->where('paese', self::PAESE)->distinct()->count('provincia');
+        $senzaCoord = Comune::query()->where('paese', self::PAESE)->whereNull('lat')->count();
 
         $this->newLine();
         $this->info("Comuni in banca dati: {$dopo} (+{$nuovi} nuovi)");

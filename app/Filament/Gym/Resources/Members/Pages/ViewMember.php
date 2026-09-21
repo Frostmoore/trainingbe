@@ -6,6 +6,8 @@ namespace App\Filament\Gym\Resources\Members\Pages;
 
 use App\Enums\AuditAction;
 use App\Filament\Gym\Resources\Members\MemberResource;
+use App\Filament\Gym\Resources\Members\Widgets\LaStoriaDellIscritto;
+use App\Filament\Gym\Support\LAbbonamentoDellIscritto;
 use App\Filament\Support\MandaIlReset;
 use App\Models\PacchettoGettoni;
 use App\Models\User;
@@ -40,9 +42,24 @@ class ViewMember extends ViewRecord
              */
             MandaIlReset::perUtente(),
 
+            // ✂️ *«mi serve il tasto per togliere l'abbonamento all'allievo»*.
+            LAbbonamentoDellIscritto::make(),
+
             $this->regalaGettoni(),
             $this->sospendi(),
             $this->disiscrivi(),
+        ];
+    }
+
+    /**
+     * 📊 *«un grafico con gli abbonamenti nel tempo»* e *«un grafico con la
+     * revenue da quell'allievo nel tempo»* — F5.7. Stanno sotto la scheda:
+     * chi apre la pagina cerca prima un dato preciso.
+     */
+    protected function getFooterWidgets(): array
+    {
+        return [
+            LaStoriaDellIscritto::class,
         ];
     }
 
@@ -150,10 +167,20 @@ class ViewMember extends ViewRecord
             ->modalHeading(fn (User $record): string => $record->is_active
                 ? "Sospendere {$record->name}?"
                 : "Riattivare {$record->name}?")
+            /*
+             * 🚨 **Corretto il 23/09/2026: qui c'era scritta una cosa falsa.**
+             *
+             * ⛔ La frase diceva *«resta iscritto e continua a occupare un posto
+             * sul vostro piano»*. Non è vero: `ContoDegliIscritti` conta solo
+             * gli account **attivi**, quindi un iscritto sospeso **libera** il
+             * posto. 💡 L'ha fatto notare la rilettura delle richieste del
+             * committente, non un test — ed è il genere di frase che fa pagare
+             * a qualcuno un piano più grande di quello che gli serve.
+             */
             ->modalDescription(fn (User $record): string => $record->is_active
                 ? 'Non entrerà più nell\'app finché non lo riattivi, e le sessioni aperte si chiudono subito. '
-                  .'⚠️ Resta iscritto e continua a occupare un posto sul vostro piano: per liberarlo, disiscrivilo.'
-                : 'Tornerà a entrare. Dovrà rifare l\'accesso.')
+                  .'Resta iscritto, ma mentre è sospeso non occupa un posto sul vostro piano.'
+                : 'Tornerà a entrare, e riprenderà a occupare un posto. Dovrà rifare l\'accesso.')
             ->action(function (User $record): void {
                 $spegnimento = $record->is_active;
 

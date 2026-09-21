@@ -73,6 +73,16 @@ class Tenant extends Model
          * fattura e non cambia nessun prezzo: serve solo al **loro** cruscotto.
          */
         'prezzo_per_allievo_cent',
+
+        /*
+         * 🆕 🧾 23/09/2026, F6.4 — i dati per le fatture, uno per uno i campi
+         * del `CessionarioCommittente` della FatturaPA. ⚠️ Prefisso `fatt_`:
+         * `name` è il nome **commerciale**, e senza prefisso prima o poi
+         * qualcuno lo metterebbe in fattura al posto della ragione sociale.
+         */
+        'fatt_ragione_sociale', 'fatt_partita_iva', 'fatt_codice_fiscale',
+        'fatt_indirizzo', 'fatt_cap', 'fatt_comune', 'fatt_provincia',
+        'fatt_nazione', 'fatt_codice_sdi', 'fatt_pec',
         // G2 — la quota in chiamate (D6/D7).
         'ai_monthly_calls_per_member', 'ai_monthly_photo_calls_per_member',
         /*
@@ -497,5 +507,44 @@ class Tenant extends Model
         } while (static::withTrashed()->where('slug', $slug)->exists());
 
         return $slug;
+    }
+
+    /**
+     * 🧾 **Ha i dati per ricevere una fattura?** — F6.4, F8.1.
+     *
+     * 🚨 È la domanda che si fa `LeFatture` prima di emettere: una fattura XML
+     * senza ragione sociale o senza sede **non è valida**, e lo SDI la
+     * scarterebbe. ⚠️ Mancando uno di questi, la fattura non si emette e il
+     * pannello dice cosa manca — invece di produrre un documento che sembra
+     * giusto e non lo è.
+     *
+     * 💡 Serve **la P.IVA o il codice fiscale**, non tutti e due; e serve **il
+     * codice SDI o la PEC**, non tutti e due.
+     *
+     * @return list<string> i campi che mancano, in parole
+     */
+    public function datiDiFatturazioneMancanti(): array
+    {
+        $mancano = [];
+
+        if (blank($this->fatt_ragione_sociale)) {
+            $mancano[] = 'il nome legale';
+        }
+
+        if (blank($this->fatt_partita_iva) && blank($this->fatt_codice_fiscale)) {
+            $mancano[] = 'la partita IVA o il codice fiscale';
+        }
+
+        if (blank($this->fatt_indirizzo) || blank($this->fatt_cap) || blank($this->fatt_comune)) {
+            $mancano[] = 'la sede legale (via, CAP e comune)';
+        }
+
+        $sdi = (string) $this->fatt_codice_sdi;
+
+        if ((blank($sdi) || $sdi === '0000000') && blank($this->fatt_pec)) {
+            $mancano[] = 'il codice SDI o la PEC';
+        }
+
+        return $mancano;
     }
 }

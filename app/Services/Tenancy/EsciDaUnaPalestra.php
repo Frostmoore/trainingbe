@@ -115,6 +115,18 @@ final class EsciDaUnaPalestra
          */
         'pagamenti_incassati',
 
+        /*
+         * 🆕 ✂️ **Gli abbonamenti tolti dalla palestra** — 23/09/2026, F5.
+         *
+         * 🚨 Restano alla palestra, e non per burocrazia: sono **la sua
+         * decisione** su quanto pagare, e servono a ricostruire la sua revenue
+         * e le sue fatture. ⛔ Se seguissero la persona nel tenant personale,
+         * lì direbbero *«senza abbonamento»* a chi lo spazio lo paga da sé — e
+         * `PianoAttivo::per()` lo metterebbe sul gratuito nel suo stesso
+         * spazio.
+         */
+        'abbonamenti_tolti',
+
         'addebiti_mensili',
         'ai_credit_movements',
         'ai_usage_logs',

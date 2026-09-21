@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\Members\Tables;
 
 use App\Enums\AuditAction;
+use App\Filament\Gym\Support\LAbbonamentoDellIscritto;
+use App\Filament\Support\MandaIlReset;
 use App\Filament\Support\VoceDiScheda;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Billing\AbbonamentiDegliIscritti;
 use App\Services\Tenancy\EsciDaUnaPalestra;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -114,6 +117,30 @@ class MembersTable
                         ->color(fn (bool $state): string => $state ? 'success' : 'danger')
                         ->sortable()),
 
+                    /*
+                     * ══ ✂️ L'ABBONAMENTO, E QUANTO HA RESO — 23/09/2026, F5 ══
+                     *
+                     * 📌 *«mi serve il tasto per togliere l'abbonamento
+                     * all'allievo»* e *«mi serve la revenue totale dall'allievo
+                     * (quindi prezzo fatto all'allievo meno costo dello slot
+                     * tutto per tutti i rinnovi dell'abbonamento pagati
+                     * dall'allievo)»*.
+                     *
+                     * ⚠️ **Il conto è quello di `AbbonamentiDegliIscritti`**, lo
+                     * stesso del grafico nella sua pagina: *«stessi criteri del
+                     * numero in pagina principale»*, ha detto il committente.
+                     */
+                    VoceDiScheda::make('Abbonamento', TextColumn::make('abbonamento')
+                        ->label('Abbonamento')
+                        ->badge()
+                        ->state(fn (User $r): string => self::abbonamenti()->haLAbbonamento($r) ? 'attivo' : 'tolto')
+                        ->color(fn (User $r): string => self::abbonamenti()->haLAbbonamento($r) ? 'success' : 'gray')),
+
+                    VoceDiScheda::make('Ti ha reso', TextColumn::make('revenue')
+                        ->label('Ti ha reso')
+                        ->state(fn (User $r): string => self::euro(self::abbonamenti()->revenueCent($r)))
+                        ->tooltip('Stima: (la tua quota − il costo di un posto) × i mesi in cui era abbonato.')),
+
                     VoceDiScheda::make('Iscritto il', TextColumn::make('created_at')
                         ->label('Iscritto il')
                         ->date('d/m/Y')
@@ -179,6 +206,14 @@ class MembersTable
                     ->label('Scheda')
                     ->button()
                     ->outlined(),
+
+                LAbbonamentoDellIscritto::make(),
+
+                /*
+                 * 🔑 *«mi serve un tasto per mandare il reset password»* — anche
+                 * dall'elenco, come ha chiesto il committente (F5.6).
+                 */
+                MandaIlReset::perUtente(),
             ])
             /*
              * 🆕 🚨 **«Disiscrivi», non «Elimina»** — D4, 19/09/2026.
@@ -227,5 +262,22 @@ class MembersTable
              * d'invito**: monouso, con scadenza, e revocabile uno per uno.
              */
             ->emptyStateDescription('Mandagli un link d\'invito: vale per una persona sola e scade dopo sette giorni.');
+    }
+
+    /**
+     * 💡 Un servizio solo per tutta la pagina: il margine per allievo è lo
+     * stesso per ogni riga, e ricalcolarlo a ogni card sono tre query in più per
+     * persona.
+     */
+    private static function abbonamenti(): AbbonamentiDegliIscritti
+    {
+        static $servizio = null;
+
+        return $servizio ??= app(AbbonamentiDegliIscritti::class);
+    }
+
+    private static function euro(?int $cent): string
+    {
+        return $cent === null ? '—' : number_format($cent / 100, 2, ',', '.').' €';
     }
 }

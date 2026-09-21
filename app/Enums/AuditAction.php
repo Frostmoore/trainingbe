@@ -132,6 +132,16 @@ enum AuditAction: string
      */
     case GettoniRegalatiDallaPalestra = 'tenant.gettoni_regalati';
 
+    /**
+     * 🆕 ✂️ **La palestra ha tolto (o ridato) l'abbonamento a un iscritto** — F5.
+     *
+     * 🚨 **Cambia quanto paga la palestra**: chi è senza abbonamento non occupa
+     * un posto, e su un piano a consumo la fattura scende. ⚠️ Resta scritto
+     * chi l'ha fatto e quando, perché è la domanda che si fa chi trova una
+     * fattura diversa da quella del mese prima.
+     */
+    case AbbonamentoDellIscritto = 'user.abbonamento_iscritto';
+
     public function label(): string
     {
         return match ($this) {
@@ -155,6 +165,7 @@ enum AuditAction: string
             self::PianoSuMisuraAssegnato => 'Piano su misura assegnato',
             self::ResetPasswordMandato => 'Link per la password mandato',
             self::GettoniRegalatiDallaPalestra => 'Gettoni regalati dalla palestra',
+            self::AbbonamentoDellIscritto => 'Abbonamento dell\'iscritto tolto o ridato',
         };
     }
 

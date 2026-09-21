@@ -9,6 +9,7 @@ use App\Models\PacchettoGettoni;
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\AbbonamentiDegliIscritti;
 use App\Services\Reporting\IContiDellaPalestra;
 use App\Support\Tenancy\TenantContext;
 use Filament\Infolists\Components\TextEntry;
@@ -110,7 +111,7 @@ class SchedaDellIscritto
              * è qui che ci si fa la domanda.
              */
             Section::make('Quanto ti rende')
-                ->columns(4)
+                ->columns(5)
                 ->description('Sono i numeri del tuo piano, uguali per ogni iscritto. La quota l\'hai scritta tu nelle Impostazioni.')
                 ->schema([
                     TextEntry::make('costo')
@@ -133,9 +134,23 @@ class SchedaDellIscritto
                      * non possiamo sapere — quei soldi non passano da qui.
                      */
                     TextEntry::make('da_quando')
-                        ->label('Da quando è qui, in tutto')
+                        ->label('Ti ha reso, in tutto')
                         ->state(fn (User $r): string => self::cumulato($r))
-                        ->helperText('Stima: quota × mesi da quando si è iscritto.'),
+                        ->helperText('Stima: (quota − costo del posto) × i mesi in cui era abbonato.'),
+
+                    /*
+                     * ✂️ **Se ha l'abbonamento adesso** — il tasto per
+                     * toglierlo sta in cima alla pagina.
+                     */
+                    TextEntry::make('abbonamento')
+                        ->label('Abbonamento')
+                        ->badge()
+                        ->state(fn (User $r): string => app(AbbonamentiDegliIscritti::class)->haLAbbonamento($r)
+                            ? 'attivo'
+                            : 'tolto')
+                        ->color(fn (User $r): string => app(AbbonamentiDegliIscritti::class)->haLAbbonamento($r)
+                            ? 'success'
+                            : 'gray'),
                 ]),
 
             Section::make('Gettoni')
@@ -184,17 +199,29 @@ class SchedaDellIscritto
      */
     private static function cumulato(User $iscritto): string
     {
-        $palestra = self::palestra();
-        $prezzo = $palestra === null ? null : self::conti()->prezzoPerAllievoCent($palestra);
+        /*
+         * 🚨 **Corretto il 23/09/2026: prima faceva un altro conto.**
+         *
+         * ⛔ Moltiplicava la **quota** (non il margine) per i mesi **dalla
+         * creazione dell'account** (non da quando è in palestra, né quelli in
+         * cui era abbonato). Tre sbagli insieme: diceva quanto l'iscritto aveva
+         * pagato, non quanto aveva reso, e contava mesi in cui non era nemmeno
+         * lì.
+         *
+         * 📌 Il committente: la revenue è *«prezzo fatto all'allievo meno costo
+         * dello slot tutto per tutti i rinnovi»*, e il grafico va fatto con gli
+         * *«stessi criteri del numero in pagina principale»*. ✅ Quindi il conto
+         * è quello di `AbbonamentiDegliIscritti`, e basta: lo stesso che
+         * scrive l'elenco e che disegna il grafico qui sotto.
+         */
+        $servizio = app(AbbonamentiDegliIscritti::class);
+        $revenue = $servizio->revenueCent($iscritto, self::palestra());
 
-        if ($prezzo === null || $iscritto->created_at === null) {
+        if ($revenue === null) {
             return '—';
         }
 
-        // 💡 `+1`: il mese in cui si è iscritto conta, anche se è iniziato ieri.
-        $mesi = $iscritto->created_at->diffInMonths(now()) + 1;
-
-        return self::euro((int) ($prezzo * $mesi))." · {$mesi} mesi";
+        return self::euro($revenue).' · '.$servizio->mesiCoperti($iscritto).' mesi abbonato';
     }
 
     /**

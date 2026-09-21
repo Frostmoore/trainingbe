@@ -13,9 +13,9 @@ use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
@@ -87,20 +87,23 @@ class SchedaPubblica extends Page
     {
         $scheda = $this->scheda();
 
-        $campagna = $this->campagna();
-
         $this->form->fill([
             'comune_id' => $scheda?->comune_id ?? auth()->user()?->comune_id,
+            'indirizzo' => $scheda?->indirizzo,
+            'cap' => $scheda?->cap,
             'titolo' => $scheda?->titolo ?? ($this->eUnTrainerIndipendente()
                 ? auth()->user()?->name
                 : $this->palestra()?->name),
             'descrizione' => $scheda?->descrizione,
-            'visibile' => $scheda?->visibile ?? false,
-            'campagna_attiva' => $campagna?->attiva ?? false,
-            'budget_mensile_euro' => $campagna !== null
-                ? $campagna->budget_mensile_cent / 100
-                : $this->budgetMinimoEuro(),
         ]);
+
+        /*
+         * 🖼️ La testata si carica a parte: è un file della media library, e il
+         * campo del modulo la legge dal modello, non da un array.
+         */
+        if ($scheda !== null) {
+            $this->form->model($scheda);
+        }
     }
 
     public function form(Schema $schema): Schema
@@ -113,11 +116,43 @@ class SchedaPubblica extends Page
                     ->description('E\' quello che vedono le persone che cercano una palestra nella tua zona.')
                     ->columns(2)
                     ->schema([
+                        /*
+                         * 🏷️ **«Nome pubblico», non «Titolo»** — F6.3 (A4).
+                         *
+                         * 📌 *«Titolo cambiamolo in nome pubblico»* · *«nome
+                         * pubblico è il nome che usa la palestra nell'app,
+                         * quindi sì»*.
+                         *
+                         * ⚠️ La colonna resta `titolo`: una migrazione per
+                         * un'etichetta è lavoro sprecato, e l'API la chiama
+                         * già così.
+                         */
                         TextInput::make('titolo')
-                            ->label('Titolo')
+                            ->label('Nome pubblico')
                             ->required()
                             ->maxLength(120)
-                            ->helperText('Il nome con cui vuoi comparire.'),
+                            ->helperText('Il nome con cui compari nell\'app, che può essere diverso da quello legale.'),
+
+                        /*
+                         * 🖼️ **L'immagine di testata** — F6.2 (A2).
+                         *
+                         * 📌 *«mettiamoci anche un'immagine di testata (si
+                         * dovrà vedere nell'app)»*. 💡 Si vede nella pagina
+                         * dell'**invito**: è lì che oggi una persona incontra
+                         * la scheda pubblica di una palestra, prima ancora di
+                         * entrarci.
+                         *
+                         * ⛔ **Niente `->imageEditor()`**: uccide il JavaScript
+                         * della pagina al salvataggio e «Salva» smette di fare
+                         * qualunque cosa, in silenzio (fase F0, atlante §106.3).
+                         */
+                        SpatieMediaLibraryFileUpload::make('testata')
+                            ->label('Immagine di testata')
+                            ->collection(ProfiloPubblico::COLLECTION_TESTATA)
+                            ->image()
+                            ->maxSize(4096)
+                            ->helperText('Una foto larga della sala: compare in cima alla pagina con cui inviti le persone.')
+                            ->columnSpanFull(),
 
                         /*
                          * 🚨 Il comune si **cerca**, non si scrive.
@@ -138,7 +173,34 @@ class SchedaPubblica extends Page
                                 ->mapWithKeys(fn (Comune $c): array => [$c->id => $c->esteso()])
                                 ->all())
                             ->getOptionLabelUsing(fn ($value): ?string => Comune::find($value)?->esteso())
-                            ->helperText('Serve a farti trovare da chi cerca vicino a se\'.'),
+                            /*
+                             * 🌍 F6.1 — **tutte le città del mondo**. 📌 *«Dove
+                             * sei deve essere una repository di tutti i comuni
+                             * del mondo, ovviamente»*.
+                             */
+                            ->helperText('Qualunque città, in qualunque paese. Scrivi l\'inizio del nome.'),
+
+                        /*
+                         * 📍 **L'indirizzo preciso** — F6.2 (A3).
+                         *
+                         * 📌 *«serve anche l'indirizzo preciso (con cap
+                         * provincia e tutto)»*. 💡 Città, provincia e paese
+                         * vengono già dal campo qui sopra: qui si scrive solo
+                         * quello che il comune non sa — la via e il CAP.
+                         *
+                         * ⚠️ **Il CAP si chiede, non si copia dal comune**:
+                         * quello è il **primo** CAP della città, e Roma ne ha
+                         * più di cento. Vedi la migrazione.
+                         */
+                        TextInput::make('indirizzo')
+                            ->label('Via e numero')
+                            ->maxLength(200)
+                            ->placeholder('Via Roma, 12'),
+
+                        TextInput::make('cap')
+                            ->label('CAP')
+                            ->maxLength(12)
+                            ->helperText('Quello della tua via: una città grande ne ha molti.'),
 
                         Textarea::make('descrizione')
                             ->label('Descrizione')
@@ -149,60 +211,30 @@ class SchedaPubblica extends Page
                     ]),
 
                 /*
-                 * 📣 La campagna — M5.6 e M5.7.
+                 * ══ ⛔ VIA «FARTI TROVARE PER PRIMO» E «MOSTRA NEL CATALOGO» ══
                  *
-                 * 💡 Sta nella **stessa pagina** della scheda invece che in una
-                 * sua: chi decide di farsi pubblicita' sta guardando come si
-                 * presenta, e sono la stessa decisione commerciale vista da due
-                 * lati. ⚠️ Una pagina a parte avrebbe voluto dire che si puo'
-                 * accendere una campagna senza mai guardare la scheda che
-                 * promuove.
+                 * 📌 Il committente, 21/09/2026: *«fatti trovare per primo
+                 * togliamolo, al momento non esiste (al massimo lo aggiungeremo
+                 * in futuro)»* · *«Mostra la mia scheda nel catalogo idem»*. E
+                 * sul sito, prima ancora: *«proprio non esiste ancora un
+                 * catalogo»*.
+                 *
+                 * 🚨 **Erano due interruttori che non accendevano niente.** Il
+                 * catalogo pubblico non è ancora un posto in cui le persone
+                 * cercano una palestra: una campagna a pagamento per comparirci
+                 * per prima avrebbe fatto spendere soldi veri per una
+                 * visibilità che non c'è.
+                 *
+                 * ⚠️ **Le tabelle restano** (`campagne`, `profili_pubblici.
+                 * visibile`), e non è dimenticanza: «al massimo lo aggiungeremo
+                 * in futuro». 💡 Rimettere due campi in un modulo è un'ora;
+                 * ricostruire lo schema e i test che ci stanno dietro sarebbe
+                 * una fase intera.
+                 *
+                 * 🚨 E `save()` **non scrive più** `visibile` né la campagna:
+                 * una scheda salvata da qui non si pubblica e non paga niente
+                 * per sbaglio.
                  */
-                Section::make('Farti trovare per primo')
-                    ->description($this->descrizioneDellaCampagna())
-                    ->columns(2)
-                    ->schema([
-                        Toggle::make('campagna_attiva')
-                            ->label('Campagna attiva')
-                            ->helperText('Puoi accenderla e spegnerla quando vuoi.')
-                            ->columnSpanFull(),
-
-                        /*
-                         * 🚨 **Il tetto di spesa e' obbligatorio, non un'opzione.**
-                         *
-                         * ⚠️ Senza, un pagamento a evento e' un modo per mandare
-                         * a qualcuno una fattura da quattromila euro per un
-                         * difetto nostro. E' come vanno male tutti i sistemi a
-                         * consumo, e la prima volta che succede si perde il
-                         * cliente e si ha torto.
-                         */
-                        TextInput::make('budget_mensile_euro')
-                            ->label('Tetto di spesa mensile')
-                            ->numeric()
-                            ->prefix('€')
-                            ->minValue($this->budgetMinimoEuro())
-                            ->required(fn (callable $get): bool => (bool) $get('campagna_attiva'))
-                            ->helperText(
-                                'Quando lo raggiungi la campagna si spegne da sola, e riparte il mese '
-                                .'prossimo. Minimo '.$this->budgetMinimoEuro().' €.'
-                            ),
-                    ]),
-
-                Section::make('Pubblicazione')
-                    ->schema([
-                        /*
-                         * ⚠️ Parte **spento**, e resta spento finche' non lo si
-                         * accende: comparire in un catalogo pubblico non deve
-                         * essere l'effetto collaterale di aver compilato un
-                         * modulo.
-                         */
-                        Toggle::make('visibile')
-                            ->label('Mostra la mia scheda nel catalogo')
-                            ->helperText(
-                                'Quando e\' accesa, chiunque usi l\'app puo\' trovarti e scriverti '
-                                .'per chiedere come ci si iscrive.'
-                            ),
-                    ]),
             ]);
     }
 
@@ -230,24 +262,33 @@ class SchedaPubblica extends Page
 
         $this->autorizza();
 
-        $campagna = $this->salvaLaCampagna($chiave, $dati);
-
-        ProfiloPubblico::updateOrCreate(
+        /*
+         * ⚠️ **`visibile` e `campagna_id` non si toccano più** — F6.3. Vedi il
+         * blocco nel modulo: il catalogo non esiste ancora, e una scheda
+         * salvata da qui non deve pubblicarsi né far partire una spesa.
+         */
+        $scheda = ProfiloPubblico::updateOrCreate(
             $chiave,
             [
                 'comune_id' => $dati['comune_id'],
+                'indirizzo' => $dati['indirizzo'] ?? null,
+                'cap' => $dati['cap'] ?? null,
                 'titolo' => $dati['titolo'],
                 'descrizione' => $dati['descrizione'] ?? null,
-                'visibile' => (bool) ($dati['visibile'] ?? false),
-                'campagna_id' => $campagna?->getKey(),
             ],
         );
 
+        /*
+         * 🖼️ **La testata si salva dopo**, e non è un dettaglio: il file della
+         * media library si attacca a un modello **che esiste**. ⛔ Alla prima
+         * scheda, prima di `updateOrCreate` il modello non c'era ancora — e
+         * l'immagine si sarebbe persa senza nessun errore.
+         */
+        $this->form->model($scheda)->saveRelationships();
+
         Notification::make()
             ->title('Scheda salvata')
-            ->body(($dati['visibile'] ?? false)
-                ? 'Da adesso compari nel catalogo.'
-                : 'La scheda e\' salvata ma non e\' pubblicata: accendi l\'interruttore per comparire.')
+            ->body('È quello che vede chi riceve un tuo invito.')
             ->success()
             ->send();
     }
@@ -293,110 +334,15 @@ class SchedaPubblica extends Page
         return app(TenantContext::class)->get();
     }
 
-    private function campagna(): ?Campagna
-    {
-        $chiave = $this->chiaveDellaScheda();
-
-        return $chiave === null ? null : Campagna::where($chiave)->first();
-    }
-
-    private function budgetMinimoEuro(): int
-    {
-        return (int) (config('listino.pubblicita.budget_minimo_cent', 1000) / 100);
-    }
-
-    /**
-     * Crea o aggiorna la campagna.
+    /*
+     * ⛔ **Le funzioni della campagna non ci sono più** — 23/09/2026, F6.3.
      *
-     * 🚨 **Il costo si fotografa all'attivazione e non si tocca piu'.**
-     *
-     * ⚠️ Se lo leggessimo dalla configurazione a ogni conteggio, un aumento di
-     * listino cambierebbe il prezzo di una campagna **gia' in corso** — cioe' di
-     * qualcuno che ha accettato un'altra cifra. E' il genere di cosa per cui si
-     * perde un cliente e si ha torto.
-     *
-     * 💡 `updateOrCreate` con `costo_visualizzazione_cent` fra i valori di
-     * **creazione** e non di aggiornamento: chi c'e' gia' si tiene il suo.
-     *
-     * @param  array<string, int>  $chiave
-     * @param  array<string, mixed>  $dati
+     * `campagna()`, `budgetMinimoEuro()`, `salvaLaCampagna()` e
+     * `descrizioneDellaCampagna()` servivano alla sezione «Farti trovare per
+     * primo», che il committente ha tolto: *«al momento non esiste (al massimo
+     * lo aggiungeremo in futuro)»*. 💡 Il modello `Campagna` e la sua
+     * tabella restano: il giorno che torna, si riparte da lì.
      */
-    private function salvaLaCampagna(array $chiave, array $dati): ?Campagna
-    {
-        $attiva = (bool) ($dati['campagna_attiva'] ?? false);
-        $esistente = Campagna::where($chiave)->first();
-
-        if (! $attiva && $esistente === null) {
-            // 💡 Non si crea una campagna spenta che nessuno ha chiesto.
-            return null;
-        }
-
-        $budgetCent = (int) round(((float) ($dati['budget_mensile_euro'] ?? 0)) * 100);
-        $budgetCent = max($budgetCent, (int) config('listino.pubblicita.budget_minimo_cent', 1000));
-
-        $campagna = $esistente ?? new Campagna($chiave);
-
-        $campagna->fill([
-            'attiva' => $attiva,
-            'budget_mensile_cent' => $budgetCent,
-        ]);
-
-        if ($campagna->costo_visualizzazione_cent === null) {
-            $campagna->costo_visualizzazione_cent = (int) config('listino.pubblicita.costo_visualizzazione_cent', 2);
-        }
-
-        /*
-         * 💡 Riaccendere dopo un esaurimento cancella la data: e' la risposta a
-         * «perche' non compaio piu'», e da adesso quella risposta non vale piu'.
-         *
-         * ⚠️ **Non azzera lo speso**: chi riaccende nello stesso mese riparte da
-         * dov'era, altrimenti alzare il tetto e riaccendere sarebbe un modo per
-         * spendere due volte il budget dello stesso mese.
-         */
-        if ($attiva) {
-            $campagna->esaurita_il = null;
-        }
-
-        $campagna->save();
-
-        return $campagna;
-    }
-
-    /** 💡 Il pannello di controllo di chi paga a consumo: §4.3.4 del piano. */
-    private function descrizioneDellaCampagna(): string
-    {
-        $costo = number_format(
-            (int) config('listino.pubblicita.costo_visualizzazione_cent', 2) / 100,
-            2,
-            ',',
-            '.',
-        );
-
-        $base = "Compari in cima ai risultati, con l'etichetta «Sponsorizzato». "
-            ."Paghi {$costo} € ogni persona che ti vede — una volta al giorno per persona, "
-            .'anche se apre il catalogo dieci volte.';
-
-        $campagna = $this->campagna();
-
-        if ($campagna === null) {
-            return $base;
-        }
-
-        $speso = number_format($campagna->speso_mese_cent / 100, 2, ',', '.');
-        $residuo = number_format($campagna->residuoCent() / 100, 2, ',', '.');
-        $persone = $campagna->costo_visualizzazione_cent > 0
-            ? intdiv($campagna->speso_mese_cent, $campagna->costo_visualizzazione_cent)
-            : 0;
-
-        $stato = "Questo mese: {$persone} persone raggiunte, {$speso} € spesi, {$residuo} € residui.";
-
-        if ($campagna->esaurita_il !== null) {
-            $stato .= ' ⚠️ La campagna si è spenta da sola il '
-                .$campagna->esaurita_il->format('d/m/Y').' per budget esaurito.';
-        }
-
-        return $base.' '.$stato;
-    }
 
     /** Se chi sta guardando e' un trainer indipendente e non una palestra. */
     private function eUnTrainerIndipendente(): bool

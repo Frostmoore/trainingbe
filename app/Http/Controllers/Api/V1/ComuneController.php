@@ -16,7 +16,8 @@ use Illuminate\Http\Request;
  * ── 🚨 Perche' e' pubblica, senza autenticazione ───────────────────────────
  *
  * Perche' i dati **sono gia' pubblici**: l'elenco dei comuni italiani lo pubblica
- * l'ISTAT e lo scarica chiunque in un file da un megabyte. ⚠️ Proteggere con
+ * l'ISTAT e lo scarica chiunque in un file da un megabyte. 🆕 E dal 23/09/2026
+ * quello del mondo lo pubblica GeoNames, con licenza CC BY 4.0. ⚠️ Proteggere con
  * l'autenticazione un dato che si trova alla fonte originale non protegge
  * niente: aggiunge un ostacolo a chi ha diritto di usarlo e nessuno a chi lo
  * vuole comunque.
@@ -43,11 +44,22 @@ class ComuneController extends Controller
         $dati = $request->validate([
             'q' => ['nullable', 'string', 'max:80'],
             'limite' => ['nullable', 'integer', 'min:1', 'max:50'],
+
+            /*
+             * 🆕 🌍 **Il paese di chi cerca** — F6.1.
+             *
+             * 💡 Non filtra: **ordina**. Con `paese=DE` un tedesco che scrive
+             * «muen» vede prima München, e trova lo stesso Parigi se la cerca.
+             * ⚠️ Facoltativo: senza, vale l'Italia — ed è quello che fa l'app
+             * installata oggi, che questo parametro non lo manda.
+             */
+            'paese' => ['nullable', 'string', 'size:2', 'alpha'],
         ]);
 
         $trovati = $ricerca->cerca(
             (string) ($dati['q'] ?? ''),
             (int) ($dati['limite'] ?? 15),
+            $dati['paese'] ?? null,
         );
 
         return response()->json([
@@ -82,9 +94,21 @@ class ComuneController extends Controller
             'id' => $c->id,
             'nome' => $c->nome,
             'nome_altro' => $c->nome_altro,
+
+            /*
+             * 🆕 🌍 F6.1 — **i campi nuovi si aggiungono, quelli vecchi
+             * restano**. ⚠️ L'app installata legge `provincia` e `regione`, e
+             * fuori dall'Italia li trova ancora pieni: `provincia` è il codice
+             * del paese e `regione` il suo nome. 💡 `esteso` è già la frase
+             * giusta per entrambi i mondi, ed è quella che l'app mostra.
+             */
+            'paese' => $c->paese,
+            'nome_locale' => $c->nome_locale,
             'provincia' => $c->provincia,
             'provincia_nome' => $c->provincia_nome,
             'regione' => $c->regione,
+
+            // ⛔ Fuori dall'Italia è `null`: GeoNames non ha il CAP, e non si inventa.
             'cap' => $c->cap,
             'esteso' => $c->esteso(),
         ];

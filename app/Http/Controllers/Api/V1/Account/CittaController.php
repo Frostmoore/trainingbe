@@ -90,6 +90,8 @@ class CittaController extends Controller
         return [
             'id' => $c->id,
             'nome' => $c->nome,
+            // 🆕 🌍 F6.1 — il paese, accanto ai campi che l'app legge già.
+            'paese' => $c->paese,
             'provincia' => $c->provincia,
             'regione' => $c->regione,
             'esteso' => $c->esteso(),

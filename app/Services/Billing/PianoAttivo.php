@@ -44,6 +44,8 @@ class PianoAttivo
     public function __construct(
         private readonly TenantContext $context,
         private readonly PortafoglioGettoni $portafoglio,
+        // 🆕 ✂️ 23/09/2026 — l'abbonamento che la palestra può togliere.
+        private readonly AbbonamentiDegliIscritti $abbonamenti,
     ) {}
 
     /**
@@ -76,6 +78,24 @@ class PianoAttivo
          * Non è un bypass dello scoping, è lo stesso filtro applicato in modo
          * esplicito invece che ambientale.
          */
+        /*
+         * ══ 🆕 ✂️ LA PALESTRA GLIELO HA TOLTO — 23/09/2026, F5 ═════════════
+         *
+         * 📌 *«mi serve il tasto per togliere l'abbonamento all'allievo»*.
+         *
+         * 🚨 **Sta qui, e non altrove, perché questo è il punto unico.** Da
+         * qui passano `eAbbonato()`, `haLaAi()`, la quota e il gate dell'app:
+         * un iscritto a cui la palestra ha tolto l'abbonamento ricade sul
+         * gratuito **dappertutto in una riga**. ⛔ Messa in un controller,
+         * avrebbe tolto il gate e lasciato l'AI — o il contrario.
+         *
+         * ⚠️ Resta **nella palestra**: chat, schede e trainer non cambiano.
+         * Cambia solo cosa gli paga la palestra.
+         */
+        if ($this->abbonamenti->eTolto($tenantId, $utente->getKey())) {
+            return $this->piadinoDiRiserva();
+        }
+
         $abbonamento = $this->context->runWithoutTenant(
             fn (): ?PlanSubscription => PlanSubscription::query()
                 ->where('tenant_id', $tenantId)

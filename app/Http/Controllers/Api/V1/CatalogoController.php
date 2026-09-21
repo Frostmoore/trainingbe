@@ -146,6 +146,17 @@ class CatalogoController extends Controller
 
         $base['descrizione'] = $p->descrizione;
 
+        /*
+         * 🆕 🖼️ 📍 F6.2 — testata e indirizzo, **solo nella scheda estesa**.
+         *
+         * 💡 Nell'elenco no: sono una foto e una riga per ogni risultato, e un
+         * elenco di venti palestre con venti foto grandi pesa come una galleria
+         * — su una connessione da palestra, cioè nello scantinato.
+         */
+        $base['immagine_testata'] = $p->testataUrl();
+        $base['indirizzo'] = $p->indirizzoPerEsteso();
+        $base['mappa'] = $p->mappaUrl();
+
         return $base;
     }
 }

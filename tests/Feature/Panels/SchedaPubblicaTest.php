@@ -60,6 +60,18 @@ class SchedaPubblicaTest extends TestCase
         ]);
     }
 
+    /**
+     * 🆕 **Il proprietario crea la sua scheda — e NON si pubblica** — F6.3.
+     *
+     * ⛔ **Questo test diceva il contrario**: salvando con `visibile` acceso, la
+     * scheda compariva nel catalogo. 📌 Il committente, 21/09/2026: *«Mostra la
+     * mia scheda nel catalogo»* va tolto, perché il catalogo *«al momento non
+     * esiste»*.
+     *
+     * 🚨 Quindi anche se qualcuno manda `visibile` (un modulo vecchio in cache,
+     * una richiesta scritta a mano), il salvataggio **non lo scrive**: una
+     * scheda compilata da qui non si pubblica per sbaglio.
+     */
     #[Test]
     public function il_proprietario_puo_creare_la_propria_scheda(): void
     {
@@ -70,8 +82,9 @@ class SchedaPubblicaTest extends TestCase
             ->fillForm([
                 'titolo' => 'Palestra Olimpo',
                 'comune_id' => $this->rimini->id,
+                'indirizzo' => 'Via Flaminia, 12',
+                'cap' => '47923',
                 'descrizione' => 'Sala pesi e functional',
-                'visibile' => true,
             ])
             ->call('save')
             ->assertHasNoErrors();
@@ -81,7 +94,51 @@ class SchedaPubblicaTest extends TestCase
         $this->assertNotNull($scheda);
         $this->assertSame('Palestra Olimpo', $scheda->titolo);
         $this->assertSame($this->rimini->id, $scheda->comune_id);
-        $this->assertTrue($scheda->visibile);
+
+        // ⛔ Non si pubblica: il catalogo non esiste ancora.
+        $this->assertFalse($scheda->visibile);
+
+        // 📍 F6.2 — e l'indirizzo è scritto per esteso, città dal comune.
+        $this->assertSame('Via Flaminia, 12 · 47923 Rimini (RN)', $scheda->indirizzoPerEsteso());
+        $this->assertStringStartsWith('https://www.google.com/maps/search/?api=1&query=', (string) $scheda->mappaUrl());
+    }
+
+    /**
+     * ⛔ **Via la campagna e la pubblicazione, dentro «Nome pubblico»** — F6.3.
+     *
+     * 📌 *«fatti trovare per primo togliamolo, al momento non esiste»* ·
+     * *«Mostra la mia scheda nel catalogo idem»* · *«Titolo cambiamolo in nome
+     * pubblico»*.
+     */
+    #[Test]
+    public function il_modulo_non_ha_piu_ne_campagna_ne_pubblicazione(): void
+    {
+        $this->attivaContesto();
+
+        $pagina = Livewire::actingAs($this->proprietario)->test(SchedaPubblica::class);
+
+        $campi = array_keys($pagina->instance()->form->getFlatFields());
+
+        foreach (['visibile', 'campagna_attiva', 'budget_mensile_euro'] as $tolto) {
+            $this->assertNotContains($tolto, $campi, "Il campo «{$tolto}» c'è ancora.");
+        }
+
+        foreach (['indirizzo', 'cap', 'testata'] as $nuovo) {
+            $this->assertContains($nuovo, $campi, "Manca il campo «{$nuovo}».");
+        }
+
+        $pagina->assertSee('Nome pubblico')->assertDontSee('Farti trovare per primo');
+    }
+
+    /** 📍 Senza la via non c'è un indirizzo, e nemmeno il pulsante delle mappe. */
+    #[Test]
+    public function senza_la_via_non_c_e_indirizzo(): void
+    {
+        $scheda = new ProfiloPubblico(['comune_id' => $this->rimini->id, 'cap' => '47923']);
+        $scheda->setRelation('comune', $this->rimini);
+
+        $this->assertNull($scheda->indirizzoPerEsteso());
+        $this->assertNull($scheda->mappaUrl());
     }
 
     #[Test]
@@ -117,9 +174,20 @@ class SchedaPubblicaTest extends TestCase
          */
         $this->attivaContesto();
 
+        /*
+         * 🆕 ⚠️ **Si guarda il database, non il modulo** — F6.3.
+         *
+         * ⛔ Prima controllava `assertFormSet(['visibile' => false])`: dopo
+         * F6.3 quel campo **non esiste più**, e il test passava lo stesso —
+         * per il motivo sbagliato. Un test che passa per il motivo sbagliato è
+         * peggio di nessun test.
+         */
         Livewire::actingAs($this->proprietario)
             ->test(SchedaPubblica::class)
-            ->assertFormSet(['visibile' => false]);
+            ->fillForm(['titolo' => 'Olimpo', 'comune_id' => $this->rimini->id])
+            ->call('save');
+
+        $this->assertFalse(ProfiloPubblico::where('tenant_id', $this->palestra->id)->sole()->visibile);
     }
 
     #[Test]

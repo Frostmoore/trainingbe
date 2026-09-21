@@ -8,6 +8,8 @@ use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * La scheda con cui una palestra o un trainer compare nel catalogo — 18/08/2026.
@@ -22,14 +24,28 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * lo scope. Ogni query che legge questa tabella per mostrarla a qualcuno deve
  * filtrare `visibile`, perche' non c'e' nessuna rete sotto.
  */
-class ProfiloPubblico extends Model
+class ProfiloPubblico extends Model implements HasMedia
 {
+    use InteractsWithMedia;
+
     /** ⚠️ Esplicita: Laravel cercherebbe `profilo_pubblicos`. */
     protected $table = 'profili_pubblici';
+
+    /**
+     * 🖼️ **L'immagine di testata** — 23/09/2026, fase F6.2 (A2).
+     *
+     * 📌 *«mettiamoci anche un'immagine di testata (si dovrà vedere
+     * nell'app)»*. 💡 Si vede nella pagina dell'**invito**, che è dove oggi una
+     * persona incontra la scheda di una palestra.
+     */
+    public const COLLECTION_TESTATA = 'testata';
 
     protected $fillable = [
         'tenant_id', 'user_id', 'comune_id', 'titolo', 'descrizione',
         'visibile', 'campagna_id',
+
+        // 🆕 📍 F6.2 (A3) — la via e il CAP: la città la dice già `comune_id`.
+        'indirizzo', 'cap',
     ];
 
     protected function casts(): array
@@ -179,5 +195,73 @@ class ProfiloPubblico extends Model
     public function scopeVisibili(Builder $query): void
     {
         $query->where('visibile', true);
+    }
+
+    // ───────────────────────── testata e indirizzo ─────────────────────────
+
+    /**
+     * Un file solo, come le copertine delle schede. ⚠️ Caricandone un altro il
+     * precedente sparisce: una testata è **una**.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::COLLECTION_TESTATA)
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->singleFile();
+    }
+
+    public function testataUrl(): ?string
+    {
+        return $this->getFirstMediaUrl(self::COLLECTION_TESTATA) ?: null;
+    }
+
+    /**
+     * 📍 **L'indirizzo per esteso**, come si scrive su una busta — F6.2 (A3).
+     *
+     * 📌 *«serve anche l'indirizzo preciso (con cap provincia e tutto)»*.
+     *
+     * 💡 «Via Roma, 12 · 01036 Nepi (VT)». La via e il CAP li ha scritti la
+     * palestra; città e provincia vengono dal comune — ⛔ scriverli due volte
+     * vorrebbe dire due versioni che divergono al primo trasloco.
+     *
+     * ⚠️ `null` se non c'è **nemmeno la via**: una città senza via non è un
+     * indirizzo, e l'app mostrerebbe un pulsante «apri nelle mappe» che porta
+     * al centro di Roma.
+     */
+    public function indirizzoPerEsteso(): ?string
+    {
+        $via = trim((string) $this->indirizzo);
+
+        if ($via === '') {
+            return null;
+        }
+
+        $citta = trim(((string) $this->cap).' '.((string) $this->comune?->esteso()));
+
+        return $citta === '' ? $via : "{$via} · {$citta}";
+    }
+
+    /**
+     * 🗺️ **Il collegamento alle mappe**, per il pulsante dell'app.
+     *
+     * 💡 L'indirizzo di Google Maps con `api=1` è **universale**: su Android
+     * apre l'app Mappe, su iPhone apre Google Maps se c'è e il browser se no.
+     * ⛔ Un link `geo:` funzionerebbe solo su Android, e uno di Apple Maps solo
+     * su iPhone — cioè l'app dovrebbe sapere su che telefono gira per scegliere.
+     *
+     * ⚠️ Si cerca per **testo**, non per coordinate: le coordinate che abbiamo
+     * sono quelle del **centro del comune**, e porterebbero la gente in piazza
+     * invece che davanti alla palestra.
+     */
+    public function mappaUrl(): ?string
+    {
+        $indirizzo = $this->indirizzoPerEsteso();
+
+        if ($indirizzo === null) {
+            return null;
+        }
+
+        return 'https://www.google.com/maps/search/?api=1&query='
+            .rawurlencode(str_replace(' · ', ', ', $indirizzo));
     }
 }

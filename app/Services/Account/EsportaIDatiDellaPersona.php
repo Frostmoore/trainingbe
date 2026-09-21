@@ -57,6 +57,17 @@ final class EsportaIDatiDellaPersona
          */
         'pagamenti_incassati' => [['user_id'], []],
 
+        /*
+         * 🆕 ✂️ **Quando la palestra le ha tolto l'abbonamento** — 23/09/2026.
+         *
+         * 🚨 È un dato **su di lei**: dice che in quelle date non era più
+         * coperta, e spiega perché l'app le mostrava il piano gratuito.
+         * L'art. 15 lo comprende. ⚠️ Chi l'ha tolto (`tolto_da_id`,
+         * `ridato_da_id`) esce come id e basta: è una persona della palestra,
+         * e il suo nome non è un dato di chi chiede l'export.
+         */
+        'abbonamenti_tolti' => [['user_id'], []],
+
         'campagne' => [['user_id'], []],
         // La chiave PUBBLICA: è fatta per essere data a chiunque.
         'chat_keys' => [['user_id'], []],
