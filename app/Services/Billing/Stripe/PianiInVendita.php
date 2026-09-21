@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Billing\Stripe;
 
 use App\Enums\PlanKind;
+use App\Enums\SuCosaVale;
 use App\Enums\UserRole;
 use App\Models\OffertaDiPiano;
 use App\Models\Plan;
@@ -68,6 +69,9 @@ class PianiInVendita
     public function __construct(
         private readonly TenantContext $context,
         private readonly ContoDegliIscritti $conto,
+
+        // 🆕 🎁 Le promozioni — 22/09/2026, fase F2.
+        private readonly ScontiSuStripe $sconti,
     ) {}
 
     // ═══════════════════════════ LA META' CHE APRE ═══════════════════════════
@@ -206,6 +210,18 @@ class PianiInVendita
         $meta = $this->metadata($utente, $tenant, $piano, $offerta);
         $cliente = $this->clienteDel($tenant);
 
+        /*
+         * ══ 🎁 LO SCONTO — 22/09/2026, fase F2 ════════════════════════════
+         *
+         * 🚨 Si calcola sul **canone vero** del piano: una percentuale su 30 €
+         * e su 200 € sono due cifre diverse. ⛔ E vale sul primo pagamento —
+         * scontare ogni rinnovo per sempre è una decisione da prendere una
+         * promozione alla volta, non il default di un metodo.
+         */
+        $sconto = $this->sconti->perIlCheckout($utente, SuCosaVale::Canone, (int) $piano->price_cents);
+
+        $meta['promozioni'] = $this->sconti->perIMetadata($sconto['promozioni']);
+
         $sessione = $this->stripe()->checkout->sessions->create([
             'mode' => 'subscription',
 
@@ -246,6 +262,9 @@ class PianiInVendita
 
             'success_url' => $this->indirizzo($tornaA, '/pagamento/ok'),
             'cancel_url' => $this->indirizzo($tornaA, '/pagamento/annullato'),
+
+            // 💡 Solo se c'è: `discounts` vuoto fa rifiutare la sessione.
+            ...($sconto['discounts'] ?? [] ? ['discounts' => $sconto['discounts']] : []),
         ]);
 
         return (string) $sessione->url;

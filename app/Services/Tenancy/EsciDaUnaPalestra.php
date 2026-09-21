@@ -166,6 +166,22 @@ final class EsciDaUnaPalestra
          */
         'liberatorie_firmate',
         'nutrition_plans',
+
+        /*
+         * 🆕 🎁 **I bersagli di una promozione** — 22/09/2026, fase F2.
+         *
+         * 🚨 Qui `tenant_id` **non vuol dire «di chi è la riga»**: vuol dire
+         * «quale palestra è il bersaglio dell'offerta». È lo stesso nome di
+         * colonna con un significato diverso, ed è il motivo per cui questa
+         * tabella non può stare in nessuna delle altre due liste.
+         *
+         * ⛔ Quando una persona esce da una palestra qui non si tocca niente:
+         * la promozione resta della piattaforma e continua a puntare a quella
+         * palestra. 💡 Che quella persona non la prenda più lo decide
+         * `LePromozioni::loPrende()`, guardando dove sta **adesso**.
+         */
+        'promozione_bersagli',
+
         'workout_plans',
     ];
 

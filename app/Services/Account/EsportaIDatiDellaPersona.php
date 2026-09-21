@@ -83,6 +83,16 @@ final class EsportaIDatiDellaPersona
         'personal_access_tokens' => 'Le sessioni aperte dell\'app: sono chiavi d\'accesso, e in un file scaricato aprirebbero l\'account a chi lo trova.',
         'sessions' => 'Le sessioni del pannello web: stesse ragioni dei token d\'accesso.',
         'password_reset_tokens' => 'Un link per cambiare la password: consegnarlo è consegnare l\'account.',
+
+        /*
+         * 🆕 🎁 22/09/2026, fase F2 — i bersagli delle promozioni.
+         *
+         * ⚠️ Una riga con dentro il suo `user_id` c'è, ma non dice niente **su
+         * di lei**: dice che un'offerta **nostra** la riguarda. 💡 Le
+         * promozioni che ha davvero usato si leggono dove si leggono i soldi —
+         * i movimenti dei gettoni e le ricevute di Stripe — e quelli escono già.
+         */
+        'promozione_bersagli' => 'Dice che un\'offerta nostra la riguarda, non è un dato su di lei: quello che ha usato sta nei movimenti.',
     ];
 
     /** Le colonne di `users` che non escono mai. */

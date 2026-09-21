@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Billing\Stripe;
 
+use App\Enums\SuCosaVale;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
 use App\Models\Plan;
@@ -45,20 +46,45 @@ class Cassa
     public function __construct(
         private readonly Listino $listino,
         private readonly PortafoglioGettoni $portafoglio,
+
+        // 🆕 🎁 Le promozioni — 22/09/2026, fase F2.
+        private readonly ScontiSuStripe $sconti,
     ) {}
 
     /**
      * Apre una sessione di pagamento e restituisce dove mandare la persona.
      *
      * @param  int|null  $gettoni  il taglio scelto, solo per [GETTONI]
+     * @param  string|null  $promozione  il codice di un'offerta ricevuta per link
      */
-    public function apri(User $utente, string $tipo, ?int $gettoni = null): string
-    {
+    public function apri(
+        User $utente,
+        string $tipo,
+        ?int $gettoni = null,
+        ?string $promozione = null,
+    ): string {
         $tenant = $utente->tenant;
 
         if ($tenant === null) {
             throw new InvalidArgumentException('Questa persona non ha un tenant: non si sa a chi accreditare.');
         }
+
+        /*
+         * ══ 🎁 LO SCONTO, PRIMA DI APRIRE — 22/09/2026, fase F2 ════════════
+         *
+         * 🚨 Si calcola **sull'importo vero** del listino, perché una
+         * percentuale su 3,00 € e su 75,00 € sono due cifre diverse. ⛔ E il
+         * conto lo fanno le nostre regole, non Stripe: la cumulabilità, la
+         * migliore fra le esclusive e il «mai sotto zero» stanno in
+         * `LePromozioni`, in un posto solo.
+         */
+        $suCosa = $tipo === self::ABBONAMENTO ? SuCosaVale::Canone : SuCosaVale::Gettoni;
+
+        $importo = $tipo === self::ABBONAMENTO
+            ? $this->listino->singolo()
+            : $this->prezzoDelPacchetto($gettoni);
+
+        $sconto = $this->sconti->perIlCheckout($utente, $suCosa, $importo, $promozione);
 
         $comune = [
             'mode' => $tipo === self::ABBONAMENTO ? 'subscription' : 'payment',
@@ -108,7 +134,22 @@ class Cassa
                 'user_id' => (string) $utente->getKey(),
                 'tenant_id' => (string) $tenant->getKey(),
                 'gettoni' => (string) ($gettoni ?? 0),
+
+                /*
+                 * 🆕 🎁 **Le promozioni usate, scritte qui** — fase F2.
+                 *
+                 * 🚨 È l'unico modo che ha il webhook di sapere quali segnare
+                 * come spese: quello che non sta nei metadata, al ritorno non
+                 * esiste.
+                 */
+                'promozioni' => $this->sconti->perIMetadata($sconto['promozioni']),
             ],
+
+            /*
+             * 💡 `discounts` c'è solo se c'è davvero uno sconto: passarlo
+             * vuoto farebbe rifiutare la sessione da Stripe.
+             */
+            ...($sconto['discounts'] ?? [] ? ['discounts' => $sconto['discounts']] : []),
 
             /*
              * ⚠️ **L'email si passa a Stripe**, cosi' la ricevuta arriva senza

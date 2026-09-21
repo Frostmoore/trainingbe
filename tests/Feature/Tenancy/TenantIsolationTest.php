@@ -9,6 +9,7 @@ use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\BelongsToTenantOrGlobal;
 use App\Models\LiberatoriaFirmata;
 use App\Models\ProfiloPubblico;
+use App\Models\PromozioneBersaglio;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -69,6 +70,23 @@ class TenantIsolationTest extends TestCase
          * quando, quale versione.
          */
         LiberatoriaFirmata::class => 'Atto della persona (art. 28): vale in ogni spazio, e si cerca sempre per `user_id`.',
+        /*
+         * 🆕 🎁 `promozione_bersagli` — 22/09/2026, fase F2.
+         *
+         * 🚨 Qui `tenant_id` **non dice di chi è la riga**: dice **quale
+         * palestra è il bersaglio** di un'offerta. È lo stesso nome di colonna
+         * con un significato opposto, e il trait lo tratterebbe come proprietà.
+         *
+         * ⛔ Con lo scope, una promozione fatta **alla** palestra Alfa sarebbe
+         * invisibile a chiunque non stia dentro Alfa — a partire dal pannello
+         * della piattaforma, che gira **senza** tenant e dove quelle righe si
+         * scrivono. La promozione è della piattaforma, non del cliente.
+         *
+         * 💡 E non c'è niente da isolare: la riga contiene un bersaglio, non
+         * un dato di nessuno. Chi la prende lo decide `LePromozioni::loPrende()`,
+         * che guarda **dove sta la persona adesso**.
+         */
+        PromozioneBersaglio::class => 'Il `tenant_id` è il BERSAGLIO di un\'offerta, non il proprietario della riga.',
         /*
          * 🚨 `profili_pubblici` esiste **apposta** per essere visto da fuori.
          *
