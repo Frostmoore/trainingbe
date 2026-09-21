@@ -11,6 +11,7 @@ use App\Models\PlanSubscription;
 use App\Models\RichiestaDiContatto;
 use App\Models\User;
 use App\Services\Billing\Exceptions\AbbonamentoNonSuStripeException;
+use App\Services\Billing\Stripe\CambioDellaCarta;
 use App\Services\Billing\Stripe\Cassa;
 use App\Services\Billing\Stripe\PianiInVendita;
 use BackedEnum;
@@ -159,9 +160,44 @@ class IlTuoPiano extends Page
      * fatture»*. 🔬 L'errore veniva da un cliente Stripe salvato che su Stripe
      * non esisteva (vedi `Cassa::clienteEsistente()`); il committente ha
      * comunque scelto di non avere il portale qui. Le ricevute ora sono **le
-     * fatture** qui sotto. ⏳ Cambiare carta e disdire restano da decidere
-     * (debito dichiarato nell'atlante §115).
+     * fatture** qui sotto, e la carta si cambia con `cambiaCarta()` (§116).
+     * ⏳ Disdire resta da decidere.
      */
+
+    /**
+     * 🆕 💳 **Cambia il metodo di pagamento** — dopo F8.
+     *
+     * 📌 *«Ovviamente ci deve essere la possibilità di cambiare metodo di
+     * pagamento»*. La carta si scrive sulla pagina di Stripe; al ritorno il
+     * webhook la mette sul cliente **e** sugli abbonamenti (`CambioDellaCarta`).
+     */
+    public function cambiaCarta(): void
+    {
+        try {
+            $this->redirect(app(CambioDellaCarta::class)->apri($this->utente(), url()->current()));
+        } catch (InvalidArgumentException $e) {
+            Notification::make()->title($e->getMessage())->warning()->send();
+        } catch (Throwable $e) {
+            report($e);
+
+            Notification::make()->title('La pagina di Stripe non si è aperta')->body('Riprova fra poco.')->danger()->send();
+        }
+    }
+
+    /**
+     * C'è una carta da cambiare? 💡 Solo il database, senza chiamare Stripe a
+     * ogni apertura di pagina: se l'id salvato non esiste più lo scopre
+     * `cambiaCarta()`, e lo dice.
+     */
+    public function haUnMetodoDiPagamento(): bool
+    {
+        $tenantId = $this->utente()->tenant_id;
+
+        return $tenantId !== null && PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->whereNotNull('stripe_customer_id')
+            ->exists();
+    }
 
     /**
      * 🆕 🧾 Le fatture della palestra, dalla più recente — F8.4.

@@ -718,6 +718,9 @@ class Cassa
              */
             PianiInVendita::TIPO => app(PianiInVendita::class)->accendi($sessione),
 
+            // 🆕 💳 La carta nuova, dal pannello (dopo F8): vedi `CambioDellaCarta`.
+            CambioDellaCarta::TIPO => app(CambioDellaCarta::class)->applica($sessione),
+
             default => Log::warning('Stripe: pagamento di tipo ignoto.', ['tipo' => $meta['tipo'] ?? null]),
         };
     }

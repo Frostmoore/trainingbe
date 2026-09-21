@@ -22,9 +22,13 @@
             <div class="tc-avviso tc-avviso-pericolo">
                 <strong>L'ultimo pagamento non è andato a buon fine</strong>
                 (dal {{ \Illuminate\Support\Carbon::parse($listino['pagamento_fallito_il'])->format('d/m/Y') }}).
-                Stripe riproverà nei prossimi giorni. Se la carta è scaduta scrivici a
-                <a href="mailto:{{ config('services.contatti.email') }}">{{ config('services.contatti.email') }}</a>
-                e ti mandiamo il link per aggiornarla.
+                Stripe riproverà nei prossimi giorni. Se la carta è scaduta, cambiala: appena salvata,
+                ripaghiamo subito quello che è rimasto in sospeso.
+                <div class="tc-azione">
+                    <x-filament::button color="danger" wire:click="cambiaCarta" wire:loading.attr="disabled" icon="heroicon-m-credit-card">
+                        Cambia carta
+                    </x-filament::button>
+                </div>
             </div>
         @endif
 
@@ -45,6 +49,15 @@
                 </p>
             @else
                 <p class="tc-piano-testo">Non hai ancora un piano. Scegline uno qui sotto.</p>
+            @endif
+
+            {{-- 🆕 💳 Dopo F8: il metodo di pagamento si cambia da qui, senza il portale. --}}
+            @if ($this->haUnMetodoDiPagamento())
+                <div class="tc-azione">
+                    <x-filament::button color="gray" wire:click="cambiaCarta" wire:loading.attr="disabled" icon="heroicon-m-credit-card">
+                        Cambia metodo di pagamento
+                    </x-filament::button>
+                </div>
             @endif
         </x-filament::section>
 
