@@ -10,6 +10,7 @@ use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\CreaTenantPersonale;
+use Database\Seeders\PacchettiGettoniSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -41,6 +42,13 @@ class BillingApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        /*
+         * 🆕 🎟️ **I tagli di gettoni si seminano** — 22/09/2026, fase F2:
+         * dal 22/09 vivono nel database, e senza il seme il listino che l'app
+         * riceve è vuoto.
+         */
+        $this->seed(PacchettiGettoniSeeder::class);
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa', 'ALFA2345');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'io@alfa.test');

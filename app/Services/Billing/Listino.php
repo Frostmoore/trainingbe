@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Models\PacchettoGettoni;
+
 /**
  * Il listino — rifatto il 18/08/2026.
  *
@@ -46,25 +48,44 @@ class Listino
     }
 
     /**
-     * @return list<array{gettoni: int, prezzo: int, nota: string}>
+     * 🔄 **I tagli di gettoni, letti dal DATABASE** — 22/09/2026, fase F2.
+     *
+     * 📌 Il committente: *«mi serve una sezione per impostare i prezzi dei
+     * pacchetti di token»* · *«ovviamente devono essere nel database, non in un
+     * file»*.
+     *
+     * ⛔ **Prima leggeva `config/listino.php`**, e cambiarli voleva dire un
+     * commit e un deploy. 💡 Adesso il file è il **seme**
+     * (`PacchettiGettoniSeeder`) e la tabella è la verità.
+     *
+     * 🚨 **Questo metodo resta l'unico punto da cui si leggono**: sito, app,
+     * `Cassa` e il cruscotto passano tutti di qui. ⛔ Chi interrogasse il
+     * modello per conto suo creerebbe un secondo listino — il difetto §86.1,
+     * che è già costato un prezzo sbagliato in vendita.
+     *
+     * ⚠️ Solo quelli **attivi**: un taglio sospeso resta in tabella (ci punta
+     * la storia degli acquisti) ma non si vende.
+     *
+     * @return list<array{codice: string, nome: string, gettoni: int, prezzo: int, nota: string, centPerGettone: float}>
      */
     public function pacchettiGettoni(): array
     {
-        return array_map(
-            static fn (array $p): array => [
-                // 🆕 20/09/2026: i tagli hanno un **nome** («Prova», «Serie»,
-                // «Blocco», «Stagione»), che è come li chiama chi li compra.
-                'nome' => $p['nome'],
-                'gettoni' => $p['gettoni'],
-                'prezzo' => $p['prezzo_cent'],
-                'nota' => $p['nota'],
+        return PacchettoGettoni::query()
+            ->inVendita()
+            ->get()
+            ->map(static fn (PacchettoGettoni $p): array => [
+                'codice' => $p->codice,
+                'nome' => $p->nome,
+                'gettoni' => $p->gettoni,
+                'prezzo' => $p->prezzo_cent,
+                'nota' => (string) $p->nota,
 
                 // 💡 Il prezzo unitario lo calcola il listino, non la pagina:
                 // serve uguale nell'app e sul sito.
-                'centPerGettone' => $p['prezzo_cent'] / $p['gettoni'],
-            ],
-            config('listino.pacchetti'),
-        );
+                'centPerGettone' => $p->centPerGettone(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

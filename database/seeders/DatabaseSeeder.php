@@ -27,6 +27,20 @@ class DatabaseSeeder extends Seeder
         // due ore di data entry che nessuno fa. E' idempotente.
         $this->call(ExerciseLibrarySeeder::class);
 
+        /*
+         * 🆕 🎟️ **I tagli di gettoni** — 22/09/2026, fase F2.
+         *
+         * 🚨 Gira **sempre**, produzione compresa: dal 22/09 i prezzi dei
+         * gettoni vivono nel database, e un'installazione senza questa tabella
+         * riempita non ha niente da vendere.
+         *
+         * ⚠️ È idempotente **e prudente**: crea ciò che manca e non tocca ciò
+         * che è stato cambiato dal pannello (`modificato_a_mano`). ⛔ Senza
+         * quella prudenza, il primo deploy dopo un cambio di prezzo
+         * riporterebbe indietro il prezzo, in silenzio.
+         */
+        $this->call(PacchettiGettoniSeeder::class);
+
         if (app()->environment('production')) {
             $this->command?->warn('Ambiente di produzione: DemoGymSeeder saltato.');
 

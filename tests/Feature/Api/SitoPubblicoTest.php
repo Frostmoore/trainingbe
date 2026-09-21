@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use App\Enums\UserRole;
+use App\Models\PacchettoGettoni;
 use App\Services\Billing\Listino;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\ImmaginiDelSito;
+use Database\Seeders\PacchettiGettoniSeeder;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -56,6 +58,19 @@ class SitoPubblicoTest extends TestCase
         parent::setUp();
 
         $this->seed(PlanSeeder::class);
+
+        /*
+         * 🆕 🎟️ **E i tagli di gettoni** — 22/09/2026, fase F2.
+         *
+         * ⚠️ Dal 22/09 i prezzi dei gettoni **vivono nel database**, non più
+         * in `config/listino.php`: un test che non li semina vede un listino
+         * vuoto, e il sito non ha niente da mostrare.
+         *
+         * ⛔ Non si è messo un ripiego sul file dentro `Listino`: sarebbe
+         * esattamente il difetto §86.1 — due listini che si contraddicono, uno
+         * dei quali in vendita.
+         */
+        $this->seed(PacchettiGettoniSeeder::class);
     }
 
     /**
@@ -693,8 +708,24 @@ class SitoPubblicoTest extends TestCase
          * listino configurato a metà, e il nome comparirebbe sbagliato sulla
          * pagina invece che rosso in un test.
          */
-        config()->set('listino.pacchetti', [
-            ['nome' => 'Finto', 'gettoni' => 42, 'prezzo_cent' => 1234, 'nota' => 'finto'],
+        /*
+         * 🔄 **Il taglio si scrive in tabella, non in `config`** — 22/09/2026,
+         * fase F2. 📌 *«ovviamente devono essere nel database, non in un
+         * file»*.
+         *
+         * ⛔ Qui prima c'era `config()->set('listino.pacchetti', ...)`, e
+         * passava: era il file a essere il listino. ⚠️ Adesso il file è solo il
+         * **seme**, e un test che scrivesse ancora nella configurazione
+         * proverebbe una strada che in produzione non esiste più.
+         */
+        PacchettoGettoni::query()->update(['attivo' => false]);
+
+        PacchettoGettoni::query()->create([
+            'codice' => 'gettoni_finti',
+            'nome' => 'Finto',
+            'gettoni' => 42,
+            'prezzo_cent' => 1234,
+            'nota' => 'finto',
         ]);
 
         $this->get('/prezzi/individuale')
