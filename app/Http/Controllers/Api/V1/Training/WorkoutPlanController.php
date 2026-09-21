@@ -709,11 +709,17 @@ class WorkoutPlanController extends Controller
              * vale per tutti. Questa è della **riga**: la presa esatta,
              * l'altezza del sedile, l'elastico che vuole quel trainer.
              *
-             * 💡 `PlanExercise::imageUrl()` ripiega già sul catalogo quando
-             * la riga non ne ha una sua: l'app può leggere questo campo e
-             * basta, senza dover scegliere fra due.
+             * 🚨 **`immagineSua()` e NON `imageUrl()`**, che ripiegherebbe sul
+             * catalogo. ⛔ L'app **tinge** le illustrazioni del catalogo (sono
+             * disegni al tratto, e su fondo chiaro sparirebbero) e **non**
+             * tinge le fotografie: mandare l'URL del catalogo dentro questo
+             * campo farebbe trattare il disegno come una foto, e diventerebbe
+             * invisibile senza nessun errore.
+             *
+             * 💡 `null` quando la riga non ha una foto sua: il ripiego lo fa
+             * l'app, che sa anche quale delle due va tinta.
              */
-            'image_url' => $r->imageUrl(),
+            'image_url' => $r->immagineSua(),
 
             'exercise' => [
                 'id' => $r->exercise?->id,

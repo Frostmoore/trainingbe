@@ -392,7 +392,30 @@ class PlanExercise extends Model implements HasMedia
      */
     public function imageUrl(): ?string
     {
-        return ($this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null)
-            ?? $this->exercise?->imageUrl();
+        return $this->immagineSua() ?? $this->exercise?->imageUrl();
+    }
+
+    /**
+     * 🖼️ **Solo la sua**, senza ripiegare sul catalogo — 23/09/2026, F5.13.
+     *
+     * ══ 🚨 PERCHÉ L'API DEVE POTER DISTINGUERE I DUE CASI ════════════════
+     *
+     * ⛔ `imageUrl()` ripiega, ed è comodo per chi disegna una pagina sul
+     * server. Ma all'app i due casi **non si possono confondere**, per una
+     * ragione che si vede solo a schermo: l'illustrazione del catalogo è un
+     * **disegno al tratto**, e l'app la **tinge** (`FotoDellEsercizio`,
+     * `credito`) perché su fondo chiaro il tratto bianco sparirebbe.
+     *
+     * 🚨 Una **fotografia** tinta di grigio è illeggibile. ⚠️ Se l'API
+     * mandasse l'URL del catalogo dentro il campo della riga, l'app lo
+     * tratterebbe come una foto e smetterebbe di tingerlo: il disegno
+     * diventerebbe invisibile — e non darebbe nessun errore.
+     *
+     * 💡 Quindi: qui **la sua o niente**, e il ripiego lo fa l'app, che sa
+     * anche quale delle due va tinta.
+     */
+    public function immagineSua(): ?string
+    {
+        return $this->getFirstMediaUrl(self::COLLECTION_IMMAGINE) ?: null;
     }
 }
