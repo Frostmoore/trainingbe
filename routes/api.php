@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\Nutrition\ImportazioneDaDocumentoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
 use App\Http\Controllers\Api\V1\Nutrition\TraslocoDelDiarioController;
+use App\Http\Controllers\Api\V1\PasswordDimenticataController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\TrainerController;
@@ -177,6 +178,23 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('throttle:auth-register');
 
         Route::post('login', [AuthController::class, 'login'])
+            ->middleware('throttle:auth-login');
+
+        /*
+         * 🔑 **«Ho dimenticato la password»** - 22/09/2026, fase F4.0.
+         *
+         * ⛔ **Prima non esisteva**: chi perdeva la password dall'app non
+         * aveva nessuna strada, e il tasto «manda il reset» del pannello non
+         * aveva nessuna pagina dove mandare la gente.
+         *
+         * ⚠️ Risponde **sempre 200 con la stessa frase**, anche per un
+         * indirizzo che non esiste: il contrario sarebbe un modo di chiedere
+         * al server quali email sono iscritte.
+         *
+         * 🚨 Sotto `auth-login`: provare indirizzi da qui deve costare
+         * quanto provare password.
+         */
+        Route::post('password-dimenticata', PasswordDimenticataController::class)
             ->middleware('throttle:auth-login');
 
         /*

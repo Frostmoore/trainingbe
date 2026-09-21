@@ -6,6 +6,8 @@ namespace App\Filament\God\Resources\Users;
 
 use App\Filament\God\Resources\Users\Pages\EditUser;
 use App\Filament\God\Resources\Users\Pages\ListUsers;
+use App\Filament\God\Resources\Users\Pages\ViewUser;
+use App\Filament\God\Resources\Users\Schemas\SchedaDellaPersona;
 use App\Filament\God\Resources\Users\Schemas\UserForm;
 use App\Filament\God\Resources\Users\Tables\UsersTable;
 use App\Models\Scopes\TenantScope;
@@ -74,6 +76,18 @@ class UserResource extends Resource
     }
 
     /**
+     * 👤 **La scheda che si guarda** — 22/09/2026, fase F4.2.
+     *
+     * ⚠️ Non è il modulo con i campi in grigio: è la pagina che risponde a
+     * *«chi è questa persona»* — quanto ha speso, che abbonamento ha, perché
+     * non riesce a entrare. Il perché per esteso sta in `SchedaDellaPersona`.
+     */
+    public static function infolist(Schema $schema): Schema
+    {
+        return SchedaDellaPersona::configure($schema);
+    }
+
+    /**
      * L'elenco deve mostrare gli utenti di tutte le palestre, cancellati
      * compresi: chi fa supporto ha bisogno di vedere anche l'account che
      * «non c'e' piu'», altrimenti l'unica risposta possibile e' «non lo trovo».
@@ -101,7 +115,16 @@ class UserResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class, TenantScope::class])
-            ->with('tenant');
+            /*
+             * 🚨 **L'abbonamento si carica qui, non nella colonna** — F4.1.
+             *
+             * ⛔ `UsersTable` mostra piano, scadenza e «abbonato»: senza questo
+             * `with()` ognuna delle tre chiederebbe il tenant e il suo
+             * abbonamento **per ogni scheda disegnata** — un elenco da
+             * cinquanta righe diventerebbe centocinquanta query, e nessun
+             * errore lo segnalerebbe: solo una pagina che ci mette due secondi.
+             */
+            ->with(['tenant', 'tenant.abbonamentoAttivo.plan']);
     }
 
     public static function getRecordRouteBindingEloquentQuery(): Builder
@@ -114,6 +137,7 @@ class UserResource extends Resource
     {
         return [
             'index' => ListUsers::route('/'),
+            'view' => ViewUser::route('/{record}'),
             'edit' => EditUser::route('/{record}/edit'),
         ];
     }

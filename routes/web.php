@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\IscrizioneController;
 use App\Http\Controllers\OffertaController;
+use App\Http\Controllers\ReimpostaPasswordController;
 use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
@@ -114,6 +115,29 @@ Route::get('/professionisti', [SitoController::class, 'professionisti'])
 | 🚨 Stanno **sopra** `/{quale}`: quella e' la rotta dei documenti legali con
 | segnaposto, e messa prima si prenderebbe anche `scrivici`.
 */
+/*
+| 🔑 La password dimenticata - 22/09/2026, fase F4.
+|
+| 📌 *«Eh sì va creata la pagina di reimpostazione password»*.
+|
+| ⚠️ **Sta sul sito e non dietro l'autenticazione**: ci arriva chi non riesce
+| a entrare, e una pagina protetta gli chiederebbe di accedere per poter rifare
+| la password di chi non riesce ad accedere.
+|
+| 🚨 Il token e' vincolato a 64 caratteri alfanumerici: senza il vincolo, un
+| token storto finisce in una query invece che in un 404.
+|
+| ⚠️ `throttle` sul POST: e' la rotta che **cambia una password**.
+*/
+Route::get('/reimposta-password/{token}', [ReimpostaPasswordController::class, 'modulo'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('sito.reimposta-password');
+
+Route::post('/reimposta-password/{token}', [ReimpostaPasswordController::class, 'salva'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:6,1')
+    ->name('sito.reimposta-password.salva');
+
 Route::get('/scrivici', [ScriviciController::class, 'modulo'])->name('sito.scrivici');
 
 /*

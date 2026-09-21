@@ -8,9 +8,11 @@ use App\Enums\AuditAction;
 use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
 use App\Filament\God\Resources\Tenants\TenantResource;
+use App\Filament\Support\MandaIlReset;
 use App\Filament\Support\VoceDiScheda;
 use App\Models\Plan;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Billing\ContoDegliIscritti;
 use Filament\Actions\Action;
@@ -294,6 +296,22 @@ class TenantsTable
                 EditAction::make()
                     ->button()
                     ->outlined(),
+
+                /*
+                 * 🔑 **Il reset del titolare** — 22/09/2026, fase F3.6.
+                 *
+                 * 📌 *«mi serve un tasto per mandare il reset password»*, anche
+                 * qui. ⚠️ Ma **una palestra non ha una password**: ce l'ha la
+                 * persona che la amministra. 💡 Chi sia, e perché proprio lei,
+                 * lo decide `Tenant::aChiScrivere()`.
+                 *
+                 * ⛔ Su una palestra senza titolare il pulsante **sparisce**
+                 * invece di mandare il link a un iscritto qualsiasi.
+                 */
+                MandaIlReset::make(
+                    fn (Tenant $r): ?User => $r->aChiScrivere(),
+                    'reset_del_titolare',
+                )->label('Reset del titolare'),
 
                 Action::make('sospendi')
                     ->button()

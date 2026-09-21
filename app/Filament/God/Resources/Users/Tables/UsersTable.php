@@ -6,6 +6,7 @@ namespace App\Filament\God\Resources\Users\Tables;
 
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
+use App\Filament\Support\MandaIlReset;
 use App\Filament\Support\VoceDiScheda;
 use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Plan;
@@ -16,7 +17,10 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Billing\Stripe\Cassa;
 use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\Layout\Split;
@@ -105,12 +109,96 @@ class UsersTable
                         ->copyable()
                         ->copyMessage('Email copiata')),
 
-                    VoceDiScheda::make('Palestra', TextColumn::make('tenant.name')
-                        ->label('Palestra')
+                    /*
+                     * ══ 🏢 «PALESTRA» → «TENANT» — 22/09/2026, F4.1 ════════
+                     *
+                     * ⛔ **Non è una palestra.** `users.tenant_id` punta allo
+                     * **spazio che paga**, e per metà degli account di questo
+                     * elenco quello spazio è un **tenant personale**: il suo
+                     * nome è il nome e cognome della persona stessa.
+                     *
+                     * 🚨 Così com'era, la scheda di un utente libero scriveva
+                     * *«Palestra: Mario Rossi»*: chi legge cerca una palestra
+                     * che non esiste, e chi fa supporto ci telefona.
+                     *
+                     * ✅ Adesso il tenant personale si dichiara per quello che
+                     * è — **«personale»** — e il nome vero resta sotto, dove
+                     * serve a ritrovare la riga senza spacciarla per un
+                     * cliente.
+                     */
+                    VoceDiScheda::make('Tenant', TextColumn::make('tenant.name')
+                        ->label('Tenant')
                         ->placeholder('Piattaforma')
                         ->badge()
-                        ->color(fn (?string $state): string => $state === null ? 'danger' : 'gray')
+                        ->state(fn (User $r): ?string => match (true) {
+                            $r->tenant === null => null,
+                            $r->tenant->ePersonale() => 'personale',
+                            default => $r->tenant->name,
+                        })
+                        ->description(fn (User $r): ?string => ($r->tenant?->ePersonale() ?? false)
+                            ? $r->tenant->name
+                            : null)
+                        ->color(fn (User $r): string => match (true) {
+                            $r->tenant === null => 'danger',
+                            $r->tenant->ePersonale() => 'info',
+                            default => 'gray',
+                        })
                         ->sortable()),
+
+                    /*
+                     * ══ 💳 L'ABBONAMENTO, TRE VOCI — 22/09/2026, F4.1 ═══════
+                     *
+                     * 📌 Il committente vuole vedere **dall'elenco** se una
+                     * persona è abbonata, a cosa, e fino a quando.
+                     *
+                     * ⚠️ **L'abbonamento non sta sulla persona**: sta sul
+                     * tenant (`plan_subscriptions.tenant_id`). Per un iscritto
+                     * di palestra quello che si vede qui è **l'abbonamento
+                     * della palestra**, ed è corretto — è quello che gli apre
+                     * l'app. 💡 Per questo la scadenza scrive *«della
+                     * palestra»*: senza, sembrerebbe suo e personale.
+                     *
+                     * 🚨 **Niente query per riga**: `UserResource::
+                     * getEloquentQuery()` carica già `tenant.abbonamentoAttivo.
+                     * plan`. ⛔ Senza quell'`with()` questa colonna farebbe due
+                     * query per ogni scheda disegnata.
+                     */
+                    VoceDiScheda::make('Abbonato', TextColumn::make('abbonato')
+                        ->label('Abbonato')
+                        ->badge()
+                        ->state(fn (User $r): string => self::abbonamentoDi($r) !== null ? 'sì' : 'no')
+                        ->color(fn (User $r): string => self::abbonamentoDi($r) !== null ? 'success' : 'gray')),
+
+                    VoceDiScheda::make('Piano', TextColumn::make('piano')
+                        ->label('Piano')
+                        ->badge()
+                        ->color('gray')
+                        ->placeholder('nessuno')
+                        ->state(fn (User $r): ?string => self::abbonamentoDi($r)?->plan?->name)),
+
+                    /*
+                     * ⚠️ `ends_at = null` vuol dire **«non scade»**, ed è la
+                     * convenzione delle palestre: scriverci «scaduto» sarebbe
+                     * l'errore opposto a quello che si sta correggendo.
+                     */
+                    VoceDiScheda::make('Scade', TextColumn::make('scade')
+                        ->label('Scade')
+                        ->state(fn (User $r): ?string => self::abbonamentoDi($r)?->ends_at?->format('d/m/Y'))
+                        ->placeholder(fn (User $r): string => self::abbonamentoDi($r) === null ? '—' : 'non scade')
+                        ->description(function (User $r): ?string {
+                            $abbonamento = self::abbonamentoDi($r);
+
+                            if ($abbonamento === null) {
+                                return null;
+                            }
+
+                            $rinnovo = $abbonamento->rinnova ? 'si rinnova da solo' : 'non si rinnova';
+
+                            return ($r->tenant?->ePersonale() ?? false)
+                                ? $rinnovo
+                                : $rinnovo.', della palestra';
+                        })
+                        ->color(fn (User $r): string => (self::abbonamentoDi($r)?->rinnova ?? true) ? 'gray' : 'warning')),
 
                     VoceDiScheda::make('Ruoli', TextColumn::make('ruoli')
                         ->label('Ruoli')
@@ -266,7 +354,140 @@ class UsersTable
              * senza, quel foglio non esce e nulla lo segnala.
              */
             ->recordActions([
+                /*
+                 * 👁️ **«Scheda» è un pulsante, non la riga intera** — F4.2.
+                 *
+                 * 📌 Vale ancora *«la card non deve essere tutta cliccabile,
+                 * solo il tasto»*: `recordUrl(null)` resta, e la scheda si
+                 * apre da qui. ⛔ Rendere cliccabile tutta l'area adesso che
+                 * porta a una pagina nuova sarebbe stato il modo più rapido di
+                 * riaprire il problema che quella regola ha chiuso.
+                 */
+                ViewAction::make()
+                    ->label('Scheda')
+                    ->button()
+                    ->outlined(),
+
                 EditAction::make()
+                    ->button()
+                    ->outlined(),
+
+                /*
+                 * 🔑 **Il tasto del reset** — 22/09/2026, F4.6.
+                 *
+                 * 📌 *«mi serve un tasto per mandare il reset password»*.
+                 * ⛔ Prima di F4.0 non esisteva né la pagina né la rotta: il
+                 * tasto avrebbe mandato la gente su un 404.
+                 *
+                 * 🚨 La regola per cui il pannello **non vede e non sceglie**
+                 * la password sta tutta in `MandaIlReset`, scritta una volta
+                 * per i quattro posti che la useranno.
+                 */
+                MandaIlReset::perUtente(),
+
+                /*
+                 * ══ ⏸️ SOSPENDI — 22/09/2026, F4.1 ═══════════════════════════
+                 *
+                 * 📌 Il committente vuole poter **sospendere** un utente
+                 * dall'elenco, senza passare dal modulo di modifica.
+                 *
+                 * ⚠️ **Non è una cancellazione.** `is_active = false` chiude
+                 * l'accesso e basta: i dati restano, le schede restano, e
+                 * riaccenderlo è un tocco. 💡 È la cosa giusta per il 90% dei
+                 * casi di supporto — un pagamento contestato, un account
+                 * condiviso, un dubbio da chiarire — dove cancellare sarebbe
+                 * irreversibile e sproporzionato.
+                 *
+                 * 🚨 **Non chiude da sola le sessioni già aperte**: i token
+                 * dell'app si cancellano qui, o chi è già dentro resterebbe
+                 * dentro finché non esce da solo. ⛔ Una sospensione che
+                 * lascia l'app funzionante non è una sospensione.
+                 */
+                Action::make('sospendi')
+                    ->button()
+                    ->outlined()
+                    ->label(fn (User $r): string => $r->is_active ? 'Sospendi' : 'Riattiva')
+                    ->icon(fn (User $r): string => $r->is_active ? 'heroicon-m-pause-circle' : 'heroicon-m-play-circle')
+                    ->color(fn (User $r): string => $r->is_active ? 'warning' : 'success')
+                    ->visible(fn (User $r): bool => $r->deleted_at === null)
+                    ->requiresConfirmation()
+                    ->modalHeading(fn (User $r): string => $r->is_active
+                        ? "Sospendere {$r->name}?"
+                        : "Riattivare {$r->name}?")
+                    ->modalDescription(fn (User $r): string => $r->is_active
+                        ? 'Non potra\' piu\' entrare, ne\' dall\'app ne\' dal pannello, e le sessioni gia\' aperte '
+                          .'si chiudono subito. I suoi dati NON vengono toccati: schede, allenamenti e gettoni '
+                          .'restano dove sono. Si riattiva da qui. Finisce nel registro.'
+                        : 'Tornera\' a poter entrare. Dovra\' rifare l\'accesso: i vecchi token sono stati cancellati.')
+                    ->modalSubmitActionLabel(fn (User $r): string => $r->is_active ? 'Sospendi' : 'Riattiva')
+                    ->action(function (User $record): void {
+                        $sospeso = $record->is_active;
+
+                        $record->forceFill(['is_active' => ! $sospeso])->save();
+
+                        if ($sospeso) {
+                            // 🚨 Vedi sopra: senza questa riga la sospensione non
+                            // tocca chi è già dentro l'app.
+                            $record->tokens()->delete();
+                        }
+
+                        app(AuditLogger::class)->log(
+                            AuditAction::UserDeactivated,
+                            $record,
+                            [
+                                'email' => $record->email,
+                                'da' => 'elenco utenti',
+                                'ora' => $sospeso ? 'sospeso' : 'riattivato',
+                            ],
+                            tenant: $record->tenant_id,
+                        );
+
+                        Notification::make()
+                            ->title($sospeso
+                                ? $record->name.' e\' sospeso'
+                                : $record->name.' e\' di nuovo attivo')
+                            ->success()
+                            ->send();
+                    }),
+
+                /*
+                 * ══ 🗑️ ELIMINA — 22/09/2026, F4.1 ════════════════════════════
+                 *
+                 * ⚠️ È un `SoftDeletes`: la riga resta, e il filtro
+                 * «Cancellati» la ritrova. 💡 È quello che serve a chi fa
+                 * supporto — *«non lo trovo più»* è la telefonata peggiore.
+                 *
+                 * 🚨 **La cancellazione DEFINITIVA non sta qui.** Quella la fa
+                 * `account:spazza-i-cancellati` con tutte le sue regole
+                 * (`EsportaIDatiDellaPersona`, i documenti contabili che
+                 * restano). ⛔ Un `forceDelete()` da un elenco salterebbe ogni
+                 * singola regola, in un tocco, senza modo di tornare indietro.
+                 */
+                DeleteAction::make()
+                    ->button()
+                    ->outlined()
+                    ->modalDescription(
+                        'Finisce nel cestino: l\'accesso si chiude subito, ma la scheda resta e si ritrova col '
+                        .'filtro «Cancellati». La cancellazione definitiva la fa il comando notturno, con le sue '
+                        .'regole: non questo tasto.'
+                    )
+                    ->after(function (User $record): void {
+                        /*
+                         * 🚨 Come la sospensione: chi è già dentro l'app ci
+                         * resterebbe, e un account cancellato che continua a
+                         * funzionare è peggio di uno non cancellato.
+                         */
+                        $record->tokens()->delete();
+
+                        app(AuditLogger::class)->log(
+                            AuditAction::UserDeleted,
+                            $record,
+                            ['email' => $record->email, 'da' => 'elenco utenti'],
+                            tenant: $record->tenant_id,
+                        );
+                    }),
+
+                RestoreAction::make()
                     ->button()
                     ->outlined(),
 
@@ -638,6 +859,21 @@ class UsersTable
      * 💡 Quello che è sparito è il modo di **mostrarla in un elenco**, dove
      * scriveva sempre lo stesso numero.
      */
+
+    /**
+     * L'abbonamento che vale per questa persona, se ce n'è uno — F4.1.
+     *
+     * ⚠️ **Sta sul tenant, non sull'utente**: `plan_subscriptions` ha
+     * `tenant_id`. 💡 Per un iscritto di palestra questo è l'abbonamento
+     * **della palestra**, ed è giusto così: è quello che gli apre l'app.
+     *
+     * 🚨 Si appoggia all'eager load di `UserResource::getEloquentQuery()`:
+     * ⛔ senza, sarebbero due query per ogni scheda disegnata.
+     */
+    private static function abbonamentoDi(User $utente): ?PlanSubscription
+    {
+        return $utente->tenant?->abbonamentoAttivo;
+    }
 
     /** @return list<string> */
     private static function ruoliDi(User $user): array

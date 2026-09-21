@@ -7,8 +7,10 @@ namespace App\Models;
 use App\Enums\SocialProvider;
 use App\Enums\TenantKind;
 use App\Enums\TenantStatus;
+use App\Enums\UserRole;
 use App\Models\Scopes\TenantScope;
 use App\Services\Auth\Social\SocialTokenVerifier;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -107,6 +110,47 @@ class Tenant extends Model
     {
         return $this->belongsTo(User::class, 'proprietario_id')
             ->withoutGlobalScopes([TenantScope::class]);
+    }
+
+    /**
+     * 🔑 **A chi si scrive, per questa palestra** — 22/09/2026, fase F3.6.
+     *
+     * 📌 Serve al tasto *«manda il reset password»*: una palestra non ha una
+     * casella sua, ha **una persona** che la amministra.
+     *
+     * ══ 🚨 TRE STRADE, IN QUEST'ORDINE, E IL PERCHÉ ══════════════════════
+     *
+     * 1. **`proprietario_id`**, se c'è: è chi paga, ed è la risposta giusta.
+     * 2. **Il `gym_admin` più vecchio**: sulle palestre nate prima di 3b-AH
+     *    quella colonna è vuota, e il titolare si riconosce solo dal ruolo.
+     *    ⚠️ Il più vecchio e non uno a caso: è quello che ha creato tutto il
+     *    resto, e mandare il reset a un collaboratore aggiunto la settimana
+     *    scorsa significherebbe dare a lui le chiavi della palestra.
+     * 3. **Niente.** ⛔ Non si ripiega su «un utente qualsiasi»: un reset
+     *    mandato a un iscritto a caso è un incidente, non un ripiego.
+     *
+     * 💡 `runWithoutTenant` perché in modalità teams la pivot dei ruoli è
+     * filtrata sul tenant corrente, e qui il contesto è vuoto.
+     */
+    public function aChiScrivere(): ?User
+    {
+        if ($this->proprietario !== null) {
+            return $this->proprietario;
+        }
+
+        return app(TenantContext::class)->runWithoutTenant(
+            fn (): ?User => User::withoutGlobalScopes()
+                ->whereNull('deleted_at')
+                ->whereIn('id', DB::table('model_has_roles as mhr')
+                    ->join('roles as r', function ($join): void {
+                        $join->on('r.id', '=', 'mhr.role_id')->on('r.tenant_id', '=', 'mhr.tenant_id');
+                    })
+                    ->where('mhr.tenant_id', $this->getKey())
+                    ->where('r.name', UserRole::GymAdmin->value)
+                    ->select('mhr.model_id'))
+                ->orderBy('id')
+                ->first(),
+        );
     }
 
     /**

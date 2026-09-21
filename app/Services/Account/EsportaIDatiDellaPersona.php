@@ -104,6 +104,20 @@ final class EsportaIDatiDellaPersona
          * i movimenti dei gettoni e le ricevute di Stripe — e quelli escono già.
          */
         'promozione_bersagli' => 'Dice che un\'offerta nostra la riguarda, non è un dato su di lei: quello che ha usato sta nei movimenti.',
+
+        /*
+         * 🆕 🔑 22/09/2026, fase F4 — le reimpostazioni della password.
+         *
+         * 🚨 **Stessa regola di `password_reset_tokens`, e per lo stesso
+         * motivo**: una riga qui dentro è una **chiave d'accesso**. ⛔ In un
+         * file scaricato — che finisce in Download, in una chat, in un
+         * backup — aprirebbe l'account a chiunque lo trovi entro l'ora.
+         *
+         * 💡 E non si perde niente: l'unico dato «suo» sarebbe *quante volte
+         * ha chiesto il reset*, che non è un'informazione che la riguarda più
+         * di quanto la esponga.
+         */
+        'reimpostazioni_password' => 'Sono chiavi d\'accesso a tempo: consegnarle in un export è consegnare l\'account.',
     ];
 
     /** Le colonne di `users` che non escono mai. */

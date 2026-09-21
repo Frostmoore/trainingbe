@@ -106,6 +106,19 @@ enum AuditAction: string
      */
     case PianoSuMisuraAssegnato = 'tenant.piano_su_misura_assegnato';
 
+    /**
+     * 🔑 **Un link per rifare la password, mandato dal pannello** - 22/09/2026, F4.
+     *
+     * 🚨 È un gesto che **apre un account a chi legge quella casella**: per
+     * un'ora chiunque abbia il link entra al posto di quella persona. ⚠️ Senza
+     * questa riga, di chi l'ha premuto non resterebbe niente - il token è in
+     * tabella, ma l'impronta non dice **chi** l'ha chiesto né da dove.
+     *
+     * 💡 `chiesto_da_id` lo dice in `reimpostazioni_password`; qui sta nel
+     * registro insieme a tutto il resto, dove lo si va davvero a cercare.
+     */
+    case ResetPasswordMandato = 'user.reset_password_mandato';
+
     public function label(): string
     {
         return match ($this) {
@@ -127,6 +140,7 @@ enum AuditAction: string
             self::IscrittoDisiscritto => 'Iscritto disiscritto',
             self::UscitoDallaPalestra => 'Uscito dalla palestra',
             self::PianoSuMisuraAssegnato => 'Piano su misura assegnato',
+            self::ResetPasswordMandato => 'Link per la password mandato',
         };
     }
 
@@ -137,7 +151,7 @@ enum AuditAction: string
             self::ImpersonationStarted, self::UserDeleted, self::TenantSuspended => 'danger',
             self::ImpersonationStopped, self::UserDeactivated, self::RoleChanged,
             self::AiQuotaChanged, self::AbbonamentoRegalato,
-            self::PianoSuMisuraAssegnato => 'warning',
+            self::PianoSuMisuraAssegnato, self::ResetPasswordMandato => 'warning',
             default => 'gray',
         };
     }

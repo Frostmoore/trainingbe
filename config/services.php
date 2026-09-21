@@ -187,4 +187,20 @@ return [
         'sandbox' => ! $stripeUsaChiaviVere,
     ],
 
+    /*
+     * 💱 **Il cambio dollaro → euro** — 22/09/2026, fase F3.5.
+     *
+     * 🚨 **Serve perché i due numeri dei grafici non sono nella stessa
+     * valuta.** Anthropic fattura in dollari, noi incassiamo in euro: un
+     * riquadro «quanto ci dà / quanto ci costa» che li affianca senza
+     * convertire mostra un margine sbagliato, e lo mostra bene — nessun
+     * errore, solo una linea rossa più bassa di quanto dovrebbe.
+     *
+     * ⚠️ **È un'approssimazione dichiarata, non una misura.** ⛔ Non chiama
+     * nessun servizio di cambio: una richiesta HTTP dentro il disegno di un
+     * grafico è una pagina che a volte non si apre. 💡 Per i conti veri
+     * valgono le fatture, non questa costante.
+     */
+    'cambio_usd_eur' => (float) env('CAMBIO_USD_EUR', 0.92),
+
 ];
