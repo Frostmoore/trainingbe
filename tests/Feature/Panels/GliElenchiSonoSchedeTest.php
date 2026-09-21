@@ -100,8 +100,17 @@ final class GliElenchiSonoSchedeTest extends TestCase
         Livewire::test(ListTenants::class)
             ->assertSuccessful()
             ->assertSee('Demo')
-            ->assertSee('DEMO2345')
-            ->assertSee('demo');
+            ->assertSee('demo')
+            /*
+             * ⛔ **Il codice della palestra non si vede più** — 21/09/2026,
+             * fase F1. 📌 *«il codice palestra non ha più senso di esistere,
+             * gli inviti si fanno con il link di invito»*.
+             *
+             * ⚠️ La colonna `join_code` è ancora viva altrove (registrazione,
+             * login, app): toglierla di lì è la fase F11. Qui si difende che
+             * dal pannello **non si mostri più**.
+             */
+            ->assertDontSee('DEMO2345');
     }
 
     #[Test]

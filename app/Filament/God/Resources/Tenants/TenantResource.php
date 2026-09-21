@@ -78,7 +78,15 @@ class TenantResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->palestre();
+        /*
+         * 🆕 **`with('abbonamentoAttivo.plan')`** — 21/09/2026, fase F1.
+         *
+         * ⚠️ L'elenco mostra il piano vero, quanto paga e quando scade: senza
+         * il caricamento anticipato sarebbero **tre query per riga**.
+         */
+        return parent::getEloquentQuery()
+            ->palestre()
+            ->with('abbonamentoAttivo.plan');
     }
 
     public static function form(Schema $schema): Schema

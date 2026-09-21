@@ -65,6 +65,47 @@ class ContoDegliIscritti
      * in modalita' teams tiene un ruolo per tenant, e un join sul solo `id`
      * pescherebbe il ruolo omonimo di un'altra palestra.
      */
+    /**
+     * 🆕 **Lo stesso conto, per tutte le palestre in una query** — 21/09/2026,
+     * fase F1.
+     *
+     * ══ 🚨 PERCHÉ NON SI CHIAMA [quanti] IN UN CICLO ═════════════════════════
+     *
+     * Perché il pannello della piattaforma elenca le palestre con accanto
+     * quanto pagano, e quanto pagano dipende da quanti iscritti hanno: con una
+     * query per riga la pagina fa venti interrogazioni per disegnare una
+     * colonna.
+     *
+     * ⛔ **E perché non si riscrive il conteggio**: le regole difficili — il
+     * `join` su `users` per non contare i cancellati, il doppio `join` su
+     * `roles` per non pescare il ruolo omonimo di un'altra palestra — stanno
+     * scritte una volta sola qui sopra, e qui sotto si ripetono **identiche**.
+     * 🚨 Il giorno che divergono, il pannello dice un numero e la fattura ne
+     * addebita un altro.
+     *
+     * @return array<int, int> id della palestra → quante persone
+     */
+    public function perOgniPalestra(UserRole $ruolo = UserRole::Member): array
+    {
+        return $this->context->runWithoutTenant(
+            fn (): array => DB::table('model_has_roles as mhr')
+                ->join('roles as r', function ($join): void {
+                    $join->on('r.id', '=', 'mhr.role_id')
+                        ->on('r.tenant_id', '=', 'mhr.tenant_id');
+                })
+                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->whereNull('u.deleted_at')
+                ->where('u.is_active', true)
+                ->where('mhr.model_type', (new User)->getMorphClass())
+                ->where('r.name', $ruolo->value)
+                ->groupBy('mhr.tenant_id')
+                ->selectRaw('mhr.tenant_id, COUNT(DISTINCT mhr.model_id) as quanti')
+                ->pluck('quanti', 'mhr.tenant_id')
+                ->map(fn ($n): int => (int) $n)
+                ->all(),
+        );
+    }
+
     public function quanti(Tenant $palestra, UserRole $ruolo = UserRole::Member): int
     {
         return $this->context->runWithoutTenant(

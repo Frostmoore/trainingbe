@@ -8,7 +8,6 @@ use App\Enums\TenantStatus;
 use App\Models\Tenant;
 use Filament\Actions\Action;
 use Filament\Forms\Components\ColorPicker;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -95,7 +94,25 @@ class TenantForm
                     ColorPicker::make('color_accent')->label('Accento')->required(),
                 ]),
 
-            Section::make('Abbonamento e limiti')
+            /*
+             * ══ 🧹 QUI DENTRO C'ERANO QUATTRO CAMPI MORTI — 21/09/2026, F1 ══
+             *
+             * 📌 Il committente, uno per uno: *«i piani devono avere il loro
+             * nome vero»*, *«fine del periodo di prova non esiste»*,
+             * *«chiamate ai al mese non esiste più»*, *«di cui con foto idem»*.
+             *
+             * | Campo | Cos'era |
+             * |---|---|
+             * | `plan` | ⛔ una colonna **legacy** con `starter`/`pro`/`enterprise`: non ha niente a che vedere con l'abbonamento vero, che sta in `plan_subscriptions` |
+             * | `trial_ends_at` | ⚠️ la legge ancora `Tenant::isActive()` per i tenant in stato `trial`, ma **nessuno mette più niente in prova**: zero righe valorizzate |
+             * | le due quote AI | ⚠️ sono due livelli della catena di `MemberAiQuota`, e restano **nel database**: servono il giorno che a una palestra si dà un'eccezione. Qui erano due caselle che nessuno ha mai riempito |
+             *
+             * 🚨 **Il piano non si cambia da qui**, e non è una dimenticanza:
+             * cambiarlo vuol dire toccare l'abbonamento — Stripe, date,
+             * rinnovo. Si fa da «Piani e listino» con il link di pagamento, o
+             * con «Attiva senza pagamento» (atlante §105).
+             */
+            Section::make('Stato e lingua')
                 ->columns(2)
                 ->schema([
                     Select::make('status')
@@ -105,36 +122,6 @@ class TenantForm
                         ->required()
                         ->native(false)
                         ->helperText('Sospesa o disdetta: nessuno entra, né dall\'app né dal pannello.'),
-
-                    Select::make('plan')
-                        ->label('Piano')
-                        ->options(['starter' => 'Starter', 'pro' => 'Pro', 'enterprise' => 'Enterprise'])
-                        ->required()
-                        ->native(false),
-
-                    DateTimePicker::make('trial_ends_at')
-                        ->label('Fine del periodo di prova')
-                        ->helperText('Scaduto, il login è negato anche se lo stato è ancora «in prova».'),
-
-                    TextInput::make('ai_monthly_calls_per_member')
-                        ->label('Chiamate AI al mese, per iscritto')
-                        ->numeric()
-                        ->minValue(0)
-                        ->helperText(
-                            'Il tetto vale per OGNI iscritto, non per la palestra: '
-                            .'il costo massimo del mese è iscritti × questo numero. '
-                            .'Vuoto = default di sistema. 0 = nessun limite.'
-                        ),
-
-                    TextInput::make('ai_monthly_photo_calls_per_member')
-                        ->label('...di cui con foto')
-                        ->numeric()
-                        ->minValue(0)
-                        ->helperText(
-                            'È un SOTTO-LIMITE del numero qui sopra, non un budget a parte: '
-                            .'una foto consuma entrambi i contatori. '
-                            .'Costa circa sette volte una chiamata normale.'
-                        ),
 
                     Select::make('locale')
                         ->label('Lingua')

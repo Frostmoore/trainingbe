@@ -12,9 +12,7 @@ use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
-use App\Services\Ai\Quota\MemberAiQuota;
 use App\Services\Audit\AuditLogger;
-use App\Services\Billing\PianoAttivo;
 use App\Services\Billing\Stripe\Cassa;
 use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
@@ -152,28 +150,31 @@ class UsersTable
                         ->toggleable()),
 
                     /*
-                     * La quota AI EFFETTIVA -- 14/08/2026.
+                     * ══ 🎟️ I GETTONI, AL POSTO DELLA QUOTA — 21/09/2026, F1 ══
                      *
-                     * Non e' la colonna `ai_monthly_call_cap`, ed e' la ragione
-                     * per cui c'e': quella colonna e' vuota per quasi tutti, e un
-                     * elenco di caselle vuote farebbe concludere "nessuno ha
-                     * quota" -- il contrario del vero. Qui si legge cosa risponde
-                     * la CATENA INTERA (`MemberAiQuota`).
+                     * 📌 Il committente: *«quota ai non esiste, è sempre 150.
+                     * Mettici token con quanti token ha»*.
                      *
-                     * Costa una query per riga, percio' e' spenta di default: chi
-                     * fa supporto la accende quando gli serve.
+                     * ⚠️ **Ha ragione sul fatto**: la catena risponde 150 a
+                     * tutti, perché è quello che dice il piano, e una colonna
+                     * che scrive sempre lo stesso numero non aiuta a decidere
+                     * niente. 💡 I **gettoni** invece cambiano da persona a
+                     * persona: sono comprati, si consumano, e sono la cosa che
+                     * si va davvero a cercare in questo elenco.
+                     *
+                     * ⛔ La catena delle quote **resta** (`MemberAiQuota`, cinque
+                     * livelli): serve il giorno che a qualcuno si dà
+                     * un'eccezione. Qui sparisce la colonna, non la regola.
+                     *
+                     * 💡 Niente query per riga: `ai_credits` è una colonna di
+                     * `users`.
                      */
-                    VoceDiScheda::make('Quota AI', TextColumn::make('quota_ai')
-                        ->label('Quota AI')
+                    VoceDiScheda::make('Gettoni', TextColumn::make('ai_credits')
+                        ->label('Gettoni')
                         ->badge()
-                        ->getStateUsing(fn (User $r): string => static::quotaDi($r))
-                        ->color(fn (string $state): string => match (true) {
-                            $state === 'AI spenta' => 'gray',
-                            $state === 'illimitata' => 'danger',
-                            str_starts_with($state, 'sua:') => 'warning',
-                            default => 'gray',
-                        })
-                        ->toggleable(isToggledHiddenByDefault: true)),
+                        ->formatStateUsing(fn (?int $state): string => number_format((int) $state, 0, ',', '.'))
+                        ->color(fn (?int $state): string => ((int) $state) > 0 ? 'success' : 'gray')
+                        ->sortable()),
 
                     VoceDiScheda::make('Iscritto il', TextColumn::make('created_at')
                         ->label('Iscritto il')
@@ -625,38 +626,20 @@ class UsersTable
             ->emptyStateDescription('Gli utenti nascono dentro una palestra: dall\'app col codice d\'invito, o dal pannello della palestra.');
     }
 
-    /** @return list<string> */
-    /**
-     * La quota **effettiva**, in forma corta per un badge.
+    /*
+     * ⛔ **`quotaDi()` non c'è più** — 21/09/2026, fase F1.
      *
-     * 💡 Distingue «gliel'abbiamo data noi» da «le spetta»: `sua:` marca il
-     * tetto scritto **su questa persona**, che e' l'unico che qualcuno ha
-     * deciso a mano e l'unico che abbia senso andare a togliere.
+     * 📌 Il committente: *«quota ai non esiste, è sempre 150»*. La colonna
+     * che la mostrava è diventata quella dei **gettoni**, e questo aiuto non
+     * lo chiamava più nessuno.
+     *
+     * ⚠️ **La catena delle quote resta**, tutti e cinque i livelli, in
+     * `MemberAiQuota`: serve il giorno che a una persona si dà un'eccezione.
+     * 💡 Quello che è sparito è il modo di **mostrarla in un elenco**, dove
+     * scriveva sempre lo stesso numero.
      */
-    private static function quotaDi(User $utente): string
-    {
-        // 🚨 Prima il cancello: un tetto su un'AI spenta e' un numero che non
-        // vuol dire niente, ed e' l'equivoco su cui il 14/08 e' andato perso un
-        // giro intero.
-        if (! app(PianoAttivo::class)->haLaAi($utente)) {
-            return 'AI spenta';
-        }
 
-        if ($utente->ai_monthly_call_cap === 0) {
-            return 'illimitata';
-        }
-
-        if ($utente->ai_monthly_call_cap !== null) {
-            return 'sua: '.$utente->ai_monthly_call_cap;
-        }
-
-        $tetto = app(MemberAiQuota::class)->capFor($utente);
-
-        // ⚠️ `null` da `capFor()` vuol dire **illimitato**: la catena e' gia'
-        // stata risolta, e lo `0` di un livello superiore e' gia' tradotto.
-        return $tetto === null ? 'illimitata' : (string) $tetto;
-    }
-
+    /** @return list<string> */
     private static function ruoliDi(User $user): array
     {
         $ruoli = DB::table('model_has_roles')

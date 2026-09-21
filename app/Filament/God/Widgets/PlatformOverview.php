@@ -11,7 +11,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 
 /**
  * I numeri della piattaforma — B2.5.
@@ -72,11 +72,6 @@ class PlatformOverview extends StatsOverviewWidget
          * e' che il dato **non esiste piu' qui**.
          */
 
-        $token = (int) AiUsageLog::query()
-            ->withoutGlobalScopes([TenantScope::class])
-            ->inMonth()
-            ->sum(DB::raw('input_tokens + output_tokens'));
-
         $costo = (int) AiUsageLog::query()
             ->withoutGlobalScopes([TenantScope::class])
             ->inMonth()
@@ -93,8 +88,20 @@ class PlatformOverview extends StatsOverviewWidget
                 ->icon('heroicon-m-user-group')
                 ->color('info'),
 
+            /*
+              * ⛔ **Sotto non ci sono più i token** — 21/09/2026, fase F1.
+              *
+              * 📌 Il committente: *«non serve a nulla sapere quanti token hanno
+              * comprato in dashboard»*. 💡 E il docblock di questa classe lo
+              * diceva già dal primo giorno: *«è in cifre e non in token: i token
+              * non dicono niente a nessuno»* — poi i token stavano lì sotto.
+              *
+              * ⚠️ Al loro posto **il mese**, che è l'unica cosa che manca per
+              * leggere la cifra: «12,40 $» senza sapere di quale periodo non
+              * significa niente.
+              */
             Stat::make('Costo AI del mese', '$'.number_format(AiUsageLog::millicentsToCurrency($costo), 2, ',', '.'))
-                ->description(number_format($token, 0, ',', '.').' token')
+                ->description(Carbon::now()->translatedFormat('F Y'))
                 ->icon('heroicon-m-banknotes')
                 ->color($costo > 0 ? 'warning' : 'gray'),
         ];

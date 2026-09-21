@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -106,6 +107,56 @@ class Tenant extends Model
     {
         return $this->belongsTo(User::class, 'proprietario_id')
             ->withoutGlobalScopes([TenantScope::class]);
+    }
+
+    /**
+     * 🆕 **Tutti gli abbonamenti di questa palestra, anche quelli finiti** —
+     * 21/09/2026, fase F1.
+     *
+     * 💡 La storia serve: *«perché a marzo questo cliente aveva l'AI e ad
+     * aprile no?»* è la domanda per cui `plan_subscriptions` esiste invece di
+     * una colonna su `tenants`.
+     */
+    public function abbonamenti(): HasMany
+    {
+        return $this->hasMany(PlanSubscription::class)
+            ->withoutGlobalScopes([TenantScope::class]);
+    }
+
+    /**
+     * 🆕 **L'abbonamento che vale adesso** — 21/09/2026, fase F1.
+     *
+     * ══ 🚨 PERCHÉ NASCE UNA RELAZIONE PER UNA COSA GIÀ SCRITTA IN TRE POSTI ══
+     *
+     * Perché era scritta **in tre posti**: `PianoAttivo::per()` (per persona),
+     * `CosaPaghi::pianoCorrente()` (per la palestra che guarda il suo piano) e
+     * `PianiInVendita::abbonamentoStripeAttivo()`. ⛔ Tre copie della stessa
+     * domanda divergono, e qui divergere vuol dire mostrare un piano e
+     * fatturarne un altro.
+     *
+     * 💡 E serve **eager-loadable**: il pannello della piattaforma elenca le
+     * palestre con il piano accanto, e una query per riga su venti righe è una
+     * pagina che si apre in due secondi invece che in uno.
+     *
+     * ── ⚠️ Perché `orderByDesc` e non `latestOfMany()` ────────────────────
+     *
+     * `latestOfMany()` costruisce una sottoquery che va d'accordo male con lo
+     * scope `attivi()` (che ha dentro un `where` annidato e la pausa). 💡 Con
+     * l'ordinamento, Laravel prende **la prima riga per ogni padre** — che è
+     * esattamente la regola di `PianoAttivo`: l'abbonamento attivo **più
+     * recente**.
+     *
+     * 🚨 `withoutGlobalScopes([TenantScope::class])`: una relazione su
+     * `tenant_id` è **già** filtrata per definizione, e lo scope aggiungerebbe
+     * solo la possibilità di non trovare niente quando la si legge dentro il
+     * contesto di un'altra palestra — cioè sempre, dal pannello `/god`.
+     */
+    public function abbonamentoAttivo(): HasOne
+    {
+        return $this->hasOne(PlanSubscription::class)
+            ->withoutGlobalScopes([TenantScope::class])
+            ->attivi()
+            ->orderByDesc('starts_at');
     }
 
     // ───────────────────────── natura ─────────────────────────

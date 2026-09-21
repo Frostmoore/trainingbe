@@ -65,7 +65,13 @@ class TenantResourceTest extends TestCase
             ->get('/god/tenants')
             ->assertOk()
             ->assertSee('Demo')
-            ->assertSee('DEMO2345');
+            /*
+             * ⛔ **E non il codice** — 21/09/2026, fase F1: dal pannello il
+             * codice della palestra è sparito, perché gli inviti si fanno col
+             * link. ⚠️ La colonna esiste ancora nel resto del sistema: è la
+             * fase F11.
+             */
+            ->assertDontSee('DEMO2345');
     }
 
     /**

@@ -7,29 +7,59 @@ namespace App\Filament\God\Widgets;
 use App\Models\AiUsageLog;
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
+use App\Services\Billing\ContoDegliIscritti;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
 
 /**
- * Le cinque palestre che consumano di piu' — B2.5.
+ * 🏢 **Le palestre a colpo d'occhio** — B2.5, rifatta il 21/09/2026 (fase F1).
  *
- * 🚨 **Serve a una decisione commerciale, non alla curiosita'.** Un cliente che
- * consuma dieci volte gli altri o sta usando il prodotto benissimo — e allora e'
- * il momento di proporgli il piano superiore — oppure ha qualcosa che gira a
- * vuoto. In entrambi i casi bisogna saperlo prima della fattura, non dopo.
+ * ══ 📌 COS'ERA, E PERCHÉ NON ANDAVA ══════════════════════════════════════
  *
- * La colonna «% del tetto» e' quella che dice quale delle due cose sia: al 95%
- * di un tetto basso e' un cliente da far crescere; al 300% di token con un tetto
- * illimitato e' qualcosa da guardare.
+ * Era «le cinque palestre che consumano di più», con dentro **token**, un
+ * **«Costo»** senza unità e un **«Token per iscritto»**. Il committente:
+ *
+ * > *«**Token per iscritto** è falso. Gli abbonati hanno semplicemente 150
+ * > chiamate gratuite, ma non sono token, non chiamarli così … A questo punto
+ * > mettici la data di rinnovo dell'abbonamento o il piano dell'abbonamento col
+ * > costo tra parentesi … **Costo** non so cosa sia, quindi o lo rendi chiaro o
+ * > lo togli. Il senso è che in questa tabella ci devono essere i dati
+ * > importanti che posso vedere velocemente senza entrare su palestre o su
+ * > utenti.»*
+ *
+ * ⛔ Aveva ragione su tutte e tre:
+ *
+ * | Colonna vecchia | Cosa c'era che non andava |
+ * |---|---|
+ * | «Token per iscritto» | ⛔ **Non erano token**: era il tetto di **chiamate** mensili, e vale 150 per tutti — una colonna che scrive sempre lo stesso numero |
+ * | «Token» | 💡 Il consumo in token è un dettaglio tecnico: quello che decide è la **cifra** |
+ * | «Costo» | ⚠️ Era il costo dell'AI del mese **in dollari**, e non lo diceva |
+ * | «Piano» | 🚨 Leggeva `tenants.plan`: una colonna **legacy** che non c'entra con l'abbonamento vero |
+ *
+ * ══ 💡 COSA C'È ADESSO ════════════════════════════════════════════════════
+ *
+ * Le cose per cui si apre questa pagina: **chi è**, **cosa paga**, **quando
+ * scade**, **quanto mi costa in AI**. 🚨 L'ordinamento resta sul costo AI: è
+ * l'unica voce che cresce da sola con l'uso, e la si guarda per prima.
  */
 class TopTenantsByAiCost extends TableWidget
 {
-    protected static ?string $heading = 'Consumo AI del mese per palestra';
+    protected static ?string $heading = 'Le palestre, a colpo d\'occhio';
 
     protected int|string|array $columnSpan = 'full';
 
     protected static ?int $sort = 2;
+
+    /**
+     * 🧮 Gli iscritti di ogni palestra, chiesti una volta sola.
+     *
+     * ⚠️ Serve a dire quanto paga chi è **a consumo**, e lì il numero dipende
+     * dagli iscritti. 💡 È lo stesso conteggio che finisce in fattura.
+     *
+     * @var array<int, int>|null
+     */
+    private static ?array $iscritti = null;
 
     public function table(Table $table): Table
     {
@@ -37,18 +67,12 @@ class TopTenantsByAiCost extends TableWidget
             ->query(
                 Tenant::query()
                     /*
-                     * 🚨 **Solo le palestre** — F1.4. Il titolo dice «per
-                     * palestra» e deve restare vero: senza questo filtro, il
-                     * giorno in cui ci sono utenti gratuiti la classifica si
-                     * riempirebbe di **nomi di persone**, in un elenco pensato
-                     * per decidere a chi alzare o abbassare il tetto di token.
-                     *
-                     * ⏸ Il consumo AI dei tenant personali avrà una sua sede in
-                     * **F4**, quando esisteranno i piani: lì la domanda non è
-                     * «quale cliente mi costa» ma «il piano gratuito regge», e
-                     * sono due tabelle diverse, non una con dentro tutto.
+                     * 🚨 **Solo le palestre** — F1.4: `tenants` contiene anche
+                     * un tenant per ogni persona senza palestra, e qui si
+                     * decide su clienti, non su righe di servizio.
                      */
                     ->palestre()
+                    ->with('abbonamentoAttivo.plan')
                     ->select('tenants.*')
                     ->selectSub(
                         AiUsageLog::query()
@@ -58,59 +82,87 @@ class TopTenantsByAiCost extends TableWidget
                             ->inMonth(),
                         'ai_cost',
                     )
-                    ->selectSub(
-                        AiUsageLog::query()
-                            ->withoutGlobalScopes([TenantScope::class])
-                            ->selectRaw('COALESCE(SUM(input_tokens + output_tokens), 0)')
-                            ->whereColumn('ai_usage_logs.tenant_id', 'tenants.id')
-                            ->inMonth(),
-                        'ai_tokens',
-                    )
                     ->orderByDesc('ai_cost')
-                    ->limit(5),
+                    ->limit(10),
             )
             ->columns([
-                TextColumn::make('name')->label('Palestra')->weight('bold'),
+                TextColumn::make('name')
+                    ->label('Palestra')
+                    ->weight('bold')
+                    ->description(fn (Tenant $r): string => $r->slug),
 
-                TextColumn::make('plan')->label('Piano')->badge()->color('gray'),
+                /*
+                 * 📌 *«il piano dell'abbonamento col costo tra parentesi»*.
+                 *
+                 * ⚠️ Il costo si legge con `Plan::quantoCostaAlMese()`: un
+                 * piano a consumo ha `price_cents = 0`, e mostrarlo così
+                 * direbbe «gratis» sul piano più caro del listino.
+                 */
+                TextColumn::make('abbonamentoAttivo.plan.name')
+                    ->label('Piano')
+                    ->badge()
+                    ->color(fn (Tenant $r): string => $r->abbonamentoAttivo === null ? 'danger' : 'success')
+                    ->placeholder('nessun abbonamento')
+                    ->description(fn (Tenant $r): ?string => self::quantoPaga($r)),
 
-                TextColumn::make('ai_tokens')
-                    ->label('Token')
-                    ->formatStateUsing(fn ($state): string => number_format((int) $state, 0, ',', '.'))
-                    ->alignEnd(),
+                /*
+                 * 📌 *«la data di rinnovo dell'abbonamento»*.
+                 *
+                 * ⚠️ `ends_at = null` vuol dire **non scade**: è la convenzione
+                 * delle palestre, e scriverci «scaduto» sarebbe il contrario.
+                 */
+                TextColumn::make('abbonamentoAttivo.ends_at')
+                    ->label('Rinnovo')
+                    ->dateTime('d/m/Y')
+                    ->placeholder('non scade')
+                    ->description(fn (Tenant $r): ?string => match (true) {
+                        $r->abbonamentoAttivo === null => null,
+                        (bool) $r->abbonamentoAttivo->rinnova => 'automatico',
+                        default => 'non si rinnova',
+                    })
+                    ->color(fn (Tenant $r): string => $r->abbonamentoAttivo?->rinnova ? 'gray' : 'warning'),
 
-                TextColumn::make('ai_cost')
-                    ->label('Costo')
-                    ->formatStateUsing(fn ($state): string => '$'
-                        .number_format(AiUsageLog::millicentsToCurrency((int) $state), 2, ',', '.'))
+                TextColumn::make('iscritti')
+                    ->label('Iscritti')
+                    ->state(fn (Tenant $r): int => self::iscrittiDi($r))
+                    ->badge()
+                    ->color('gray')
                     ->alignEnd(),
 
                 /*
-                 * ⚠️ **Non c'e' piu' una «% del tetto» di palestra** — C20.
-                 *
-                 * La quota e' passata a essere di ciascun iscritto: una
-                 * percentuale di palestra sarebbe una frazione di un tetto che
-                 * non esiste, e chi la guardasse crederebbe di avere un margine
-                 * che nessuno gli garantisce.
-                 *
-                 * Quello che serve sapere da qui e' **quanto da' a ognuno**:
-                 * moltiplicato per gli iscritti, e' il costo massimo del mese —
-                 * un numero che si puo' calcolare prima di venderlo.
+                 * 🚨 **In dollari, e adesso lo dice.** Il listino dei modelli è
+                 * in dollari: convertirlo qui vorrebbe dire scrivere un cambio
+                 * a mano in un cruscotto, e sbagliarlo il giorno che si muove.
                  */
-                TextColumn::make('per_iscritto')
-                    ->label('Token per iscritto')
-                    ->getStateUsing(function (Tenant $r): string {
-                        $tetto = $r->chiamatePerMember();
-
-                        return $tetto === null
-                            ? 'illimitato'
-                            : number_format($tetto, 0, ',', '.');
-                    })
-                    ->badge()
-                    ->color(fn (Tenant $r): string => $r->chiamatePerMember() === null ? 'warning' : 'gray')
+                TextColumn::make('ai_cost')
+                    ->label('Costo AI del mese')
+                    ->formatStateUsing(fn ($state): string => '$'
+                        .number_format(AiUsageLog::millicentsToCurrency((int) $state), 2, ',', '.'))
+                    ->description('quanto ci costa la loro AI')
                     ->alignEnd(),
             ])
             ->paginated(false)
-            ->emptyStateHeading('Nessun consumo AI questo mese');
+            ->emptyStateHeading('Nessuna palestra');
+    }
+
+    private static function iscrittiDi(Tenant $palestra): int
+    {
+        self::$iscritti ??= app(ContoDegliIscritti::class)->perOgniPalestra();
+
+        return self::$iscritti[$palestra->getKey()] ?? 0;
+    }
+
+    /** Quanto paga questo mese, già scritto in euro. */
+    private static function quantoPaga(Tenant $palestra): ?string
+    {
+        $piano = $palestra->abbonamentoAttivo?->plan;
+
+        if ($piano === null) {
+            return null;
+        }
+
+        $euro = number_format($piano->quantoCostaAlMese(self::iscrittiDi($palestra)) / 100, 2, ',', '.').' €';
+
+        return $piano->aConsumo() ? $euro.' (a consumo)' : $euro;
     }
 }

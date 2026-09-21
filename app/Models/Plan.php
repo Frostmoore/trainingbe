@@ -207,4 +207,26 @@ class Plan extends Model
         return (int) ($this->canone_cent ?? 0)
             + max($iscrittiAbbonati, $this->minimo_iscritti ?? 0) * $this->prezzo_iscritto_cent;
     }
+
+    /**
+     * 🆕 **Quanto costa questo piano al mese, qualunque tipo sia** —
+     * 21/09/2026, fase F1.
+     *
+     * ══ 🚨 PERCHÉ SERVE, VISTO CHE CI SONO GIÀ [costoDelMese] E `price_cents` ══
+     *
+     * Perché sono **due strade diverse per la stessa domanda**, e chi la fa —
+     * un elenco di palestre, un cruscotto, una fattura — deve sceglierne una
+     * guardando `aConsumo()`. ⛔ Chi se ne dimentica scrive «0,00 €» accanto al
+     * piano **più caro del listino**, perché un piano a consumo ha
+     * `price_cents = 0` per definizione.
+     *
+     * 💡 Qui la scelta si fa una volta sola: si passa il numero di iscritti, e
+     * si riceve quello che quel cliente paga questo mese.
+     */
+    public function quantoCostaAlMese(int $iscrittiAbbonati = 0): int
+    {
+        return $this->aConsumo()
+            ? (int) $this->costoDelMese($iscrittiAbbonati)
+            : (int) $this->price_cents;
+    }
 }

@@ -78,6 +78,25 @@ class UserResource extends Resource
      * compresi: chi fa supporto ha bisogno di vedere anche l'account che
      * «non c'e' piu'», altrimenti l'unica risposta possibile e' «non lo trovo».
      */
+    /**
+     * 🆕 **Il numero accanto alla voce di menù: quanti utenti attivi ci sono**
+     * — 21/09/2026, fase F1.
+     *
+     * 📌 Il committente: *«voglio che mi mostri il numero degli utenti attivi
+     * accanto al link del menù proprio come le palestre»*.
+     *
+     * ⚠️ **Attivi**, non tutti: un elenco che conta anche gli account spenti
+     * dice un numero che non corrisponde a nessuna domanda — né «quanti mi
+     * usano» né «quanti mi costano».
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        return (string) User::query()
+            ->withoutGlobalScopes([SoftDeletingScope::class, TenantScope::class])
+            ->where('is_active', true)
+            ->count();
+    }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()

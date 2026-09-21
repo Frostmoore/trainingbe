@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Filament\God\Resources\Tenants\Tables;
 
 use App\Enums\AuditAction;
+use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
 use App\Filament\Support\VoceDiScheda;
+use App\Models\Plan;
 use App\Models\Tenant;
 use App\Services\Audit\AuditLogger;
+use App\Services\Billing\ContoDegliIscritti;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -17,10 +20,11 @@ use Filament\Tables\Columns\ColorColumn;
 use Filament\Tables\Columns\Layout\Split;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * L'elenco delle palestre.
@@ -31,6 +35,40 @@ use Illuminate\Support\Carbon;
  */
 class TenantsTable
 {
+    /**
+     * 🧮 **Quanti iscritti ha ogni palestra**, chiesto una volta sola.
+     *
+     * ⚠️ È una colonna che si disegna per ogni riga: senza memoria, una query
+     * per riga. 💡 Il conteggio resta quello di `ContoDegliIscritti`, che è
+     * anche quello che finisce in fattura — due conti diversi qui vorrebbero
+     * dire mostrare un prezzo e addebitarne un altro.
+     *
+     * @var array<int, int>|null
+     */
+    private static ?array $iscritti = null;
+
+    /** Quanto paga questa palestra **questo mese**, già scritto in euro. */
+    private static function quantoPaga(Tenant $palestra): string
+    {
+        $piano = $palestra->abbonamentoAttivo?->plan;
+
+        if ($piano === null) {
+            return '—';
+        }
+
+        self::$iscritti ??= app(ContoDegliIscritti::class)->perOgniPalestra();
+
+        $cent = $piano->quantoCostaAlMese(self::$iscritti[$palestra->getKey()] ?? 0);
+
+        $euro = number_format($cent / 100, 2, ',', '.').' €';
+
+        /*
+         * 💡 Su un piano a consumo il numero **cambia ogni mese**: dirlo evita
+         * la telefonata «ma perché adesso è diverso?».
+         */
+        return $piano->aConsumo() ? $euro.' (a consumo)' : $euro;
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
@@ -81,12 +119,19 @@ class TenantsTable
                             ->weight('bold'),
                     ]),
 
-                    VoceDiScheda::make('Codice', TextColumn::make('join_code')
-                        ->label('Codice')
-                        ->searchable()
-                        ->copyable()
-                        ->copyMessage('Codice copiato')
-                        ->fontFamily('mono')),
+                    /*
+                     * ⛔ **Il «Codice» non c'è più** — 21/09/2026, fase F1.
+                     *
+                     * 📌 Il committente: *«il codice palestra non ha più senso
+                     * di esistere, gli inviti si fanno con il link di invito.
+                     * Togliamo proprio tutto il discorso dei codici»*.
+                     *
+                     * ⚠️ `tenants.join_code` è ancora **viva** in
+                     * registrazione, login, login social e nell'app: toglierla
+                     * di lì è la fase **F11** del piano, e ha un ordine di
+                     * rilascio suo (prima l'app, poi il server). Qui sparisce
+                     * solo dalla vista, che è la parte che non rompe niente.
+                     */
 
                     VoceDiScheda::make('Stato', TextColumn::make('status')
                         ->label('Stato')
@@ -94,10 +139,71 @@ class TenantsTable
                         ->formatStateUsing(fn (TenantStatus $state): string => $state->label())
                         ->color(fn (TenantStatus $state): string => $state->color())),
 
-                    VoceDiScheda::make('Piano', TextColumn::make('plan')
+                    /*
+                     * ══ 🚨 IL PIANO VERO, NON QUELLO DI `tenants.plan` ══════
+                     *
+                     * 📌 Il committente: *«I piani devono avere i nomi veri»*.
+                     *
+                     * ⛔ Qui c'era `tenants.plan`: una colonna **legacy** con
+                     * tre valori inventati (`starter`, `pro`, `enterprise`) che
+                     * **non hanno niente a che vedere** con l'abbonamento. Il
+                     * piano vero sta in `plan_subscriptions → plans`, ed è
+                     * quello che decide posti, AI e fattura.
+                     *
+                     * 🚨 Quindi questa pagina mostrava, per ogni palestra, **un
+                     * piano che non esiste**. Nessun errore: un badge grigio
+                     * con dentro una parola.
+                     */
+                    VoceDiScheda::make('Piano', TextColumn::make('abbonamentoAttivo.plan.name')
                         ->label('Piano')
                         ->badge()
-                        ->color('gray')),
+                        ->color(fn (Tenant $r): string => $r->abbonamentoAttivo === null ? 'danger' : 'success')
+                        ->placeholder('nessun abbonamento')),
+
+                    /*
+                     * 💡 **Quanto paga, a colpo d'occhio** — 📌 *«Mi serve di
+                     * sapere al volo quanto paga»*.
+                     *
+                     * ⚠️ Un piano **a consumo** ha `price_cents = 0`: leggere
+                     * quella colonna direbbe «gratis» sul piano più caro del
+                     * listino. Si passa da `Plan::quantoCostaAlMese()`, che la
+                     * domanda la fa una volta sola e nel modo giusto.
+                     */
+                    VoceDiScheda::make('Paga', TextColumn::make('quanto_paga')
+                        ->label('Paga')
+                        ->state(fn (Tenant $r): string => self::quantoPaga($r))
+                        ->weight('bold')),
+
+                    /*
+                     * 📌 *«Mi serve di sapere al volo quando gli scade
+                     * l'abbonamento e se si auto-rinnova»*.
+                     *
+                     * ⚠️ `ends_at = null` vuol dire **«non scade»**, ed è la
+                     * convenzione delle palestre: scriverci «scaduto» sarebbe
+                     * l'errore opposto a quello che si sta correggendo.
+                     */
+                    VoceDiScheda::make('Scadenza', TextColumn::make('abbonamentoAttivo.ends_at')
+                        ->label('Scade')
+                        ->dateTime('d/m/Y')
+                        ->placeholder('non scade')
+                        ->description(fn (Tenant $r): ?string => $r->abbonamentoAttivo === null
+                            ? null
+                            : ($r->abbonamentoAttivo->rinnova ? 'si rinnova da solo' : 'non si rinnova'))
+                        ->color(fn (Tenant $r): string => $r->abbonamentoAttivo?->rinnova ? 'gray' : 'warning')),
+
+                    /*
+                     * ⏳ **Promo: segnaposto fino alla fase F2.** 📌 *«Semmai
+                     * qui mi ci metti un campo "Promo" dove si vedranno le
+                     * promozioni attive per questa palestra»*.
+                     *
+                     * 💡 Sta qui vuoto e non "dopo": così il posto è già
+                     * deciso, e chi farà F2 non deve rifare la tabella.
+                     */
+                    VoceDiScheda::make('Promo', TextColumn::make('promo')
+                        ->label('Promo')
+                        ->state('—')
+                        ->color('gray')
+                        ->tooltip('Le promozioni arrivano con la fase F2')),
 
                     // Conteggi via `withCount` nella query: senza, ogni scheda
                     // farebbe la sua query e l'elenco ne sparerebbe una per
@@ -109,17 +215,16 @@ class TenantsTable
                         ->color('gray')
                         ->sortable()),
 
-                    VoceDiScheda::make('Prova fino al', TextColumn::make('trial_ends_at')
-                        ->label('Prova fino al')
-                        ->dateTime('d/m/Y')
-                        ->placeholder('nessuna')
-                        // Rosso se il periodo di prova e' gia' scaduto: e' il caso
-                        // in cui l'abbonamento sembra attivo ma nessuno puo'
-                        // entrare.
-                        ->color(fn (?Carbon $state): string => $state !== null && $state->isPast()
-                            ? 'danger'
-                            : 'gray')
-                        ->sortable()),
+                    /*
+                     * ⛔ **«Prova fino al» non c'è più** — 📌 *«non serve a
+                     * nulla e non esiste»*.
+                     *
+                     * ⚠️ `tenants.trial_ends_at` **non è del tutto morta**:
+                     * `Tenant::isActive()` la legge ancora per i tenant in
+                     * stato `trial`. 💡 Ma nessuno mette più niente in prova —
+                     * zero righe valorizzate — e mostrare una colonna sempre
+                     * vuota è rumore.
+                     */
 
                     VoceDiScheda::make('Creata', TextColumn::make('created_at')
                         ->label('Creata')
@@ -134,9 +239,28 @@ class TenantsTable
                     ->options(collect(TenantStatus::cases())
                         ->mapWithKeys(fn (TenantStatus $s) => [$s->value => $s->label()])),
 
-                SelectFilter::make('plan')
+                /*
+                 * 🚨 Si filtra per il piano **vero**, quello dell'abbonamento
+                 * in corso. ⛔ Il filtro di prima leggeva `tenants.plan`: le
+                 * tre voci inventate.
+                 */
+                SelectFilter::make('piano')
                     ->label('Piano')
-                    ->options(['starter' => 'Starter', 'pro' => 'Pro', 'enterprise' => 'Enterprise']),
+                    ->options(fn (): array => Plan::query()
+                        ->diTipo(PlanKind::Gym)
+                        ->orderBy('price_cents')
+                        ->pluck('name', 'code')
+                        ->all())
+                    ->query(fn (Builder $q, array $data): Builder => blank($data['value'] ?? null)
+                        ? $q
+                        : $q->whereHas(
+                            'abbonamentoAttivo.plan',
+                            fn (Builder $p): Builder => $p->where('code', $data['value']),
+                        )),
+
+                Filter::make('senza_abbonamento')
+                    ->label('Senza abbonamento')
+                    ->query(fn (Builder $q): Builder => $q->whereDoesntHave('abbonamentoAttivo')),
 
                 TrashedFilter::make()->label('Cancellate'),
             ])
