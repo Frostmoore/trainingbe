@@ -1,6 +1,6 @@
 # Informativa privacy
 
-> **Ultimo aggiornamento:** 21 settembre 2026
+> **Ultimo aggiornamento:** 26 settembre 2026
 
 ---
 
@@ -350,6 +350,39 @@ La richiesta si conserva **24 mesi** dall'invio, e poi si cancella da sola: una 
 riparte dopo un anno è normale, dopo due non è più la stessa. Se vuoi che spariscano prima,
 scrivicelo — vedi §6.
 
+### 3.13 🎁 Le promozioni
+
+Ogni tanto offriamo **promozioni**: gettoni in regalo, sconti, mesi di abbonamento, prove gratuite.
+Per decidere **a chi** spetta una promozione usiamo solo dati che abbiamo già per farti funzionare
+il servizio:
+
+- il **piano** che hai, e se sei abbonato, lo sei stato o sei in prova;
+- **da quando** sei iscritto, e da quanto tempo sei nostro cliente;
+- **quando hai fatto l'ultimo accesso all'app**;
+- se hai **mai comprato gettoni**;
+- la **palestra** o il **trainer** a cui appartieni, e il tuo ruolo.
+
+🚨 **Non usiamo mai** i dati che stanno sul tuo telefono — diario, allenamenti, peso, sonno — e non
+potremmo: non li abbiamo.
+
+Una promozione te la possiamo far sapere **nell'app**, con una **notifica**, per **email** o nel
+pannello, se sei una palestra o un trainer. Le promozioni «per tutti» si vedono anche sul sito.
+
+⚖️ Lo facciamo per il nostro **legittimo interesse** a proporre ai nostri clienti servizi simili a
+quelli che usano già (art. 6(1)(f)). **Puoi opporti quando vuoi**, senza motivare, scrivendo a
+**info@smp-digital.it**: da quel momento non ti mandiamo più avvisi di promozioni.
+
+### 3.14 🖼️ Le immagini dei prodotti
+
+Accanto ai prodotti confezionati l'app mostra, quando c'è, la foto del prodotto. **Quella foto non
+passa da noi**: il telefono la scarica direttamente dai server di **Open Food Facts**, un'associazione
+francese che raccoglie i dati dei prodotti alimentari, perché le immagini sono loro e si
+ridistribuiscono solo con la loro licenza.
+
+⚠️ Scaricandola, il tuo telefono comunica a Open Food Facts il proprio **indirizzo IP** e **quale
+immagine** chiede, come succede aprendo una qualsiasi pagina web. Noi non mandiamo loro nient'altro:
+né il tuo nome, né il tuo diario.
+
 ---
 
 ## 4. Per quanto tempo
@@ -403,7 +436,8 @@ che non esiste più**: byte casuali accanto a un segnaposto.
 | **La palestra e i trainer che ti seguono** | Nome, email, foto del profilo, se il rapporto è attivo; i messaggi che vi scambiate, cifrati. 🚨 **Non** il diario, **non** gli allenamenti, **non** peso, misure o sonno | UE | Contratto |
 | **Anthropic PBC** | Quello descritto ai §3.5–3.8, e solo con i consensi che servono | 🚨 **USA** | Art. 28 + clausole contrattuali standard (dec. UE 2021/914) |
 | **Stripe** | Email, e il nome della palestra per il piano a consumo. **Mai** i dati della carta da noi: li scrivi da loro | UE / USA | Art. 28 + clausole contrattuali standard |
-| **Firebase / Google** *(notifiche)* | L'identificativo del dispositivo, e «hai un messaggio» — **mai il testo** | USA | Art. 28 + clausole contrattuali standard |
+| **Firebase / Google** *(notifiche)* | L'identificativo del dispositivo, e il titolo dell'avviso («hai un messaggio», «un'offerta per te») — **mai il testo dei messaggi** | USA | Art. 28 + clausole contrattuali standard |
+| **Open Food Facts** *(immagini dei prodotti)* | Solo l'**indirizzo IP** del telefono e l'immagine chiesta, quando l'app scarica la foto di un prodotto — vedi §3.14 | 🇫🇷 UE | Non la mandiamo noi: la chiede il telefono direttamente |
 | **Fornitore dell'hosting** | Tutto ciò che sta sui nostri server | UE | Art. 28 |
 
 **Nessun dato viene venduto, e nessun dato va a chi fa pubblicità.**
