@@ -829,7 +829,8 @@ class AiController extends Controller
 
         $utente = $request->user();
 
-        if (! ($utente->isTrainer() || $utente->isFreeTrainer() || $utente->isGymAdmin() || $utente->isSuperAdmin())) {
+        // 🐛 `allena()`: il contesto qui è la casa, e un trainer di palestra non è trainer lì (giro A6, 22/09/2026).
+        if (! ($utente->allena() || $utente->isGymAdmin() || $utente->isSuperAdmin())) {
             return response()->json([
                 'message' => __('Solo chi allena può usare la stima nei piani.'),
                 'code' => 'not_a_trainer',

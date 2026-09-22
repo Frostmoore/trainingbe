@@ -12,7 +12,7 @@ use App\Support\Tempo\GiornoLocale;
  * Il target alimentare di una persona in un giorno.
  *
  * ⛔ **Qui c'era tutta la giornata alimentare** (`forDate()`, `voce()`), letta da
- * `food_entries`. Il 26/09/2026 (A1 di `plan_blocco_A.md`) il diario ha lasciato il
+ * `food_entries`. Il 22/09/2026 (A1 di `plan_blocco_A.md`) il diario ha lasciato il
  * server: è sul telefono dal 03/09, e la tabella non c'è più. Resta solo il
  * target, che non legge il diario: lo usano il consiglio del giorno
  * (`AiController::contestoConsiglio()`) e il cruscotto (`DashboardService`).

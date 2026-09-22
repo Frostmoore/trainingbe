@@ -1,6 +1,6 @@
 # Condizioni d'uso
 
-> **Ultimo aggiornamento:** 26 settembre 2026
+> **Ultimo aggiornamento:** 22 settembre 2026
 
 ---
 

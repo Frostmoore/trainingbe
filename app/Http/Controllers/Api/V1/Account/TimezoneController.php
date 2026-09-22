@@ -56,6 +56,12 @@ class TimezoneController extends Controller
      * ⚠️ E l'elenco si chiede a PHP invece di scriverlo: le zone cambiano —
      * `Europe/Kyiv` è del 2022, `America/Nuuk` del 2020 — e un elenco copiato
      * qui dentro comincia a invecchiare il giorno dopo.
+     *
+     * 🐛 **Anche i nomi di compatibilità** (`ALL_WITH_BC`) — giro A6,
+     * 22/09/2026. L'emulatore manda `GMT`, e l'elenco canonico non lo contiene:
+     * 422 a ogni avvio, e il fuso restava quello vecchio. Sono nomi IANA veri
+     * (`GMT`, `UTC`, `Europe/Kiev`…) che `Carbon` accetta: rifiutarli non
+     * protegge niente e lascia fuori telefoni configurati così.
      */
     public function update(Request $request): JsonResponse
     {
@@ -64,7 +70,7 @@ class TimezoneController extends Controller
                 'required',
                 'string',
                 'max:64',
-                Rule::in(DateTimeZone::listIdentifiers()),
+                Rule::in(DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC)),
             ],
         ]);
 

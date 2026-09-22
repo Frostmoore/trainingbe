@@ -14,10 +14,10 @@ use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
 /**
- * 📅 Il calendario del server — C4, e com'è dal 26/09/2026.
+ * 📅 Il calendario del server — C4, e com'è dal 22/09/2026.
  *
  * ⛔ **Qui c'erano anche i test di `GET series`** (le serie delle calorie) e il
- * cibo nelle celle del calendario. Il 26/09/2026 il diario ha lasciato il server
+ * cibo nelle celle del calendario. Il 22/09/2026 il diario ha lasciato il server
  * (A1 di `plan_blocco_A.md`): la rotta delle serie non c'è più, e il calendario
  * dà solo **la griglia e i titoli**. Le calorie, gli allenamenti e i pasti li
  * mette l'app, che li ha sul telefono (`calendarProvider`, `giornataProvider`).

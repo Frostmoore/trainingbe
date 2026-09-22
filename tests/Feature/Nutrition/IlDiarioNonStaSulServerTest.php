@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * 🍽️ **Il diario non sta sul server** — A1 di `plan_blocco_A.md`, 26/09/2026.
+ * 🍽️ **Il diario non sta sul server** — A1 di `plan_blocco_A.md`, 22/09/2026.
  *
  * Il diario alimentare e i preferiti vivono sul telefono dal 03/09/2026. Il
  * 22/09 si è scoperto che sul server erano rimaste le tabelle e le rotte, mentre

@@ -62,7 +62,7 @@ class EsciDallaPalestraTest extends TestCase
     // ───────────────────────── quello che se ne va ─────────────────────────
 
     /*
-     * ⛔ Qui c'era `il_diario_segue_la_persona`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `il_diario_segue_la_persona`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

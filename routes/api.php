@@ -431,7 +431,7 @@ Route::prefix('v1')->group(function (): void {
 
         // C3 — le serie per i grafici. Un endpoint solo, stessa forma di
         // risposta per entrambe le metriche: l'app ha un parser unico.
-        // ⛔ `series` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `series` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         // C4 — il calendario. Mese e settimana restituiscono la stessa forma di
         // celle: l'app disegna due layout, non due modelli di dati.
@@ -450,9 +450,9 @@ Route::prefix('v1')->group(function (): void {
         */
 
         // ── Nutrizione (B5.5) ────────────────────────────────────────────
-        // ⛔ `diary` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `targets` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `nutrition-plan` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `diary` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `targets` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `nutrition-plan` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * ⛔ **`POST /nutrition-plan/meals/{meal}/eaten` — RITIRATO in G9.4.**
@@ -476,10 +476,10 @@ Route::prefix('v1')->group(function (): void {
          * vera, ed e' un debito che il ritiro riapre: §7.6 del piano.
          */
 
-        // ⛔ `food-entries` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-entries/{entry}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-entries/{entry}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-entries/{entry}/favorite` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}/favorite` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * I suggerimenti mentre si scrive il nome di un alimento — Parte L.
@@ -495,10 +495,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('foods/search', [CatalogoAlimentiController::class, 'search'])
             ->middleware('throttle:60,1');
 
-        // ⛔ `food-favorites` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-favorites/meal` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-favorites/{favorite}/add` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
-        // ⛔ `food-favorites/{favorite}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/meal` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/{favorite}/add` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/{favorite}` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * 📦 **Il diario trasloca sul telefono** — Parte I, I3.
@@ -508,7 +508,7 @@ Route::prefix('v1')->group(function (): void {
          * telefono vero. ⛔ Un endpoint che consegna e cancella nella stessa
          * richiesta perde tutto il giorno che la risposta non arriva.
          */
-        // ⛔ `trasloco/diario` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `trasloco/diario` tolta il 22/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
         | ⛔ `daily-burn` e' andato con gli altri — FASE 11.6. La dichiarazione

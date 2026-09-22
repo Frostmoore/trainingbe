@@ -1367,6 +1367,7 @@ class SitoPubblicoTest extends TestCase
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
         );
+        $this->conPianoDaTrainer($trainer);
 
         $invito = app(InvitiDelTrainer::class)->invita($trainer);
 
@@ -1390,6 +1391,7 @@ class SitoPubblicoTest extends TestCase
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
         );
+        $this->conPianoDaTrainer($trainer);
 
         $invito = app(InvitiDelTrainer::class)->invita($trainer);
 
@@ -1408,6 +1410,7 @@ class SitoPubblicoTest extends TestCase
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
         );
+        $this->conPianoDaTrainer($trainer);
 
         $scaduto = app(InvitiDelTrainer::class)->invita($trainer);
         $scaduto->forceFill(['expires_at' => now()->subMinute()])->save();

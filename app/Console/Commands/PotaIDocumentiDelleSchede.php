@@ -11,12 +11,12 @@ use Illuminate\Database\Eloquent\Collection;
 
 /**
  * 🗑️ **Cancella i documenti delle schede importate dal pannello** — A8 di
- * `plan_blocco_A.md`, 26/09/2026.
+ * `plan_blocco_A.md`, 22/09/2026.
  *
  * ── 🚨 Perché esiste ──────────────────────────────────────────────────────
  *
  * Una palestra carica il PDF o la foto di una scheda per farla trascrivere
- * (`WorkoutPlanImport`, disco privato, atlante §114.3). Fino al 26/09/2026 quel
+ * (`WorkoutPlanImport`, disco privato, atlante §114.3). Fino al 22/09/2026 quel
  * documento **restava per sempre**, e nel pannello non c'era modo di toglierlo.
  * Se la scheda era intestata a un allievo, il suo nome restava sul server senza
  * scadenza (DPIA, R19).

@@ -22,9 +22,9 @@ use Tests\TestCase;
 
 /**
  * 🗑️ **I documenti delle schede importate dal pannello scadono** — A8 di
- * `plan_blocco_A.md`, 26/09/2026.
+ * `plan_blocco_A.md`, 22/09/2026.
  *
- * ⛔ Fino al 26/09 il PDF o la foto caricati da una palestra restavano per
+ * ⛔ Fino al 22/09 il PDF o la foto caricati da una palestra restavano per
  * sempre, e nel pannello non c'era modo di toglierli (DPIA R19). Se la scheda era
  * intestata a un allievo, il suo nome restava sul server senza scadenza.
  */

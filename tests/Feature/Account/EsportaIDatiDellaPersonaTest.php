@@ -57,7 +57,7 @@ class EsportaIDatiDellaPersonaTest extends TestCase
             ->json('data');
 
         $this->assertSame('mario@alfa.test', $dati['account']['email']);
-        // ⛔ Il diario non c'è più fra le tabelle (26/09/2026): sta sul telefono.
+        // ⛔ Il diario non c'è più fra le tabelle (22/09/2026): sta sul telefono.
         $this->assertArrayNotHasKey('food_entries', $dati['tabelle']);
         $this->assertContains('member', array_column($dati['ruoli'], 'ruolo'));
         $this->assertNotEmpty($dati['avvertenze']);
@@ -91,14 +91,25 @@ class EsportaIDatiDellaPersonaTest extends TestCase
     public function i_dati_degli_altri_restano_fuori(): void
     {
         $luigi = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
-        $this->pasto($luigi, 'La cena di Luigi');
 
-        $grezzo = $this->comeApp($this->mario)
+        /*
+         * ⚠️ Qui c'era una voce di diario di Luigi (`pasto()`): il diario ha
+         * lasciato il server con A1 (22/09/2026) e l'aiuto con lui. Un token
+         * delle notifiche è una riga che il server ha ancora, legata a una
+         * persona, nella stessa palestra.
+         */
+        DB::table('device_tokens')->insert([
+            'tenant_id' => $this->alfa->id, 'user_id' => $luigi->id,
+            'token' => 'fcm-di-luigi', 'platform' => 'ios',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $risposta = $this->comeApp($this->mario)
             ->getJson('/api/v1/account/export')
-            ->assertOk()
-            ->getContent();
+            ->assertOk();
+        $grezzo = $risposta->getContent();
 
-        $this->assertStringNotContainsString('La cena di Luigi', $grezzo);
+        $this->assertSame([], $risposta->json('data.tabelle.device_tokens') ?? []);
         $this->assertStringNotContainsString('luigi@alfa.test', $grezzo);
     }
 

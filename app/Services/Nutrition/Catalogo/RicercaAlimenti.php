@@ -97,7 +97,7 @@ class RicercaAlimenti
     {
         /*
          * ⛔ Qui c'era `$mieSelezioni`: quante volte **questa persona** aveva
-         * scelto ciascun alimento, contato su `food_entries`. Il 26/09/2026 il
+         * scelto ciascun alimento, contato su `food_entries`. Il 22/09/2026 il
          * diario ha lasciato il server (A1 di `plan_blocco_A.md`): l'ordine «prima
          * i miei» lo fa il telefono, che il diario ce l'ha.
          */

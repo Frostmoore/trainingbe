@@ -928,6 +928,24 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     }
 
     /**
+     * 🆕 🏋️ **Allena qualcuno, da qualche parte?** — giro A6, 22/09/2026.
+     *
+     * 🚨 **È la domanda giusta per le API dell'app**, non `isTrainer()`. Le
+     * richieste dell'app girano sempre nello spazio **di casa**
+     * (`ResolveTenant`), e dal 18/09 la casa di un trainer di palestra è il suo
+     * spazio personale, dove è `free_user`: lì `isTrainer()` risponde **no**, e
+     * un trainer creato dal pannello si vedeva chiudere in faccia tutte le
+     * funzioni da trainer. Trovato nel giro A6.
+     *
+     * ⚠️ **Nel pannello resta `isTrainer()`**: lì il contesto è lo spazio
+     * scelto con *Cambia spazio*, ed è proprio quello che deve contare.
+     */
+    public function allena(): bool
+    {
+        return $this->isTrainer() || $this->isFreeTrainer() || $this->allenaInUnaPalestra();
+    }
+
+    /**
      * Chi puo' comporre un piano alimentare vero — N22.1.
      *
      * 🚨 **Non e' un `isTrainer()`, e non deve diventarlo** — stessa regola

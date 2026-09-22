@@ -63,7 +63,7 @@ final class EsciDaUnaPalestra
      *
      * 💡 Sono i dati che la persona ha prodotto per sé, e che non hanno senso
      * senza di lei: i consigli ricevuti, le stime, le importazioni. ⛔ Diario e
-     * preferiti non ci sono più: dal 26/09/2026 stanno solo sul telefono.
+     * preferiti non ci sono più: dal 22/09/2026 stanno solo sul telefono.
      */
     public const SEGUONO_LA_PERSONA = [
         'ai_advices',
@@ -514,7 +514,7 @@ final class EsciDaUnaPalestra
                 }
 
                 // ⛔ Qui si staccavano le voci del diario dai piani rimasti in palestra:
-                // dal 26/09/2026 il diario non è più sul server (A1 di plan_blocco_A.md).
+                // dal 22/09/2026 il diario non è più sul server (A1 di plan_blocco_A.md).
 
                 return $spostate;
             }

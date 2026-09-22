@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Tenancy;
 
+use App\Enums\PlanKind;
 use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
 use App\Models\Conversation;
@@ -68,7 +69,7 @@ class InvitiDelTrainer
      */
     private function pretendiUnoSpazioSuo(User $trainer): void
     {
-        if (! $this->haUnoSpazioSuo($trainer)) {
+        if (! $this->puoAvereAllieviSuoi($trainer)) {
             throw ValidationException::withMessages([
                 /*
                  * 🆕 ⛔ **La frase diceva una cosa falsa** — 15/09/2026.
@@ -97,6 +98,30 @@ class InvitiDelTrainer
         $suo = $trainer->tenant;
 
         return $suo !== null && $suo->eDi($trainer);
+    }
+
+    /**
+     * 🆕 **Può avere allievi suoi?** — giro A6, 22/09/2026.
+     *
+     * 💡 Uno spazio suo **e** un piano da trainer su quello spazio
+     * (`PlanKind::Trainer`, compresa la fascia gratuita da tre posti).
+     *
+     * ⛔ **Prima bastava `haUnoSpazioSuo()`**, e fino al 18/09 era la stessa
+     * domanda: un trainer di sola palestra viveva **dentro** la palestra, quindi
+     * lo spazio non era suo. Dalla decisione 2 (`DaiUnaCasaAlTrainer`) ogni
+     * trainer ha uno spazio suo, e un trainer creato dal pannello — sul piano
+     * gratuito da persona, `max_members` nullo — risultava avere allievi propri
+     * **senza limite**, gratis. 📌 La regola resta quella scritta sopra: *«per
+     * avere allievi tuoi serve un abbonamento da trainer indipendente»*.
+     *
+     * ⚠️ E un indipendente col piano scaduto ricade sul gratuito da persona:
+     * niente inviti nuovi e niente riscatti di quelli vecchi, come per tutte
+     * le altre funzioni da trainer (U.3.1).
+     */
+    public function puoAvereAllieviSuoi(User $trainer): bool
+    {
+        return $this->haUnoSpazioSuo($trainer)
+            && $this->piano->per($trainer)->kind === PlanKind::Trainer;
     }
 
     /**
@@ -270,7 +295,7 @@ class InvitiDelTrainer
          * porta da nessuna parte. 💡 Mostrarlo come valido vorrebbe dire far
          * toccare «accetto» a qualcuno per poi dirgli di no.
          */
-        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
+        if ($trainer === null || ! $trainer->is_active || ! $this->puoAvereAllieviSuoi($trainer)) {
             return null;
         }
 
@@ -309,7 +334,7 @@ class InvitiDelTrainer
 
         $trainer = $invito->trainer;
 
-        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
+        if ($trainer === null || ! $trainer->is_active || ! $this->puoAvereAllieviSuoi($trainer)) {
             /*
              * 🚨 **Lo spazio si ricontrolla ADESSO, non solo quando l'invito è
              * nato** — AH.1-bis.
@@ -465,7 +490,7 @@ class InvitiDelTrainer
         $trainer = User::query()->withoutGlobalScopes()->find($invito->trainer_id);
 
         // 🚨 Stessa guardia di `riscatta()`, per la stessa ragione — AH.1-bis.
-        if ($trainer === null || ! $trainer->is_active || ! $this->haUnoSpazioSuo($trainer)) {
+        if ($trainer === null || ! $trainer->is_active || ! $this->puoAvereAllieviSuoi($trainer)) {
             $nonValido();
         }
 

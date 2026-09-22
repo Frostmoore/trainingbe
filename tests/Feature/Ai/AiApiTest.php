@@ -725,7 +725,7 @@ class AiApiTest extends TestCase
         $this->comeIscritto()->getJson('/api/v1/ai/advice')->assertOk();
         $primeChiamate = count($finta->calls);
 
-        // ⛔ Il pasto non va più al server (26/09/2026): la prova è che il consiglio resti quello.
+        // ⛔ Il pasto non va più al server (22/09/2026): la prova è che il consiglio resti quello.
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/advice')

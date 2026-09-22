@@ -119,7 +119,7 @@ class AccountErasureSweepTest extends TestCase
         // dimostrerebbe che «non resta niente» senza che ci fosse mai stato
         // niente.
         $prima = $this->righePerTabella($tabelle, $id);
-        // ⚠️ 5 e non più 6: il 26/09/2026 diario e preferiti hanno lasciato il
+        // ⚠️ 5 e non più 6: il 22/09/2026 diario e preferiti hanno lasciato il
         // server (A1 di plan_blocco_A.md), e con loro due tabelle da popolare.
         $this->assertGreaterThanOrEqual(
             5,
@@ -295,7 +295,7 @@ class AccountErasureSweepTest extends TestCase
         $id = $this->iscritto->getKey();
 
         $this->ctx()->runAs($this->alfa, function () use ($id): void {
-            // ⛔ Diario e preferiti non si seminano più: dal 26/09/2026 le tabelle non ci sono.
+            // ⛔ Diario e preferiti non si seminano più: dal 22/09/2026 le tabelle non ci sono.
 
             /*
              * 'daily_burns' e 'workout_sessions' non si seminano piu': le

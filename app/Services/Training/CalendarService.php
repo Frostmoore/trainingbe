@@ -80,7 +80,7 @@ class CalendarService
          * 📌 Il committente: *«Nessun allenamento deve risiedere sul server,
          * devono stare tutti nell'app»*.
          *
-         * ⛔ **E dal 26/09/2026 nemmeno il cibo** (A1 di `plan_blocco_A.md`):
+         * ⛔ **E dal 22/09/2026 nemmeno il cibo** (A1 di `plan_blocco_A.md`):
          * il diario è sul telefono e `food_entries` non esiste più. Il server
          * dà solo la data e il titolo; il resto lo mette l'app
          * (`calendarDayProvider`, `giornataProvider`). ⚠️ `kcal` ed `entries`
@@ -103,7 +103,7 @@ class CalendarService
     private function celle(User $utente, GiornoLocale $da, GiornoLocale $a, ?int $meseCorrente): array
     {
         /*
-         * ⛔ **Le calorie mangiate non si leggono più qui** — 26/09/2026, A1 di
+         * ⛔ **Le calorie mangiate non si leggono più qui** — 22/09/2026, A1 di
          * `plan_blocco_A.md`: il diario è sul telefono, e l'app le mette nella
          * griglia (`calendarProvider`, `conCalorie()`).
          */

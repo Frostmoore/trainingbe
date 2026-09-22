@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Concerns;
 
+use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
 use App\Models\AiCreditMovement;
@@ -280,5 +281,36 @@ trait CreaAmbiente
         $u->forceFill(['is_super_admin' => true])->save();
 
         return $u;
+    }
+
+    /**
+     * 🆕 Un piano **da trainer** sullo spazio di questo trainer indipendente —
+     * giro A6, 22/09/2026.
+     *
+     * 🚨 Da `InvitiDelTrainer::puoAvereAllieviSuoi()` gli allievi propri li ha
+     * solo chi ha un piano di tipo `trainer`: un trainer sul piano gratuito da
+     * persona non invita nessuno. ⚠️ È anche l'unico caso reale: senza piano la
+     * rotta degli inviti rispondeva già 403 (`TrainerController::trainerOrAbort`).
+     */
+    protected function conPianoDaTrainer(User $trainer, string $codice = Plan::TRAINER_30): User
+    {
+        $piano = Plan::query()->where('code', $codice)->first()
+            ?? Plan::create([
+                'code' => $codice,
+                'name' => 'Trainer di prova',
+                'kind' => PlanKind::Trainer,
+                'ai_enabled' => false,
+                'max_members' => 30,
+                'price_cents' => 0,
+                'is_public' => true,
+            ]);
+
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $trainer->tenant_id,
+            'plan_id' => $piano->id,
+            'starts_at' => now()->subDay(),
+        ]);
+
+        return $trainer;
     }
 }

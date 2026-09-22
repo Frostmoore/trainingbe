@@ -83,6 +83,20 @@ class TimezoneApiTest extends TestCase
     }
 
     /**
+     * 🐛 Giro A6, 22/09/2026: l'emulatore manda `GMT`, che è un nome IANA di
+     * compatibilità e non sta nell'elenco canonico — 422 a ogni avvio.
+     */
+    #[Test]
+    public function it_accepts_the_backward_compatible_names_too(): void
+    {
+        $this->comeApp($this->mario)
+            ->putJson('/api/v1/account/timezone', ['timezone' => 'GMT'])
+            ->assertOk();
+
+        $this->assertSame('GMT', $this->mario->fresh()->timezone);
+    }
+
+    /**
      * ⚠️ Senza questo, ogni avvio dell'app muoverebbe `updated_at`, e la colonna
      * smetterebbe di dire «quando è cambiato qualcosa di questa persona» per
      * dire «quando ha aperto l'app» — cioè non risponderebbe più alla domanda

@@ -103,8 +103,8 @@ class NutritionPlanController extends Controller
          * chi li legge.
          */
         return $utente !== null
-            && ($utente->isTrainer()
-                || $utente->isFreeTrainer()
+            // 🐛 `allena()`: il contesto qui è la casa (giro A6, 22/09/2026).
+            && ($utente->allena()
                 || $utente->isGymAdmin()
                 || $utente->isNutrizionista()
                 || $utente->isSuperAdmin());

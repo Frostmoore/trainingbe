@@ -157,7 +157,7 @@ class DashboardService
     private function nutrizione(User $utente, GiornoLocale $oggi): array
     {
         /*
-         * ⛔ **Il diario non sta più sul server** — 26/09/2026, A1 di
+         * ⛔ **Il diario non sta più sul server** — 22/09/2026, A1 di
          * `plan_blocco_A.md`. `totals` e `entries_count` venivano da
          * `food_entries`, che non esiste più: l'app li mette dal telefono
          * (`conIlCiboDelTelefono`). ⚠️ La forma resta, perché le app già

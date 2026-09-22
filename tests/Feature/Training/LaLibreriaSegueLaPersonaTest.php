@@ -44,12 +44,12 @@ final class LaLibreriaSegueLaPersonaTest extends TestCase
 
     private function trainerIndipendente(string $email): User
     {
-        return app(CreaTenantPersonale::class)(
+        return $this->conPianoDaTrainer(app(CreaTenantPersonale::class)(
             'Trainer '.$email,
             $email,
             ['password' => self::FAKE_PASSWORD, 'username' => str_replace(['@', '.'], '', $email)],
             UserRole::FreeTrainer,
-        );
+        ));
     }
 
     private function utenteLibero(string $email): User

@@ -77,7 +77,8 @@ class WorkoutPlanController extends Controller
     {
         $utente = $request->user();
 
-        if (! $utente->isTrainer() && ! $utente->isGymAdmin()) {
+        // 🐛 `allena()`: il contesto qui è la casa (giro A6, 22/09/2026).
+        if (! $utente->allena() && ! $utente->isGymAdmin()) {
             // 403 e non 404: qui non c'è nessun id da indovinare, quindi non
             // c'è nessun oracolo da proteggere. Dire la verità aiuta chi sta
             // scrivendo il client.

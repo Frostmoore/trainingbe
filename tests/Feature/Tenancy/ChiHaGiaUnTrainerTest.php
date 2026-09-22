@@ -43,12 +43,12 @@ class ChiHaGiaUnTrainerTest extends TestCase
 
     private function unTrainer(string $email): User
     {
-        return app(CreaTenantPersonale::class)(
+        return $this->conPianoDaTrainer(app(CreaTenantPersonale::class)(
             ucfirst(explode('@', $email)[0]),
             $email,
             ['password' => self::FAKE_PASSWORD],
             UserRole::FreeTrainer,
-        );
+        ));
     }
 
     /** Una persona con uno spazio suo, pronta a ricevere un invito. */

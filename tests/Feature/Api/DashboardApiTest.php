@@ -187,7 +187,7 @@ class DashboardApiTest extends TestCase
     }
 
     /*
-     * ⛔ Qui c'era `the_dashboard_of_a_gym_mate_never_leaks_in`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `the_dashboard_of_a_gym_mate_never_leaks_in`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

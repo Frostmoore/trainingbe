@@ -117,7 +117,7 @@ class FusoOrarioTest extends TestCase
     // ───────────────────────── il calendario ─────────────────────────
 
     /*
-     * ⛔ Qui c'era `the_calendar_puts_the_after_midnight_meal_in_the_right_cell`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `the_calendar_puts_the_after_midnight_meal_in_the_right_cell`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

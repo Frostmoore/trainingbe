@@ -72,6 +72,15 @@ class InvitoInChatTest extends TestCase
 
         $suo->forceFill(['proprietario_id' => $this->trainer->getKey()])->save();
 
+        /*
+         * 🆕 E il suo piano è **da trainer** — giro A6, 22/09/2026. `creaPalestra()`
+         * gli aveva lasciato quello da palestra, e da
+         * `InvitiDelTrainer::puoAvereAllieviSuoi()` gli allievi propri li ha
+         * solo chi ha un piano di tipo `trainer`.
+         */
+        PlanSubscription::withoutGlobalScopes()->where('tenant_id', $suo->id)->delete();
+        $this->conPianoDaTrainer($this->trainer);
+
         $this->scheda = ProfiloPubblico::create([
             'user_id' => $this->trainer->id,
             'comune_id' => $comune->id,

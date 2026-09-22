@@ -120,6 +120,19 @@ class UserResource extends JsonResource
             'abbonato' => app(PianoAttivo::class)->eAbbonato($this->resource),
 
             /*
+             * 🆕 🏋️ **Può fare il trainer, adesso?** — giro A6, 22/09/2026.
+             *
+             * ⛔ L'app decideva il muro «Abbonamento da trainer scaduto» da
+             * `abbonato`, che è il contratto **della persona**: per un trainer
+             * di palestra è falso anche quando la palestra paga, e il muro
+             * compariva a chi lavora. Il perché per esteso sta su
+             * `PianoAttivo::puoAllenare()`. Informativo come gli altri: il
+             * cancello vero è `TrainerController::trainerOrAbort()`.
+             */
+            'puo_allenare' => $this->resource->allena()
+                && app(PianoAttivo::class)->puoAllenare($this->resource),
+
+            /*
              * 🆕 **Chi paga per questa persona** — 3b-AH.4 (12/09/2026).
              *
              * ⚠️ Sta **anche** qui e non solo nel listino perche' la modale

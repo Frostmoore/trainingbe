@@ -88,7 +88,7 @@ class ProfileApiTest extends TestCase
     }
 
     /*
-     * ⛔ Qui c'era `in_the_small_hours_the_meal_is_the_last_of_the_day_not_breakfast`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `in_the_small_hours_the_meal_is_the_last_of_the_day_not_breakfast`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

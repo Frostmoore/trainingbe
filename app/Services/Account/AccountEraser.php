@@ -100,7 +100,7 @@ class AccountEraser
                 $p->forceDelete();
             });
 
-        // ⛔ Diario e preferiti: dal 26/09/2026 non sono più sul server (A1 di plan_blocco_A.md).
+        // ⛔ Diario e preferiti: dal 22/09/2026 non sono più sul server (A1 di plan_blocco_A.md).
         AiAdvice::withoutGlobalScopes()->where('user_id', $id)->delete();
 
         /*

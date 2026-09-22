@@ -155,7 +155,7 @@ final class ConsiglioAFasceTest extends TestCase
          */
         $this->alle('2026-08-30 13:00');
 
-        // ⛔ Il pasto non va più al server (26/09/2026): resta la fascia che non cambia.
+        // ⛔ Il pasto non va più al server (22/09/2026): resta la fascia che non cambia.
 
         $this->finta->willReturnAdvice('Il secondo consiglio.');
 
@@ -360,7 +360,7 @@ final class ConsiglioAFasceTest extends TestCase
     }
 
     /*
-     * ⛔ Qui c'era `una_voce_vecchia_sul_server_non_e_una_notizia`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `una_voce_vecchia_sul_server_non_e_una_notizia`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

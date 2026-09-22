@@ -140,7 +140,7 @@ Schedule::command('piani:pota-importazioni')
 
 /*
 |------------------------------------------------------------------------------
-| 🆕 I documenti delle schede importate dal pannello — A8, 26/09/2026
+| 🆕 I documenti delle schede importate dal pannello — A8, 22/09/2026
 |------------------------------------------------------------------------------
 |
 | Il PDF o la foto che una palestra carica per trascrivere una scheda restavano

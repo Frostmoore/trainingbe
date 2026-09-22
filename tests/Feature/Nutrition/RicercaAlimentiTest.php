@@ -42,7 +42,7 @@ class RicercaAlimentiTest extends TestCase
 
     /**
      * 🚨 **L'ordine, tutto in un test**: prima i più scelti in generale, poi
-     * per nome. ⛔ Fino al 26/09/2026 venivano prima «i miei», contati su
+     * per nome. ⛔ Fino al 22/09/2026 venivano prima «i miei», contati su
      * `food_entries`: il diario ha lasciato il server (A1 di `plan_blocco_A.md`)
      * e quell'ordine lo fa il telefono, che il diario ce l'ha.
      */
@@ -88,7 +88,7 @@ class RicercaAlimentiTest extends TestCase
     }
 
     /*
-     * ⛔ Qui c'era `you_always_see_your_own`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `you_always_see_your_own`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 
@@ -175,7 +175,7 @@ class RicercaAlimentiTest extends TestCase
     }
 
     /*
-     * ⛔ Qui c'era `your_own_foods_come_before_even_crea`: provava il diario sul server, che dal 26/09/2026 non
+     * ⛔ Qui c'era `your_own_foods_come_before_even_crea`: provava il diario sul server, che dal 22/09/2026 non
      * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
 

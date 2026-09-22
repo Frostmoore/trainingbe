@@ -115,7 +115,7 @@ class TrainerController extends Controller
                  * suoi non ne ha **nessuno**, perché gli iscritti li paga la
                  * palestra.
                  */
-                'allievi_propri' => $this->inviti->haUnoSpazioSuo($trainer),
+                'allievi_propri' => $this->inviti->puoAvereAllieviSuoi($trainer),
                 'posti_rimasti' => $this->inviti->postiRimasti($trainer),
                 'limite' => $this->inviti->limiteDelPiano($trainer),
                 'piano' => $this->inviti->codicePiano($trainer),
@@ -212,9 +212,13 @@ class TrainerController extends Controller
     {
         $utente = $request->user();
 
+        /*
+         * 🐛 `allena()` e non `isTrainer() || isFreeTrainer()` — giro A6,
+         * 22/09/2026: qui il contesto è la casa, e la casa di un trainer di
+         * palestra è il suo spazio personale. Il perché sta su `User::allena()`.
+         */
         abort_unless(
-            $utente instanceof User
-                && ($utente->isTrainer() || $utente->isFreeTrainer()),
+            $utente instanceof User && $utente->allena(),
             403,
             __('Questa sezione è per chi segue altre persone.'),
         );
@@ -231,17 +235,19 @@ class TrainerController extends Controller
          * schede — per sempre, senza nessun errore da nessuna parte. La porta
          * era rimasta aperta perché nessuno le aveva mai messo una serratura.
          *
-         * 💡 `eAbbonato()` risponde bene a tutti e due i casi senza doverli
-         * distinguere: per un trainer di palestra guarda l'abbonamento **della
-         * palestra**, che è chi paga per lui; per un indipendente guarda il
-         * suo. ⚠️ E la fascia trainer gratuita resta dentro: non è scaduta, è
-         * gratis, ed è un tier vero da tre allievi.
+         * 🐛 **`puoAllenare()` e non `eAbbonato()`** — giro A6, 22/09/2026.
+         * Qui c'era scritto che `eAbbonato()` guardava la palestra per un
+         * trainer di palestra: era vero finché lui **viveva** nella palestra.
+         * Dal 18/09 vive nel suo spazio, e `eAbbonato()` guarda quello, vuoto.
+         * `puoAllenare()` guarda il suo piano da indipendente **oppure** una
+         * palestra attiva dove allena. ⚠️ La fascia trainer gratuita resta
+         * dentro: non è scaduta, è gratis, ed è un tier vero da tre allievi.
          *
          * ⛔ **Quello che NON si tocca sono le sue schede.** Restano sue e
          * continua a vederle da utente: sono lavoro suo, ed è la stessa regola
          * già scritta per `AccountEraser` e per `EsciDaUnaPalestra`.
          */
-        if (! app(PianoAttivo::class)->eAbbonato($utente)) {
+        if (! app(PianoAttivo::class)->puoAllenare($utente)) {
             /*
              * 🚨 **Un'eccezione con un CODICE, non un `abort(403, 'frase')`.**
              *

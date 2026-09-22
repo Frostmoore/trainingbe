@@ -69,7 +69,7 @@ class NutritionPlanItem extends Model
 
     /*
      * ⛔ Qui c'era `logAsEaten()`, che scriveva l'alimento in `food_entries`. La
-     * rotta che lo usava è stata ritirata in G9.4, e il 26/09/2026 la tabella è
+     * rotta che lo usava è stata ritirata in G9.4, e il 22/09/2026 la tabella è
      * sparita (A1 di `plan_blocco_A.md`): il diario è sul telefono.
      */
 }

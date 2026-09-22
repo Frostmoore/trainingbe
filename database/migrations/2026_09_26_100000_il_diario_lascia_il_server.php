@@ -6,7 +6,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * 🍽️ **Il diario lascia il server** — A1 di `plan_blocco_A.md`, 26/09/2026.
+ * 🍽️ **Il diario lascia il server** — A1 di `plan_blocco_A.md`, 22/09/2026.
  *
  * Il diario alimentare e i preferiti vivono sul telefono dal 03/09/2026 (Parte I):
  * l'app li ha portati via col trasloco e da allora **non chiama più** nessuna

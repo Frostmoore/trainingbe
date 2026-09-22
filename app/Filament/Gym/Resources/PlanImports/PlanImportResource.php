@@ -192,7 +192,7 @@ class PlanImportResource extends Resource
                     }),
 
                 /*
-                 * 🆕 🗑️ **Elimina** — A8, 26/09/2026.
+                 * 🆕 🗑️ **Elimina** — A8, 22/09/2026.
                  *
                  * ⛔ Prima un import, e il documento caricato con lui, non si
                  * poteva togliere in nessun modo (DPIA R19). ⚠️ Si cancellano la

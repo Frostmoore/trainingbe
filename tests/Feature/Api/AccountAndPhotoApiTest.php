@@ -140,7 +140,7 @@ class AccountAndPhotoApiTest extends TestCase
     {
         /*
          * ⛔ Qui si seminava una voce di diario e si controllava che sparisse: dal
-         * 26/09/2026 il diario non è più sul server. Resta da provare che
+         * 22/09/2026 il diario non è più sul server. Resta da provare che
          * l'account si cancelli.
          */
         $this->comeApp($this->iscritto)

@@ -69,7 +69,7 @@ class Food extends Model
     public function scopeVisibiliA(Builder $query, User $utente): Builder
     {
         /*
-         * ⛔ **Dal 26/09/2026 solo i pubblici** (A1 di `plan_blocco_A.md`). «I
+         * ⛔ **Dal 22/09/2026 solo i pubblici** (A1 di `plan_blocco_A.md`). «I
          * propri» si riconoscevano da `food_entries`, che non c'è più: gli
          * alimenti scritti da una persona stanno sul **suo telefono**, e l'app
          * li mette per primi nella ricerca (`ricercaAlimentiProvider`).

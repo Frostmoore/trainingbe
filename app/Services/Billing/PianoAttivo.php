@@ -6,8 +6,10 @@ namespace App\Services\Billing;
 
 use App\Models\Plan;
 use App\Models\PlanSubscription;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\Quota\QuotaDelTrainer;
+use App\Services\Tenancy\ChiSiVede;
 use App\Support\Tenancy\TenantContext;
 
 /**
@@ -285,6 +287,68 @@ class PianoAttivo
          * l'ha (l'iscritto di una palestra con un trainer esterno, AH.1-ter).
          */
         return $this->per($utente)->code !== Plan::FREE;
+    }
+
+    /**
+     * 🆕 🏋️ **Può fare il trainer, adesso?** — giro A6, 22/09/2026.
+     *
+     * 📌 *«Quando gli scade l'abbonamento, perde tutte le funzionalità da
+     * trainer»* (U.3.1) — ma **l'abbonamento di chi?** Due risposte, e basta
+     * una delle due:
+     *
+     * | Chi | Cosa conta |
+     * |---|---|
+     * | trainer indipendente | il **suo** abbonamento, nel suo spazio (`eAbbonato`) |
+     * | trainer di una palestra | l'abbonamento **della palestra**, che è chi paga per lui — di almeno una, attiva |
+     *
+     * ⛔ **Prima si chiedeva solo `eAbbonato()`**, e il commento in
+     * `TrainerController::trainerOrAbort()` diceva che per un trainer di
+     * palestra guardava già la palestra. Era vero finché quel trainer **viveva
+     * dentro** la palestra. Dal 18/09 (decisione 2, `DaiUnaCasaAlTrainer`) ogni
+     * trainer ha uno spazio suo: `eAbbonato()` guarda quello, vuoto, e un
+     * trainer creato dal pannello si vedeva «Abbonamento da trainer scaduto» —
+     * un abbonamento che non ha mai avuto, per un lavoro che la palestra paga.
+     * Trovato nel giro A6.
+     *
+     * ⚠️ **Non sostituisce `eAbbonato()`**: quella dice se **la persona** ha un
+     * contratto (AI, schede, carte del diario); questa se può **allenare**.
+     * Un trainer di palestra risponde «no» alla prima e «sì» alla seconda, ed
+     * è giusto così: la palestra gli paga il lavoro, non il Plus.
+     */
+    public function puoAllenare(User $utente): bool
+    {
+        if ($utente->isFreeTrainer() && $this->eAbbonato($utente)) {
+            return true;
+        }
+
+        $palestre = app(ChiSiVede::class)->palestreDoveAllena($utente);
+
+        if ($palestre->isEmpty()) {
+            return false;
+        }
+
+        /*
+         * ⚠️ Una palestra sospesa o chiusa non fa allenare nessuno, anche con
+         * l'abbonamento ancora in corso: è lo stesso criterio del login
+         * (`TenantStatus::allowsLogin()`, prova compresa).
+         */
+        $aperte = Tenant::withoutGlobalScopes()
+            ->whereIn('id', $palestre->all())
+            ->get()
+            ->filter(fn (Tenant $t): bool => $t->status->allowsLogin())
+            ->modelKeys();
+
+        if ($aperte === []) {
+            return false;
+        }
+
+        return $this->context->runWithoutTenant(
+            fn (): bool => PlanSubscription::query()
+                ->whereIn('tenant_id', $aperte)
+                ->attivi()
+                ->whereHas('plan', fn ($q) => $q->where('code', '!=', Plan::FREE))
+                ->exists(),
+        );
     }
 
     /**
