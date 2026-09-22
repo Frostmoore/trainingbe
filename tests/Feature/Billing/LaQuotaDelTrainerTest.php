@@ -551,23 +551,20 @@ final class LaQuotaDelTrainerTest extends TestCase
     }
 
     /**
-     * ⏳ **DOMANDA APERTA, non un difetto deciso** — U.4, 29/08/2026.
+     * ✅ **DECISO: la fascia trainer gratuita non esiste** — U.4, chiusa il
+     * 22/09/2026.
      *
-     * 🚨 `eAbbonato()` risponde *«il codice del piano non è `free`»*, e
-     * `trainer_free` non è `free`: quindi **un trainer sulla fascia gratuita
-     * risulta abbonato**, e nell'app non ha limiti di schede né il gate.
+     * 📌 Il committente: *«Non esiste un trainer in fascia gratuita, l'unica
+     * possibilità di essere free trainer è l'abbonamento minimo»*.
      *
-     * ⚠️ Può essere giusto — è un tier vero, da tre allievi, e togliergli le
-     * schede renderebbe la prova del prodotto inutile — o può essere un buco:
-     * chiunque si dichiari trainer si prende le funzioni a pagamento senza
-     * pagare.
-     *
-     * ⛔ **Non si decide qui.** Questo test **fotografa** il comportamento
-     * attuale invece di lasciarlo scoprire per caso: il giorno che il
-     * committente decide, diventa rosso e dice esattamente cosa cambiare.
+     * ⛔ Qui c'era la fotografia della domanda aperta dal 29/08: `trainer_free`
+     * non è `free`, quindi un trainer su quella fascia risultava abbonato —
+     * senza limiti di schede, e con i suoi allievi «abbonati» a costo zero.
+     * Adesso `PianoAttivo::per()` scarta quell'abbonamento: chi ce l'ha è un
+     * utente normale.
      */
     #[Test]
-    public function per_ora_anche_la_fascia_trainer_gratuita_risulta_abbonata(): void
+    public function la_fascia_trainer_gratuita_non_rende_abbonati(): void
     {
         $trainer = app(CreaTenantPersonale::class)(
             'Trainer', 'trainer@esempio.test',
@@ -583,13 +580,8 @@ final class LaQuotaDelTrainerTest extends TestCase
             'starts_at' => Carbon::now()->subYear(),
         ]);
 
-        $this->assertTrue(
-            app(PianoAttivo::class)->eAbbonato($trainer->fresh()),
-            'Il comportamento è cambiato: rileggere U.4 e chiedere al committente.',
-        );
-
-        // 💡 Ma l'AI no: quella la decide `ai_enabled`, che su questa fascia è
-        // spento. Le due domande sono separate, ed è giusto che lo siano.
+        $this->assertFalse(app(PianoAttivo::class)->eAbbonato($trainer->fresh()));
+        $this->assertSame(Plan::FREE, app(PianoAttivo::class)->per($trainer->fresh())->code);
         $this->assertFalse(app(PianoAttivo::class)->haLaAi($trainer->fresh()));
     }
 

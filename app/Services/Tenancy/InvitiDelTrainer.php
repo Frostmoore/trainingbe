@@ -104,7 +104,9 @@ class InvitiDelTrainer
      * 🆕 **Può avere allievi suoi?** — giro A6, 22/09/2026.
      *
      * 💡 Uno spazio suo **e** un piano da trainer su quello spazio
-     * (`PlanKind::Trainer`, compresa la fascia gratuita da tre posti).
+     * (`PlanKind::Trainer`). ⛔ La fascia gratuita `trainer_free` non conta:
+     * `PianoAttivo::per()` la scarta (committente, 22/09/2026: *«l'unica
+     * possibilità di essere free trainer è l'abbonamento minimo»*).
      *
      * ⛔ **Prima bastava `haUnoSpazioSuo()`**, e fino al 18/09 era la stessa
      * domanda: un trainer di sola palestra viveva **dentro** la palestra, quindi

@@ -98,10 +98,25 @@ class PianoAttivo
             return $this->piadinoDiRiserva();
         }
 
+        /*
+         * ⛔ **`trainer_free` non vale** — 22/09/2026, dopo il giro A6.
+         *
+         * 📌 Il committente: *«Non esiste un trainer in fascia gratuita, l'unica
+         * possibilità di essere free trainer è l'abbonamento minimo»*. Il piano
+         * era già ritirato (non si vende), ma un abbonamento vecchio a quella
+         * fascia valeva ancora come un contratto: funzioni da trainer, tre posti
+         * e — tramite `eAbbonato()` — allievi «abbonati» a costo zero.
+         *
+         * 💡 Si esclude **qui**, una volta sola, e ne seguono tutte le risposte
+         * (`eAbbonato`, `livello`, `puoAllenare`, i posti degli inviti). ⚠️ Per
+         * codice e non per prezzo: anche `trainer_consumo` costa 0 a listino, e
+         * si paga a consumo.
+         */
         $abbonamento = $this->context->runWithoutTenant(
             fn (): ?PlanSubscription => PlanSubscription::query()
                 ->where('tenant_id', $tenantId)
                 ->attivi()
+                ->whereDoesntHave('plan', fn ($q) => $q->where('code', Plan::TRAINER_FREE))
                 ->with('plan')
                 ->orderByDesc('starts_at')
                 ->first(),

@@ -186,6 +186,18 @@ class TrainerController extends Controller
             return response()->json(['message' => __('Persona non trovata.')], 404);
         }
 
+        /*
+         * 🆕 ⛔ **Un posto liberato non si riapre da qui** — 22/09/2026 (Q-A5-2).
+         * 📌 *«se vuole reinvitarlo gli deve mandare un link di invito»*: è
+         * l'allievo che accetta, non il trainer che decide per tutti e due.
+         */
+        if (app(LoSlotDelTrainer::class)->haLiberatoIlPosto((int) $trainer->getKey(), (int) $utente->getKey())) {
+            return response()->json([
+                'message' => __('Hai liberato il suo posto: per seguirlo di nuovo mandagli un invito.'),
+                'code' => 'posto_liberato',
+            ], 409);
+        }
+
         $attivo = $utente->pivot->disattivato_il === null;
 
         $attivo
@@ -240,8 +252,9 @@ class TrainerController extends Controller
          * trainer di palestra: era vero finché lui **viveva** nella palestra.
          * Dal 18/09 vive nel suo spazio, e `eAbbonato()` guarda quello, vuoto.
          * `puoAllenare()` guarda il suo piano da indipendente **oppure** una
-         * palestra attiva dove allena. ⚠️ La fascia trainer gratuita resta
-         * dentro: non è scaduta, è gratis, ed è un tier vero da tre allievi.
+         * palestra attiva dove allena. ⛔ La fascia trainer gratuita **non
+         * esiste** (committente, 22/09/2026): un abbonamento vecchio a
+         * `trainer_free` non vale, e lo esclude già `PianoAttivo::per()`.
          *
          * ⛔ **Quello che NON si tocca sono le sue schede.** Restano sue e
          * continua a vederle da utente: sono lavoro suo, ed è la stessa regola

@@ -123,7 +123,17 @@ final class ChiSiVede
      */
     public function allieviDi(User $trainer): Collection
     {
-        $suoi = $trainer->assignedMembers()->get();
+        /*
+         * 🆕 ⛔ **Chi ha liberato il posto non lo ritrova fra i suoi** —
+         * 22/09/2026 (Q-A5-2). Restava in elenco con «Riapri la conversazione»:
+         * un rapporto che l'allievo non aveva chiesto, riaperto da una parte
+         * sola. 📌 *«se vuole reinvitarlo gli deve mandare un link di invito»*.
+         * ⚠️ Se è ancora iscritto in una palestra dove il trainer allena, lo
+         * rivede qui sotto come iscritto della palestra: è lì che lo segue.
+         */
+        $suoi = $trainer->assignedMembers()
+            ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
+            ->get();
 
         $palestre = $this->palestreDoveAllena($trainer);
 
@@ -145,7 +155,15 @@ final class ChiSiVede
      */
     public function trainerDi(User $membro): Collection
     {
-        $suoi = $membro->assignedTrainers()->get();
+        /*
+         * 🆕 ⛔ Il trainer che ha liberato il posto non è più «il tuo trainer» —
+         * 22/09/2026 (Q-A5-2), lo specchio di [allieviDi]. ⚠️ E da qui dipende
+         * anche la chat (`CancelloDellaChat::ancoraLegati`): fuori da una
+         * palestra comune tornano i tre messaggi.
+         */
+        $suoi = $membro->assignedTrainers()
+            ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
+            ->get();
 
         $palestra = $membro->tenant;
 

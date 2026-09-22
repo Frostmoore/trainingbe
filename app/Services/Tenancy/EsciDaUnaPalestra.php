@@ -298,8 +298,28 @@ final class EsciDaUnaPalestra
 
         $this->pretendiUnaClassificazionePerOgniTabella();
 
-        return DB::transaction(function () use ($utente, $palestra): Tenant {
-            $personale = $this->creaIlTenantPersonale($utente);
+        /*
+         * ══ 🆕 🎟️ CHI HA UN TRAINER CHE GLI TIENE IL POSTO TORNA DA LUI ══════
+         *
+         * 📌 Il committente, 22/09/2026: *«Ovviamente se il trainer gli ha
+         * tenuto il posto torna nello spazio del trainer, sennò a che servirebbe
+         * tenere il posto?»*. E da D1 seguire un trainer indipendente vuol dire
+         * **stare nel suo spazio**, dove paga lui: il Plus resta in pausa.
+         *
+         * ⛔ **Prima si creava sempre uno spazio personale** e si riprendeva
+         * l'abbonamento: il rapporto restava, ma l'allievo finiva a casa sua a
+         * pagarsi il Plus mentre il trainer continuava a pagargli il posto —
+         * **pagavano in due**, e su Stripe l'addebito ripartiva. Trovato nel giro
+         * A5 (Q-A5-1).
+         *
+         * 💡 Si decide **prima** della transazione: più sotto
+         * `sciogliIlLegameConLaPalestra()` e `chiudiLaSovrapposizione()`
+         * cambiano proprio le righe che lo dicono.
+         */
+        $spazioDelTrainer = $this->spazioDelTrainerCheLoTiene($utente, $palestra);
+
+        return DB::transaction(function () use ($utente, $palestra, $spazioDelTrainer): Tenant {
+            $personale = $spazioDelTrainer ?? $this->creaIlTenantPersonale($utente);
 
             $spostate = $this->portaViaLeSueRighe($utente, $palestra, $personale);
 
@@ -314,7 +334,16 @@ final class EsciDaUnaPalestra
 
             $utente->forceFill(['tenant_id' => $personale->getKey()])->save();
 
-            $this->rifaiIRuoli($utente, $palestra, $personale);
+            /*
+             * 💡 Nello spazio del trainer si è `Member`, come dopo aver
+             * accettato il suo invito (`InvitiDelTrainer::traslocaSeHaUnoSpazioSuo`).
+             */
+            $this->rifaiIRuoli(
+                $utente,
+                $palestra,
+                $personale,
+                $spazioDelTrainer === null ? UserRole::FreeUser : UserRole::Member,
+            );
             $this->sciogliIlLegameConLaPalestra($utente, $palestra);
 
             /*
@@ -331,7 +360,16 @@ final class EsciDaUnaPalestra
              * ⚠️ E chi **non era** abbonato esce non abbonato: qui non si crea
              * niente, si riprende solo ciò che era stato messo in pausa.
              */
-            $this->pausa->riprendi($utente, $palestra, $personale);
+            /*
+             * 🚨 **Tornando dal trainer non riprende niente**: lì paga lui, e la
+             * pausa resta com'è, con i giorni che restavano. Riprenderà quando la
+             * persona tornerà davvero individuale (uscendo dallo spazio del
+             * trainer passa di nuovo da qui). ⛔ Riprendere e rimettere in pausa
+             * non sarebbe innocuo: senza `trial_end` Stripe riaddebita subito.
+             */
+            if ($spazioDelTrainer === null) {
+                $this->pausa->riprendi($utente, $palestra, $personale);
+            }
 
             /*
              * ══ 🆕 🎟️ E GLI SLOT TENUTI SI RIACCENDONO — AH.1-ter.6 ═════════
@@ -532,7 +570,7 @@ final class EsciDaUnaPalestra
      * ⚠️ Si esce come `FreeUser`, non come `Member`: «iscritto» è un ruolo che
      * ha senso dentro una palestra, e fuori non vuol dire niente.
      */
-    private function rifaiIRuoli(User $utente, Tenant $palestra, Tenant $personale): void
+    private function rifaiIRuoli(User $utente, Tenant $palestra, Tenant $personale, UserRole $ruolo = UserRole::FreeUser): void
     {
         DB::table('model_has_roles')
             ->where('model_id', $utente->getKey())
@@ -540,10 +578,56 @@ final class EsciDaUnaPalestra
             ->where('tenant_id', $palestra->getKey())
             ->delete();
 
-        $this->context->runAs($personale, function () use ($utente): void {
+        $this->context->runAs($personale, function () use ($utente, $ruolo): void {
             $fresco = User::withoutGlobalScopes()->findOrFail($utente->getKey());
             $fresco->unsetRelation('roles');
-            $fresco->syncRoles([UserRole::FreeUser->value]);
+            $fresco->syncRoles([$ruolo->value]);
+        });
+    }
+
+    /**
+     * 🆕 **Lo spazio del trainer indipendente che gli tiene il posto**, se c'è
+     * — 22/09/2026 (Q-A5-1).
+     *
+     * 💡 Il segno è una riga di `trainer_member` **ancora in piedi** con un
+     * trainer indipendente: il posto il trainer lo paga, che abbia risposto
+     * «tengo» alla domanda della sovrapposizione o che la domanda non sia mai
+     * nata (il trainer non lavora in quella palestra, il caso D1).
+     *
+     * ⚠️ Se i trainer sono più d'uno (*«infiniti free trainer»*) la casa è una
+     * sola: vince quello **sovrapposto in questa palestra** (ha scelto di
+     * tenerlo proprio per questo ritorno), poi il rapporto più recente.
+     *
+     * ⛔ Solo uno spazio **personale, attivo, del trainer**, e solo se il trainer
+     * può ancora avere allievi suoi: mandare qualcuno nello spazio di chi ha
+     * smesso di pagare vorrebbe dire lasciarlo senza nessuno che paghi.
+     */
+    private function spazioDelTrainerCheLoTiene(User $utente, Tenant $palestra): ?Tenant
+    {
+        return $this->context->runWithoutTenant(function () use ($utente, $palestra): ?Tenant {
+            $righe = DB::table('trainer_member')
+                ->where('member_id', $utente->getKey())
+                ->where('tenant_id', '!=', $palestra->getKey())
+                ->whereNull('disattivato_il')
+                ->orderByRaw('CASE WHEN sovrapposto_in_tenant_id = ? THEN 0 ELSE 1 END', [$palestra->getKey()])
+                ->orderByDesc('assigned_at')
+                ->get(['trainer_id', 'tenant_id']);
+
+            foreach ($righe as $riga) {
+                $spazio = Tenant::withoutGlobalScopes()->find($riga->tenant_id);
+                $trainer = User::withoutGlobalScopes()->find($riga->trainer_id);
+
+                if ($spazio !== null
+                    && $trainer !== null
+                    && $spazio->ePersonale()
+                    && $spazio->status->allowsLogin()
+                    && $spazio->eDi($trainer)
+                    && app(InvitiDelTrainer::class)->puoAvereAllieviSuoi($trainer)) {
+                    return $spazio;
+                }
+            }
+
+            return null;
         });
     }
 

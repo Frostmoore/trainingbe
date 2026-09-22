@@ -314,6 +314,17 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
         $this->assertNull($dopoLuscita->sovrapposto_dal, 'la sovrapposizione e rimasta aperta');
         $this->assertNull($dopoLuscita->sovrapposto_in_tenant_id);
         $this->assertNull($dopoLuscita->disattivato_il, 'lallievo non e tornato al trainer');
+
+        // 🆕 22/09/2026 (Q-A5-1): e torna **nello spazio** del trainer, da iscritto suo.
+        $tornato = User::withoutGlobalScopes()->findOrFail($allievo->getKey());
+        $this->assertSame($trainer->tenant_id, $tornato->tenant_id, 'Doveva tornare nello spazio del trainer.');
+        $this->assertTrue(
+            app(TenantContext::class)->runAs(
+                $trainer->tenant,
+                fn (): bool => $tornato->unsetRelation('roles')->hasRole(UserRole::Member->value),
+            ),
+            'Nello spazio del trainer doveva essere un iscritto.',
+        );
     }
 
     /**
@@ -617,9 +628,27 @@ final class LoSlotEQuandoSiEntraInPalestraTest extends TestCase
 
         app(UnisciAUnaPalestra::class)->dentroQuestoTenant($allievo->fresh(), $palestra, UserRole::Member);
 
-        $tornato = User::withoutGlobalScopes()->findOrFail($allievo->getKey());
-        app(EsciDaUnaPalestra::class)($tornato);
-        $tornato = $tornato->fresh();
+        /*
+         * 🔄 22/09/2026 (Q-A5-1): uscendo dalla palestra **torna dal trainer**,
+         * che il posto non l'ha mai liberato. Lì paga il trainer: il Plus resta
+         * in pausa, con i giorni che restavano.
+         */
+        $dalTrainer = User::withoutGlobalScopes()->findOrFail($allievo->getKey());
+        app(EsciDaUnaPalestra::class)($dalTrainer);
+        $dalTrainer = $dalTrainer->fresh();
+
+        $this->assertSame($trainer->tenant_id, $dalTrainer->tenant_id, 'Doveva tornare nello spazio del trainer.');
+
+        $inPausa = PlanSubscription::withoutGlobalScopes()
+            ->whereHas('plan', fn ($q) => $q->where('code', Plan::PLUS))
+            ->whereIn('tenant_id', Tenant::withoutGlobalScopes()->withTrashed()->where('proprietario_id', $allievo->getKey())->select('id'))
+            ->first();
+
+        $this->assertNotNull($inPausa?->in_pausa_dal, 'Dal trainer il Plus doveva restare in pausa.');
+
+        // 📌 *«quando torna individuale non può avere l'abbonamento scaduto, l'ha pagato»*.
+        app(EsciDaUnaPalestra::class)($dalTrainer);
+        $tornato = $dalTrainer->fresh();
 
         $riga = PlanSubscription::withoutGlobalScopes()
             ->where('tenant_id', $tornato->tenant_id)

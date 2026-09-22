@@ -8,6 +8,7 @@ use App\Models\Conversation;
 use App\Models\User;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\ChiSiVede;
+use App\Services\Tenancy\LoSlotDelTrainer;
 use App\Support\Impersonation\Impersonator;
 use Illuminate\Support\Facades\DB;
 
@@ -109,10 +110,29 @@ class CancelloDellaChat
          * devo avere»*.
          */
         if (! $c->eDiInformazioni() && ! $this->ancoraLegati($c)) {
-            return Permesso::no(
-                Permesso::CANALE_CHIUSO,
-                'Non vi seguite più: puoi rileggere la conversazione, ma non scrivere.',
-            );
+            /*
+             * ══ 🆕 IL POSTO LIBERATO: SI TORNA AI TRE MESSAGGI — 22/09/2026 ══
+             *
+             * 📌 Il committente (Q-A5-2): *«la chat si deve bloccare (max 3
+             * messaggi, come sempre) e se vuole reinvitarlo gli deve mandare un
+             * link di invito»*. Il filo torna **di presentazione**, con il
+             * contatore da zero: tre messaggi ciascuno, quanto basta a mandare
+             * l'invito. Accettandolo, `InvitiDelTrainer::riscattaPerChiEsiste`
+             * lo rende di nuovo illimitato.
+             *
+             * 💡 Succede **qui**, alla prima scrittura dopo che i due hanno
+             * smesso di essere legati, e non quando il trainer libera il posto:
+             * finché l'allievo è iscritto nella palestra dove lui allena, lo
+             * segue da trainer della palestra e la chat resta libera.
+             */
+            if ($this->slot()->haLiberatoIlPosto((int) $c->trainer_id, (int) $c->member_id)) {
+                $this->limite->tornaAllaPresentazione($c);
+            } else {
+                return Permesso::no(
+                    Permesso::CANALE_CHIUSO,
+                    'Non vi seguite più: puoi rileggere la conversazione, ma non scrivere.',
+                );
+            }
         }
 
         /*
@@ -248,6 +268,17 @@ class CancelloDellaChat
             ->where('trainer_id', $c->trainer_id)
             ->where('member_id', $c->member_id)
             ->whereNotNull('disattivato_il')
+            /*
+             * 🆕 ⚠️ **Non il posto liberato** (22/09/2026): quello non è «il
+             * trainer ha chiuso la conversazione». Finché sono legati da una
+             * palestra si scrivono; poi tornano ai tre messaggi (sopra).
+             */
+            ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
             ->exists();
+    }
+
+    private function slot(): LoSlotDelTrainer
+    {
+        return app(LoSlotDelTrainer::class);
     }
 }

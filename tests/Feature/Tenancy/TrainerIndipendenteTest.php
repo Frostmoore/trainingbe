@@ -355,15 +355,16 @@ class TrainerIndipendenteTest extends TestCase
 
         PlanSubscription::withoutGlobalScopes()->create([
             'tenant_id' => $trainer->tenant_id,
-            'plan_id' => Plan::query()->where('code', Plan::TRAINER_FREE)->firstOrFail()->id,
+            // 🔄 22/09/2026: la fascia minima vera (`trainer_5`), non `trainer_free` che non vale più.
+            'plan_id' => Plan::query()->where('code', 'trainer_5')->firstOrFail()->id,
             'starts_at' => now()->subYear(),
         ]);
 
-        $this->assertSame(3, $this->inviti()->postiRimasti($trainer->fresh()));
+        $this->assertSame(5, $this->inviti()->postiRimasti($trainer->fresh()));
 
-        $this->inviti()->invita($trainer);
-        $this->inviti()->invita($trainer);
-        $this->inviti()->invita($trainer);
+        foreach (range(1, 5) as $_) {
+            $this->inviti()->invita($trainer);
+        }
 
         $this->assertSame(0, $this->inviti()->postiRimasti($trainer->fresh()));
 
@@ -380,16 +381,16 @@ class TrainerIndipendenteTest extends TestCase
         $trainer = $this->creaTrainer();
         PlanSubscription::withoutGlobalScopes()->create([
             'tenant_id' => $trainer->tenant_id,
-            'plan_id' => Plan::query()->where('code', Plan::TRAINER_FREE)->firstOrFail()->id,
+            'plan_id' => Plan::query()->where('code', 'trainer_5')->firstOrFail()->id,
             'starts_at' => now()->subYear(),
         ]);
 
         $invito = $this->inviti()->invita($trainer);
-        $this->assertSame(2, $this->inviti()->postiRimasti($trainer->fresh()));
+        $this->assertSame(4, $this->inviti()->postiRimasti($trainer->fresh()));
 
         $invito->forceFill(['revoked_at' => now()])->save();
 
-        $this->assertSame(3, $this->inviti()->postiRimasti($trainer->fresh()));
+        $this->assertSame(5, $this->inviti()->postiRimasti($trainer->fresh()));
     }
 
     /** Il piano pro non ha limite. */
@@ -596,14 +597,17 @@ class TrainerIndipendenteTest extends TestCase
     }
 
     /**
-     * 💡 **La fascia trainer gratuita non è «scaduta»**: è gratis.
+     * ⛔ **La fascia trainer gratuita non esiste** — 22/09/2026.
      *
-     * ⚠️ `trainer_free` costa zero ma è un tier vero, da tre allievi. Chiuderlo
-     * insieme agli scaduti vorrebbe dire togliere la prova del prodotto proprio
-     * a chi la sta facendo.
+     * 📌 Il committente: *«Non esiste un trainer in fascia gratuita, l'unica
+     * possibilità di essere free trainer è l'abbonamento minimo»*. ⚠️ Qui prima
+     * c'era il test opposto (*«la fascia trainer gratuita continua a
+     * funzionare»*). Un abbonamento vecchio a `trainer_free` non apre niente:
+     * né le funzioni da trainer, né i posti, né «abbonato» per chi vive nel
+     * suo spazio.
      */
     #[Test]
-    public function la_fascia_trainer_gratuita_continua_a_funzionare(): void
+    public function la_fascia_trainer_gratuita_non_apre_niente(): void
     {
         $trainer = app(CreaTenantPersonale::class)(
             'Trainer Gratuito',
@@ -620,7 +624,7 @@ class TrainerIndipendenteTest extends TestCase
                 'ai_enabled' => false,
                 'max_members' => 3,
                 'price_cents' => 0,
-                'is_public' => true,
+                'is_public' => false,
             ]);
 
         PlanSubscription::withoutGlobalScopes()->create([
@@ -629,8 +633,11 @@ class TrainerIndipendenteTest extends TestCase
             'starts_at' => now()->subYear(),
         ]);
 
+        $this->assertFalse(app(PianoAttivo::class)->eAbbonato($trainer->fresh()));
+        $this->assertFalse($this->inviti()->puoAvereAllieviSuoi($trainer->fresh()));
+
         $this->actingAs($trainer->fresh(), 'sanctum')
             ->getJson('/api/v1/trainer/members')
-            ->assertStatus(200);
+            ->assertStatus(403);
     }
 }

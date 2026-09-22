@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -321,6 +322,42 @@ class LoSlotDelTrainer
      *
      * @return int quante sovrapposizioni sono state chiuse
      */
+    /**
+     * 🆕 **Il trainer ha liberato il posto di questo allievo?** — 22/09/2026.
+     *
+     * 📌 Il committente (Q-A5-2): chi ha liberato il posto **non riapre da
+     * solo** il rapporto — *«la chat si deve bloccare (max 3 messaggi, come
+     * sempre) e se vuole reinvitarlo gli deve mandare un link di invito»*.
+     *
+     * 💡 Si riconosce senza colonne nuove: `decidi()` scrive **la stessa ora**
+     * in `slot_deciso_il` e in `disattivato_il`. Un rapporto chiuso col
+     * pulsante del trainer (`InvitiDelTrainer::disattiva`) ha solo
+     * `disattivato_il`; uno tenuto e poi chiuso ha due ore diverse. ⚠️ Chi
+     * riaccetta un invito passa da `riapriSeChiuso()`, che azzera tutte e due.
+     */
+    public function haLiberatoIlPosto(int $trainerId, int $allievoId): bool
+    {
+        return DB::table('trainer_member')
+            ->where('trainer_id', $trainerId)
+            ->where('member_id', $allievoId)
+            ->whereNotNull('disattivato_il')
+            ->whereColumn('slot_deciso_il', 'disattivato_il')
+            ->exists();
+    }
+
+    /**
+     * 🆕 Il filtro complementare, da usare dentro una `where(fn …)` su
+     * `trainer_member`: **tutto tranne** i posti liberati.
+     *
+     * @param  Builder|\Illuminate\Database\Eloquent\Builder  $q
+     */
+    public static function nonLiberati($q): void
+    {
+        $q->whereNull('trainer_member.disattivato_il')
+            ->orWhereNull('trainer_member.slot_deciso_il')
+            ->orWhereColumn('trainer_member.slot_deciso_il', '!=', 'trainer_member.disattivato_il');
+    }
+
     public function chiudiLaSovrapposizione(User $allievo, Tenant $palestra): int
     {
         return $this->context->runWithoutTenant(function () use ($allievo, $palestra): int {

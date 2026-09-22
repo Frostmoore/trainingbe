@@ -99,6 +99,26 @@ class LimiteDeiTreMessaggi
     }
 
     /**
+     * 🆕 Il contrario di [sblocca]: il filo torna **di presentazione**, con il
+     * contatore da zero — 22/09/2026 (Q-A5-2).
+     *
+     * 💡 Serve quando un trainer ha liberato il posto di un allievo e i due non
+     * sono più legati: *«max 3 messaggi, come sempre»*. ⚠️ Qui il contatore si
+     * azzera, a differenza di `sblocca()`: i messaggi di prima erano del
+     * rapporto, non tentativi di presentarsi, e contarli lascerebbe zero.
+     */
+    public function tornaAllaPresentazione(Conversation $c): void
+    {
+        if ($c->eDiInformazioni()) {
+            return;
+        }
+
+        $c->tipo = TipoConversazione::Informazioni;
+        $c->messaggi_di = [];
+        $c->save();
+    }
+
+    /**
      * 🚨 Il filo diventa illimitato: la persona si e' iscritta — M4.4.
      *
      * 💡 Non azzera il contatore, **cambia il tipo**. Il conteggio resta scritto

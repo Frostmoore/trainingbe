@@ -94,7 +94,10 @@ class ChiVedeChiTest extends TestCase
     }
 
     /**
-     * ⏰ Gli dà la fascia trainer gratuita.
+     * ⏰ Gli dà l'abbonamento da trainer minimo (`trainer_5`).
+     *
+     * 🔄 22/09/2026: prima era la fascia gratuita, che il committente ha detto
+     * non esistere e che `PianoAttivo::per()` ora scarta.
      *
      * 🚨 Serve per chiamare `/trainer/members`: dopo U.3.1 la rotta pretende
      * un abbonamento in piedi, e senza risponde **403** — che in un test somiglia
@@ -102,14 +105,14 @@ class ChiVedeChiTest extends TestCase
      */
     private function abbona(User $trainer): void
     {
-        $piano = Plan::query()->where('code', Plan::TRAINER_FREE)->first()
+        $piano = Plan::query()->where('code', 'trainer_5')->first()
             ?? Plan::create([
-                'code' => Plan::TRAINER_FREE,
-                'name' => 'Trainer — gratuito',
+                'code' => 'trainer_5',
+                'name' => 'Trainer — 5 allievi',
                 'kind' => PlanKind::Trainer,
-                'ai_enabled' => false,
-                'max_members' => 3,
-                'price_cents' => 0,
+                'ai_enabled' => true,
+                'max_members' => 5,
+                'price_cents' => 3000,
                 'is_public' => true,
             ]);
 
