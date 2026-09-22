@@ -28,7 +28,7 @@
     </p>
 
     @if ($documento === null)
-        <p class="tc-nota">Il documento non c'è più: è stato cancellato insieme all'import.</p>
+        <p class="tc-nota">Il documento non c'è più: si cancella da solo 30 giorni dopo il caricamento, o quando si elimina l'import.</p>
     @elseif ($import->eUnaImmagine())
         <img src="{{ $indirizzo }}" alt="Il documento importato" class="tc-documento">
     @else

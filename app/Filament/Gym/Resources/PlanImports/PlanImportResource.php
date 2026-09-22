@@ -15,6 +15,7 @@ use App\Models\WorkoutPlanImport;
 use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -189,6 +190,21 @@ class PlanImportResource extends Resource
 
                         Notification::make()->title('Rimesso in coda')->success()->send();
                     }),
+
+                /*
+                 * 🆕 🗑️ **Elimina** — A8, 26/09/2026.
+                 *
+                 * ⛔ Prima un import, e il documento caricato con lui, non si
+                 * poteva togliere in nessun modo (DPIA R19). ⚠️ Si cancellano la
+                 * riga e il documento (la media library lo toglie dal disco con
+                 * la riga); la **scheda creata resta**: è della palestra, e i
+                 * trainer potrebbero averla già mandata.
+                 */
+                DeleteAction::make()
+                    ->label('Elimina')
+                    ->modalHeading('Eliminare questo import?')
+                    ->modalDescription('Spariscono il documento caricato e le righe lette. Se ne hai già creato una scheda, la scheda resta.')
+                    ->successNotificationTitle('Import eliminato'),
             ])
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Nessun import')

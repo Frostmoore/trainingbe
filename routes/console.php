@@ -140,6 +140,25 @@ Schedule::command('piani:pota-importazioni')
 
 /*
 |------------------------------------------------------------------------------
+| 🆕 I documenti delle schede importate dal pannello — A8, 26/09/2026
+|------------------------------------------------------------------------------
+|
+| Il PDF o la foto che una palestra carica per trascrivere una scheda restavano
+| per sempre (DPIA R19). Adesso si cancellano 30 giorni dopo il caricamento:
+| l'import resta come storia, la scheda creata non si tocca.
+|
+| /!\ In background e senza sovrapposizioni: server condiviso con altri domini.
+*/
+Schedule::command('schede:pota-documenti')
+    ->dailyAt('03:25')
+    ->withoutOverlapping(30)
+    ->runInBackground()
+    ->onFailure(function (): void {
+        Log::error('Potatura dei documenti delle schede fallita: restano oltre i 30 giorni.');
+    });
+
+/*
+|------------------------------------------------------------------------------
 | 🆕 La potatura della coda — FASE 9.8
 |------------------------------------------------------------------------------
 |
