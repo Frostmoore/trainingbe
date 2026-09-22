@@ -142,14 +142,15 @@ class SchedaPubblica extends Page
                          * la scheda pubblica di una palestra, prima ancora di
                          * entrarci.
                          *
-                         * ⛔ **Niente `->imageEditor()`**: uccide il JavaScript
-                         * della pagina al salvataggio e «Salva» smette di fare
-                         * qualunque cosa, in silenzio (fase F0, atlante §106.3).
+                         * ✂️ Con l'editor delle immagini, per ritagliare la foto
+                         * larga: acceso di nuovo su Filament 5.8.4 (atlante §137;
+                         * su 5.7.6 faceva morire «Salva», §106.3).
                          */
                         SpatieMediaLibraryFileUpload::make('testata')
                             ->label('Immagine di testata')
                             ->collection(ProfiloPubblico::COLLECTION_TESTATA)
                             ->image()
+                            ->imageEditor()
                             ->maxSize(4096)
                             ->helperText('Una foto larga della sala: compare in cima alla pagina con cui inviti le persone.')
                             ->columnSpanFull(),
