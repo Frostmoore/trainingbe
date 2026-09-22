@@ -8,14 +8,18 @@ use App\Enums\PlanKind;
 use App\Enums\TenantKind;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Mail\BenvenutoMail;
 use App\Models\Plan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Throwable;
 
 /**
  * Chi si abbona dal sito — 20/09/2026.
@@ -133,6 +137,25 @@ final class IscrizioneDalSito
 
             return $utente;
         });
+
+        /*
+         * 🆕 👋 **Il benvenuto** — 22/09/2026. Fuori dalla transazione: una
+         * mail mandata dentro, e poi un rollback, saluterebbe qualcuno che non
+         * esiste. E dentro un `try`, perche' l'iscrizione e' gia' andata bene.
+         */
+        try {
+            Mail::to($utente->email)->send(new BenvenutoMail(
+                $utente,
+                $piano->kind === PlanKind::Gym ? BenvenutoMail::PALESTRA : BenvenutoMail::TRAINER,
+            ));
+        } catch (Throwable $e) {
+            Log::error('Benvenuto: mail non partita.', [
+                'utente' => $utente->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
+
+        return $utente;
     }
 
     /**

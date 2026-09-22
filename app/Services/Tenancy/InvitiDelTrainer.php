@@ -7,6 +7,7 @@ namespace App\Services\Tenancy;
 use App\Enums\PlanKind;
 use App\Enums\TipoConversazione;
 use App\Enums\UserRole;
+use App\Mail\InvitoDelTrainerMail;
 use App\Models\Conversation;
 use App\Models\Plan;
 use App\Models\TrainerInvite;
@@ -15,7 +16,10 @@ use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\Exceptions\HaiGiaUnTrainerException;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Inviti personali di un trainer indipendente — F6.2, F6.4, F6.5.
@@ -230,13 +234,51 @@ class InvitiDelTrainer
             ]);
         }
 
-        return TrainerInvite::withoutGlobalScopes()->create([
+        $invito = TrainerInvite::withoutGlobalScopes()->create([
             'tenant_id' => $trainer->tenant_id,
             'trainer_id' => $trainer->getKey(),
             'token' => TrainerInvite::generaToken(),
             'email' => $email,
             'expires_at' => now()->addDays(TrainerInvite::GIORNI_DI_VITA),
         ]);
+
+        $this->mandaIlLink($invito, $trainer);
+
+        return $invito;
+    }
+
+    /**
+     * 🆕 📧 **L'invito parte anche per email** — 22/09/2026.
+     *
+     * ⛔ Fino a oggi l'indirizzo si poteva scrivere e non serviva a niente: il
+     * link tornava all'app, che lo copiava negli appunti, e il trainer lo
+     * mandava a mano. Chi scriveva l'email si aspettava che partisse.
+     *
+     * 🚨 **Se la mail non parte, l'invito resta valido**: il link esiste già e
+     * il trainer ce l'ha negli appunti. Far fallire la creazione perché il
+     * trasporto è giù vorrebbe dire perdere un posto del piano per un guasto
+     * che non c'entra niente.
+     *
+     * @return bool `false` se non c'era un indirizzo, o se la mail non è partita
+     */
+    public function mandaIlLink(TrainerInvite $invito, User $trainer): bool
+    {
+        if ($invito->email === null || $invito->email === '') {
+            return false;
+        }
+
+        try {
+            Mail::to($invito->email)->send(new InvitoDelTrainerMail($invito, $trainer));
+
+            return true;
+        } catch (Throwable $e) {
+            Log::error('Invito del trainer: mail non partita.', [
+                'invito' => $invito->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     /**

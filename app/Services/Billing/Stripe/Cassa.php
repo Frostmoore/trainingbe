@@ -6,6 +6,7 @@ namespace App\Services\Billing\Stripe;
 
 use App\Enums\EventoDiPromozione;
 use App\Enums\SuCosaVale;
+use App\Mail\PagamentoFallitoMail;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
 use App\Models\PacchettoGettoni;
@@ -22,10 +23,12 @@ use App\Services\Promozioni\ConsegnaDeiPremi;
 use App\Services\Promozioni\GliEventi;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
 use Stripe\Checkout\Session;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\StripeClient;
+use Throwable;
 
 /**
  * La cassa: apre una sessione di pagamento e la incassa — 3b-H, 26/08/2026.
@@ -748,7 +751,7 @@ class Cassa
             };
 
             return true;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error('Stripe: incasso fallito.', [
                 'errore' => $e->getMessage(),
                 'evento' => $evento['id'] ?? null,
@@ -1080,6 +1083,12 @@ class Cassa
 
             Log::warning('Stripe: addebito a consumo non pagato.', ['fattura' => $fattura['id'] ?? null]);
 
+            $spazio = $addebito?->tenant_id === null
+                ? null
+                : Tenant::withoutGlobalScopes()->find($addebito->tenant_id);
+
+            $this->avvisaDelPagamentoFallito($spazio, 'la fattura del mese');
+
             return;
         }
 
@@ -1096,9 +1105,58 @@ class Cassa
          */
         if ($riga->pagamento_fallito_il === null) {
             $riga->forceFill(['pagamento_fallito_il' => now()])->save();
+
+            /*
+             * 🚨 **Solo la prima volta.** Stripe riprova per giorni e a ogni
+             * tentativo manda un altro webhook: avvisare ogni volta vorrebbe
+             * dire quattro mail identiche a chi ha gia' capito. La colonna
+             * `pagamento_fallito_il` e' la memoria di «gliel'abbiamo detto».
+             */
+            $this->avvisaDelPagamentoFallito(
+                Tenant::withoutGlobalScopes()->find($riga->tenant_id),
+                'l\'abbonamento',
+            );
         }
 
         Log::warning('Stripe: pagamento di un abbonamento non riuscito.', ['subscription' => $idAbbonamento]);
+    }
+
+    /**
+     * 🆕 📧 **Avvisa chi paga che il pagamento non e' riuscito** — 22/09/2026.
+     *
+     * ⛔ Prima finiva solo nel log: chi paga non lo sapeva, non cambiava la
+     * carta, e l'abbonamento scadeva per una cosa che si sistema in due minuti.
+     *
+     * ⚠️ Si scrive a `Tenant::aChiScrivere()` — il proprietario, o il gym_admin
+     * piu' vecchio — e **mai** a un iscritto a caso: una mail sui soldi mandata
+     * a chi non paga e' un incidente, non un ripiego.
+     *
+     * 🚨 Dentro un `try`: qui siamo dentro un webhook di Stripe, e un'eccezione
+     * farebbe rispondere 500. Stripe riproverebbe il webhook, e il webhook
+     * rifarebbe il lavoro gia' fatto.
+     */
+    private function avvisaDelPagamentoFallito(?Tenant $spazio, string $quale): void
+    {
+        if ($spazio === null) {
+            return;
+        }
+
+        $chi = $spazio->aChiScrivere();
+
+        if ($chi === null) {
+            Log::warning('Pagamento fallito: nessuno a cui scrivere.', ['tenant' => $spazio->getKey()]);
+
+            return;
+        }
+
+        try {
+            Mail::to($chi->email)->send(new PagamentoFallitoMail($spazio, $quale));
+        } catch (Throwable $e) {
+            Log::error('Pagamento fallito: avviso non partito.', [
+                'tenant' => $spazio->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

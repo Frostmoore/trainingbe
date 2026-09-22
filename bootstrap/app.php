@@ -11,6 +11,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -23,6 +24,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // iscritto a un canale, il client riceve tutto cio' che ci passa.
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
+
+        /*
+         * 👀 **L'anteprima delle mail, solo in locale** — 22/09/2026.
+         *
+         * ⛔ In produzione queste rotte **non esistono**: non sono protette da
+         * un permesso, proprio non vengono registrate. Un elenco pubblico di
+         * come sono fatte le nostre mail e' mezzo lavoro fatto per chi ne
+         * scrive una falsa.
+         */
+        then: function (): void {
+            if (app()->environment('local')) {
+                Route::middleware('web')
+                    ->group(base_path('routes/anteprima-mail.php'));
+            }
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         /*

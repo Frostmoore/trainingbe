@@ -115,4 +115,27 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Il vestito delle mail
+    |--------------------------------------------------------------------------
+    |
+    | 🎨 22/09/2026. I componenti di Laravel sono pubblicati in
+    | `resources/views/vendor/mail/` e il foglio di stile è `themes/training.css`:
+    | gli stessi colori del sito (accento #0F766E, tenue #ECFDF5).
+    |
+    | ⚠️ Il nome del tema è il nome del file **senza** estensione. Scriverlo
+    | sbagliato non dà errore: si torna al tema di Laravel, e la mail esce
+    | vestita da applicazione di esempio.
+    |
+    */
+
+    'markdown' => [
+        'theme' => 'training',
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
 ];

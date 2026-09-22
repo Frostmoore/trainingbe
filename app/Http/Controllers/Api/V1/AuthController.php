@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
 use App\Http\Resources\Api\V1\UserResource;
+use App\Mail\BenvenutoMail;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\CreaTenantPersonale;
@@ -18,8 +19,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
+use Throwable;
 
 /**
  * Autenticazione degli iscritti dall'app.
@@ -260,6 +264,8 @@ class AuthController extends Controller
             return $utente;
         });
 
+        $this->benvenuto($utente, BenvenutoMail::PERSONA);
+
         /*
          * ⚠️ **La risposta si costruisce DENTRO il contesto del tenant.**
          *
@@ -452,5 +458,28 @@ class AuthController extends Controller
             'data' => new UserResource($user),
             'branding' => $tenant->branding(),
         ], $status);
+    }
+
+    /**
+     * 🆕 👋 **Il benvenuto** — 22/09/2026.
+     *
+     * 🚨 Fuori dalla transazione e dentro un `try`: l'account e' gia' creato e
+     * la persona sta aspettando la risposta. ⛔ Far fallire una registrazione
+     * riuscita perche' la posta e' giu' sarebbe il peggiore dei baratti.
+     *
+     * ⚠️ Non si manda a chi arriva da un invito: quella persona ha gia'
+     * ricevuto la mail dell'invito, e due mail di fila per lo stesso gesto
+     * sembrano un errore.
+     */
+    private function benvenuto(User $utente, string $tipo): void
+    {
+        try {
+            Mail::to($utente->email)->send(new BenvenutoMail($utente, $tipo));
+        } catch (Throwable $e) {
+            Log::error('Benvenuto: mail non partita.', [
+                'utente' => $utente->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
     }
 }

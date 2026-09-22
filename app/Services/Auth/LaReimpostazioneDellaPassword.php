@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Auth;
 
 use App\Mail\LinkPerLaPassword;
+use App\Mail\PasswordCambiataMail;
 use App\Models\ReimpostazionePassword;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -151,6 +152,27 @@ class LaReimpostazioneDellaPassword
             ])->save();
 
             $riga->forceFill(['usato_il' => Carbon::now()])->save();
+
+            /*
+             * 🆕 📧 **E si avvisa che è cambiata** — 22/09/2026.
+             *
+             * 🚨 Una password cambiata senza avviso è il modo in cui un accesso
+             * rubato resta invisibile: chi entra nella casella di posta di
+             * qualcuno chiede il reset, e il proprietario se ne accorge solo
+             * quando non riesce più a entrare.
+             *
+             * ⚠️ Dentro il `try`: la password **è già cambiata**, e far fallire
+             * qui vorrebbe dire dire di no a chi ha appena scelto la password
+             * giusta. Se la mail non parte resta nel log.
+             */
+            try {
+                Mail::to($persona->email)->send(new PasswordCambiataMail($persona));
+            } catch (Throwable $e) {
+                Log::error('Password cambiata: avviso non partito.', [
+                    'utente' => $persona->getKey(),
+                    'errore' => $e->getMessage(),
+                ]);
+            }
 
             /*
              * 🚨 **Chi cambia la password chiude le sessioni aperte**, e non è

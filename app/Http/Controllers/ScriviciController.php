@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\TipoDiRichiesta;
+use App\Mail\RichiestaDalSitoMail;
+use App\Mail\RichiestaRicevutaMail;
 use App\Models\RichiestaDiContatto;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * ✉️ **Il modulo di contatto** — 21/09/2026.
@@ -93,7 +98,7 @@ class ScriviciController extends Controller
             return $this->grazie();
         }
 
-        RichiestaDiContatto::create([
+        $richiesta = RichiestaDiContatto::create([
             'tipo' => $dati['tipo'],
             'nome' => $dati['nome'],
             'email' => $dati['email'],
@@ -103,6 +108,33 @@ class ScriviciController extends Controller
             'trainer' => $dati['trainer'] ?? null,
             'messaggio' => $dati['messaggio'],
         ]);
+
+        /*
+         * 🆕 📧 **Due mail, e nessuna delle due puo' far fallire l'invio** —
+         * 22/09/2026 (DA-FARE 19).
+         *
+         * ⛔ Prima la richiesta finiva **solo in tabella**: si vedeva aprendo il
+         * pannello, e chi aveva scritto non sapeva nemmeno se il modulo avesse
+         * funzionato. Una richiesta commerciale che aspetta tre giorni e' persa.
+         *
+         * 🚨 Il `try` e' intorno a tutte e due: la riga e' gia' scritta, e un
+         * errore del trasporto non deve diventare un errore a schermo per chi
+         * ha appena premuto «invia».
+         */
+        try {
+            $nostra = (string) config('services.contatti.email');
+
+            if ($nostra !== '') {
+                Mail::to($nostra)->send(new RichiestaDalSitoMail($richiesta));
+            }
+
+            Mail::to($richiesta->email)->send(new RichiestaRicevutaMail($richiesta));
+        } catch (Throwable $e) {
+            Log::error('Richiesta dal sito: mail non partite.', [
+                'richiesta' => $richiesta->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
 
         return $this->grazie();
     }
