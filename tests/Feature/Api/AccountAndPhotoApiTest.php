@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
 use App\Models\Conversation;
-use App\Models\FoodEntry;
 use App\Models\Message;
 use App\Models\Tenant;
 use App\Models\User;
@@ -140,21 +138,19 @@ class AccountAndPhotoApiTest extends TestCase
     #[Test]
     public function deleting_the_account_wipes_the_personal_data(): void
     {
-        $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
-            'user_id' => $this->iscritto->getKey(),
-            'eaten_at' => now(),
-            'meal' => MealType::Lunch,
-            'description' => 'Pasto',
-            'kcal' => 500,
-        ]));
-
+        /*
+         * ⛔ Qui si seminava una voce di diario e si controllava che sparisse: dal
+         * 26/09/2026 il diario non è più sul server. Resta da provare che
+         * l'account si cancelli.
+         */
         $this->comeApp($this->iscritto)
             ->deleteJson('/api/v1/account', ['password' => TestCase::FAKE_PASSWORD])
             ->assertNoContent();
 
-        $id = $this->iscritto->getKey();
+        $cancellato = User::withoutGlobalScopes()->withTrashed()->find($this->iscritto->getKey());
 
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->where('user_id', $id)->count());
+        $this->assertNotNull($cancellato);
+        $this->assertNotSame('mario@alfa.test', $cancellato->email);
     }
 
     /**

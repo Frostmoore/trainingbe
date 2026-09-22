@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
@@ -88,21 +87,9 @@ class ProfileApiTest extends TestCase
         $this->deleteJson('/api/v1/profile')->assertUnauthorized();
     }
 
-    /**
-     * 💡 Il diario del server (per le app vecchie) usa gli orari di serie: alle
-     * 2:00 nessun pasto è ancora cominciato, e la risposta giusta è l'ultimo
-     * della giornata, non la colazione.
+    /*
+     * ⛔ Qui c'era `in_the_small_hours_the_meal_is_the_last_of_the_day_not_breakfast`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
-    #[Test]
-    public function in_the_small_hours_the_meal_is_the_last_of_the_day_not_breakfast(): void
-    {
-        $this->comeApp($this->iscritto)
-            ->postJson('/api/v1/food-entries', [
-                'description' => 'Biscotti',
-                'kcal' => 200,
-                'eaten_at' => today()->setTime(2, 0)->toIso8601String(),
-            ])
-            ->assertCreated()
-            ->assertJsonPath('data.meal', MealType::EveningSnack->value);
-    }
+
 }

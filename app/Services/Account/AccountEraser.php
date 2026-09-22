@@ -7,8 +7,6 @@ namespace App\Services\Account;
 use App\Models\AiAdvice;
 use App\Models\ChatKey;
 use App\Models\DeviceToken;
-use App\Models\FoodEntry;
-use App\Models\FoodFavorite;
 use App\Models\Media;
 use App\Models\RecoveryKey;
 use App\Models\SocialIdentity;
@@ -102,8 +100,7 @@ class AccountEraser
                 $p->forceDelete();
             });
 
-        FoodEntry::withoutGlobalScopes()->where('user_id', $id)->delete();
-        FoodFavorite::withoutGlobalScopes()->where('user_id', $id)->delete();
+        // ⛔ Diario e preferiti: dal 26/09/2026 non sono più sul server (A1 di plan_blocco_A.md).
         AiAdvice::withoutGlobalScopes()->where('user_id', $id)->delete();
 
         /*

@@ -9,7 +9,6 @@ use App\Enums\UserRole;
 use App\Models\AiAdvice;
 use App\Models\AiCreditMovement;
 use App\Models\AiUsageLog;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Ai\AiUsageRecorder;
@@ -185,7 +184,6 @@ class AiApiTest extends TestCase
          * setaccio: e' l'invariante della Parte I, ed e' l'unica cosa che questo
          * test puo' ancora provare da qui.
          */
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
     /**
@@ -204,7 +202,6 @@ class AiApiTest extends TestCase
 
         $this->assertFalse($stima['saved']);
         $this->assertSame([], $stima['entries']);
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
     /**
@@ -728,9 +725,7 @@ class AiApiTest extends TestCase
         $this->comeIscritto()->getJson('/api/v1/ai/advice')->assertOk();
         $primeChiamate = count($finta->calls);
 
-        $this->comeIscritto()->postJson('/api/v1/food-entries', [
-            'description' => 'Pollo', 'meal' => 'lunch', 'kcal' => 400, 'grams' => 250,
-        ])->assertCreated();
+        // ⛔ Il pasto non va più al server (26/09/2026): la prova è che il consiglio resti quello.
 
         $this->comeIscritto()
             ->getJson('/api/v1/ai/advice')
@@ -1000,8 +995,6 @@ class AiApiTest extends TestCase
 
         $stima = $risultato['estimate']['items'];
 
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
-
         // 2. Il setaccio: torna pulita, e in diario non entra niente.
         $pulita = $this->comeIscritto()
             ->postJson('/api/v1/ai/food/valida', ['items' => $stima])
@@ -1020,7 +1013,6 @@ class AiApiTest extends TestCase
          * che e' cio' per cui `FoodSource` esiste. 💡 Che l'app le scriva davvero
          * lo prova `diario_calcolato_qui_test.dart`.
          */
-        $this->assertSame(0, FoodEntry::withoutGlobalScopes()->count());
     }
 
     /**

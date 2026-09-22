@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Tenancy;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\Trainers\TrainerResource;
 use App\Http\Middleware\SpazioDelPannello;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Tenancy\ChiSiVede;
@@ -87,33 +85,10 @@ final class OgniTrainerHaUnaCasaTest extends TestCase
         );
     }
 
-    /**
-     * 🚨 **1 — Il diario lo segue.** Spostando solo `users.tenant_id`, il
-     * `TenantScope` glielo renderebbe invisibile: non cancellato, peggio.
+    /*
+     * ⛔ Qui c'era `il_suo_diario_lo_segue`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
-    #[Test]
-    public function il_suo_diario_lo_segue(): void
-    {
-        $palestra = $this->creaPalestra();
-        $trainer = $this->trainerNatoDentro($palestra, 'diario@esempio.test');
-
-        $this->ctx()->runAs($palestra, fn () => FoodEntry::create([
-            'tenant_id' => $palestra->getKey(),
-            'user_id' => $trainer->getKey(),
-            'eaten_at' => now(),
-            'meal' => MealType::Breakfast,
-            'description' => 'Due uova',
-            'kcal' => 140,
-        ]));
-
-        $casa = app(DaiUnaCasaAlTrainer::class)($trainer);
-
-        $this->assertSame(
-            1,
-            $this->ctx()->runAs($casa, fn (): int => FoodEntry::where('user_id', $trainer->getKey())->count()),
-            'il diario del trainer e diventato invisibile',
-        );
-    }
 
     /** ⚠️ Gli iscritti della palestra restano della palestra: si sposta solo lui. */
     #[Test]

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Tenancy;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
@@ -78,15 +76,6 @@ class EntrareInUnaPalestraTest extends TestCase
     private function conDeiDati(User $utente): void
     {
         $this->ctx()->runAs($utente->tenant, function () use ($utente): void {
-            FoodEntry::create([
-                'tenant_id' => $utente->tenant_id,
-                'user_id' => $utente->getKey(),
-                'eaten_at' => now(),
-                'meal' => MealType::Breakfast,
-                'description' => 'Due uova',
-                'kcal' => 140,
-            ]);
-
             WorkoutPlan::create([
                 'tenant_id' => $utente->tenant_id,
                 'member_id' => $utente->getKey(),
@@ -120,8 +109,6 @@ class EntrareInUnaPalestraTest extends TestCase
 
         // 🚨 Dal contesto della palestra, le sue cose ci sono ancora.
         $this->ctx()->runAs($palestra, function () use ($fresco): void {
-            $this->assertSame(1, FoodEntry::where('user_id', $fresco->getKey())->count(),
-                'Il diario è diventato invisibile.');
             $this->assertSame(1, WorkoutPlan::where('member_id', $fresco->getKey())->count(),
                 'Le schede sono diventate invisibili.');
         });

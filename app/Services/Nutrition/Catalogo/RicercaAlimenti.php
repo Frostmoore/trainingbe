@@ -96,19 +96,11 @@ class RicercaAlimenti
     private function interroga(User $chi, int $limite): Builder
     {
         /*
-         * 🚨 Quante volte **questa persona** ha scelto ciascun alimento.
-         *
-         * ⚠️ È una sotto-interrogazione e non una `JOIN`: con la `JOIN` un
-         * alimento mai usato sparirebbe (o servirebbe una `LEFT JOIN` con un
-         * `GROUP BY` su tutte le colonne, che è peggio). Qui gli alimenti senza
-         * uso valgono zero e restano in elenco.
-         *
-         * 💡 `withoutGlobalScopes` non serve: il filtro è sul proprio
-         * `user_id`, e i propri dati sono nel proprio tenant per definizione.
+         * ⛔ Qui c'era `$mieSelezioni`: quante volte **questa persona** aveva
+         * scelto ciascun alimento, contato su `food_entries`. Il 26/09/2026 il
+         * diario ha lasciato il server (A1 di `plan_blocco_A.md`): l'ordine «prima
+         * i miei» lo fa il telefono, che il diario ce l'ha.
          */
-        $mieSelezioni = '(select count(*) from food_entries'
-            .' where food_entries.food_id = foods.id'
-            .' and food_entries.user_id = '.(int) $chi->getKey().')';
 
         /*
          * 🚨 La qualità della fonte, come numero da ordinare.
@@ -124,13 +116,9 @@ class RicercaAlimenti
         return Food::query()
             ->visibiliA($chi)
             ->select('foods.*')
-            ->selectRaw($mieSelezioni.' as mie_selezioni')
-            // 1. e 2. — i miei, prima quelli che uso di più
-            ->orderByRaw($mieSelezioni.' > 0 desc')
-            ->orderByRaw($mieSelezioni.' desc')
-            // 3. — poi il CREA, che è misurato in laboratorio
+            // 1. — prima il CREA, che è misurato in laboratorio
             ->orderByRaw($qualitaFonte.' asc')
-            // 4. e 5. — i più scelti in generale, poi il resto
+            // 2. e 3. — i più scelti in generale, poi il resto
             ->orderByDesc('usi')
             ->orderByDesc('conferme')
             ->orderBy('nome')

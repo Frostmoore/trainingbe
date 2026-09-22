@@ -62,13 +62,12 @@ final class EsciDaUnaPalestra
      * Le tabelle che **seguono la persona**, filtrando su `user_id`.
      *
      * 💡 Sono i dati che la persona ha prodotto per sé, e che non hanno senso
-     * senza di lei: il diario, i preferiti, il profilo, i consigli ricevuti.
+     * senza di lei: i consigli ricevuti, le stime, le importazioni. ⛔ Diario e
+     * preferiti non ci sono più: dal 26/09/2026 stanno solo sul telefono.
      */
     public const SEGUONO_LA_PERSONA = [
         'ai_advices',
         'device_tokens',
-        'food_entries',
-        'food_favorites',
         'importazioni_da_documento',
         'stime_cibo',
     ];
@@ -514,30 +513,8 @@ final class EsciDaUnaPalestra
                     }
                 }
 
-                /*
-                 * ⚠️ **Il diario segue la persona, il piano che lo ispirava
-                 * no.** Una voce che punta a un piano rimasto in palestra
-                 * diventerebbe un riferimento **attraverso** i tenant: il
-                 * `TenantScope` non lo risolverebbe, e la voce sembrerebbe
-                 * rotta.
-                 *
-                 * 💡 Si stacca il collegamento, non la voce: calorie, macro e
-                 * descrizione restano — era quello il dato.
-                 */
-                $staccate = DB::table('food_entries')
-                    ->where('tenant_id', $a->getKey())
-                    ->whereNotNull('nutrition_plan_id')
-                    ->whereNotIn(
-                        'nutrition_plan_id',
-                        DB::table('nutrition_plans')
-                            ->where('tenant_id', $a->getKey())
-                            ->select('id')
-                    )
-                    ->update(['nutrition_plan_id' => null]);
-
-                if ($staccate > 0) {
-                    $spostate['food_entries.nutrition_plan_id_staccati'] = $staccate;
-                }
+                // ⛔ Qui si staccavano le voci del diario dai piani rimasti in palestra:
+                // dal 26/09/2026 il diario non è più sul server (A1 di plan_blocco_A.md).
 
                 return $spostate;
             }

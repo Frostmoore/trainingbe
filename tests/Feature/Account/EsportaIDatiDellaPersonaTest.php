@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Account;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Account\EsportaIDatiDellaPersona;
@@ -53,15 +51,14 @@ class EsportaIDatiDellaPersonaTest extends TestCase
     #[Test]
     public function ci_sono_l_account_e_le_sue_righe(): void
     {
-        $this->pasto($this->mario, 'Pasta al pomodoro');
-
         $dati = $this->comeApp($this->mario)
             ->getJson('/api/v1/account/export')
             ->assertOk()
             ->json('data');
 
         $this->assertSame('mario@alfa.test', $dati['account']['email']);
-        $this->assertSame('Pasta al pomodoro', $dati['tabelle']['food_entries'][0]['description']);
+        // ⛔ Il diario non c'è più fra le tabelle (26/09/2026): sta sul telefono.
+        $this->assertArrayNotHasKey('food_entries', $dati['tabelle']);
         $this->assertContains('member', array_column($dati['ruoli'], 'ruolo'));
         $this->assertNotEmpty($dati['avvertenze']);
     }
@@ -138,16 +135,5 @@ class EsportaIDatiDellaPersonaTest extends TestCase
 
         $this->assertSame([], $senzaRegola, 'Tabelle legate a una persona senza una regola per l\'esportazione: '
             .implode(', ', $senzaRegola).'. Vanno in EsportaIDatiDellaPersona::ESPORTATE o ::ESCLUSE, col motivo.');
-    }
-
-    private function pasto(User $chi, string $descrizione): void
-    {
-        $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
-            'user_id' => $chi->getKey(),
-            'eaten_at' => now(),
-            'meal' => MealType::Lunch,
-            'description' => $descrizione,
-            'kcal' => 500,
-        ]));
     }
 }

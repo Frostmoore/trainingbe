@@ -155,9 +155,7 @@ final class ConsiglioAFasceTest extends TestCase
          */
         $this->alle('2026-08-30 13:00');
 
-        $this->comeApp($this->iscritto->fresh())->postJson('/api/v1/food-entries', [
-            'description' => 'Pollo', 'meal' => 'lunch', 'kcal' => 400, 'grams' => 250,
-        ])->assertCreated();
+        // ⛔ Il pasto non va più al server (26/09/2026): resta la fascia che non cambia.
 
         $this->finta->willReturnAdvice('Il secondo consiglio.');
 
@@ -361,31 +359,10 @@ final class ConsiglioAFasceTest extends TestCase
         $this->assertSame(2, $this->quanteChiamate());
     }
 
-    /**
-     * ⛔ **E senza notizie non si paga, nemmeno con il diario pieno.**
-     *
-     * 🚨 E' l'altra meta' dello stesso cambio: il server **non guarda piu'
-     * nessuna tabella** per decidere se qualcosa e' successo. ⚠️ Una riga in
-     * `food_entries` — che oggi puo' esistere solo come residuo di prima del
-     * trasloco — non deve far scattare niente.
+    /*
+     * ⛔ Qui c'era `una_voce_vecchia_sul_server_non_e_una_notizia`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
-    #[Test]
-    public function una_voce_vecchia_sul_server_non_e_una_notizia(): void
-    {
-        $this->alle('2026-08-30 09:41');
-        $this->chiediIlConsiglio('2026-08-30 09:30')->assertOk();
-
-        $this->alle('2026-08-30 14:30');
-
-        $this->comeApp($this->iscritto->fresh())->postJson('/api/v1/food-entries', [
-            'description' => 'Pollo', 'meal' => 'lunch', 'kcal' => 400, 'grams' => 250,
-        ])->assertCreated();
-
-        // ⚠️ L'app dice «io non ho notizie»: e adesso non ne ha nessun altro.
-        $this->chiediIlConsiglio(null)->assertOk()->assertJsonPath('data.cached', true);
-
-        $this->assertSame(1, $this->quanteChiamate());
-    }
 
     /**
      * ⚠️ **Un'app vecchia non manda il campo, e non deve restare a secco.**

@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use App\Enums\FoodSource;
 use App\Models\Concerns\PuoAvereAlternative;
 use App\Services\Nutrition\FoodUnit;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * Un alimento prescritto dentro un pasto del piano.
@@ -69,33 +67,9 @@ class NutritionPlanItem extends Model
         return $this->belongsTo(NutritionPlanMeal::class, 'nutrition_plan_meal_id');
     }
 
-    /**
-     * Registra questo alimento nel diario come effettivamente mangiato.
-     *
-     * 🚨 `source = plan` e `nutrition_plan_id` valorizzato: e' cio' che rende
-     * l'aderenza al piano una join invece di una stima. Se questo metodo
-     * scrivesse `manual`, il collegamento fra prescrizione e consuntivo — cioe'
-     * il motivo per cui le due tabelle sono separate — andrebbe perso.
+    /*
+     * ⛔ Qui c'era `logAsEaten()`, che scriveva l'alimento in `food_entries`. La
+     * rotta che lo usava è stata ritirata in G9.4, e il 26/09/2026 la tabella è
+     * sparita (A1 di `plan_blocco_A.md`): il diario è sul telefono.
      */
-    public function logAsEaten(User $member, ?Carbon $when = null): FoodEntry
-    {
-        $pasto = $this->meal;
-
-        return FoodEntry::create([
-            'tenant_id' => $member->tenant_id,
-            'user_id' => $member->getKey(),
-            'eaten_at' => $when ?? Carbon::now(),
-            'meal' => $pasto->meal,
-            'description' => $this->description,
-            'grams' => $this->grams,
-            'qty' => $this->qty,
-            'unit' => $this->unit,
-            'kcal' => $this->kcal,
-            'protein' => $this->protein,
-            'carbs' => $this->carbs,
-            'fat' => $this->fat,
-            'source' => FoodSource::Plan,
-            'nutrition_plan_id' => $pasto->nutrition_plan_id,
-        ]);
-    }
 }

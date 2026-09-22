@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Training;
 
-use App\Models\FoodEntry;
 use App\Models\User;
-use App\Services\Nutrition\DiaryService;
 use App\Support\Tempo\GiornoLocale;
 
 /**
@@ -17,10 +15,6 @@ use App\Support\Tempo\GiornoLocale;
  */
 class CalendarService
 {
-    public function __construct(
-        private readonly DiaryService $diario,
-    ) {}
-
     /**
      * Le celle di un mese, **dal lunedì della prima settimana alla domenica
      * dell'ultima**.
@@ -79,12 +73,6 @@ class CalendarService
      */
     public function day(User $utente, GiornoLocale $giorno): array
     {
-        $voci = FoodEntry::query()
-            ->forUser($utente)
-            ->onDate($giorno)
-            ->orderBy('eaten_at')
-            ->get();
-
         /*
          * ⛔ **Le sedute e le bruciate non si leggono piu' qui** — FASE 11.6,
          * 21/08/2026.
@@ -92,18 +80,18 @@ class CalendarService
          * 📌 Il committente: *«Nessun allenamento deve risiedere sul server,
          * devono stare tutti nell'app»*.
          *
-         * 🚨 Il calendario e' l'ultima schermata in cui cibo e allenamento
-         * convivevano, e da qui in poi hanno **due case diverse**: le calorie
-         * mangiate stanno ancora sul server, gli allenamenti no. ⚠️ L'app le
-         * unisce a valle (`calendarProvider`), che e' l'unico posto dove le due
-         * fonti possono incontrarsi senza che una menta per l'altra.
+         * ⛔ **E dal 26/09/2026 nemmeno il cibo** (A1 di `plan_blocco_A.md`):
+         * il diario è sul telefono e `food_entries` non esiste più. Il server
+         * dà solo la data e il titolo; il resto lo mette l'app
+         * (`calendarDayProvider`, `giornataProvider`). ⚠️ `kcal` ed `entries`
+         * restano nella forma, vuoti, per le app già installate.
          */
 
         return [
             'date' => $giorno->etichetta,
             'title' => ucfirst($giorno->locale()->translatedFormat('l d F Y')),
-            'kcal' => (int) round($voci->sum('kcal')),
-            'entries' => $voci->map(fn (FoodEntry $v): array => $this->diario->voce($v))->all(),
+            'kcal' => null,
+            'entries' => [],
         ];
     }
 
@@ -114,23 +102,11 @@ class CalendarService
      */
     private function celle(User $utente, GiornoLocale $da, GiornoLocale $a, ?int $meseCorrente): array
     {
-        $fuso = $da->fuso;
-
         /*
-         * 🚨 **I `groupBy` sono nel fuso di chi guarda** — A3.
-         *
-         * Prima raggruppavano su `->toDateString()` del timestamp, cioe' **in
-         * UTC**: una cena delle 00:30 di Roma cadeva nella casella del giorno
-         * prima. Sul calendario e' il difetto piu' visibile di tutti, perche' si
-         * vede la casella sbagliata accanto a quella giusta.
+         * ⛔ **Le calorie mangiate non si leggono più qui** — 26/09/2026, A1 di
+         * `plan_blocco_A.md`: il diario è sul telefono, e l'app le mette nella
+         * griglia (`calendarProvider`, `conCalorie()`).
          */
-        $assunte = FoodEntry::query()
-            ->forUser($utente)
-            ->whereBetween('eaten_at', $da->finestraFinoA($a))
-            ->get(['eaten_at', 'kcal'])
-            ->groupBy(fn (FoodEntry $v): string => GiornoLocale::etichettaDi($v->eaten_at, $fuso))
-            ->map(fn ($g): int => (int) round($g->sum('kcal')))
-            ->all();
 
         /*
          * ⛔ Come sopra: allenamenti e bruciate stanno sul telefono — FASE 11.6.
@@ -149,15 +125,10 @@ class CalendarService
                 'dow' => ucfirst($g->locale()->translatedFormat('D')),
 
                 /*
-                 * 🚨 `null` se non c'è NIENTE registrato, `0` se c'è qualcosa
-                 * che vale zero calorie.
-                 *
-                 * Appiattirli su `0` renderebbe una giornata a digiuno
-                 * indistinguibile da una non registrata, e l'app disegnerebbe
-                 * una barra vuota per entrambe — dicendo a chi si è dimenticato
-                 * di scrivere che ha mangiato zero.
+                 * ⚠️ Sempre `null`: le calorie le mette l'app (vedi sopra). 🚨 E
+                 * non `0`, che per l'app vuol dire «hai mangiato zero».
                  */
-                'kcal' => array_key_exists($chiave, $assunte) ? $assunte[$chiave] : null,
+                'kcal' => null,
 
                 'in_month' => $meseCorrente === null || $g->locale()->month === $meseCorrente,
 

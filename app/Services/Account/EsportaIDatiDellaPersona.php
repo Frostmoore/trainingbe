@@ -74,8 +74,6 @@ final class EsportaIDatiDellaPersona
         'conversations' => [['member_id', 'trainer_id'], []],
         // ⛔ Il token delle notifiche: chi lo ha può mandare notifiche a quel telefono.
         'device_tokens' => [['user_id'], ['token']],
-        'food_entries' => [['user_id'], []],
-        'food_favorites' => [['user_id'], []],
         'importazioni_da_documento' => [['user_id'], []],
         // 🆕 ✍️ La liberatoria firmata: è un atto suo, e gli spetta.
         'liberatorie_firmate' => [['user_id'], []],

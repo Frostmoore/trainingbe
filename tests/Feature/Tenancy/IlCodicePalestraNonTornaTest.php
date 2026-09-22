@@ -80,7 +80,8 @@ final class IlCodicePalestraNonTornaTest extends TestCase
                 foreach (preg_split('/\R/u', $file->getContents()) as $n => $riga) {
                     $pulita = ltrim($riga);
 
-                    if (str_starts_with($pulita, '*') || str_starts_with($pulita, '/*') || str_starts_with($pulita, '//')) {
+                    // ⚠️ Anche `|`: è lo stile dei blocchi di commento grandi (`/* | … */`).
+                    if (str_starts_with($pulita, '*') || str_starts_with($pulita, '/*') || str_starts_with($pulita, '//') || str_starts_with($pulita, '|')) {
                         continue;
                     }
 

@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Dashboard\DashboardService;
@@ -188,43 +186,10 @@ class DashboardApiTest extends TestCase
         $this->assertNull($risposta->json('data.nutrition.burned'));
     }
 
-    #[Test]
-    public function the_dashboard_sums_what_was_eaten_today(): void
-    {
-        $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
-            'user_id' => $this->iscritto->getKey(),
-            'eaten_at' => Carbon::now(),
-            'meal' => MealType::Lunch,
-            'description' => 'Pasto',
-            'kcal' => 700,
-        ]));
-
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/dashboard')
-            ->assertOk()
-            ->assertJsonPath('data.nutrition.totals.kcal', 700.0)
-            ->assertJsonPath('data.nutrition.entries_count', 1);
-    }
-
-    #[Test]
-    public function the_dashboard_of_a_gym_mate_never_leaks_in(): void
-    {
-        $compagno = $this->creaUtente($this->alfa, UserRole::Member, 'luigi@alfa.test');
-
-        $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
-            'user_id' => $compagno->getKey(),
-            'eaten_at' => Carbon::now(),
-            'meal' => MealType::Lunch,
-            'description' => 'Pasto di Luigi',
-            'kcal' => 4321,
-        ]));
-
-        $this->comeApp($this->iscritto)
-            ->getJson('/api/v1/dashboard')
-            ->assertOk()
-            ->assertJsonPath('data.nutrition.totals.kcal', 0.0)
-            ->assertJsonPath('data.nutrition.entries_count', 0);
-    }
+    /*
+     * ⛔ Qui c'era `the_dashboard_of_a_gym_mate_never_leaks_in`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
+     */
 
     #[Test]
     public function the_dashboard_needs_authentication(): void

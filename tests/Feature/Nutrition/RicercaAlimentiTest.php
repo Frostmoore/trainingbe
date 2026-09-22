@@ -6,7 +6,6 @@ namespace Tests\Feature\Nutrition;
 
 use App\Enums\UserRole;
 use App\Models\Food;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Nutrition\Catalogo\ChiaveAlimento;
@@ -42,22 +41,18 @@ class RicercaAlimentiTest extends TestCase
     }
 
     /**
-     * 🚨 **L'ordine dei quattro livelli, tutto in un test.**
-     *
-     * 💡 I primi due livelli collassano in un ordinamento solo, e non è una
-     * semplificazione: «inseriti da me» e «più selezionati da me» sono lo
-     * stesso insieme letto con due ordini diversi.
+     * 🚨 **L'ordine, tutto in un test**: prima i più scelti in generale, poi
+     * per nome. ⛔ Fino al 26/09/2026 venivano prima «i miei», contati su
+     * `food_entries`: il diario ha lasciato il server (A1 di `plan_blocco_A.md`)
+     * e quell'ordine lo fa il telefono, che il diario ce l'ha.
      */
     #[Test]
-    public function mine_come_first_then_the_most_used_overall(): void
+    public function the_most_used_overall_come_first(): void
     {
-        $usatoDaMeSpesso = $this->alimento('Pollo arrosto', usi: 5);
-        $usatoDaMeUnaVolta = $this->alimento('Pollo al curry', usi: 5);
-        $popolare = $this->alimento('Pollo alla cacciatora', usi: 900);
-        $sconosciuto = $this->alimento('Pollo strano', usi: 0);
-
-        $this->usa($this->io, $usatoDaMeSpesso, 3);
-        $this->usa($this->io, $usatoDaMeUnaVolta, 1);
+        $this->alimento('Pollo arrosto', usi: 5);
+        $this->alimento('Pollo al curry', usi: 5);
+        $this->alimento('Pollo alla cacciatora', usi: 900);
+        $this->alimento('Pollo strano', usi: 0);
 
         $ordine = app(RicercaAlimenti::class)
             ->cerca('pollo', $this->io)
@@ -65,14 +60,11 @@ class RicercaAlimentiTest extends TestCase
             ->all();
 
         $this->assertSame([
-            'Pollo arrosto',            // 1. mio, e quello che uso di più
-            'Pollo al curry',           // 2. mio, usato meno
-            'Pollo alla cacciatora',    // 3. il più scelto in generale
-            'Pollo strano',             // 4. inserito da altri, mai scelto
+            'Pollo alla cacciatora',    // il più scelto in generale
+            'Pollo al curry',           // a parità di scelte, per nome
+            'Pollo arrosto',
+            'Pollo strano',             // mai scelto
         ], $ordine);
-
-        $this->assertNotNull($popolare);
-        $this->assertNotNull($sconosciuto);
     }
 
     /**
@@ -88,7 +80,6 @@ class RicercaAlimentiTest extends TestCase
         $altro = $this->creaUtente($this->alfa, UserRole::Member, 'altro@alfa.test');
 
         $suo = $this->alimento('Pollo della nonna', pubblico: false);
-        $this->usa($altro, $suo, 1);
 
         $trovati = app(RicercaAlimenti::class)
             ->cerca('pollo', $this->io);
@@ -96,16 +87,10 @@ class RicercaAlimentiTest extends TestCase
         $this->assertCount(0, $trovati);
     }
 
-    /** 💡 Il proprio invece si vede subito, anche prima di essere pubblico. */
-    #[Test]
-    public function you_always_see_your_own(): void
-    {
-        $mio = $this->alimento('Pollo della nonna', pubblico: false);
-        $this->usa($this->io, $mio, 1);
-
-        $this->assertCount(1, app(RicercaAlimenti::class)
-            ->cerca('pollo', $this->io));
-    }
+    /*
+     * ⛔ Qui c'era `you_always_see_your_own`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
+     */
 
     /**
      * 💡 Chi cerca «pollo» deve trovare «Petto di pollo», non solo quelli che
@@ -189,27 +174,10 @@ class RicercaAlimentiTest extends TestCase
         $this->assertSame(['Pollo zzz crea', 'Pollo aaa off'], $ordine);
     }
 
-    /**
-     * ⚠️ **Ma i propri vengono prima anche del CREA.**
-     *
-     * Quello che una persona usa tutti i giorni resta la prima cosa che deve
-     * trovare, anche se è un prodotto di marca trascritto da un volontario.
+    /*
+     * ⛔ Qui c'era `your_own_foods_come_before_even_crea`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
-    #[Test]
-    public function your_own_foods_come_before_even_crea(): void
-    {
-        $mio = $this->alimento('Pollo mio', fonte: 'OFF:8009999999999');
-        $this->alimento('Pollo del CREA', fonte: 'CREA:106140');
-
-        $this->usa($this->io, $mio, 1);
-
-        $ordine = app(RicercaAlimenti::class)
-            ->cerca('pollo', $this->io)
-            ->pluck('nome')
-            ->all();
-
-        $this->assertSame(['Pollo mio', 'Pollo del CREA'], $ordine);
-    }
 
     /** \U0001F4A1 E fra due Open Food Facts decide sempre l'uso. */
     #[Test]
@@ -294,19 +262,5 @@ class RicercaAlimentiTest extends TestCase
             'conferme' => 2,
             'pubblico' => $pubblico,
         ]);
-    }
-
-    private function usa(User $chi, Food $alimento, int $volte): void
-    {
-        for ($i = 0; $i < $volte; $i++) {
-            FoodEntry::query()->create([
-                'tenant_id' => $chi->tenant_id,
-                'user_id' => $chi->getKey(),
-                'eaten_at' => now()->subDays($i),
-                'meal' => 'lunch',
-                'description' => $alimento->nome,
-                'food_id' => $alimento->getKey(),
-            ]);
-        }
     }
 }

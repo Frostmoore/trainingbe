@@ -6,7 +6,6 @@ namespace Tests\Feature\Api;
 
 use App\Enums\AuditAction;
 use App\Enums\UserRole;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
@@ -62,26 +61,10 @@ class EsciDallaPalestraTest extends TestCase
 
     // ───────────────────────── quello che se ne va ─────────────────────────
 
-    #[Test]
-    public function il_diario_segue_la_persona(): void
-    {
-        $voce = $this->ctx()->runAs($this->palestra, fn (): FoodEntry => FoodEntry::create([
-            'user_id' => $this->mario->getKey(),
-            'eaten_at' => now(),
-            'meal' => 'lunch',
-            'description' => 'Riso e pollo',
-            'grams' => 300,
-            'kcal' => 500,
-        ]));
-
-        $personale = $this->esci();
-
-        $this->assertSame(
-            $personale->getKey(),
-            FoodEntry::withoutGlobalScopes()->find($voce->getKey())?->tenant_id,
-            'senza il diario la persona esce e trova la casa vuota',
-        );
-    }
+    /*
+     * ⛔ Qui c'era `il_diario_segue_la_persona`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
+     */
 
     #[Test]
     public function la_scheda_che_si_e_scritta_da_sola_se_ne_va_con_lei(): void

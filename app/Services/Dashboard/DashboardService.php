@@ -156,13 +156,17 @@ class DashboardService
      */
     private function nutrizione(User $utente, GiornoLocale $oggi): array
     {
-        $giornata = $this->diario->forDate($utente, $oggi);
-
+        /*
+         * ⛔ **Il diario non sta più sul server** — 26/09/2026, A1 di
+         * `plan_blocco_A.md`. `totals` e `entries_count` venivano da
+         * `food_entries`, che non esiste più: l'app li mette dal telefono
+         * (`conIlCiboDelTelefono`). ⚠️ La forma resta, perché le app già
+         * installate la leggono.
+         */
         return [
-            'totals' => $giornata['totals'] ?? null,
-            'targets' => $giornata['targets'] ?? null,
-            'entries_count' => collect($giornata['meals'] ?? [])
-                ->sum(fn (array $m): int => count($m['entries'] ?? [])),
+            'totals' => null,
+            'targets' => $this->diario->targetsFor($utente, $oggi),
+            'entries_count' => 0,
         ];
     }
 

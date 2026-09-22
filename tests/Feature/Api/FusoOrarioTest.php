@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use App\Enums\UserRole;
-use App\Models\FoodEntry;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tempo\GiornoLocale;
@@ -117,41 +116,10 @@ class FusoOrarioTest extends TestCase
 
     // ───────────────────────── il calendario ─────────────────────────
 
-    /**
-     * 🚨 Il raggruppamento delle celle era **in UTC**: la cena delle 00:30
-     * finiva nella casella del giorno prima.
-     *
-     * Sul calendario e' il difetto piu' visibile di tutti, perche' si vede la
-     * casella sbagliata **accanto** a quella giusta.
+    /*
+     * ⛔ Qui c'era `the_calendar_puts_the_after_midnight_meal_in_the_right_cell`: provava il diario sul server, che dal 26/09/2026 non
+     * c'è più (A1 di `plan_blocco_A.md`). Il diario sta sul telefono.
      */
-    #[Test]
-    public function the_calendar_puts_the_after_midnight_meal_in_the_right_cell(): void
-    {
-        $adesso = $this->alleOre(self::MEZZANOTTE_E_MEZZA_A_ROMA);
-
-        $this->ctx()->runAs($this->alfa, fn () => FoodEntry::create([
-            'user_id' => $this->mario->getKey(),
-            'eaten_at' => $adesso,
-            'meal' => 'dinner',
-            'description' => 'Avanzi di mezzanotte',
-            'grams' => 200,
-            'kcal' => 600,
-        ]));
-
-        $celle = collect(
-            $this->comeApp($this->mario)
-                ->getJson('/api/v1/calendar?month=2026-08')
-                ->assertOk()
-                ->json('data.days')
-        );
-
-        $this->assertSame(600, $celle->firstWhere('date', '2026-08-12')['kcal']);
-        $this->assertNull($celle->firstWhere('date', '2026-08-11')['kcal']);
-
-        // E il pallino di «oggi» sta sulla casella giusta.
-        $this->assertTrue($celle->firstWhere('date', '2026-08-12')['today']);
-        $this->assertFalse($celle->firstWhere('date', '2026-08-11')['today']);
-    }
 
     // ───────────────────────── l'ora legale ─────────────────────────
 

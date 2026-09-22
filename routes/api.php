@@ -23,11 +23,8 @@ use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\LiberatoriaController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
-use App\Http\Controllers\Api\V1\Nutrition\DiaryController;
-use App\Http\Controllers\Api\V1\Nutrition\FoodFavoriteController;
 use App\Http\Controllers\Api\V1\Nutrition\ImportazioneDaDocumentoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
-use App\Http\Controllers\Api\V1\Nutrition\TraslocoDelDiarioController;
 use App\Http\Controllers\Api\V1\PasswordDimenticataController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\PromozioniController;
@@ -35,7 +32,6 @@ use App\Http\Controllers\Api\V1\SocialAuthController;
 use App\Http\Controllers\Api\V1\TrainerController;
 use App\Http\Controllers\Api\V1\Training\CalendarController;
 use App\Http\Controllers\Api\V1\Training\ExerciseController;
-use App\Http\Controllers\Api\V1\Training\SeriesController;
 use App\Http\Controllers\Api\V1\Training\WorkoutPlanController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Broadcast;
@@ -435,7 +431,7 @@ Route::prefix('v1')->group(function (): void {
 
         // C3 — le serie per i grafici. Un endpoint solo, stessa forma di
         // risposta per entrambe le metriche: l'app ha un parser unico.
-        Route::get('series', [SeriesController::class, 'index']);
+        // ⛔ `series` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         // C4 — il calendario. Mese e settimana restituiscono la stessa forma di
         // celle: l'app disegna due layout, non due modelli di dati.
@@ -454,9 +450,9 @@ Route::prefix('v1')->group(function (): void {
         */
 
         // ── Nutrizione (B5.5) ────────────────────────────────────────────
-        Route::get('diary', [DiaryController::class, 'index']);
-        Route::get('targets', [DiaryController::class, 'targets']);
-        Route::get('nutrition-plan', [DiaryController::class, 'plan']);
+        // ⛔ `diary` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `targets` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `nutrition-plan` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * ⛔ **`POST /nutrition-plan/meals/{meal}/eaten` — RITIRATO in G9.4.**
@@ -480,10 +476,10 @@ Route::prefix('v1')->group(function (): void {
          * vera, ed e' un debito che il ritiro riapre: §7.6 del piano.
          */
 
-        Route::post('food-entries', [DiaryController::class, 'store']);
-        Route::patch('food-entries/{entry}', [DiaryController::class, 'update'])->whereNumber('entry');
-        Route::delete('food-entries/{entry}', [DiaryController::class, 'destroy'])->whereNumber('entry');
-        Route::post('food-entries/{entry}/favorite', [FoodFavoriteController::class, 'fromEntry'])->whereNumber('entry');
+        // ⛔ `food-entries` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-entries/{entry}/favorite` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * I suggerimenti mentre si scrive il nome di un alimento — Parte L.
@@ -499,10 +495,10 @@ Route::prefix('v1')->group(function (): void {
         Route::get('foods/search', [CatalogoAlimentiController::class, 'search'])
             ->middleware('throttle:60,1');
 
-        Route::get('food-favorites', [FoodFavoriteController::class, 'index']);
-        Route::post('food-favorites/meal', [FoodFavoriteController::class, 'storeMeal']);
-        Route::post('food-favorites/{favorite}/add', [FoodFavoriteController::class, 'add'])->whereNumber('favorite');
-        Route::delete('food-favorites/{favorite}', [FoodFavoriteController::class, 'destroy'])->whereNumber('favorite');
+        // ⛔ `food-favorites` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/meal` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/{favorite}/add` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
+        // ⛔ `food-favorites/{favorite}` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
          * 📦 **Il diario trasloca sul telefono** — Parte I, I3.
@@ -512,7 +508,7 @@ Route::prefix('v1')->group(function (): void {
          * telefono vero. ⛔ Un endpoint che consegna e cancella nella stessa
          * richiesta perde tutto il giorno che la risposta non arriva.
          */
-        Route::get('trasloco/diario', [TraslocoDelDiarioController::class, 'pacchetto']);
+        // ⛔ `trasloco/diario` tolta il 26/09/2026 (A1 di plan_blocco_A.md): il diario non sta più sul server.
 
         /*
         | ⛔ `daily-burn` e' andato con gli altri — FASE 11.6. La dichiarazione

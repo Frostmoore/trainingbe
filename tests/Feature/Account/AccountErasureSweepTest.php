@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Account;
 
-use App\Enums\MealType;
 use App\Enums\UserRole;
 use App\Models\AiAdvice;
 use App\Models\ChatKey;
 use App\Models\Conversation;
 use App\Models\DeviceToken;
-use App\Models\FoodEntry;
-use App\Models\FoodFavorite;
 use App\Models\RecoveryKey;
 use App\Models\Tenant;
 use App\Models\User;
@@ -122,8 +119,10 @@ class AccountErasureSweepTest extends TestCase
         // dimostrerebbe che «non resta niente» senza che ci fosse mai stato
         // niente.
         $prima = $this->righePerTabella($tabelle, $id);
+        // ⚠️ 5 e non più 6: il 26/09/2026 diario e preferiti hanno lasciato il
+        // server (A1 di plan_blocco_A.md), e con loro due tabelle da popolare.
         $this->assertGreaterThanOrEqual(
-            6,
+            5,
             count(array_filter($prima)),
             'Il test non ha popolato abbastanza tabelle per dimostrare qualcosa.',
         );
@@ -296,14 +295,7 @@ class AccountErasureSweepTest extends TestCase
         $id = $this->iscritto->getKey();
 
         $this->ctx()->runAs($this->alfa, function () use ($id): void {
-            FoodEntry::create([
-                'user_id' => $id, 'eaten_at' => Carbon::now(),
-                'meal' => MealType::Lunch, 'description' => 'Pasto', 'kcal' => 700,
-            ]);
-
-            FoodFavorite::create([
-                'user_id' => $id, 'description' => 'Yogurt', 'kcal' => 120,
-            ]);
+            // ⛔ Diario e preferiti non si seminano più: dal 26/09/2026 le tabelle non ci sono.
 
             /*
              * 'daily_burns' e 'workout_sessions' non si seminano piu': le
