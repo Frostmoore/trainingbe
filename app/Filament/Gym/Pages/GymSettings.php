@@ -41,8 +41,6 @@ class GymSettings extends Page
 
     protected static ?string $navigationLabel = 'Impostazioni';
 
-    protected static ?string $title = 'Impostazioni della palestra';
-
     protected static ?int $navigationSort = 90;
 
     protected string $view = 'filament.gym.pages.gym-settings';
@@ -50,9 +48,39 @@ class GymSettings extends Page
     /** @var array<string, mixed> */
     public array $data = [];
 
+    /**
+     * 🆕 **Il titolo segue lo spazio** — F10, 23/09/2026.
+     *
+     * ⛔ Era fisso a *«Impostazioni della palestra»*. 🚨 Per un trainer
+     * indipendente quella parola è sbagliata due volte: non ha una palestra, e
+     * leggerla gli fa credere di essere finito nelle impostazioni **di
+     * qualcun altro** — cioè nel posto dove non deve toccare niente.
+     */
+    public function getTitle(): string
+    {
+        return $this->palestra()?->ePersonale() === true
+            ? 'Il tuo spazio'
+            : 'Impostazioni della palestra';
+    }
+
+    /**
+     * ══ 🆕 🔑 CHI COMANDA IN QUESTO SPAZIO — F10, 23/09/2026 ══════════════════
+     *
+     * 📌 Il committente: *«un free trainer potrà agire sostanzialmente come una
+     * palestra»*.
+     *
+     * ⛔ Era `isGymAdmin()`, e chiudeva fuori il trainer indipendente **dal
+     * proprio** spazio: non poteva mettere il suo nome, il suo logo, il suo
+     * colore, la sua quota né i propri dati di fatturazione. 🚨 Tutto quello che
+     * c'è in questa pagina è suo quanto di una palestra — è la stessa tabella.
+     *
+     * ⚠️ **`comandaQui()` e non `isFreeTrainer()`**: quel ruolo se lo porta
+     * dietro anche nella palestra dove allena, e lì queste impostazioni non
+     * sono sue. Il predicato controlla il **proprietario** dello spazio.
+     */
     public static function canAccess(): bool
     {
-        return auth()->user()?->isGymAdmin() === true;
+        return auth()->user()?->comandaQui() === true;
     }
 
     public function mount(): void
@@ -230,8 +258,33 @@ class GymSettings extends Page
                             ->validationMessages(['required' => 'Con il codice 0000000 serve la PEC: è l\'unico posto dove può arrivare la fattura.']),
                     ]),
 
+                /*
+                 * ══ 🚨 IL VESTITO NON C'E' IN UNO SPAZIO PERSONALE — F10 ══════
+                 *
+                 * 📌 **Regola 8.1.3**, dettata dal committente il 18/09/2026:
+                 * *«Assicurati che un trainer non convogli le personalizzazioni
+                 * dell'app come le palestre. Cioè, un free trainer non crea un
+                 * "vestito" per l'app dei suoi allievi»*.
+                 *
+                 * ⛔ **E `Tenant::branding()` la applica davvero**: su un tenant
+                 * personale azzera nome, logo e colori. Quindi questi quattro
+                 * campi, lì, **non hanno alcun effetto**.
+                 *
+                 * 🚨 Mostrarli sarebbe peggio che non averli: farebbero credere
+                 * di aver vestito l'app dei propri allievi, e la bugia si
+                 * scoprirebbe solo chiedendo a un allievo cosa vede. ⚠️ È
+                 * esattamente ciò che diceva il test di `IlVestitoEITrainerInfiniti`
+                 * quando teneva **chiusa tutta la pagina**.
+                 *
+                 * 💡 **Perché adesso si chiude la sezione e non la pagina**: il
+                 * resto — nome, contatto, la quota, i dati per le fatture — è
+                 * suo quanto di una palestra, ed è la roba che gli serve per
+                 * lavorare. Chiudere tutto per proteggere un quarto della
+                 * pagina era la difesa giusta con lo strumento grosso.
+                 */
                 Section::make('Aspetto nell\'app')
                     ->description('E\' quello che vedono i tuoi iscritti quando aprono l\'app.')
+                    ->visible(fn (): bool => $this->palestra()?->ePersonale() !== true)
                     ->columns(3)
                     ->schema([
                         FileUpload::make('logo_path')

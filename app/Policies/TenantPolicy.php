@@ -40,10 +40,29 @@ class TenantPolicy
         return false;
     }
 
-    /** La propria, e solo il gym_admin. Quali campi, lo decide il modulo. */
+    /**
+     * Il proprio spazio, e solo chi ci comanda. Quali campi, lo decide il modulo.
+     *
+     * ══ 🆕 🔑 ANCHE IL TRAINER INDIPENDENTE, A CASA SUA — F10, 23/09/2026 ═════
+     *
+     * 📌 Il committente: *«un free trainer potrà agire sostanzialmente come una
+     * palestra»*.
+     *
+     * ⛔ Con `isGymAdmin()` la pagina delle impostazioni si sarebbe **aperta e
+     * poi rifiutata di salvare**: il peggiore dei due mondi, perché il modulo
+     * compila, il tasto risponde, e l'errore arriva dopo il lavoro.
+     *
+     * 🚨 **Questo non riapre il vestito.** La regola 8.1.3 — *«un free trainer
+     * non crea un "vestito" per l'app dei suoi allievi»* — la applicano due
+     * cose che restano dove sono: `Tenant::branding()`, che su un tenant
+     * personale azzera nome, logo e colori, e la sezione «Aspetto nell'app»,
+     * che lì **non si mostra**. 💡 Qui si autorizza a scrivere il proprio nome,
+     * la propria quota e i propri dati fiscali — non a vestire l'app di
+     * qualcun altro.
+     */
     public function update(User $utente, Tenant $palestra): bool
     {
-        return $utente->tenant_id === $palestra->getKey() && $utente->isGymAdmin();
+        return $utente->tenant_id === $palestra->getKey() && $utente->comandaQui();
     }
 
     public function delete(User $utente, Tenant $palestra): bool

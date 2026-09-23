@@ -65,8 +65,20 @@ class Chat extends Page
     {
         $u = auth()->user();
 
+        /*
+         * 🆕 **Anche il trainer indipendente** — F10, 23/09/2026.
+         *
+         * ⛔ Con la coppia `isGymAdmin() || isTrainer()` era l'unico a cui la
+         * pagina non si apriva, pur essendo **la persona che di messaggi ne ha
+         * di più**: i suoi allievi gli scrivono tutti direttamente.
+         *
+         * ⚠️ La pagina non mostra messaggi — la chat è cifrata e vive nell'app —
+         * ma dice **quanti ne aspettano**, e a chi allena per mestiere quel
+         * numero serve. 💡 Negarglielo era un effetto collaterale della coppia
+         * di ruoli su cui è nato il pannello, non una decisione.
+         */
         return $u instanceof User
-            && ($u->isGymAdmin() || $u->isTrainer())
+            && ($u->isGymAdmin() || $u->isTrainer() || $u->isFreeTrainer())
             && Gate::allows('viewAny', Conversation::class);
     }
 

@@ -36,11 +36,38 @@ class UserPolicy
 
     public function viewAny(User $utente): bool
     {
-        return $utente->isGymAdmin() || $utente->isTrainer();
+        // 🆕 F10, 23/09/2026: anche il trainer indipendente, che nel proprio
+        //    spazio non è né l'uno né l'altro. Cosa vede lo decide `view()`.
+        return $utente->isGymAdmin() || $utente->isTrainer() || $utente->isFreeTrainer();
     }
 
     public function view(User $utente, User $bersaglio): bool
     {
+        /*
+         * ══ 🆕 🚨 IL TRAINER INDIPENDENTE VIENE PRIMA DEL TENANT — F10 ════════
+         *
+         * ⛔ **La sua regola non può essere «stessa palestra»**, e non è una
+         * comodità: i suoi allievi **non stanno tutti nel suo spazio**.
+         *
+         * | Come è arrivato | Dove vive |
+         * |---|---|
+         * | invitato senza account | `nasceNelloSpazioDi($trainer)` → **spazio del trainer** |
+         * | aveva già un account | resta **nel suo**, e il legame è solo `trainer_member` |
+         *
+         * 🚨 Con il controllo sul tenant per primo, il secondo caso sparirebbe
+         * dal pannello — e sarebbe **invisibile**: l'elenco funziona, mostra
+         * qualcuno, e chi guarda non ha modo di sapere che manca gente.
+         *
+         * 💡 La regola giusta è quella che usa già l'app in `ChiSiVede`: *«è un
+         * mio allievo»*, non *«sta in casa mia»*. E `trainer_member` porta
+         * `tenant_id` del **trainer**, quindi il rapporto resta suo anche
+         * quando la persona abita altrove.
+         */
+        if ($utente->isFreeTrainer()) {
+            return $utente->getKey() === $bersaglio->getKey()
+                || $this->segue($utente, $bersaglio);
+        }
+
         if (! $this->stessaPalestra($utente, $bersaglio)) {
             return false;
         }

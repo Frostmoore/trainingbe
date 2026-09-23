@@ -14,6 +14,7 @@ use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -137,21 +138,86 @@ final class IlVestitoEITrainerInfinitiTest extends TestCase
     }
 
     /**
-     * ⚠️ **8.1.3, la metà del pannello**: un free trainer non raggiunge la
-     * pagina dove si scelgono logo e colori.
+     * ⚠️ **8.1.3, la metà del pannello**: un free trainer non trova i campi
+     * dove si scelgono logo e colori.
      *
      * 💡 Un campo che non ha più effetto sarebbe peggio di un campo che non
      * c'è: farebbe credere di aver vestito l'app.
+     *
+     * ══ 🆕 COSA E' CAMBIATO IL 23/09/2026, E PERCHE' ═════════════════
+     *
+     * ⛔ Fino a F10 questo test chiedeva che **tutta la pagina** fosse chiusa
+     * (`GymSettings::canAccess()` falso), ed era la difesa giusta con lo
+     * strumento grosso: il vestito è un quarto di quella pagina.
+     *
+     * 📌 Il committente, 23/09: *«un free trainer potrà agire sostanzialmente
+     * come una palestra»*. Gli altri tre quarti — nome, contatto, **la sua
+     * quota**, i **dati per le fatture** — sono roba sua, e gli servono per
+     * lavorare.
+     *
+     * 🚨 **La 8.1.3 però non si tocca**, e adesso la difendono due cose
+     * invece di una: `Tenant::branding()`, che su un tenant personale azzera
+     * nome, logo e colori (i test qui sopra), e la sezione «Aspetto nell'app»,
+     * che in uno spazio personale **non si mostra**.
+     *
+     * 💡 Questo test adesso prova **l'intenzione** invece della porta: che i
+     * campi del vestito non ci siano. ⚠️ È più forte di prima — una pagina
+     * chiusa dice solo *«non entri»*, e non avrebbe impedito a nessuno di
+     * rimettere quei campi altrove.
      */
     #[Test]
-    public function un_free_trainer_non_apre_le_impostazioni_del_vestito(): void
+    public function un_free_trainer_non_trova_i_campi_del_vestito(): void
     {
         $trainer = $this->trainerIndipendente('pannello@esempio.test');
 
         $this->ctx()->runAs($trainer->tenant, function () use ($trainer): void {
             $this->actingAs($trainer);
 
-            $this->assertFalse(GymSettings::canAccess(), 'un free trainer puo scegliere logo e colori');
+            // ✅ La pagina si apre: la sua quota e le sue fatture stanno lì.
+            $this->assertTrue(
+                GymSettings::canAccess(),
+                'un free trainer non raggiunge nemmeno la sua quota e i suoi dati fiscali',
+            );
+
+            $campi = Livewire::test(GymSettings::class)
+                ->instance()
+                ->form
+                ->getFlatFields(withHidden: false);
+
+            foreach (['logo_path', 'color_primary', 'color_secondary', 'color_accent'] as $vestito) {
+                $this->assertArrayNotHasKey(
+                    $vestito,
+                    $campi,
+                    "\U0001f6a8 Il campo {$vestito} e' tornato nel pannello di un trainer indipendente: "
+                    ."gli farebbe credere di aver vestito l'app dei suoi allievi, e la bugia si "
+                    ."scoprirebbe solo chiedendo a un allievo cosa vede (regola 8.1.3).",
+                );
+            }
+        });
+    }
+
+    /**
+     * ✅ **E per una palestra i campi del vestito ci sono ancora.**
+     *
+     * ⚠️ Il gemello del test di sopra, e serve per la stessa ragione per cui
+     * serve `una_palestra_veste_lapp_come_prima`: nascondere la sezione a
+     * **tutti** sarebbe il modo più rapido di far passare quell'asserzione.
+     */
+    #[Test]
+    public function una_palestra_invece_i_campi_del_vestito_ce_li_ha(): void
+    {
+        $palestra = $this->creaPalestra();
+        $capo = $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@palestra.test');
+
+        $this->ctx()->runAs($palestra, function () use ($capo): void {
+            $this->actingAs($capo);
+
+            $campi = Livewire::test(GymSettings::class)
+                ->instance()
+                ->form
+                ->getFlatFields(withHidden: false);
+
+            $this->assertArrayHasKey('color_primary', $campi, 'la palestra ha perso i campi del vestito');
         });
     }
 

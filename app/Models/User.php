@@ -912,6 +912,57 @@ class User extends Authenticatable implements FilamentUser, HasMedia
     }
 
     /**
+     * 🆕 🔑 **Comanda in questo spazio?** — F10, 23/09/2026.
+     *
+     * 📌 Il committente: *«il trainer di palestra non deve poter modificare
+     * nulla che riguardi la palestra e i suoi iscritti, mentre un free trainer
+     * potrà agire sostanzialmente come una palestra»*.
+     *
+     * ══ 🚨 PERCHE' SERVIVA UN PREDICATO NUOVO ════════════════════════════════
+     *
+     * ⛔ Tutto il pannello era costruito sulla coppia `isGymAdmin()` /
+     * `isTrainer()`, e un trainer indipendente **non è nessuno dei due**: nel
+     * proprio spazio ha il ruolo `FreeTrainer`. 🚨 Quindi ogni scoping lo
+     * trattava come uno sconosciuto e rispondeva `1 = 0` — il pannello
+     * **falliva chiuso**, che era giusto finché non c'era niente da mostrargli.
+     * Questa fase è il momento in cui smette di esserlo.
+     *
+     * ⚠️ **Non si è allargato `isGymAdmin()`**, ed è la tentazione da evitare:
+     * quel metodo significa *«amministra una palestra»*, e farlo rispondere di
+     * sì a chi una palestra non ce l'ha renderebbe vera una frase falsa in ogni
+     * altro punto che lo chiama — compresi i conteggi dei posti e la fattura.
+     *
+     * ── 🏠 «Nel **proprio** spazio», e non genericamente ──────────────────────
+     *
+     * 🚨 `isFreeTrainer()` da solo non basterebbe. Un trainer indipendente che
+     * allena **anche** in una palestra porta il suo ruolo con sé nel contesto di
+     * quella palestra (`hasAppRole` ripiega sullo spazio di casa): senza il
+     * controllo sul proprietario, entrando nella palestra si ritroverebbe i
+     * comandi del padrone di casa **a casa d'altri**. ⛔ È esattamente il caso
+     * che il committente ha nominato per terzo — *«un trainer che sia
+     * entrambi»* — ed è quello in cui sbagliare costa di più.
+     *
+     * 💡 `eDi()` guarda `proprietario_id`: risponde di sì a chi quello spazio
+     * l'ha creato, e di no a chiunque altro ci stia dentro.
+     */
+    public function comandaQui(): bool
+    {
+        if ($this->isGymAdmin()) {
+            return true;
+        }
+
+        if (! $this->isFreeTrainer()) {
+            return false;
+        }
+
+        $spazio = app(TenantContext::class)->get() ?? $this->tenant;
+
+        return $spazio instanceof Tenant
+            && $spazio->ePersonale()
+            && $spazio->eDi($this);
+    }
+
+    /**
      * 🆕 🏠 **Allena in almeno una palestra?** — decisione 2, 18/09/2026.
      *
      * ⚠️ **Diverso da `isTrainer()`**, e la differenza è il motivo per cui

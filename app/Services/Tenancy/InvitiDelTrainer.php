@@ -261,6 +261,28 @@ class InvitiDelTrainer
      *
      * @return bool `false` se non c'era un indirizzo, o se la mail non è partita
      */
+    /**
+     * 🆕 🚫 **Revocare un invito** — F10.1, 23/09/2026.
+     *
+     * ⛔ **La riga esisteva solo dentro `TrainerController::revokeInvite()`**,
+     * cioè raggiungibile solo dall'app. 🚨 Ma un invito valido **tiene un
+     * posto** del piano finché non scade (`postiRimasti()` conta anche quelli
+     * non ancora usati): senza un modo di revocarlo dal pannello, un link
+     * mandato alla persona sbagliata costava un posto per sette giorni.
+     *
+     * 💡 Sta qui e non nel pannello per la stessa ragione per cui ci sta
+     * `revoca()` delle palestre: la regola è una, e due copie divergono alla
+     * prima modifica — quella che divergerebbe per prima sarebbe la copia, cioè
+     * quella meno provata.
+     *
+     * ⚠️ `forceFill`: `revoked_at` non è in `$fillable`, e non deve entrarci —
+     * non è un campo che si scrive da un modulo.
+     */
+    public function revoca(TrainerInvite $invito): void
+    {
+        $invito->forceFill(['revoked_at' => now()])->save();
+    }
+
     public function mandaIlLink(TrainerInvite $invito, User $trainer): bool
     {
         if ($invito->email === null || $invito->email === '') {

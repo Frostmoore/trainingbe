@@ -164,7 +164,9 @@ class TrainerController extends Controller
             return response()->json(['message' => __('Invito non trovato.')], 404);
         }
 
-        $invito->forceFill(['revoked_at' => now()])->save();
+        // 🆕 F10.1: la riga sta in `InvitiDelTrainer::revoca()`, perché dal
+        //    23/09 revoca anche il pannello. Una regola, una sede.
+        $this->inviti->revoca($invito);
 
         return response()->json(['message' => __('Invito revocato.')]);
     }
