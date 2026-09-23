@@ -377,6 +377,69 @@ class DueCappelliNelPannelloTest extends TestCase
         );
     }
 
+    /**
+     * 🚨 **E il trainer di PALESTRA, che a casa sua non è niente.**
+     *
+     * 📌 Il committente, il 24/09, provando `trainer@palestra-demo.test`:
+     * *«Non mi fa accedere, carica e mi rimette nella stessa pagina»*.
+     *
+     * ⛔ **Dal 18/09 (decisione 2) ogni trainer ha una casa sua**, e la casa di
+     * un trainer di palestra è uno spazio **personale** dove il ruolo è
+     * `free_user`. Al login il contesto è quello di casa, quindi:
+     *
+     * | Domanda | Risposta a casa sua |
+     * |---|---|
+     * | `isGymAdmin()` | no |
+     * | `isTrainer()` | **no** — è `trainer` nella palestra, non a casa |
+     * | `isFreeTrainer()` | no — è `free_user` |
+     *
+     * 🚨 `urlFor()` rispondeva `null`, `toResponse()` lo sloggava, e **nessun
+     * trainer di palestra poteva più entrare nel pannello** — per sei giorni,
+     * senza un errore, senza un messaggio, senza una riga nei registri.
+     *
+     * ⚠️ **È la terza volta che questo metodo sbaglia la stessa domanda**: il
+     * 16/09 mancava `isFreeTrainer()` (il test qui sopra) e si aggiunse un
+     * terzo predicato. 💡 Il difetto non era il predicato mancante: era
+     * **chiedere i ruoli nello spazio di casa** a gente che lavora altrove.
+     * `allena()` guarda in **tutti** gli spazi, e per questo il test lo prova
+     * proprio nel contesto di casa.
+     */
+    #[Test]
+    public function anche_un_trainer_di_palestra_dopo_il_login_finisce_nel_pannello(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+
+        // La forma vera dal 18/09: casa personale + ruolo `trainer` nella palestra.
+        $coach = app(CreaTenantPersonale::class)(
+            'Tommaso Coach',
+            'tommaso@esempio.test',
+            ['password' => self::FAKE_PASSWORD],
+            UserRole::FreeUser,
+        );
+
+        $this->allenaAnchePresso($coach, $palestra);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+
+        /*
+         * ⚠️ **Nel contesto di casa**, che è dove si trova il login: provarlo
+         * dentro la palestra nasconderebbe il difetto, perché lì
+         * `isTrainer()` risponde di sì e la domanda sbagliata sembra giusta.
+         */
+        $dove = $this->ctx()->runAs(
+            $fresco->tenant,
+            fn (): ?string => RoleAwareLoginResponse::urlFor($fresco),
+        );
+
+        $this->assertNotNull(
+            $dove,
+            '🚨 Un trainer di palestra viene sloggato subito dopo il login: da fuori si vede '
+            .'solo «carica e torna indietro», senza nessun errore da nessuna parte.',
+        );
+
+        $this->assertStringContainsString('/admin', $dove);
+    }
+
     /** ⚠️ La chiave in sessione è una sola, e la conoscono in due. */
     #[Test]
     public function la_chiave_di_sessione_e_quella_che_legge_il_middleware(): void

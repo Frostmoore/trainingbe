@@ -8,6 +8,7 @@ use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Services\Billing\ContoDegliIscritti;
 use App\Services\Billing\RegistroDeiPagamenti;
+use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +56,57 @@ class IContiDellaPalestra
         private readonly RegistroDeiPagamenti $registro,
     ) {}
 
+    /**
+     * 🆕 👥 **Quanti allievi ha questo spazio, adesso** — F10.7, 24/09/2026.
+     *
+     * ══ 🚨 DUE SPAZI, DUE STRADE, E NON E' UN DETTAGLIO ══════════════════
+     *
+     * | Spazio | Da dove si contano | Perché |
+     * |---|---|---|
+     * | **Palestra** | ruolo `member` **in quel tenant** | è la stessa query della fattura (`ContoDegliIscritti`) |
+     * | **Personale** | le righe di `trainer_member` | i suoi allievi **non vivono tutti nel suo spazio** |
+     *
+     * 📌 Il committente, il 24/09: *«se un allievo di una palestra si iscrive a
+     * un free trainer che non lavora in quella palestra, allora il free trainer
+     * paga normalmente il suo spazio. Quindi ha senso che sia conteggiato»*.
+     *
+     * ⛔ **Contandoli col ruolo nel tenant**, un allievo che aveva già un
+     * account — e che quindi è rimasto a vivere nello spazio della sua palestra
+     * — sparisce dal conto del trainer che lo paga. 🚨 E sparisce **dal
+     * divisore**: «ti costa 20 € per allievo» quando ne ha due e ne paga due è
+     * il doppio del vero, senza che nessuna riga dia errore.
+     *
+     * 💡 La strada giusta è `InvitiDelTrainer::quantiAllieviHa()`, che è lo
+     * stesso conto con cui il piano decide i posti rimasti: qui e lì **deve**
+     * uscire lo stesso numero.
+     */
+    public function quantiAllievi(Tenant $palestra): int
+    {
+        if (! $palestra->ePersonale()) {
+            return $this->conto->quanti($palestra);
+        }
+
+        $trainer = $palestra->proprietario;
+
+        // ⚠️ Uno spazio personale senza proprietario non è di nessuno: zero, non
+        //    «tutti». È la stessa direzione prudente di `Tenant::eDi()`.
+        if ($trainer === null) {
+            return 0;
+        }
+
+        /*
+         * 🚨 **Risolto qui e non nel costruttore, e non è uno stile.**
+         * `InvitiDelTrainer` tira dentro `UnisciAUnaPalestra`, che per una
+         * strada o per l'altra torna a chiedere questa classe: il contenitore
+         * entra in **ricorsione infinita** e il processo muore con «allowed
+         * memory size exhausted», che di un ciclo di dipendenze non dice niente.
+         *
+         * 💡 Risolverlo **quando serve** rompe il cerchio: quando questa riga
+         * gira, questa istanza è già costruita.
+         */
+        return app(InvitiDelTrainer::class)->quantiAllieviHa($trainer);
+    }
+
     // ───────────────────────── i numeri di oggi ─────────────────────────
 
     /**
@@ -72,7 +124,7 @@ class IContiDellaPalestra
             return null;
         }
 
-        $iscritti = $this->conto->quanti($palestra);
+        $iscritti = $this->quantiAllievi($palestra);
 
         if ($iscritti === 0) {
             return null;
@@ -117,21 +169,9 @@ class IContiDellaPalestra
      */
     public function personePerMese(Tenant $palestra, UserRole $ruolo = UserRole::Member, int $mesi = self::MESI): array
     {
-        $arrivi = $this->context->runWithoutTenant(
-            fn (): array => DB::table('model_has_roles as mhr')
-                ->join('roles as r', function ($join): void {
-                    $join->on('r.id', '=', 'mhr.role_id')->on('r.tenant_id', '=', 'mhr.tenant_id');
-                })
-                ->join('users as u', 'u.id', '=', 'mhr.model_id')
-                ->whereNull('u.deleted_at')
-                ->where('mhr.tenant_id', $palestra->getKey())
-                ->where('r.name', $ruolo->value)
-                ->selectRaw("DATE_FORMAT(u.created_at, '%Y-%m') as mese, COUNT(*) as quanti")
-                ->groupBy('mese')
-                ->pluck('quanti', 'mese')
-                ->map(static fn ($v): int => (int) $v)
-                ->all(),
-        );
+        $arrivi = $palestra->ePersonale()
+            ? $this->arriviDegliAllievi($palestra, $ruolo)
+            : $this->arriviInPalestra($palestra, $ruolo);
 
         $serie = [];
         $totale = 0;
@@ -156,6 +196,74 @@ class IContiDellaPalestra
         }
 
         return $serie;
+    }
+
+    /**
+     * 🏢 Gli arrivi dentro una **palestra**: chi ha il ruolo lì, per mese
+     * d'iscrizione.
+     *
+     * @return array<string, int>
+     */
+    private function arriviInPalestra(Tenant $palestra, UserRole $ruolo): array
+    {
+        return $this->context->runWithoutTenant(
+            fn (): array => DB::table('model_has_roles as mhr')
+                ->join('roles as r', function ($join): void {
+                    $join->on('r.id', '=', 'mhr.role_id')->on('r.tenant_id', '=', 'mhr.tenant_id');
+                })
+                ->join('users as u', 'u.id', '=', 'mhr.model_id')
+                ->whereNull('u.deleted_at')
+                ->where('mhr.tenant_id', $palestra->getKey())
+                ->where('r.name', $ruolo->value)
+                ->selectRaw("DATE_FORMAT(u.created_at, '%Y-%m') as mese, COUNT(*) as quanti")
+                ->groupBy('mese')
+                ->pluck('quanti', 'mese')
+                ->map(static fn ($v): int => (int) $v)
+                ->all(),
+        );
+    }
+
+    /**
+     * 🆕 🏋️ Gli arrivi da un **trainer indipendente**: le righe di
+     * `trainer_member`, per mese in cui il rapporto è cominciato — F10.7.
+     *
+     * ══ 🚨 PERCHE' NON SI GUARDA `users.created_at` ══════════════════════
+     *
+     * ⛔ In palestra la data d'arrivo è la nascita dell'account, perché in
+     * palestra ci si entra iscrivendosi. 🚨 Da un trainer indipendente no: metà
+     * dei suoi allievi **avevano già un account** — magari di due anni prima, in
+     * un'altra palestra — e la loro curva partirebbe nel passato, mostrandogli
+     * allievi che allora non erano suoi.
+     *
+     * 💡 `assigned_at` è la data giusta: è **quando il rapporto è cominciato**.
+     * ⚠️ Con `created_at` del pivot come rete, per le righe vecchie di AH.1 che
+     * quella colonna non l'avevano ancora.
+     *
+     * ⛔ **Nessun trainer sotto un trainer**: uno spazio personale non ha
+     * dipendenti, e la curva dei trainer resta vuota invece di essere finta.
+     *
+     * @return array<string, int>
+     */
+    private function arriviDegliAllievi(Tenant $palestra, UserRole $ruolo): array
+    {
+        $trainer = $palestra->proprietario;
+
+        if ($ruolo !== UserRole::Member || $trainer === null) {
+            return [];
+        }
+
+        return $this->context->runWithoutTenant(
+            fn (): array => DB::table('trainer_member as tm')
+                ->join('users as u', 'u.id', '=', 'tm.member_id')
+                ->whereNull('u.deleted_at')
+                ->where('tm.trainer_id', $trainer->getKey())
+                ->whereNull('tm.disattivato_il')
+                ->selectRaw("DATE_FORMAT(COALESCE(tm.assigned_at, tm.created_at), '%Y-%m') as mese, COUNT(DISTINCT tm.member_id) as quanti")
+                ->groupBy('mese')
+                ->pluck('quanti', 'mese')
+                ->map(static fn ($v): int => (int) $v)
+                ->all(),
+        );
     }
 
     /**

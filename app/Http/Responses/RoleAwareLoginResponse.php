@@ -42,22 +42,42 @@ class RoleAwareLoginResponse implements LoginResponse
         }
 
         /*
-         * ══ 🆕 E ANCHE IL TRAINER INDIPENDENTE — 16/09/2026 ══════════════════
+         * ══ 🚨 LA DOMANDA VA FATTA IN **TUTTI** GLI SPAZI ══════════════
          *
-         * ⛔ **`isFreeTrainer()` mancava**, e il risultato era una porta aperta
-         * su un corridoio chiuso: `canAccessPanel()` lo fa entrare dal 13/08
-         * (F2), ma qui `urlFor()` rispondeva `null` — e `toResponse()`, per un
-         * utente senza destinazione, **lo slogga** e lo rimanda al login con
-         * scritto *«gli iscritti accedono dall'app, non da qui»*.
+         * ⚠️ **Questo `if` ha sbagliato la stessa cosa tre volte**, e le prime
+         * due sono state curate aggiungendo un predicato. La terza no.
          *
-         * 🚨 Cioè: gli si diceva che è un iscritto. Nessun errore, un messaggio
-         * sbagliato, e un pannello che risultava rotto invece che vietato.
+         * | Quando | Chi restava fuori | Perché |
+         * |---|---|---|
+         * | fino al 16/09 | il **trainer indipendente** | mancava `isFreeTrainer()` |
+         * | 18/09 → 24/09 | il **trainer di palestra** | a casa sua è `free_user`, e i ruoli si chiedono lì |
          *
-         * ⚠️ Colpiva anche chi ha **due cappelli**: al login il contesto è il
-         * suo spazio, dove è un `free_trainer` e non un trainer di palestra.
-         * Cioè proprio la persona per cui esiste `SpazioDelPannello`.
+         * 📌 Il committente, il 24/09, provando `trainer@palestra-demo.test`:
+         * *«Non mi fa accedere, carica e mi rimette nella stessa pagina»*.
+         *
+         * ⛔ **Al login il contesto è lo spazio di CASA**, e dalla decisione 2
+         * (18/09) la casa di un trainer di palestra è uno spazio **personale**
+         * dove il ruolo è `free_user`. Chiesti lì: `isGymAdmin()` no,
+         * `isTrainer()` **no** (è `trainer` nella palestra, non a casa),
+         * `isFreeTrainer()` no.
+         *
+         * 🚨 `urlFor()` rispondeva `null`, e `toResponse()` per chi non ha
+         * destinazione **lo slogga** e lo rimanda al login. 💡 Da fuori si vede
+         * solo *«carica e torna indietro»*: nessun errore, nessun messaggio,
+         * niente nei registri. ⛔ **Nessun trainer di palestra poteva entrare nel
+         * pannello per sei giorni.**
+         *
+         * 💡 Il difetto non era il predicato mancante: era **chiedere i ruoli
+         * nello spazio di casa** a gente che lavora altrove. `allena()` guarda
+         * in **tutti** gli spazi (`ChiSiVede::palestreDoveAllena`), ed è la
+         * stessa domanda che fanno le API dell'app in `TrainerController`.
+         *
+         * 🛡️ Lo tiene fermo `DueCappelliNelPannelloTest`, che prova i tre casi
+         * **nel contesto di casa** — provarli dentro la palestra nasconderebbe
+         * il difetto, perché lì `isTrainer()` risponde di sì e la domanda
+         * sbagliata sembra giusta.
          */
-        if ($user->isGymAdmin() || $user->isTrainer() || $user->isFreeTrainer()) {
+        if ($user->isGymAdmin() || $user->allena()) {
             return self::destinazione('admin');
         }
 

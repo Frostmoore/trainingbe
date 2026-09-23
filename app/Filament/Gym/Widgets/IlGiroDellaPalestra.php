@@ -46,11 +46,20 @@ class IlGiroDellaPalestra extends ChartWidget
     public static function canView(): bool
     {
         /*
-         * 🚨 **Solo il gestore.** Ci sono dentro i conti della palestra: il
+         * 🚨 **Solo chi comanda in questo spazio.** Ci sono dentro i conti: il
          * margine del datore di lavoro non è un dato che riguarda un trainer
          * dipendente.
+         *
+         * ══ 🆕 ANCHE IL TRAINER INDIPENDENTE — F10.7, 24/09/2026 ════════════
+         *
+         * 📌 Il committente: *«su quella di giulia ci devono essere le stesse
+         * cards che riguardano i guadagni e le spese che avrebbe una palestra
+         * (di base è solo una palestra con un solo trainer)»*.
+         *
+         * 💡 `comandaQui()` dice esattamente quello: **lo spazio è tuo**. ⛔ Per
+         * un trainer dipendente resta no, com'era prima.
          */
-        return auth()->user()?->isGymAdmin() === true;
+        return auth()->user()?->comandaQui() === true;
     }
 
     protected function getType(): string
@@ -128,27 +137,37 @@ class IlGiroDellaPalestra extends ChartWidget
         }
 
         $iscritti = $conti->personePerMese($palestra, UserRole::Member);
-        $trainer = $conti->personePerMese($palestra, UserRole::Trainer);
 
-        return [
-            'datasets' => [
-                [
-                    'label' => 'Iscritti',
-                    'data' => array_map(static fn (string $m): int => $iscritti[$m] ?? 0, $mesi),
-                    'borderColor' => 'rgba(59, 130, 246, 1)',
-                    'backgroundColor' => 'rgba(59, 130, 246, 0.15)',
-                    'fill' => true,
-                ],
-                [
-                    'label' => 'Trainer',
-                    'data' => array_map(static fn (string $m): int => $trainer[$m] ?? 0, $mesi),
-                    'borderColor' => 'rgba(245, 158, 11, 1)',
-                    'backgroundColor' => 'rgba(245, 158, 11, 0.15)',
-                    'fill' => true,
-                ],
+        $serie = [
+            [
+                'label' => $palestra->ePersonale() ? 'Allievi' : 'Iscritti',
+                'data' => array_map(static fn (string $m): int => $iscritti[$m] ?? 0, $mesi),
+                'borderColor' => 'rgba(59, 130, 246, 1)',
+                'backgroundColor' => 'rgba(59, 130, 246, 0.15)',
+                'fill' => true,
             ],
-            'labels' => $etichette,
         ];
+
+        /*
+         * ⛔ **Nessuna curva dei trainer in uno spazio personale**: non può
+         * assumere nessuno, e una riga piatta sullo zero con scritto «Trainer»
+         * sembra un dato — cioè «i miei trainer sono zero» — invece che una
+         * domanda che lì non si pone. 💡 È la stessa scelta della card dei
+         * posti in `IPostiDellaPalestra`.
+         */
+        if (! $palestra->ePersonale()) {
+            $trainer = $conti->personePerMese($palestra, UserRole::Trainer);
+
+            $serie[] = [
+                'label' => 'Trainer',
+                'data' => array_map(static fn (string $m): int => $trainer[$m] ?? 0, $mesi),
+                'borderColor' => 'rgba(245, 158, 11, 1)',
+                'backgroundColor' => 'rgba(245, 158, 11, 0.15)',
+                'fill' => true,
+            ];
+        }
+
+        return ['datasets' => $serie, 'labels' => $etichette];
     }
 
     private function cosa(): string

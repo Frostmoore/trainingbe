@@ -7,6 +7,9 @@ namespace App\Filament\Gym\Resources\Members\Pages;
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\Members\MemberResource;
 use App\Filament\Gym\Support\UnInvito;
+use App\Filament\Gym\Support\UnInvitoAllievo;
+use App\Models\User;
+use App\Services\Tenancy\InvitiDelTrainer;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -42,8 +45,35 @@ class ListMembers extends ListRecords
              * strada buona: con l'invito è la persona a fare il proprio
              * account, e la palestra non tocca né la sua email né la sua
              * password.
+             *
+             * ══ 🐛 E IL TASTO GIUSTO, NON UNO SOLO — 24/09/2026 ══════════════
+             *
+             * 📌 Il committente, dal pannello di una trainer indipendente:
+             * *«Se clicco su "Invita un iscritto" mi dice che solo la palestra
+             * può invitare»*.
+             *
+             * ⛔ **Il tasto si mostrava a tutti** e parlava con
+             * `InvitiInPalestra`, che a uno spazio personale risponde *«un
+             * tenant personale non è una palestra»*. 🚨 Giustissimo lato
+             * servizio — ma il rifiuto arrivava **dopo** aver aperto la
+             * finestra, cioè dopo aver fatto credere che si potesse.
+             *
+             * 💡 Adesso il tasto lo decide **chi sei**: chi amministra una
+             * palestra invita nella palestra, chi allena per conto proprio
+             * invita un **allievo suo**. ⚠️ Chi è tutti e due li vede tutti e
+             * due, e non è un caso da evitare: sono due inviti diversi, verso
+             * due posti diversi.
              */
-            UnInvito::make(UserRole::Member),
+            UnInvito::make(UserRole::Member)
+                ->visible(fn (): bool => auth()->user()?->isGymAdmin() === true),
+
+            UnInvitoAllievo::make()
+                ->visible(function (): bool {
+                    $utente = auth()->user();
+
+                    return $utente instanceof User
+                        && app(InvitiDelTrainer::class)->puoAvereAllieviSuoi($utente);
+                }),
 
             /*
              * ⚠️ Solo il gestore crea iscritti a mano. 💡 Serve a chi ha

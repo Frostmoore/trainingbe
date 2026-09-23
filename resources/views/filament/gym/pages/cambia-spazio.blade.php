@@ -1,22 +1,38 @@
+{{--
+    🔀 «Cambia spazio» — AH.1-quater.
+
+    ══ ⛔ NIENTE CLASSI DI TAILWIND — 24/09/2026 ════════════════════════════
+
+    📌 Il committente: *«cambia spazio ha le cards senza margini»*.
+
+    🚨 La vista usava `grid gap-4 sm:grid-cols-2`, `text-sm`, `font-semibold`,
+    `flex items-center justify-between gap-4`: **nel CSS precompilato di
+    Filament non ci sono**. Non danno nessun errore e non fanno niente — le
+    schede finivano una sotto l'altra, appiccicate.
+
+    ⚠️ È la stessa famiglia di difetti della liberatoria, lo stesso giorno. 💡
+    Quello che serve sta in `resources/css/pannello-palestra.css` col prefisso
+    `tc-`, e da lì esce con `php artisan filament:assets`.
+--}}
 <x-filament-panels::page>
     {{-- 💡 Una riga che dice cosa cambia, perché «spazio» da solo non lo dice. --}}
-    <p class="text-sm text-gray-600 dark:text-gray-400">
+    <p class="tc-cappello">
         Lavori in più di un posto. Qui scegli quale stai gestendo adesso: iscritti,
         schede e piani sono quelli dello spazio scelto.
     </p>
 
-    <div class="grid gap-4 sm:grid-cols-2">
+    <div class="tc-griglia-due">
         @foreach ($this->spazi() as $spazio)
             @php($corrente = $spazio->getKey() === $this->spazioCorrente())
 
             <x-filament::section>
-                <div class="flex items-center justify-between gap-4">
+                <div class="tc-riga-spazio">
                     <div>
-                        <p class="font-semibold text-gray-950 dark:text-white">
+                        <p class="tc-nome-spazio">
                             {{ $spazio->name }}
                         </p>
 
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                        <p class="tc-che-spazio">
                             {{ $spazio->ePersonale() ? 'Il tuo spazio' : 'Palestra dove alleni' }}
                         </p>
                     </div>

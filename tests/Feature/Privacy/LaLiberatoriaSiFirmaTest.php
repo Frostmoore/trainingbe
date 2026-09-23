@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Tests\Feature\Privacy;
 
 use App\Enums\UserRole;
+use App\Filament\Gym\Pages\Liberatoria;
 use App\Models\LiberatoriaFirmata;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Privacy\LeLiberatorie;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
 use Tests\Concerns\CreaAmbiente;
@@ -156,5 +159,68 @@ class LaLiberatoriaSiFirmaTest extends TestCase
         User::withoutGlobalScopes()->whereKey($trainer->getKey())->forceDelete();
 
         $this->assertSame(0, LiberatoriaFirmata::query()->where('user_id', $trainer->getKey())->count());
+    }
+
+    /**
+     * 🐛 **Dopo aver firmato dal pannello si finiva su un 404** — 24/09/2026.
+     *
+     * 📌 Il committente: *«Se clicco su accetta mi manda qui»*, con la foto di
+     * `127.0.0.1:8000/admin/admin` e la pagina *«Questo indirizzo non esiste»*.
+     *
+     * ⛔ `Liberatoria::firma()` rimandava a
+     * `filament()->getCurrentPanel()?->getPath()`, che torna `'admin'` — **senza
+     * la barra davanti**. 🚨 Un redirect relativo, partendo da
+     * `/admin/liberatoria`, lo attacca al percorso corrente: `/admin/admin`.
+     *
+     * ⚠️ **E la firma era già stata salvata**: il difetto arrivava dopo. Quindi
+     * l'atto risultava firmato e la persona vedeva una pagina rotta — il
+     * momento peggiore possibile per un 404, perché chi ha appena accettato una
+     * responsabilità legale pensa che non sia stato registrato niente.
+     *
+     * 💡 Il test guarda **due** cose, e la seconda è quella che conta: che
+     * l'indirizzo sia **assoluto**. Controllare solo che non contenga
+     * `admin/admin` lascerebbe passare il prossimo redirect relativo scritto in
+     * un altro punto.
+     */
+    #[Test]
+    public function dopo_la_firma_si_torna_alla_casa_del_pannello(): void
+    {
+        $trainer = $this->creaUtente(
+            $this->palestra,
+            UserRole::Trainer,
+            'coach-redirect@esempio.test',
+            liberatoriaFirmata: false,
+        );
+
+        $this->actingAs($trainer);
+
+        /*
+         * ⚠️ **Il pannello corrente va impostato a mano.** In una richiesta
+         * vera lo mette il middleware di Filament; in un test Livewire no, e
+         * `getCurrentPanel()` risponde `null`. 🚨 Senza questa riga il test
+         * proverebbe il **ripiego** invece della strada che percorre la gente.
+         */
+        Filament::setCurrentPanel('admin');
+
+        $risposta = $this->ctx()->runAs(
+            $this->palestra,
+            fn () => Livewire::test(Liberatoria::class)->call('firma'),
+        );
+
+        $dove = $risposta->effects['redirect'] ?? null;
+
+        $this->assertNotNull($dove, 'Dopo la firma non si viene mandati da nessuna parte.');
+
+        $this->assertStringStartsWith(
+            'http',
+            $dove,
+            "🚨 Il redirect e' relativo ({$dove}): partendo da /admin/liberatoria "
+            .'diventa /admin/admin, cioe\' un 404 subito dopo aver firmato.',
+        );
+
+        $this->assertStringNotContainsString('admin/admin', $dove);
+
+        // ⚠️ E la firma deve esserci comunque: il redirect è l'ultima cosa.
+        $this->assertNull(app(LeLiberatorie::class)->serveA($trainer->fresh()));
     }
 }

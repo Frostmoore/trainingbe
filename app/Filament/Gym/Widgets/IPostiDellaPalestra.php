@@ -6,9 +6,11 @@ namespace App\Filament\Gym\Widgets;
 
 use App\Enums\UserRole;
 use App\Filament\Gym\Support\UnInvito;
+use App\Filament\Gym\Support\UnInvitoAllievo;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Reporting\IContiDellaPalestra;
+use App\Services\Tenancy\InvitiDelTrainer;
 use App\Services\Tenancy\InvitiInPalestra;
 use App\Support\Tenancy\TenantContext;
 use Filament\Actions\Action;
@@ -53,14 +55,41 @@ class IPostiDellaPalestra extends Widget implements HasActions, HasForms
 
     protected static ?int $sort = -1;
 
+    /**
+     * ══ 🆕 ANCHE IL TRAINER INDIPENDENTE, A CASA SUA — F10.7, 24/09/2026 ═════
+     *
+     * 📌 Il committente: *«su quella di giulia ci devono essere le stesse cards
+     * che riguardano i guadagni e le spese che avrebbe una palestra (di base è
+     * solo una palestra con un solo trainer)»*.
+     *
+     * 💡 `comandaQui()` e non `isGymAdmin()`: la domanda vera non è «amministri
+     * una palestra», è **«questo spazio è tuo?»**. ⛔ Per un trainer dipendente
+     * la risposta resta no, e resta no per lo stesso motivo di prima: qui dentro
+     * c'è il margine del suo datore di lavoro.
+     */
     public static function canView(): bool
     {
-        return auth()->user()?->isGymAdmin() === true;
+        return auth()->user()?->comandaQui() === true;
     }
 
+    /**
+     * 🚨 **Due inviti diversi, perché sono due cose diverse.**
+     *
+     * ⛔ `InvitiInPalestra::invita()` **rifiuta** uno spazio personale — *«Solo
+     * una palestra può invitare»* — ed è giusto così: un trainer indipendente
+     * non fa entrare nessuno «dentro se stesso», si prende un allievo. 💡 La
+     * sua strada è `InvitiDelTrainer`, cioè `UnInvitoAllievo`.
+     *
+     * ⚠️ È lo stesso difetto che il committente ha trovato il 24/09 nella
+     * pagina degli iscritti: *«Se clicco su "Invita un iscritto" mi dice che
+     * solo la palestra può invitare»*. Qui il tasto è **dentro la card dei
+     * posti**, e sarebbe stato il secondo posto da cui usciva lo stesso errore.
+     */
     public function invitaIscrittoAction(): Action
     {
-        return UnInvito::make(UserRole::Member, 'invitaIscritto');
+        return $this->spazioPersonale()
+            ? UnInvitoAllievo::make('invitaIscritto')
+            : UnInvito::make(UserRole::Member, 'invitaIscritto');
     }
 
     public function invitaTrainerAction(): Action
@@ -85,18 +114,54 @@ class IPostiDellaPalestra extends Widget implements HasActions, HasForms
             return ['palestra' => null];
         }
 
-        $inviti = app(InvitiInPalestra::class);
         $conti = app(IContiDellaPalestra::class);
 
-        return [
+        $comune = [
             'palestra' => $palestra,
-            'iscritti' => $inviti->iPosti($palestra, UserRole::Member),
-            'trainer' => $inviti->iPosti($palestra, UserRole::Trainer),
-            'trainerAttivi' => $this->trainerAttivi($palestra),
             'costo' => $conti->costoPerAllievoCent($palestra),
             'prezzo' => $conti->prezzoPerAllievoCent($palestra),
             'margine' => $conti->marginePerAllievoCent($palestra),
         ];
+
+        /*
+         * ══ 🆕 🏋️ LO SPAZIO DI UN TRAINER NON HA DIPENDENTI — F10.7 ═════════
+         *
+         * ⛔ **Niente card dei trainer**, e non è una semplificazione: un
+         * trainer indipendente non può assumere nessuno (`InvitiInPalestra`
+         * rifiuta gli inviti da uno spazio personale), e `iPosti(…, Trainer)`
+         * gli direbbe «0 su 0 posti» — un limite che non esiste, su una cosa
+         * che non può fare.
+         *
+         * 💡 I suoi posti sono gli **allievi**, e li conta `InvitiDelTrainer`:
+         * è lo stesso conto che decide se può mandare un altro invito, quindi
+         * il numero scritto qui e il rifiuto che riceve là non possono
+         * discordare.
+         */
+        if ($palestra->ePersonale()) {
+            $trainer = $palestra->proprietario;
+
+            return $comune + [
+                'iscritti' => $trainer === null
+                    ? ['occupati' => 0, 'totali' => 0, 'rimasti' => 0]
+                    : app(InvitiDelTrainer::class)->iPosti($trainer),
+                'trainer' => null,
+                'trainerAttivi' => null,
+            ];
+        }
+
+        $inviti = app(InvitiInPalestra::class);
+
+        return $comune + [
+            'iscritti' => $inviti->iPosti($palestra, UserRole::Member),
+            'trainer' => $inviti->iPosti($palestra, UserRole::Trainer),
+            'trainerAttivi' => $this->trainerAttivi($palestra),
+        ];
+    }
+
+    /** Lo spazio che si sta guardando è quello personale di un trainer? */
+    private function spazioPersonale(): bool
+    {
+        return app(TenantContext::class)->get()?->ePersonale() === true;
     }
 
     /**

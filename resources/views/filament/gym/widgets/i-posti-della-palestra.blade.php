@@ -42,11 +42,11 @@
             <p class="tc-nota">Nessuna palestra nel contesto.</p>
         </x-filament::section>
     @else
-        <div class="tc-posti">
+        <div class="tc-posti {{ $trainer === null ? 'tc-posti--due' : '' }}">
 
             {{-- ───────────────── Iscritti ───────────────── --}}
             <x-filament::section>
-                <x-slot name="heading">Iscritti</x-slot>
+                <x-slot name="heading">{{ $palestra->ePersonale() ? 'Allievi' : 'Iscritti' }}</x-slot>
 
                 <div class="tc-numero">
                     <span class="tc-numero-grande">{{ $iscritti['occupati'] }}</span>
@@ -57,7 +57,7 @@
 
                 <p class="tc-nota">
                     @if ($iscritti['totali'] === null)
-                        Il vostro piano non mette limiti.
+                        {{ $palestra->ePersonale() ? 'Il tuo piano non mette limiti.' : 'Il vostro piano non mette limiti.' }}
                     @elseif ($iscritti['rimasti'] === 0)
                         Posti esauriti: per invitare qualcuno serve un piano più grande.
                     @else
@@ -70,7 +70,14 @@
                 </div>
             </x-filament::section>
 
-            {{-- ───────────────── Trainer ───────────────── --}}
+            {{--
+                ───────────────── Trainer ─────────────────
+
+                🚨 Non c'è nello spazio di un trainer indipendente: non può
+                assumere nessuno, e «0 su 0 posti» sarebbe un limite inventato
+                su una cosa che non può fare. Vedi `getViewData()`.
+            --}}
+            @if ($trainer !== null)
             <x-filament::section>
                 <x-slot name="heading">Trainer</x-slot>
 
@@ -91,10 +98,11 @@
                     {{ $this->invitaTrainerAction }}
                 </div>
             </x-filament::section>
+            @endif
 
             {{-- ───────────────── I conti ───────────────── --}}
             <x-filament::section>
-                <x-slot name="heading">Per ogni iscritto</x-slot>
+                <x-slot name="heading">{{ $palestra->ePersonale() ? 'Per ogni allievo' : 'Per ogni iscritto' }}</x-slot>
 
                 <dl class="tc-conti">
                     <div>
@@ -117,9 +125,11 @@
                         Scrivi la tua quota mensile in <strong>Impostazioni</strong> e qui comparirà
                         quanto ti resta.
                     @elseif ($costo === null)
-                        Il costo compare quando hai un abbonamento attivo e almeno un iscritto.
+                        Il costo compare quando hai un abbonamento attivo e almeno un
+                        {{ $palestra->ePersonale() ? 'allievo' : 'iscritto' }}.
                     @else
-                        Il costo è il vostro canone diviso gli iscritti. La quota l'hai scritta tu:
+                        Il costo è {{ $palestra->ePersonale() ? 'il tuo' : 'il vostro' }} canone diviso
+                        {{ $palestra->ePersonale() ? 'gli allievi' : 'gli iscritti' }}. La quota l'hai scritta tu:
                         noi non la vediamo e non la usiamo per niente.
                     @endif
                 </p>

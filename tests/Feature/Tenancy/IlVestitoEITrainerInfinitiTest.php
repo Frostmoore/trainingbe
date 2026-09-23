@@ -190,7 +190,7 @@ final class IlVestitoEITrainerInfinitiTest extends TestCase
                     $campi,
                     "\U0001f6a8 Il campo {$vestito} e' tornato nel pannello di un trainer indipendente: "
                     ."gli farebbe credere di aver vestito l'app dei suoi allievi, e la bugia si "
-                    ."scoprirebbe solo chiedendo a un allievo cosa vede (regola 8.1.3).",
+                    .'scoprirebbe solo chiedendo a un allievo cosa vede (regola 8.1.3).',
                 );
             }
         });

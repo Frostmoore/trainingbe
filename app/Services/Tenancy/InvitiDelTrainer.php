@@ -181,11 +181,22 @@ class InvitiDelTrainer
      */
     public function postiRimasti(User $trainer): ?int
     {
-        $max = $this->limiteDelPiano($trainer);
+        return $this->iPosti($trainer)['rimasti'];
+    }
 
-        if ($max === null) {
-            return null;
-        }
+    /**
+     * 🆕 **Gli stessi posti, per intero** — F10.7, 24/09/2026.
+     *
+     * 💡 Stessa forma di `InvitiInPalestra::iPosti()`: `occupati`, `totali`,
+     * `rimasti`. ⛔ Il cruscotto di un trainer indipendente disegna la stessa
+     * card della palestra, e senza questa forma dovrebbe rimettere insieme i
+     * tre numeri da solo — cioè riscrivere qui fuori la regola dei posti.
+     *
+     * @return array{occupati: int, totali: ?int, rimasti: ?int}
+     */
+    public function iPosti(User $trainer): array
+    {
+        $max = $this->limiteDelPiano($trainer);
 
         /*
          * ══ 🆕 SOLO I RAPPORTI IN PIEDI — 3b-AH.1-ter (12/09/2026) ══════════
@@ -203,13 +214,50 @@ class InvitiDelTrainer
          * 🚨 È lo slot che è **il rapporto**, non la persona: un rapporto
          * chiuso non occupa niente.
          */
-        $occupati = $trainer->assignedMembers()->wherePivotNull('disattivato_il')->count()
+        $occupati = $this->quantiAllieviHa($trainer)
             + TrainerInvite::withoutGlobalScopes()
                 ->where('trainer_id', $trainer->getKey())
                 ->validi()
                 ->count();
 
-        return max(0, $max - $occupati);
+        return [
+            'occupati' => $occupati,
+            'totali' => $max,
+
+            // 🚨 Mai sotto zero, come in `InvitiInPalestra::iPosti()`: i posti si
+            //    superano per davvero (un piano che si rimpicciolisce), e un
+            //    «-2» sembra un errore di conto invece che uno spazio pieno.
+            'rimasti' => $max === null ? null : max(0, $max - $occupati),
+        ];
+    }
+
+    /**
+     * 🆕 **Quanti allievi occupa adesso, inviti esclusi** — F10.7, 24/09/2026.
+     *
+     * ══ 🚨 PERCHE' E' UN METODO E NON UNA RIGA DENTRO `postiRimasti()` ═══════
+     *
+     * 📌 Il committente, il 24/09: *«Nel pannello di giulia trainer mi dice
+     * iscritti attivi 1. Qui credo proprio sia sbagliato, perché lei segue due
+     * allievi»* — e la regola, ripetuta: *«se un allievo di una palestra si
+     * iscrive a un free trainer che non lavora in quella palestra, allora il
+     * free trainer paga normalmente il suo spazio. Quindi ha senso che sia
+     * conteggiato»*.
+     *
+     * 🚨 **È il numero che decide i soldi**: da qui escono i posti che restano,
+     * e lo stesso numero finisce adesso nel cruscotto (`IContiDellaPalestra`)
+     * come divisore del «ti costa per ogni allievo». ⛔ Scritto due volte,
+     * diverge: il riquadro direbbe «ti costa 10 €» dividendo per uno mentre il
+     * piano ne conta due, e nessuno dei due numeri darebbe errore.
+     *
+     * ⚠️ **Non si passa da `ChiPossoSeguire`**, che è la stessa domanda per gli
+     * *elenchi*: quella tiene dentro anche i rapporti chiusi col pulsante
+     * (`nonLiberati()`), perché un allievo disattivato si deve ancora vedere in
+     * lista. 💡 Qui conta chi occupa **uno slot pagato**, e un rapporto
+     * disattivato non lo occupa più (3b-AH.1-ter).
+     */
+    public function quantiAllieviHa(User $trainer): int
+    {
+        return $trainer->assignedMembers()->wherePivotNull('disattivato_il')->count();
     }
 
     /**

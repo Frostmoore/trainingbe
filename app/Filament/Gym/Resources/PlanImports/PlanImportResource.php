@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\PlanImports;
 
 use App\Enums\ImportStatus;
-use App\Enums\UserRole;
 use App\Filament\Gym\Resources\PlanImports\Pages\ListPlanImports;
 use App\Filament\Gym\Resources\PlanImports\Pages\ReviewPlanImport;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\EditWorkoutPlan;
+use App\Filament\Gym\Support\ChiPossoSeguire;
 use App\Jobs\ParseWorkoutPdf;
-use App\Models\User;
 use App\Models\WorkoutPlanImport;
-use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
@@ -25,7 +23,6 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 /**
  * L'import di schede da PDF, lato palestra — B7.1 / B7.4.
@@ -212,24 +209,34 @@ class PlanImportResource extends Resource
     }
 
     /** @return array<int, string> */
+    /**
+     * A chi si può assegnare la scheda importata.
+     *
+     * ══ 🐛 A UN TRAINER INDIPENDENTE NE OFFRIVA META' — 24/09/2026 ═══════════
+     *
+     * 📌 Il committente: *«a questo punto mi sorge il dubbio: sei sicuro che
+     * l'import da pdf funzioni qui?»*, guardando il pannello di una trainer
+     * indipendente. ⛔ **Aveva ragione a dubitare.**
+     *
+     * Qui si cercava *«chi ha il ruolo `member` in questo tenant»*, che è la
+     * strada di una palestra. 🚨 Gli allievi di un trainer indipendente arrivano
+     * per **due** strade, e solo una li porta nel suo spazio: chi aveva già un
+     * account resta a casa propria, legato da `trainer_member`.
+     *
+     * 📏 Misurato su una trainer con **due** allievi: il menù ne offriva
+     * **uno**. ⚠️ E l'altro spariva **in silenzio** — il menù si apre, dentro
+     * c'è un nome, e chi guarda non ha modo di sapere che ne manca uno. 🚨 Su
+     * una schermata che assegna un programma di allenamento, il nome mancante è
+     * **la persona che non lo riceve**.
+     *
+     * 💡 La domanda adesso si fa in un posto solo: `ChiPossoSeguire`. ⛔ Era la
+     * seconda copia della stessa regola, e la prima (`MemberResource`) era già
+     * stata corretta il 23/09 — questa no, perché nessuno sapeva che ce n'era
+     * una seconda.
+     */
     public static function iscritti(): array
     {
-        $tenantId = app(TenantContext::class)->id();
-
-        $query = User::query()
-            ->whereIn('id', DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('roles.name', UserRole::Member->value)
-                ->where('model_has_roles.tenant_id', $tenantId)
-                ->select('model_has_roles.model_id'));
-
-        $utente = auth()->user();
-
-        if ($utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin()) {
-            $query->whereIn('id', $utente->assignedMembers()->pluck('users.id')->all());
-        }
-
-        return $query->orderBy('name')->pluck('name', 'id')->all();
+        return ChiPossoSeguire::perIlMenu();
     }
 
     public static function getPages(): array

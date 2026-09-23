@@ -52,13 +52,42 @@ class Liberatoria extends Page
         return Str::markdown(app(LeLiberatorie::class)->testo($tipo), ['html_input' => 'escape']);
     }
 
+    /**
+     * Dove si va dopo aver firmato: **la casa del pannello**.
+     *
+     * ══ 🐛 `getPath()` MANDAVA SU `/admin/admin` — 24/09/2026 ═════════════════
+     *
+     * ⛔ Qui c'era `filament()->getCurrentPanel()?->getPath()`, che torna
+     * `'admin'` — **senza la barra davanti**. 🚨 Un redirect relativo, partendo
+     * da `/admin/liberatoria`, lo attacca al percorso corrente: `/admin/admin`,
+     * cioè **404**.
+     *
+     * ⚠️ **E la firma era andata a buon fine.** Il difetto arrivava dopo il
+     * salvataggio, quindi l'atto risultava firmato e la persona vedeva
+     * *«Questo indirizzo non esiste»*: il momento peggiore possibile per un
+     * 404 — chi ha appena accettato una responsabilità legale e si trova
+     * davanti una pagina rotta pensa che non sia stato registrato niente.
+     *
+     * 💡 `getUrl()` torna un **URL assoluto** e tiene conto della tenancy, che
+     * è esattamente la differenza fra i due metodi.
+     *
+     * ⛔ **E il ripiego passa da `url()`**, non è la stringa `/admin`: anche
+     * quella è relativa, e avrebbe lo stesso difetto il giorno che il pannello
+     * corrente non c'è. 🔍 Trovato dal test, che senza pannello corrente
+     * cadeva proprio lì.
+     */
+    private function casaDelPannello(): string
+    {
+        return filament()->getCurrentPanel()?->getUrl() ?? url('/admin');
+    }
+
     public function firma(): void
     {
         $persona = Auth::user();
         $tipo = app(LeLiberatorie::class)->serveA($persona);
 
         if ($tipo === null) {
-            $this->redirect(filament()->getCurrentPanel()?->getPath() ?? '/admin');
+            $this->redirect($this->casaDelPannello());
 
             return;
         }
@@ -70,6 +99,6 @@ class Liberatoria extends Page
             ->success()
             ->send();
 
-        $this->redirect(filament()->getCurrentPanel()?->getPath() ?? '/admin');
+        $this->redirect($this->casaDelPannello());
     }
 }

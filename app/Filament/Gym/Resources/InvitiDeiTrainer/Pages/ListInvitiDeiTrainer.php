@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\InvitiDeiTrainer\Pages;
 
 use App\Filament\Gym\Resources\InvitiDeiTrainer\InvitoDelTrainerResource;
+use App\Filament\Gym\Support\UnInvitoAllievo;
 use App\Models\User;
 use App\Services\Tenancy\InvitiDelTrainer;
-use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 
 class ListInvitiDeiTrainer extends ListRecords
@@ -52,66 +50,30 @@ class ListInvitiDeiTrainer extends ListRecords
      * 💡 **Si invita da qui**, come nella pagina delle palestre: aprire un
      * elenco di inviti e non poterne fare uno è il difetto che ha fatto nascere
      * quella pagina.
+     *
+     * ══ 🔴 E LA FINESTRA ERA SBAGLIATA — corretta il 24/09/2026 ═══════════════
+     *
+     * ⛔ Il 23/09 qui avevo scritto una finestra **mia**: chiedeva l'email
+     * **prima** e il link non lo mostrava affatto.
+     *
+     * 📌 Il committente: *«lì dovrebbe apparire subito il link di invito e il
+     * campo email se voglio mandare l'email. Deve funzionare come quelli delle
+     * palestre. I due tasti di invito sono diversi, non ha senso»*.
+     *
+     * 🚨 **Aveva ragione due volte.** Quella forma — email prima, link dopo —
+     * è esattamente quella che lui stesso aveva fatto cambiare il 23/09 per le
+     * palestre (*«non deve essere obbligatorio che metto l'email. Deve subito
+     * generare un link di invito»*): l'avevo rifatta uguale a fianco, il giorno
+     * dopo, senza accorgermene.
+     *
+     * 💡 Adesso è `UnInvitoAllievo`, gemello di `UnInvito`: stessa forma, altro
+     * servizio. ⚠️ Ed è **una classe condivisa** e non una copia locale, così
+     * il tasto è lo stesso anche sull'elenco degli iscritti.
      */
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('invitaAllievo')
-                ->label('Invita un allievo')
-                ->icon('heroicon-m-user-plus')
-                ->modalHeading('Invitare un allievo')
-                ->modalDescription(
-                    'Nasce un link personale. Puoi mandarlo per email da qui, oppure copiarlo '
-                    .'e mandarlo come preferisci.'
-                )
-                ->modalSubmitActionLabel('Crea l\'invito')
-                ->schema([
-                    TextInput::make('email')
-                        ->label('Indirizzo email')
-                        ->email()
-                        ->maxLength(255)
-                        ->helperText('Puoi lasciarlo vuoto: in quel caso copi il link e lo mandi tu.'),
-                ])
-                ->action(function (array $dati): void {
-                    $trainer = auth()->user();
-
-                    if (! $trainer instanceof User) {
-                        return;
-                    }
-
-                    $servizio = app(InvitiDelTrainer::class);
-
-                    $email = trim((string) ($dati['email'] ?? ''));
-                    $invito = $servizio->invita($trainer, $email === '' ? null : $email);
-
-                    /*
-                     * ⚠️ **Se c'era un indirizzo si prova a mandarlo subito**, e
-                     * si dice com'è andata. 🚨 Ma un invito nato resta valido
-                     * anche se la mail non parte: il link esiste, e farlo
-                     * fallire per il trasporto vorrebbe dire bruciare un posto
-                     * per un guasto che non c'entra.
-                     */
-                    if ($email === '') {
-                        Notification::make()
-                            ->title('Invito creato')
-                            ->body('Copia il link dalla scheda qui sotto.')
-                            ->success()
-                            ->send();
-
-                        return;
-                    }
-
-                    $mandata = $servizio->mandaIlLink($invito, $trainer);
-                    $davvero = $mandata && config('mail.default') !== 'log';
-
-                    Notification::make()
-                        ->title($davvero ? 'Invito creato e mandato' : 'Invito creato')
-                        ->body($davvero
-                            ? null
-                            : 'La posta non è ancora collegata: copia il link e mandalo tu.')
-                        ->status($davvero ? 'success' : 'warning')
-                        ->send();
-                }),
+            UnInvitoAllievo::make(),
         ];
     }
 }

@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Gym\Widgets;
 
-use App\Enums\UserRole;
+use App\Filament\Gym\Support\ChiPossoSeguire;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
-use Illuminate\Support\Facades\DB;
 
 /**
  * I numeri della palestra in cima al pannello.
@@ -62,41 +61,114 @@ class GymOverview extends StatsOverviewWidget
          * 💡 I numeri che lo sostituiscono — posti, costo, guadagno — stanno in
          * `IPostiDellaPalestra` e `IlGiroDiSoldiDellaPalestra` (F5.1, F5.2).
          */
-        return [
-            Stat::make('Iscritti attivi', (string) $totale)
-                ->description('Persone con un account funzionante')
+        $stat = [
+            Stat::make($this->dipendente() ? 'I tuoi allievi' : 'Iscritti attivi', (string) $totale)
+                ->description($this->dipendente()
+                    ? 'Le persone assegnate a te'
+                    : 'Persone con un account funzionante')
                 ->icon('heroicon-m-user-group')
                 ->color('primary'),
-
         ];
+
+        /*
+         * ══ 🆕 👥 LA SECONDA CARD, SOLO PER IL TRAINER DI PALESTRA ══════════
+         *
+         * 📌 Il committente, il 24/09, guardando il pannello di un trainer
+         * dipendente: *«in dashboard dice 0 iscritti. Che di suo sarebbe anche
+         * giusto, ma vorrei che mostrasse un'altra card con allievi seguiti che
+         * indichi tutti gli allievi della palestra»*.
+         *
+         * 💡 Le due domande sono diverse e stanno bene una accanto all'altra:
+         * «quanti ne seguo io» dice quanto lavoro ho, «quanti ce ne sono qui»
+         * dice dov'è il posto in cui lavoro. ⛔ Un trainer appena assunto vedeva
+         * solo uno zero, e uno zero da solo sembra un pannello rotto.
+         *
+         * ⚠️ **Non è una fuga di dati**: dal 16/09 un trainer di palestra vede
+         * l'elenco completo degli iscritti in lettura (`UserPolicy::viewAny`,
+         * `ChiPossoSeguire`). 🚨 Il numero non dice niente che l'elenco non dica
+         * già — e il giorno che quella decisione cambiasse, questa card va tolta
+         * **insieme** all'elenco, non dopo.
+         */
+        if ($this->dipendente()) {
+            $stat[] = Stat::make('Allievi della palestra', (string) count($this->idDellaPalestra()))
+                ->description('Tutti gli iscritti, anche quelli non assegnati a te')
+                ->icon('heroicon-m-building-storefront')
+                ->color('gray');
+        }
+
+        return $stat;
     }
 
-    /** @return list<int> */
+    /**
+     * 🏢 Chi guarda è un trainer **dipendente** di questa palestra?
+     *
+     * ⚠️ `isTrainer()` risponde **sullo spazio corrente**: dentro la palestra è
+     * `trainer`, a casa sua è `free_user`. È la stessa domanda che ha tenuto
+     * fuori dal pannello tutti i trainer di palestra per sei giorni
+     * (`RoleAwareLoginResponse`) — qui va bene perché qui lo spazio corrente
+     * **è** la palestra che si sta guardando.
+     */
+    private function dipendente(): bool
+    {
+        $utente = auth()->user();
+
+        return $utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin();
+    }
+
+    /**
+     * Le persone che questo cruscotto conta come «mie».
+     *
+     * ══ 🚨 PERCHE' PASSA DA `ChiPossoSeguire` — F10.7, 24/09/2026 ══════════
+     *
+     * 📌 Il committente: *«Nel pannello di giulia trainer mi dice iscritti
+     * attivi 1. Qui credo proprio sia sbagliato, perché lei segue due allievi,
+     * anche se uno è di una palestra non vedo perché non dovrebbe essere
+     * conteggiato visto che la paga»*.
+     *
+     * ⛔ **Era la terza copia della stessa regola**, e sbagliava come le altre
+     * due: cercava chi ha il ruolo `member` **in questo tenant**, e gli allievi
+     * di un trainer indipendente che avevano già un account **vivono nello
+     * spazio della loro palestra**. 🚨 Ne contava uno su due, e il numero
+     * mancante era una persona che lui paga.
+     *
+     * 💡 La regola sta scritta **una volta sola** in `ChiPossoSeguire`: chi la
+     * cerca la trova, e chi la cambia la cambia per tutti — elenco iscritti,
+     * tendina dell'import e questo cruscotto.
+     *
+     * @return list<int>
+     */
     private function idIscritti(): array
     {
-        $tenantId = app(TenantContext::class)->id();
-
-        if ($tenantId === null) {
+        if (app(TenantContext::class)->id() === null) {
             return [];
         }
 
-        $query = User::query()
-            ->where('is_active', true)
-            ->whereIn('id', DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('roles.name', UserRole::Member->value)
-                ->where('model_has_roles.tenant_id', $tenantId)
-                ->select('model_has_roles.model_id'));
+        $query = ChiPossoSeguire::query()->where('is_active', true);
 
-        // Il trainer vede i numeri dei **suoi** iscritti: un cruscotto che gli
-        // mostra i totali della palestra gli darebbe indirettamente l'elenco che
-        // lo scoping di B3.5 gli nega.
-        $utente = auth()->user();
-
-        if ($utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin()) {
-            $query->whereIn('id', $utente->assignedMembers()->pluck('users.id')->all());
+        /*
+         * ⚠️ Il trainer dipendente resta ai **suoi**: `ChiPossoSeguire` gli dà
+         * tutta la palestra perché quella è la regola degli *elenchi* (16/09,
+         * *«tutti in lettura»*), ma il numero grosso in cima al pannello è «il
+         * mio lavoro», e i totali della palestra stanno nella card accanto.
+         */
+        if ($this->dipendente()) {
+            $query->whereIn('users.id', auth()->user()->assignedMembers()->pluck('users.id')->all());
         }
 
-        return $query->pluck('id')->all();
+        return $query->pluck('users.id')->all();
+    }
+
+    /**
+     * 🆕 Tutti gli iscritti **di questo spazio**, senza il filtro dell'assegnato.
+     *
+     * @return list<int>
+     */
+    private function idDellaPalestra(): array
+    {
+        if (app(TenantContext::class)->id() === null) {
+            return [];
+        }
+
+        return ChiPossoSeguire::query()->where('is_active', true)->pluck('users.id')->all();
     }
 }

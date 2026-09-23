@@ -76,10 +76,31 @@ class UserPolicy
             return true;
         }
 
+        /*
+         * ══ 🐛 L'ELENCO MOSTRAVA PERSONE CHE LA SCHEDA RIFIUTAVA ═════════════
+         *
+         * ⛔ Qui c'era `getKey() === bersaglio || segue()`, cioè *«solo i propri
+         * assegnati»*. 🚨 Ma il **16/09** il committente ha deciso il contrario
+         * per l'elenco — *«tutti in lettura, ma le schede e i piani entrano nel
+         * suo profilo personale, non può assegnarli dal server»* — e
+         * `ScopedToTrainer::limitaAgliAssegnati()` è stato allargato a tutta la
+         * palestra. **Questa policy no.**
+         *
+         * 💡 Risultato, misurato il 24/09 su Palestra Demo: un trainer **vede**
+         * un iscritto nell'elenco e, aprendolo, si prende un rifiuto. ⚠️ Un
+         * elenco che mostra righe che non si possono aprire è peggio di un
+         * elenco corto: fa sembrare rotto il pannello, e non c'è niente da
+         * fare per rimediare.
+         *
+         * 🔍 Trovato da un test che montava la scheda come trainer di palestra
+         * e falliva con *«Attempt to read property "mountedActions" on null»* —
+         * cioè la pagina non nasceva affatto.
+         *
+         * ⛔ **Vedere non è toccare**: `update()` e `delete()` qui sotto restano
+         * di chi amministra la palestra, ed è tutta la differenza.
+         */
         if ($utente->isTrainer()) {
-            // Se stesso sempre, piu' i propri assegnati.
-            return $utente->getKey() === $bersaglio->getKey()
-                || $this->segue($utente, $bersaglio);
+            return true;
         }
 
         return false;

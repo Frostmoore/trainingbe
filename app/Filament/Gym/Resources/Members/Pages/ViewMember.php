@@ -91,7 +91,28 @@ class ViewMember extends ViewRecord
             ->label('Regalagli gettoni')
             ->icon('heroicon-m-gift')
             ->color('success')
-            ->visible(fn (): bool => auth()->user()?->isGymAdmin() === true)
+            /*
+             * ══ 🆕 ANCHE CHI ALLENA PER CONTO PROPRIO — F10, 24/09/2026 ══════
+             *
+             * 📌 Il committente, guardando la scheda di un allievo nel pannello
+             * di una trainer indipendente: *«Già che c'è scritto tanto vale che
+             * gli possa regalare dei gettoni, no? Altrimenti togliamo proprio
+             * la scheda da dentro la pagina "Scheda" dell'iscritto»*.
+             *
+             * ⛔ **Aveva ragione, ed era il difetto peggiore dei due possibili**:
+             * la sezione «Gettoni» mostrava i numeri **e diceva** *«glieli puoi
+             * regalare»* — con il tasto per farlo nascosto. 🚨 Una pagina che
+             * descrive un'azione che non offre è peggio di una pagina che tace.
+             *
+             * 💡 `comandaQui()` e non `isGymAdmin()`: chi allena per conto
+             * proprio paga **con la propria cassa** (`Cassa::apri()` vuole solo
+             * che chi preme abbia uno spazio suo) e i gettoni vanno all'allievo.
+             *
+             * ⛔ Resta chiuso al **trainer di palestra**: lì i soldi sarebbero i
+             * suoi e l'iscritto è della palestra — è una decisione commerciale
+             * che nessuno ha preso, e il posto per prenderla non è questo.
+             */
+            ->visible(fn (): bool => auth()->user()?->comandaQui() === true)
             ->modalHeading(fn (User $record): string => "Comprare gettoni per {$record->name}?")
             ->modalDescription(
                 'Paghi tu, e i gettoni vanno direttamente a lui. ⚠️ Da quel momento sono suoi: '

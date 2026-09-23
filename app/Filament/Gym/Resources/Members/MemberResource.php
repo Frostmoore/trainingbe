@@ -12,9 +12,9 @@ use App\Filament\Gym\Resources\Members\Pages\ViewMember;
 use App\Filament\Gym\Resources\Members\Schemas\MemberForm;
 use App\Filament\Gym\Resources\Members\Schemas\SchedaDellIscritto;
 use App\Filament\Gym\Resources\Members\Tables\MembersTable;
+use App\Filament\Gym\Support\ChiPossoSeguire;
 use App\Models\Scopes\TenantScope;
 use App\Models\User;
-use App\Services\Tenancy\LoSlotDelTrainer;
 use App\Support\Tenancy\TenantContext;
 use BackedEnum;
 use Filament\Resources\Resource;
@@ -63,42 +63,26 @@ class MemberResource extends Resource
         $utente = auth()->user();
 
         /*
-         * ══ 🆕 🏋️ IL TRAINER INDIPENDENTE VEDE I **SUOI**, OVUNQUE ABITINO ════
+         * ══ 🏋️ IL TRAINER INDIPENDENTE VEDE I **SUOI**, OVUNQUE ABITINO ═══
          *
          * 📌 F10, 23/09/2026 — il committente: *«un free trainer potrà agire
          * sostanzialmente come una palestra»*.
          *
          * 🚨 **Non si può passare da `idConRuolo(Member)`**, che è la strada di
-         * una palestra: cerca chi ha il ruolo `member` **nel tenant corrente**,
-         * e gli allievi di un trainer indipendente non stanno tutti lì.
+         * una palestra: i suoi allievi non stanno tutti nel suo spazio, e chi
+         * aveva già un account resta a casa propria.
          *
-         * | Come è arrivato | Dove vive |
-         * |---|---|
-         * | invitato senza account | `nasceNelloSpazioDi($trainer)` → **spazio del trainer** |
-         * | aveva già un account | resta **nel suo** |
-         *
-         * ⛔ Con la strada della palestra il secondo caso sparirebbe, e
-         * sparirebbe **in silenzio**: l'elenco funziona, mostra qualcuno, e chi
-         * guarda non ha modo di sapere che manca gente.
-         *
-         * 💡 `assignedMembers()` è la relazione giusta: toglie già `TenantScope`
-         * e filtra il pivot sul tenant **del trainer**, che è chi possiede il
-         * rapporto (F6.1).
-         *
-         * ⚠️ **E `nonLiberati()`, come fa l'app in `ChiSiVede::allieviDi()`**:
-         * un rapporto chiuso non torna in elenco. 🚨 Senza, il pannello e l'app
-         * darebbero due risposte diverse alla stessa domanda — ed è esattamente
-         * il difetto che il 16/09 ha fatto riscrivere `limitaAgliAssegnati`.
+         * 💡 **La regola per esteso sta in `ChiPossoSeguire`**, e non più qui:
+         * il 24/09 il committente ha chiesto *«sei sicuro che l'import da pdf
+         * funzioni qui?»* e la risposta era no —
+         * `PlanImportResource::iscritti()` aveva **una seconda copia** di questa
+         * stessa regola, quella vecchia, e a una trainer con due allievi ne
+         * offriva uno. ⛔ Una regola che serve in due posti va scritta in
+         * nessuno dei due.
          */
         if ($utente instanceof User && $utente->isFreeTrainer()) {
-            return parent::getEloquentQuery()
-                ->withoutGlobalScopes([SoftDeletingScope::class, TenantScope::class])
-                ->whereIn(
-                    'users.id',
-                    $utente->assignedMembers()
-                        ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
-                        ->select('users.id'),
-                );
+            return ChiPossoSeguire::query()
+                ->withoutGlobalScopes([SoftDeletingScope::class, TenantScope::class]);
         }
 
         $query = parent::getEloquentQuery()

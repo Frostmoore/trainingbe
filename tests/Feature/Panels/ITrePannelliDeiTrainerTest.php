@@ -7,11 +7,20 @@ namespace Tests\Feature\Panels;
 use App\Enums\UserRole;
 use App\Filament\Gym\Resources\InvitiDeiTrainer\InvitoDelTrainerResource;
 use App\Filament\Gym\Resources\Members\MemberResource;
+use App\Filament\Gym\Resources\Members\Pages\ListMembers;
+use App\Filament\Gym\Resources\Members\Pages\ViewMember;
+use App\Filament\Gym\Resources\PlanImports\PlanImportResource;
+use App\Filament\Gym\Widgets\GymOverview;
+use App\Filament\Gym\Widgets\IlGiroDellaPalestra;
+use App\Filament\Gym\Widgets\IPostiDellaPalestra;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Reporting\IContiDellaPalestra;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
@@ -221,7 +230,7 @@ final class ITrePannelliDeiTrainerTest extends TestCase
         $palestra = $this->creaPalestra('Olimpo', 'olimpo');
 
         // La stessa persona allena anche nella palestra.
-        $this->ctx()->runAs($palestra, function () use ($libero, $palestra): void {
+        $this->ctx()->runAs($palestra, function () use ($libero): void {
             $libero->forceFill(['tenant_id' => $libero->tenant_id])->save();
             $libero->assignRole(UserRole::Trainer->value);
         });
@@ -358,5 +367,447 @@ final class ITrePannelliDeiTrainerTest extends TestCase
         );
 
         $this->assertFalse($invito->fresh()->eValido());
+    }
+
+    // ───────────────── 5. i tasti d'invito, e che siano quelli giusti ─────
+
+    /**
+     * 🐛 **A un trainer indipendente si mostrava il tasto della palestra.**
+     *
+     * 📌 Il committente, dal suo pannello: *«Se clicco su "Invita un iscritto"
+     * mi dice che solo la palestra può invitare»*.
+     *
+     * ⛔ `UnInvito` parla con `InvitiInPalestra`, che a uno spazio personale
+     * risponde *«un tenant personale non è una palestra»*. 🚨 Giustissimo lato
+     * servizio — ma il rifiuto arrivava **dopo** aver aperto la finestra, cioè
+     * dopo avergli fatto credere che si potesse.
+     *
+     * 💡 Il test guarda **tutti e due** i tasti: che ci sia quello giusto non
+     * basta, se accanto resta quello che non funziona.
+     */
+    #[Test]
+    public function a_un_indipendente_si_mostra_il_tasto_giusto(): void
+    {
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        $this->actingAs($libero);
+
+        $this->ctx()->runAs($libero->tenant, function (): void {
+            Filament::setCurrentPanel('admin');
+
+            Livewire::test(ListMembers::class)
+                ->assertActionVisible('invitaAllievo')
+                ->assertActionHidden('invita');
+        });
+    }
+
+    /** ✅ E a chi amministra una palestra si mostra quello della palestra. */
+    #[Test]
+    public function a_una_palestra_si_mostra_il_suo(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $capo = $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@olimpo.test');
+
+        $this->actingAs($capo);
+
+        $this->ctx()->runAs($palestra, function (): void {
+            Filament::setCurrentPanel('admin');
+
+            Livewire::test(ListMembers::class)
+                ->assertActionVisible('invita')
+                ->assertActionHidden('invitaAllievo');
+        });
+    }
+
+    /**
+     * 🎁 **«Regalagli gettoni» c'era, e non si vedeva.**
+     *
+     * 📌 Il committente: *«Già che c'è scritto tanto vale che gli possa
+     * regalare dei gettoni, no? Altrimenti togliamo proprio la scheda da dentro
+     * la pagina "Scheda" dell'iscritto»*.
+     *
+     * ⛔ La sezione «Gettoni» mostrava i numeri **e diceva** *«glieli puoi
+     * regalare»*, con il tasto per farlo nascosto a chi non amministra una
+     * palestra. 🚨 Una pagina che descrive un'azione che non offre è peggio
+     * di una pagina che tace.
+     */
+    #[Test]
+    public function un_indipendente_puo_regalare_gettoni_al_suo_allievo(): void
+    {
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+        $allievo = $this->unAllievoAltrove($libero, $altrove);
+
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($libero);
+        $this->ctx()->set($libero->tenant);
+
+        Livewire::test(ViewMember::class, ['record' => $allievo->getKey()])
+            ->assertActionVisible('regala_gettoni');
+    }
+
+    /** ⛔ Ma un trainer di palestra no: quei soldi sarebbero i suoi e l'iscritto della palestra. */
+    #[Test]
+    public function un_trainer_di_palestra_invece_non_regala_gettoni(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+        $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@olimpo.test');
+
+        /*
+         * ⚠️ **Il contesto si mette con `set()`, non dentro `runAs()`.**
+         *
+         * 🚨 Con la chiusura il montaggio di `ViewMember` falliva con
+         * *«Attempt to read property "mountedActions" on null»*: il componente
+         * non nasce, e l'asserzione guarda il vuoto. 💡 È il modo che usano
+         * già gli altri test della pagina (`DisiscrivereNonCancellaTest`), e
+         * qui si segue quello invece di inventarne un terzo.
+         */
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($trainer);
+        $this->ctx()->set($palestra);
+
+        Livewire::test(ViewMember::class, ['record' => $iscritto->getKey()])
+            ->assertActionHidden('regala_gettoni');
+    }
+
+    // ───────────────── 6. l'elenco e la scheda devono dire la stessa cosa ──
+
+    /**
+     * 🚨 **Ogni riga dell'elenco si deve poter aprire.**
+     *
+     * ⛔ Il **16/09** il committente ha deciso che un trainer di palestra vede
+     * **tutti** gli iscritti, in lettura: *«tutti in lettura, ma le schede e i
+     * piani entrano nel suo profilo personale, non può assegnarli dal server»*.
+     * `ScopedToTrainer` è stato allargato, **`UserPolicy::view()` no**.
+     *
+     * 💡 Risultato: l'elenco mostrava l'iscritto e la scheda lo rifiutava. ⚠️
+     * Un elenco che mostra righe che non si possono aprire è peggio di un
+     * elenco corto: fa sembrare rotto il pannello, e chi guarda non può farci
+     * niente.
+     *
+     * 🔍 Trovato il 24/09 perché un test non riusciva a **montare** la
+     * scheda come trainer di palestra.
+     *
+     * 🚨 **Il test confronta le due risposte**, e è questo che lo rende
+     * utile: guardare solo la policy direbbe «può vedere» senza accorgersi se un
+     * giorno l'elenco si restringe, e guardare solo l'elenco direbbe «c'è»
+     * senza accorgersi se la policy si chiude. ⛔ Il difetto è **la distanza
+     * fra le due**, non una delle due.
+     */
+    #[Test]
+    public function tutto_quello_che_e_in_elenco_si_puo_aprire(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+
+        // ⚠️ **Non assegnato a lui**: è il caso che si rompeva.
+        $altrui = $this->creaUtente($palestra, UserRole::Member, 'non-suo@olimpo.test');
+
+        $this->actingAs($trainer);
+
+        $this->ctx()->runAs($palestra, function () use ($trainer, $altrui): void {
+            $inElenco = MemberResource::getEloquentQuery()
+                ->whereKey($altrui->getKey())
+                ->exists();
+
+            $this->assertTrue($inElenco, 'Dal 16/09 un trainer vede tutta la palestra in elenco.');
+
+            $this->assertTrue(
+                $trainer->can('view', $altrui),
+                '🚨 L\'elenco lo mostra e la scheda lo rifiuta: aprendo quella riga si '
+                .'prende un errore, e non c\'e\' niente da fare per rimediare.',
+            );
+        });
+    }
+
+    /** ⛔ Ma resta in **lettura**: vedere non è toccare. */
+    #[Test]
+    public function ma_resta_in_lettura(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+        $altrui = $this->creaUtente($palestra, UserRole::Member, 'non-suo@olimpo.test');
+
+        $this->actingAs($trainer);
+
+        $this->ctx()->runAs($palestra, function () use ($trainer, $altrui): void {
+            $this->assertFalse($trainer->can('update', $altrui));
+            $this->assertFalse($trainer->can('delete', $altrui));
+        });
+    }
+
+    // ───────────────── 7. «e l'import da PDF funziona qui?» ───────────────
+
+    /**
+     * 📄 **Il menù dell'import offriva metà degli allievi.**
+     *
+     * 📌 Il committente, guardando il pannello di una trainer indipendente:
+     * *«a questo punto mi sorge il dubbio: sei sicuro che l'import da pdf
+     * funzioni qui?»*. ⛔ **Aveva ragione a dubitare.**
+     *
+     * `PlanImportResource::iscritti()` cercava *«chi ha il ruolo member in
+     * questo tenant»* — la strada di una palestra. 🚨 Su una trainer con due
+     * allievi ne offriva **uno**: quello nato nel suo spazio. L'altro, che
+     * abita altrove, spariva **in silenzio**.
+     *
+     * ⚠️ Su una schermata che assegna un programma di allenamento, il nome
+     * mancante è **la persona che non lo riceve** — e il menù si apre lo
+     * stesso, con dentro un nome, quindi non c'è niente che lo segnali.
+     *
+     * 💡 **Era la seconda copia della stessa regola.** La prima
+     * (`MemberResource`) era stata corretta il 23/09; questa no, perché nessuno
+     * sapeva che ce n'era una seconda. Ora la domanda si fa in un posto solo,
+     * `ChiPossoSeguire`, e **questo test guarda che le due schermate diano la
+     * stessa risposta** — non che una delle due sia giusta.
+     */
+    #[Test]
+    public function limport_offre_gli_stessi_allievi_dell_elenco(): void
+    {
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        $fuori = $this->unAllievoAltrove($libero, $altrove);
+        $dentro = $this->creaUtente($libero->tenant, UserRole::Member, 'in-casa@esempio.test');
+
+        $dentro->assignedTrainers()->attach($libero->getKey(), [
+            'tenant_id' => $libero->tenant_id,
+            'assigned_at' => now(),
+            'assigned_by' => $libero->getKey(),
+        ]);
+
+        $this->actingAs($libero);
+
+        [$inElenco, $nelMenu] = $this->ctx()->runAs($libero->tenant, fn (): array => [
+            MemberResource::getEloquentQuery()->pluck('id')->sort()->values()->all(),
+            array_values(array_map('intval', array_keys(PlanImportResource::iscritti()))),
+        ]);
+
+        sort($nelMenu);
+
+        $this->assertContains(
+            $fuori->getKey(),
+            $nelMenu,
+            '🚨 L\'allievo che abita altrove non si può scegliere nell\'import: '
+            .'e il menù si apre lo stesso, quindi nessuno se ne accorge.',
+        );
+
+        $this->assertSame(
+            $inElenco,
+            $nelMenu,
+            'L\'elenco degli iscritti e il menù dell\'import dicono due cose diverse: '
+            .'una delle due schermate sta mentendo, e non si sa quale.',
+        );
+    }
+
+    // ───────────────── 4. il cruscotto ─────────────────
+
+    /**
+     * I numeri in cima al pannello, come `etichetta => valore`.
+     *
+     * ⚠️ Si chiama `getStats()` per riflessione invece di leggere l'HTML: un
+     * `assertSee('2')` passerebbe anche se il «2» fosse la data di ieri.
+     *
+     * @return array<string, string>
+     */
+    private function iNumeriDelCruscotto(User $chi, Tenant $dove): array
+    {
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($chi);
+        $this->ctx()->set($dove);
+
+        $metodo = new \ReflectionMethod(GymOverview::class, 'getStats');
+        $metodo->setAccessible(true);
+
+        $numeri = [];
+
+        foreach ($metodo->invoke(new GymOverview) as $stat) {
+            $numeri[(string) $stat->getLabel()] = (string) $stat->getValue();
+        }
+
+        return $numeri;
+    }
+
+    /** Un allievo del trainer che vive **nello spazio del trainer**. */
+    private function unAllievoInCasa(User $trainer, string $email = 'in-casa@esempio.test'): User
+    {
+        $allievo = $this->creaUtente($trainer->tenant, UserRole::Member, $email);
+
+        $allievo->assignedTrainers()->attach($trainer->getKey(), [
+            'tenant_id' => $trainer->tenant_id,
+            'assigned_at' => now(),
+            'assigned_by' => $trainer->getKey(),
+        ]);
+
+        return $allievo;
+    }
+
+    /**
+     * 🚨 **Il cruscotto contava metà degli allievi.**
+     *
+     * 📌 Il committente, il 24/09: *«Nel pannello di giulia trainer mi dice
+     * iscritti attivi 1. Qui credo proprio sia sbagliato, perché lei segue due
+     * allievi, anche se uno è di una palestra non vedo perché non dovrebbe
+     * essere conteggiato visto che la paga»*. 💡 E la regola, ripetuta: *«se un
+     * allievo di una palestra si iscrive a un free trainer che non lavora in
+     * quella palestra, allora il free trainer paga normalmente il suo spazio»*.
+     *
+     * ⛔ **Era la terza copia della stessa regola** — dopo l'elenco iscritti
+     * (23/09) e la tendina dell'import (24/09): *«chi ha il ruolo member in
+     * questo tenant»*. 🚨 E qui faceva il danno peggiore delle tre, perché un
+     * numero solo non si può confrontare con niente: un elenco a cui manca un
+     * nome si può notare, un «1» no.
+     */
+    #[Test]
+    public function il_cruscotto_dell_indipendente_conta_anche_chi_abita_altrove(): void
+    {
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        $this->unAllievoAltrove($libero, $altrove);
+        $this->unAllievoInCasa($libero);
+
+        $numeri = $this->iNumeriDelCruscotto($libero, $libero->tenant);
+
+        $this->assertSame(
+            '2',
+            $numeri['Iscritti attivi'] ?? null,
+            '🚨 Il cruscotto conta solo gli allievi che abitano nello spazio del trainer: '
+            .'l\'altro lo paga e non lo vede, e il numero non dà nessun segno di essere monco.',
+        );
+    }
+
+    /**
+     * 🆕 **Il trainer di palestra vede due numeri, e sono due domande diverse.**
+     *
+     * 📌 Il committente: *«in dashboard dice 0 iscritti. Che di suo sarebbe
+     * anche giusto, ma vorrei che mostrasse un'altra card con allievi seguiti
+     * che indichi tutti gli allievi della palestra»*.
+     *
+     * ⚠️ Il primo numero resta **i suoi**: è il suo lavoro. 💡 Il secondo è la
+     * palestra in cui lavora, e non gli dice niente che l'elenco degli iscritti
+     * — che dal 16/09 vede tutto in lettura — non gli dica già.
+     */
+    #[Test]
+    public function il_trainer_di_palestra_vede_anche_il_totale_della_palestra(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+
+        $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
+        $this->creaUtente($palestra, UserRole::Member, 'due@olimpo.test');
+
+        $numeri = $this->iNumeriDelCruscotto($coach, $palestra);
+
+        $this->assertSame('0', $numeri['I tuoi allievi'] ?? null, 'Non ha nessun assegnato: il numero suo è zero.');
+
+        $this->assertSame(
+            '2',
+            $numeri['Allievi della palestra'] ?? null,
+            '🚨 Un trainer appena assunto vede solo uno zero, e uno zero da solo sembra un pannello rotto.',
+        );
+    }
+
+    /** ⛔ E un trainer di palestra non ha nessun secondo numero da inventare a casa sua. */
+    #[Test]
+    public function l_indipendente_non_vede_la_card_della_palestra(): void
+    {
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+        $this->unAllievoInCasa($libero);
+
+        $numeri = $this->iNumeriDelCruscotto($libero, $libero->tenant);
+
+        $this->assertArrayNotHasKey(
+            'Allievi della palestra',
+            $numeri,
+            'Nel suo spazio non c\'è nessuna palestra: quel numero sarebbe lo stesso di prima, scritto due volte.',
+        );
+    }
+
+    /**
+     * 💶 **I conti dello spazio sono di chi lo paga.**
+     *
+     * 📌 Il committente: *«su quella di giulia ci devono essere le stesse cards
+     * che riguardano i guadagni e le spese che avrebbe una palestra (di base è
+     * solo una palestra con un solo trainer)»*.
+     *
+     * ⛔ **E restano chiusi al trainer dipendente**, che è la ragione per cui
+     * erano chiusi a tutti: là dentro c'è il margine del suo datore di lavoro su
+     * ogni cliente che segue.
+     */
+    #[Test]
+    public function i_conti_li_vede_chi_paga_lo_spazio_non_chi_ci_lavora(): void
+    {
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        $this->actingAs($libero);
+        $this->ctx()->set($libero->tenant);
+
+        $this->assertTrue(IPostiDellaPalestra::canView(), 'Il trainer indipendente non vede i conti del proprio spazio.');
+        $this->assertTrue(IlGiroDellaPalestra::canView(), 'Il trainer indipendente non vede spesa e guadagno del proprio spazio.');
+
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+
+        $this->actingAs($coach);
+        $this->ctx()->set($palestra);
+
+        $this->assertFalse(IPostiDellaPalestra::canView(), '🚨 Un trainer dipendente si vede il margine della palestra su ogni cliente.');
+        $this->assertFalse(IlGiroDellaPalestra::canView(), '🚨 Un trainer dipendente si vede spesa e guadagno del suo datore di lavoro.');
+    }
+
+    /**
+     * 🚨 **Il tasto d'invito dentro la card dei posti era quello della palestra.**
+     *
+     * ⛔ `InvitiInPalestra::invita()` rifiuta uno spazio personale — *«Solo una
+     * palestra può invitare»* — ed è **lo stesso errore** che il committente ha
+     * trovato il 24/09 nella pagina degli iscritti. 💡 Aperto il cruscotto al
+     * trainer indipendente, quel messaggio sarebbe uscito da un secondo posto.
+     */
+    #[Test]
+    public function nel_cruscotto_l_indipendente_trova_il_suo_tasto_d_invito(): void
+    {
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($libero);
+        $this->ctx()->set($libero->tenant);
+
+        $this->assertSame(
+            'Invita un allievo',
+            (string) (new IPostiDellaPalestra)->invitaIscrittoAction()->getLabel(),
+            '🚨 Il tasto è quello della palestra: cliccandolo esce «Solo una palestra può invitare».',
+        );
+    }
+
+    /**
+     * 💶 **Il divisore del «ti costa per ogni allievo» è lo stesso del piano.**
+     *
+     * ⚠️ Se qui ne contasse uno e il piano due, il riquadro direbbe il **doppio**
+     * del costo reale per allievo — e sarebbe un numero plausibile, quindi
+     * nessuno lo verificherebbe.
+     */
+    #[Test]
+    public function i_conti_dividono_per_gli_allievi_veri(): void
+    {
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+
+        $this->unAllievoAltrove($libero, $altrove);
+        $this->unAllievoInCasa($libero);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($libero->getKey());
+
+        $this->assertSame(
+            2,
+            app(IContiDellaPalestra::class)->quantiAllievi($libero->tenant),
+            'Il conto dei soldi vede un allievo solo: il costo per allievo uscirebbe doppio.',
+        );
+
+        $this->assertSame(
+            2,
+            app(InvitiDelTrainer::class)->quantiAllieviHa($fresco),
+            'Il conto dei posti e quello dei conti devono dare lo stesso numero.',
+        );
     }
 }
