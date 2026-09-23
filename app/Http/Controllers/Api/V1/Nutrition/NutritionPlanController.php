@@ -113,7 +113,7 @@ class NutritionPlanController extends Controller
     private function negato(): JsonResponse
     {
         return response()->json([
-            'message' => __('Solo chi allena può scrivere piani alimentari.'),
+            'message' => __('Solo chi allena può scrivere consigli alimentari.'),
             'code' => 'not_a_trainer',
         ], 403);
     }

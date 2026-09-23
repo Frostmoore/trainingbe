@@ -173,7 +173,7 @@
                     <p class="occhiello">Schede e chat</p>
                     <h2>Il tuo trainer ti scrive qui.</h2>
                     <p class="guida">
-                        Schede di allenamento e piani alimentari arrivano in chat, e da lì
+                        Schede di allenamento e consigli alimentari arrivano in chat, e da lì
                         entrano nell'app. La conversazione è <strong>cifrata da un capo
                         all'altro</strong>: la chiave sta sui due telefoni, non sui nostri
                         server.

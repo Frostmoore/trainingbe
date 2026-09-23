@@ -82,7 +82,7 @@
                 <div class="scheda">
                     <h3>3. I trainer lavorano</h3>
                     <p>
-                        Scrivono schede e piani alimentari, li mandano in chat, e vedono gli
+                        Scrivono schede e consigli alimentari, li mandano in chat, e vedono gli
                         iscritti che affidi loro. Le palestre hanno anche un tetto di
                         <strong>posti trainer</strong>: da 2 a 20 secondo il piano, e se ne
                         servono di più si concorda.
