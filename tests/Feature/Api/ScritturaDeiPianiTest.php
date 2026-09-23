@@ -35,6 +35,9 @@ final class ScritturaDeiPianiTest extends TestCase
 
     private User $iscritto;
 
+    /** Chi allena: l'unico che può scrivere una scheda **sul server**. */
+    private User $chiAllena;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -67,6 +70,21 @@ final class ScritturaDeiPianiTest extends TestCase
          */
         $this->trainer = $this->creaUtente($this->palestra, UserRole::Nutrizionista, 'trainer@alfa.test');
         $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
+
+        /*
+         * 🆕 🚨 **Chi scrive le schede sul server è chi allena** — 23/09/2026.
+         *
+         * ⛔ Fino a oggi questi test scrivevano come `iscritto`, perché la rotta
+         * era aperta a chiunque: era la decisione C2/D1, *«l'iscritto si scrive
+         * le proprie schede»*. ⚠️ Superata dal committente il **24/08/2026**
+         * (*«la scheda risiede sul telefono… basta, niente server»*), ma il
+         * cancello non era mai stato messo — e i test lo tenevano in vita.
+         *
+         * 💡 Non è `$this->trainer`: quello è un **Nutrizionista**, che compone
+         * piani alimentari e non allena nessuno (N19/N22). Qui serve proprio
+         * qualcuno per cui `User::allena()` risponde di sì.
+         */
+        $this->chiAllena = $this->creaUtente($this->palestra, UserRole::Trainer, 'coach@alfa.test');
     }
 
     /** @return array<string, mixed> */
@@ -328,7 +346,7 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function a_workout_plan_can_be_written_with_days_and_alternatives(): void
     {
-        $r = $this->actingAs($this->iscritto, 'sanctum')
+        $r = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Split',
                 'days' => [
@@ -364,7 +382,7 @@ final class ScritturaDeiPianiTest extends TestCase
          * e sarebbe un guasto che non si vede in nessun test se non c'e'
          * questo.
          */
-        $r = $this->actingAs($this->iscritto, 'sanctum')
+        $r = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Alla vecchia maniera',
                 'exercises' => [['name' => 'Squat', 'sets' => 5, 'reps' => '5']],
@@ -382,7 +400,7 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function reps_survive_as_written_inside_a_day_too(): void
     {
-        $r = $this->actingAs($this->iscritto, 'sanctum')
+        $r = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Cedimento',
                 'days' => [['exercises' => [['name' => 'Curl bicipiti', 'reps' => 'cedimento']]]],
@@ -414,7 +432,7 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function what_the_app_writes_it_can_read_back(): void
     {
-        $creata = $this->actingAs($this->iscritto, 'sanctum')
+        $creata = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Split',
                 'days' => [
@@ -433,7 +451,10 @@ final class ScritturaDeiPianiTest extends TestCase
             ])
             ->assertCreated();
 
-        $r = $this->actingAs($this->iscritto, 'sanctum')
+        // 🆕 23/09: la rilegge **l'autore**. Da quando scrivere sul server è
+        //    riservato a chi allena, una scheda non è di un iscritto qualsiasi:
+        //    chiederla come `iscritto` risponderebbe 404, ed è giusto così.
+        $r = $this->actingAs($this->chiAllena, 'sanctum')
             ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
             ->assertOk();
 
@@ -466,7 +487,7 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function the_flat_list_still_answers_and_still_excludes_the_alternatives(): void
     {
-        $creata = $this->actingAs($this->iscritto, 'sanctum')
+        $creata = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Split',
                 'days' => [[
@@ -478,7 +499,8 @@ final class ScritturaDeiPianiTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->actingAs($this->iscritto, 'sanctum')
+        // 🆕 23/09: la rilegge l'autore, per la stessa ragione detta sopra.
+        $this->actingAs($this->chiAllena, 'sanctum')
             ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
             ->assertOk()
             // Un esercizio da fare, non due: l'alternativa e' una scelta, non
@@ -498,7 +520,9 @@ final class ScritturaDeiPianiTest extends TestCase
     #[Test]
     public function the_private_note_of_a_workout_plan_is_only_for_its_author(): void
     {
-        $creata = $this->actingAs($this->trainer, 'sanctum')
+        // 🆕 23/09: `$this->trainer` è un **Nutrizionista** e non allena
+        //    nessuno, quindi sul server una scheda non la scrive.
+        $creata = $this->actingAs($this->chiAllena, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Riatletizzazione',
                 'rif_allievo' => 'M.R. spalla dx',
@@ -506,7 +530,7 @@ final class ScritturaDeiPianiTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->actingAs($this->trainer, 'sanctum')
+        $this->actingAs($this->chiAllena, 'sanctum')
             ->getJson('/api/v1/workout-plans/'.$creata->json('data.id'))
             ->assertOk()
             ->assertJsonPath('data.rif_allievo', 'M.R. spalla dx');
@@ -521,5 +545,59 @@ final class ScritturaDeiPianiTest extends TestCase
         } else {
             $altrui->assertStatus(404);
         }
+    }
+
+    /**
+     * 🚨 **Le schede di un iscritto NON finiscono sul server** — 23/09/2026.
+     *
+     * 📌 Committente, quando gli ho fatto notare che la rotta era aperta:
+     * *«se io utente scrivo una scheda dall'app, questa va a finire sul server?
+     * Non deve succedere questa cosa. Deve stare solo sul telefono. È il trainer
+     * che se scrive una scheda si deve salvare sul server, perché così le può
+     * inviare»* — e, sul perché gli interessa: *«potrebbe essere rilevante ai
+     * fini del GDPR»*.
+     *
+     * ⛔ **Oggi l'app non ci passa** — un iscritto salva in locale
+     * (`PlanActions.create()`), e anche quello che importa (`SalvaLaBozza`). ⚠️
+     * Ma la porta era rimasta aperta, e questo test è la serratura: un giorno
+     * qualcuno riscriverà quella schermata, e deve trovarla chiusa.
+     *
+     * 💡 **403 e non 404**: la rotta esiste e la persona la sta chiamando
+     * legittimamente — quello che non si può è metterci i propri dati. Il
+     * messaggio lo dice senza colpevolizzare: *«le schede che scrivi per te
+     * restano sul tuo telefono»*.
+     */
+    #[Test]
+    public function un_iscritto_non_puo_scrivere_una_scheda_sul_server(): void
+    {
+        $this->actingAs($this->iscritto, 'sanctum')
+            ->postJson('/api/v1/workout-plans', [
+                'name' => 'La mia scheda',
+                'days' => [['exercises' => [['name' => 'Panca piana', 'sets' => 4]]]],
+            ])
+            ->assertForbidden();
+
+        // ⛔ E non deve restarne traccia: un 403 che scrive lo stesso sarebbe
+        //    il difetto peggiore possibile qui dentro.
+        $this->assertDatabaseMissing('workout_plans', ['name' => 'La mia scheda']);
+    }
+
+    /** ✅ E chi allena invece sì: è il suo mestiere, e gli serve per mandarle. */
+    #[Test]
+    public function chi_allena_invece_puo(): void
+    {
+        $this->actingAs($this->chiAllena, 'sanctum')
+            ->postJson('/api/v1/workout-plans', [
+                'name' => 'Modello forza',
+                'days' => [['exercises' => [['name' => 'Squat', 'sets' => 5]]]],
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('workout_plans', [
+            'name' => 'Modello forza',
+            // 💡 `member_id` è **l'autore**, non un destinatario: è il senso
+            //    che quella colonna ha dal 23/09 (vedi `WorkoutPlanForm`).
+            'member_id' => $this->chiAllena->getKey(),
+        ]);
     }
 }

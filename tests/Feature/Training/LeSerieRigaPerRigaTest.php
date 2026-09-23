@@ -49,7 +49,8 @@ final class LeSerieRigaPerRigaTest extends TestCase
 
     private Tenant $palestra;
 
-    private User $iscritto;
+    /** Chi scrive le schede: dal 23/09 sul server ci arriva solo chi allena. */
+    private User $autore;
 
     protected function setUp(): void
     {
@@ -58,7 +59,19 @@ final class LeSerieRigaPerRigaTest extends TestCase
         $this->seed(ExerciseLibrarySeeder::class);
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa');
-        $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
+        /*
+         * 🆕 🚨 **Chi scrive una scheda sul server è chi allena** — 23/09/2026.
+         *
+         * ⛔ Qui l'autore era un `Member`, e questi test passavano perché la
+         * rotta era aperta a chiunque — la decisione C2/D1, *«l'iscritto si
+         * scrive le proprie schede»*. ⚠️ Superata dal committente il 24/08
+         * (*«la scheda risiede sul telefono… basta, niente server»*), e dal
+         * 23/09 `WorkoutPlanController::store()` la applica davvero.
+         *
+         * 💡 Questi test non parlano di ruoli: parlano del **formato** che
+         * viaggia. Cambia solo chi li scrive, non cosa dimostrano.
+         */
+        $this->autore = $this->creaUtente($this->palestra, UserRole::Trainer, 'autore@alfa.test');
     }
 
     /**
@@ -67,7 +80,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function tre_serie_con_tre_pesi_diversi_si_salvano_e_tornano(): void
     {
-        $risposta = $this->comeApp($this->iscritto)
+        $risposta = $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Gambe',
                 'exercises' => [[
@@ -101,7 +114,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function e_il_riassunto_vecchio_lo_calcola_il_server(): void
     {
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Gambe',
                 'exercises' => [[
@@ -148,7 +161,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     {
         $piano = $this->pianoVecchio();
 
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->getJson("/api/v1/workout-plans/{$piano->getKey()}")
             ->assertOk()
             ->assertJsonCount(4, 'data.exercises.0.serie')
@@ -185,7 +198,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function chi_manda_i_numeri_vecchi_salva_come_sempre(): void
     {
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Alla vecchia',
                 'exercises' => [[
@@ -212,7 +225,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function l_isometria_viaggia_nei_secondi_e_il_carico_si_conserva(): void
     {
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Core',
                 'exercises' => [[
@@ -236,7 +249,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function e_valgono_anche_per_gli_esercizi_dentro_un_giorno(): void
     {
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Split',
                 'days' => [[
@@ -260,7 +273,7 @@ final class LeSerieRigaPerRigaTest extends TestCase
     #[Test]
     public function e_non_si_possono_mandare_mille_serie(): void
     {
-        $this->comeApp($this->iscritto)
+        $this->comeApp($this->autore)
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Troppe',
                 'exercises' => [[
@@ -277,8 +290,8 @@ final class LeSerieRigaPerRigaTest extends TestCase
     {
         $piano = WorkoutPlan::create([
             'tenant_id' => $this->palestra->getKey(),
-            'member_id' => $this->iscritto->getKey(),
-            'created_by' => $this->iscritto->getKey(),
+            'member_id' => $this->autore->getKey(),
+            'created_by' => $this->autore->getKey(),
             'name' => 'Scritta prima',
             'status' => PlanStatus::Published,
             'source' => PlanSource::Manual,

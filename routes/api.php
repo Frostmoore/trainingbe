@@ -364,9 +364,26 @@ Route::prefix('v1')->group(function (): void {
         Route::get('workout-plans/templates', [WorkoutPlanController::class, 'templates']);
         Route::get('workout-plans/{plan}', [WorkoutPlanController::class, 'show'])->whereNumber('plan');
 
-        // C2 — l'iscritto si scrive le proprie schede (decisione D1). Quelle del
-        // trainer restano in sola lettura: la distinzione è in WorkoutPlanPolicy,
-        // e la risposta di `index` la riporta nel campo `editable`.
+        /*
+         * 🚨 **Scrivere qui lo può fare solo chi allena** — 23/09/2026.
+         *
+         * ⛔ Qui c'era scritto *«C2 — l'iscritto si scrive le proprie schede
+         * (decisione D1)»*, e la rotta era aperta a chiunque fosse autenticato.
+         * ⚠️ Quella decisione è stata **superata dal committente il 24/08/2026**:
+         *
+         *   «la scheda risiede sul telefono (e finisce nel backup). Basta, niente
+         *    server, sticazzi crea solo problemi.»
+         *
+         * 💡 Da allora l'app non ci passa piu' — un iscritto salva in locale
+         * (`PlanActions.create()`), e anche quello che importa (`SalvaLaBozza`).
+         * ⚠️ Ma la **porta era rimasta aperta**, e un commento che descrive una
+         * regola morta è il modo in cui qualcuno, fra sei mesi e in buona fede,
+         * la rimette in piedi. Il cancello sta in `store()`, con il suo perche'.
+         *
+         * ⚠️ `update` e `destroy` erano già coperti da `WorkoutPlanPolicy`: il
+         * buco era solo la creazione. La risposta di `index` riporta in
+         * `editable` chi può toccare cosa.
+         */
         Route::post('workout-plans', [WorkoutPlanController::class, 'store']);
         Route::put('workout-plans/{plan}', [WorkoutPlanController::class, 'update'])->whereNumber('plan');
         Route::delete('workout-plans/{plan}', [WorkoutPlanController::class, 'destroy'])->whereNumber('plan');

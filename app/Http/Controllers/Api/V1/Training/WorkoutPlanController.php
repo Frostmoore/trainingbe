@@ -117,17 +117,55 @@ class WorkoutPlanController extends Controller
     // ───────────────────────── C2: scrittura ─────────────────────────
 
     /**
-     * Una scheda che l'iscritto scrive per sé.
+     * Un modello di scheda, scritto da chi allena.
      *
-     * ⚠️ **Nasce gia' pubblicata.** Lo stato `draft` esiste perche' il trainer
-     * possa lavorarci prima di consegnarla; una scheda che uno scrive per sé non
-     * ha nessuno da cui essere rivista, e lasciarla in bozza la renderebbe
-     * invisibile a `index()`, che filtra `published()`. Sarebbe un salvataggio
-     * riuscito che produce una scheda sparita.
+     * ══ 🚨 SOLO CHI ALLENA, DAL 23/09/2026 ═══════════════════════════════════
+     *
+     * ⛔ **Questa rotta era aperta a chiunque fosse autenticato**, e il suo
+     * commento diceva *«una scheda che l'iscritto scrive per sé»* — la
+     * decisione C2/D1, superata dal committente il **24/08/2026**:
+     *
+     * > *«la scheda risiede sul telefono (e finisce nel backup). Basta, niente
+     * > server, sticazzi crea solo problemi.»*
+     *
+     * 💡 Da allora l'app non ci passa piu': un iscritto che scrive una scheda
+     * la salva in locale (`PlanActions.create()`), e una importata pure
+     * (`SalvaLaBozza`, che lo dichiara — *«salvarla di la' vorrebbe dire un
+     * piano di allenamento con un nome sopra sui nostri sistemi»*). ⚠️ Ma la
+     * **porta era rimasta aperta**: nessun cancello impediva a una versione
+     * futura dell'app, o a una chiamata diretta, di rimettere qui i dati di
+     * allenamento di una persona.
+     *
+     * 📌 Committente, 23/09/2026, quando gliel'ho fatto notare: *«se io utente
+     * scrivo una scheda dall'app, questa va a finire sul server? Non deve
+     * succedere questa cosa. Deve stare solo sul telefono. È il trainer che se
+     * scrive una scheda si deve salvare sul server, perché così le può
+     * inviare»*.
+     *
+     * ⚠️ **`allena()` e non `isTrainer()`**: è lo stesso predicato di
+     * `TrainerController::trainerOrAbort()`, e il perché sta su `User::allena()`.
+     *
+     * ⛔ **Non si controlla anche l'abbonamento**, e non è una dimenticanza: qui
+     * si difende *dove finiscono i dati di una persona*, non chi può usare le
+     * funzioni da trainer. Un trainer scaduto che non riesce piu' a salvare un
+     * proprio modello è una decisione commerciale (U.3.1), da prendere a parte.
+     *
+     * ── ⚠️ Nasce gia' pubblicata ────────────────────────────────────────────
+     *
+     * Lo stato `draft` esiste perche' il trainer possa lavorarci prima di
+     * consegnarla; un modello lasciato in bozza sarebbe invisibile a `index()`,
+     * che filtra `published()`. Sarebbe un salvataggio riuscito che produce una
+     * scheda sparita.
      */
     public function store(WorkoutPlanRequest $request): JsonResponse
     {
         $utente = $request->user();
+
+        abort_unless(
+            $utente instanceof User && $utente->allena(),
+            403,
+            __('Le schede che scrivi per te restano sul tuo telefono.'),
+        );
 
         $piano = DB::transaction(function () use ($request, $utente): WorkoutPlan {
             $piano = WorkoutPlan::create([

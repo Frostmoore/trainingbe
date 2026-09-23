@@ -38,14 +38,27 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
 
     private Tenant $palestra;
 
-    private User $iscritto;
+    /** Chi scrive le schede: dal 23/09 sul server ci arriva solo chi allena. */
+    private User $autore;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->palestra = $this->creaPalestra('Alfa', 'alfa');
-        $this->iscritto = $this->creaUtente($this->palestra, UserRole::Member, 'iscritto@alfa.test');
+        /*
+         * 🆕 🚨 **Chi scrive una scheda sul server è chi allena** — 23/09/2026.
+         *
+         * ⛔ Qui l'autore era un `Member`, e questi test passavano perché la
+         * rotta era aperta a chiunque — la decisione C2/D1, *«l'iscritto si
+         * scrive le proprie schede»*. ⚠️ Superata dal committente il 24/08
+         * (*«la scheda risiede sul telefono… basta, niente server»*), e dal
+         * 23/09 `WorkoutPlanController::store()` la applica davvero.
+         *
+         * 💡 Questi test non parlano di ruoli: parlano del **formato** che
+         * viaggia. Cambia solo chi li scrive, non cosa dimostrano.
+         */
+        $this->autore = $this->creaUtente($this->palestra, UserRole::Trainer, 'autore@alfa.test');
     }
 
     private function matcher(): ExerciseMatcher
@@ -61,7 +74,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $e = $this->matcher()->match(
             'Spinte strane al cavo',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Chest,
             ['triceps', 'shoulders'],
         );
@@ -84,7 +97,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
          */
         $this->expectException(MuscoliNonDecisiException::class);
 
-        $this->matcher()->match('Esercizio senza nome noto', $this->palestra->getKey(), $this->iscritto);
+        $this->matcher()->match('Esercizio senza nome noto', $this->palestra->getKey(), $this->autore);
     }
 
     #[Test]
@@ -103,7 +116,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $this->matcher()->match(
             'Esercizio con mezza risposta',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Chest,
         );
     }
@@ -128,7 +141,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $trovato = $this->matcher()->match(
             'Esercizio che c\'era',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
         );
 
         self::assertSame($gia->getKey(), $trovato->getKey());
@@ -162,7 +175,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $trovato = $this->matcher()->match(
             'Rematore corda',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Back,
             ['biceps', 'shoulders'],
         );
@@ -188,7 +201,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $trovato = $this->matcher()->match(
             'Panca piana con bilanciere olimpico',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
         );
 
         self::assertSame($panca->getKey(), $trovato->getKey());
@@ -209,7 +222,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $dopo = $this->matcher()->match(
             'Spinte al cavo basso',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Chest,
             ['triceps'],
         );
@@ -238,7 +251,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $this->matcher()->match(
             'Croci strane',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Quads,
             ['calves'],
         );
@@ -270,7 +283,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
         $trovato = $this->matcher()->match(
             'Esercizio di piattaforma',
             $this->palestra->getKey(),
-            $this->iscritto,
+            $this->autore,
             MuscleGroup::Chest,
             ['triceps'],
         );
@@ -285,7 +298,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
     #[Test]
     public function il_compositore_puo_dichiarare_i_muscoli_salvando_la_scheda(): void
     {
-        $this->actingAs($this->iscritto, 'sanctum')
+        $this->actingAs($this->autore, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Scheda con muscoli',
                 'days' => [[
@@ -323,7 +336,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
             'secondary_muscles' => ['triceps'],
         ]);
 
-        $this->actingAs($this->iscritto, 'sanctum')
+        $this->actingAs($this->autore, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Solo roba nota',
                 'exercises' => [['name' => 'Panca piana', 'sets' => 3]],
@@ -342,7 +355,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
          * esercizi su venti sarebbe peggio di nessuna scheda, perché sembra
          * completa.
          */
-        $this->actingAs($this->iscritto, 'sanctum')
+        $this->actingAs($this->autore, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Con dentro una cosa mai vista',
                 'exercises' => [['name' => 'Movimento mai visto prima', 'sets' => 3]],
@@ -359,7 +372,7 @@ final class IMuscoliEntranoNelCatalogoTest extends TestCase
     {
         // ⚠️ Meglio un 422 che una libreria con dentro `pettorine`: quel valore
         // non colora niente e non filtra niente, e resta lì per sempre.
-        $this->actingAs($this->iscritto, 'sanctum')
+        $this->actingAs($this->autore, 'sanctum')
             ->postJson('/api/v1/workout-plans', [
                 'name' => 'Scheda con muscolo finto',
                 'days' => [['exercises' => [[

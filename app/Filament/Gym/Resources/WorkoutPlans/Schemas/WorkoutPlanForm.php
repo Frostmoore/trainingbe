@@ -83,11 +83,14 @@ class WorkoutPlanForm
                      * pseudonimizzazione che sceglie il trainer, che vede solo
                      * lui, e che non dice al server chi sia quella persona.
                      *
-                     * ⚠️ La colonna `member_id` **resta** in tabella, e non e'
-                     * un'incoerenza: serve alle schede che **l'iscritto scrive
-                     * per se'** dall'app, dove il legame lo crea lui con i propri
-                     * dati. Quello che non esiste piu' e' che sia **la palestra**
-                     * a crearlo.
+                     * ⚠️ La colonna `member_id` **resta** in tabella, e dal
+                     * 23/09/2026 vuol dire una cosa sola: **chi ha scritto quel
+                     * modello**. ⛔ Qui c'era scritto che serviva *ºllle schede che
+                     * l'iscritto scrive per se' dall'app»*: non e' piu' vero, e
+                     * contraddiceva `salva_la_bozza.dart`, che dichiara l'opposto
+                     * (D9-bis). 🚨 Dal 24/08/2026 le schede di un iscritto stanno
+                     * **solo sul telefono** — decisione del committente — e dal
+                     * 23/09 `WorkoutPlanController::store()` rifiuta chi non allena.
                      *
                      * 🎯 La scheda si consegna via **chat cifrata** (D4), dove il
                      * server instrada una busta che non sa leggere.

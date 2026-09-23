@@ -1,6 +1,6 @@
 # Condizioni d'uso
 
-> **Ultimo aggiornamento:** 22 settembre 2026
+> **Ultimo aggiornamento:** 23 settembre 2026
 
 ---
 
@@ -246,8 +246,11 @@ per sé.
 con il trainer finisce, anche se l'abbonamento cessa, anche se l'account del trainer viene chiuso.
 Chi l'ha ricevuto l'ha pagato.
 
-💡 Sui nostri server una scheda **non ha un destinatario**: la palestra e il trainer vi conservano i
-propri modelli, e li mandano a chi vogliono dal telefono.
+💡 Sui nostri server una scheda porta il nome di **chi l'ha scritta**, non di chi la riceverà: la
+palestra e il trainer vi conservano i propri modelli, e li mandano a chi vogliono dal telefono.
+
+🚨 **Le schede che ti scrivi da solo non passano di lì**: restano sul tuo telefono e nel tuo backup,
+e i nostri server non le vedono mai.
 
 ## 9. Interruzioni e modifiche
 
