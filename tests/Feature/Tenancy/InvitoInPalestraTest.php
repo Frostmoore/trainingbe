@@ -317,6 +317,77 @@ final class InvitoInPalestraTest extends TestCase
         );
     }
 
+    /**
+     * 🆕 ⛔ **Nessuna riga dell'invito mette in vetrina un numero** — 23/09/2026.
+     *
+     * 📌 Decisione del committente, 26/08: *«togli la scritta "150 richieste al
+     * mese", non va detto, perché l'abbonamento non fa solo quello»*. ⛔ Era
+     * stata applicata al modale degli acquisti e **non qui**, cioè proprio dove
+     * la legge per primo chi non è ancora iscritto.
+     *
+     * 🚨 **Un numero in cima a un'offerta diventa l'offerta**: chi legge «150
+     * richieste» compra un contatore e lo confronta con i pacchetti di gettoni,
+     * invece di guardare **cosa** si porta a casa.
+     *
+     * 💡 Il test guarda le **cifre** e non la frase: una frase la si riscrive e
+     * il test continua a passare, un numero no. Il limite resta nell'API per chi
+     * lo cerca davvero.
+     */
+    #[Test]
+    public function cosa_ottieni_non_mette_numeri_in_vetrina(): void
+    {
+        $this->palestra->update(['ai_monthly_calls_per_member' => 150]);
+
+        foreach (app(CosaOttieniInPalestra::class)->per($this->palestra->fresh()) as $riga) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/\d/',
+                $riga['titolo'].' '.$riga['dettaglio'],
+                'Una riga dell\'invito mette in vetrina un numero: '
+                .'«'.$riga['titolo'].' — '.$riga['dettaglio'].'».',
+            );
+        }
+    }
+
+    /**
+     * 🆕 🚨 **Zero richieste comprese non si promettono** — 23/09/2026.
+     *
+     * ⚠️ `ai_monthly_calls_per_member` ha tre significati diversi, e due di
+     * loro si assomigliano pericolosamente:
+     *
+     * | Valore | Vuol dire | Si promette? |
+     * |---|---|---|
+     * | `null` | **senza limite** (vedi `PlanSeeder`) | sì |
+     * | `> 0` | tante comprese | sì |
+     * | `0` | **nessuna compresa** | ⛔ no |
+     *
+     * ⛔ Finché la riga diceva un numero, lo zero si mostrava da solo («Fino a 0
+     * richieste al mese»): brutto, ma non mentiva. Tolto il numero, senza questa
+     * condizione la palestra a zero prometterebbe una funzione che non ha — la
+     * **stessa** bugia che `ai_enabled` evita un passo prima.
+     */
+    #[Test]
+    public function cosa_ottieni_non_promette_l_ai_a_dotazione_zero(): void
+    {
+        $cosa = app(CosaOttieniInPalestra::class);
+
+        $this->palestra->update(['ai_monthly_calls_per_member' => 0]);
+
+        $this->assertFalse(
+            collect($cosa->per($this->palestra->fresh()))
+                ->contains(fn (array $r): bool => str_contains($r['titolo'], 'AI')),
+            'L\'invito promette l\'AI a una palestra che non ne ha nemmeno una compresa.',
+        );
+
+        // ⚠️ `null` e' l'opposto di `0`: senza limite, quindi si promette.
+        $this->palestra->update(['ai_monthly_calls_per_member' => null]);
+
+        $this->assertTrue(
+            collect($cosa->per($this->palestra->fresh()))
+                ->contains(fn (array $r): bool => str_contains($r['titolo'], 'AI')),
+            'Senza limite l\'AI c\'e\' eccome, e l\'invito deve dirlo.',
+        );
+    }
+
     /** ⚠️ Una palestra sospesa non fa entrare nessuno. */
     #[Test]
     public function una_palestra_sospesa_non_fa_entrare(): void

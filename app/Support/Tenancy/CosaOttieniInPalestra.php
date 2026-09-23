@@ -43,10 +43,13 @@ class CosaOttieniInPalestra
     /**
      * Le righe da mostrare, gia' in italiano e gia' leggibili.
      *
-     * ⚠️ **Stringhe e non chiavi da tradurre nell'app.** Il contenuto dipende
-     * dai numeri del piano («150 chiamate»), quindi una chiave costringerebbe a
+     * ⚠️ **Stringhe e non chiavi da tradurre nell'app.** Quali righe ci sono, e
+     * cosa dicono, dipende dal piano della palestra: una chiave costringerebbe a
      * mandare anche i parametri e a rimontare la frase di la' — cioe' a tenere
      * allineate due meta' della stessa cosa.
+     *
+     * ⛔ **Nessuna riga mette in vetrina un numero** (23/09/2026, vedi la nota
+     * sull'AI piu' sotto): i numeri restano nell'API per chi li cerca.
      *
      * @return list<array{icona: string, titolo: string, dettaglio: string}>
      */
@@ -87,16 +90,41 @@ class CosaOttieniInPalestra
          * `ai_enabled` e' del piano, non della palestra: una palestra su un
          * piano senza AI non deve leggere qui una funzione che poi non trovera'.
          */
-        if ($piano !== null && $piano->ai_enabled) {
-            $chiamate = $palestra->ai_monthly_calls_per_member
-                ?? $piano->ai_monthly_calls_per_member;
+        $chiamate = $palestra->ai_monthly_calls_per_member
+            ?? $piano?->ai_monthly_calls_per_member;
 
+        /*
+         * ⚠️ **E nemmeno se la dotazione è zero** — 23/09/2026.
+         *
+         * `null` qui vuol dire **senza limite** (vedi `PlanSeeder`), quindi si
+         * promette; `0` vuol dire che di richieste comprese non ce n'è
+         * nessuna, e prometterle sarebbe la stessa bugia che `ai_enabled`
+         * evita un passo prima.
+         */
+        if ($piano !== null && $piano->ai_enabled && $chiamate !== 0) {
+            /*
+             * ══ ⛔ QUI NON SI DICE QUANTE RICHIESTE — 23/09/2026 ══════════
+             *
+             * 📌 La decisione è del committente, 26/08: *«togli la scritta
+             * "150 richieste al mese", non va detto, perché l'abbonamento non
+             * fa solo quello»*. 🚨 **Un numero in cima a un'offerta diventa
+             * l'offerta**: chi legge «150 richieste» compra un contatore e lo
+             * confronta con i pacchetti di gettoni, invece di guardare **cosa**
+             * si porta a casa.
+             *
+             * ⚠️ Era stata applicata al modale degli acquisti
+             * (`modale_acquisti.dart`) e **non qui** — cioè proprio dove la
+             * legge per primo chi non è ancora iscritto, aprendo l'invito.
+             * Trovata nel giro UX del 23/09.
+             *
+             * 💡 Il numero **resta nell'API** per chi lo cerca (condizioni
+             * d'uso, assistenza): quello che cambia è cosa si mette in vetrina.
+             */
             $righe[] = [
                 'icona' => 'auto_awesome',
                 'titolo' => 'I consigli e le stime con l\'AI',
-                'dettaglio' => $chiamate !== null && $chiamate > 0
-                    ? "Fino a {$chiamate} richieste al mese, comprese nell'iscrizione."
-                    : 'Comprese nell\'iscrizione.',
+                'dettaglio' => 'Compresi nell\'iscrizione: il consiglio del '
+                    .'giorno e le stime di quello che mangi.',
             ];
         }
 
