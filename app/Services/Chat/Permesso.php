@@ -40,6 +40,19 @@ final readonly class Permesso
     /** Sta scrivendo qualcuno nei panni di un altro. */
     public const IMPERSONAZIONE = 'impersonazione';
 
+    /**
+     * 🆕 🚫 **Uno dei due ha bloccato l'altro** — blocco B3, 24/09/2026.
+     *
+     * 📌 Decisione 53.3 del committente: *«max 3 messaggi e si possono
+     * bloccare le persone»*.
+     *
+     * ⚠️ **Un codice solo per i due versi**, di proposito: chi è stato bloccato
+     * non deve poter distinguere «mi ha bloccato» da «l'ho bloccato io»
+     * guardando la risposta del server. 🚨 Dirglielo sarebbe dare a chi
+     * molesta la conferma di aver colpito nel segno.
+     */
+    public const BLOCCATO = 'bloccato';
+
     private function __construct(
         public bool $consentito,
         public ?string $codice = null,

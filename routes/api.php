@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\LiberatoriaController;
+use App\Http\Controllers\Api\V1\NomeUtenteController;
 use App\Http\Controllers\Api\V1\Nutrition\CatalogoAlimentiController;
 use App\Http\Controllers\Api\V1\Nutrition\ImportazioneDaDocumentoController;
 use App\Http\Controllers\Api\V1\Nutrition\NutritionPlanController;
@@ -348,6 +349,33 @@ Route::prefix('v1')->group(function (): void {
         // spostare l'account su un indirizzo altrui.
         Route::patch('account/email', [AccountController::class, 'updateEmail']);
         Route::patch('account/password', [AccountController::class, 'updatePassword']);
+
+        /*
+         * ── 🆔 Il nome utente come nome pubblico — blocco B3, 24/09/2026 ──
+         *
+         * 📌 Il committente: *«bisognerà inventarsi un sistema di username per
+         * poter scrivere a chiunque»*. Le cinque decisioni che lo governano
+         * stanno in `memory/decisioni.md`.
+         *
+         * ⛔ **La trovabilità nasce spenta** (53.1) e la ricerca ha un cancello
+         * (53.2): un professionista lo trova chiunque, un **iscritto** solo i
+         * suoi trainer o la sua palestra.
+         *
+         * 🚨 `throttle` sulla ricerca: senza, provare nomi a tappeto sarebbe un
+         * modo di scoprire **chi esiste** una lettera alla volta.
+         */
+        Route::get('account/nome-utente', [NomeUtenteController::class, 'mio']);
+        Route::patch('account/nome-utente', [NomeUtenteController::class, 'cambia']);
+        Route::patch('account/trovabile', [NomeUtenteController::class, 'trovabile']);
+
+        Route::middleware('throttle:30,1')->group(function (): void {
+            Route::get('persone/cerca', [NomeUtenteController::class, 'cerca']);
+        });
+
+        // 🚫 Il blocco — decisione 53.3. Fa due cose: non ti scrive e non ti trova.
+        Route::get('account/bloccati', [NomeUtenteController::class, 'bloccati']);
+        Route::post('persone/{utente}/blocca', [NomeUtenteController::class, 'blocca'])->whereNumber('utente');
+        Route::delete('persone/{utente}/blocca', [NomeUtenteController::class, 'sblocca'])->whereNumber('utente');
 
         // ── Allenamento (B4.5) ───────────────────────────────────────────
         Route::get('workout-plans', [WorkoutPlanController::class, 'index']);
@@ -806,6 +834,16 @@ Route::prefix('v1')->group(function (): void {
          */
         Route::post('conversations/informazioni', [ConversationController::class, 'informazioni'])
             ->middleware('throttle:catalogo');
+
+        /*
+         * 🆕 🔎 **Scrivere a chi si è trovato col nome utente** — B3, 24/09.
+         *
+         * ⚠️ Apre un filo **di informazioni**, cioè col limite dei tre
+         * messaggi: è una presentazione, non un rapporto. 🚨 E il cancello è
+         * lo stesso della ricerca — se non lo posso trovare, non gli posso
+         * nemmeno scrivere.
+         */
+        Route::post('conversations/da-nome-utente', [ConversationController::class, 'daNomeUtente']);
 
         /*
          * 🚨 Riscattare un invito **avendo gia' un account** — M6.2.

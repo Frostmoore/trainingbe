@@ -316,6 +316,26 @@ l'hai vista quel giorno — una volta al giorno, anche se apri il catalogo dieci
 la pubblicità. ⚠️ **Chi paga la pubblicità non riceve il tuo nome**: vede solo quante persone ha
 raggiunto.
 
+### 3.10-bis 🔎 Il nome utente, e il farsi trovare
+
+**Di serie nessuno ti trova.** Il tuo nome utente serve ad accedere, e basta: finche' non lo accendi
+tu, cercandolo non compare niente.
+
+**Se accendi «fatti trovare»** (lo trovi nella finestra dei messaggi), chi cerca quel nome vede il
+tuo **nome, il nome utente e la foto del profilo** — niente altro: non l'email, non il telefono, non
+la palestra. Lo puoi spegnere quando vuoi, e da quel momento non ti trova piu' nessuno.
+
+**E non tutti possono cercare tutti.** Chi allena — trainer e palestre — si puo' cercare per nome
+utente. **Chi si allena e basta lo trovano solo i suoi trainer o la sua palestra**: uno sconosciuto
+non puo' arrivare a te cercandoti.
+
+**Puoi bloccare una persona.** Da quel momento non puo' scriverti e **non ti trova piu'** nemmeno
+cercando il tuo nome utente.
+
+**Il nome utente non si ricicla.** Se lo cambi, o se cancelli l'account, quel nome resta fermo e non
+viene assegnato a nessun altro: serve a evitare che i messaggi che cercavano te arrivino a una
+persona diversa.
+
 ### 3.11 💳 I pagamenti
 
 I pagamenti passano da **Stripe**. **I dati della tua carta li scrivi sulla pagina di Stripe, e

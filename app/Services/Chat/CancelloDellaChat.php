@@ -51,6 +51,7 @@ class CancelloDellaChat
         private readonly LimiteDeiTreMessaggi $limite,
         private readonly PianoAttivo $piani,
         private readonly Impersonator $impersonatore,
+        private readonly ChiHoBloccato $blocchi,
     ) {}
 
     /**
@@ -80,6 +81,30 @@ class CancelloDellaChat
             return Permesso::no(
                 Permesso::NESSUN_LEGAME,
                 'Non fai parte di questa conversazione.',
+            );
+        }
+
+        /*
+         * ══ 🆕 🚫 IL BLOCCO — decisione 53.3, 24/09/2026 ═════════════
+         *
+         * 📌 Il committente: *«max 3 messaggi e si possono bloccare le
+         * persone»*.
+         *
+         * 🚨 **Sta prima del limite dei tre**, come il canale chiuso: dire
+         * «ti restano due messaggi» a chi è bloccato sarebbe una bugia, e per
+         * di piu' una bugia che lo invita a riprovare.
+         *
+         * ⚠️ **Vale nei due versi** (`fraLoroCeUnBlocco`): non importa chi ha
+         * bloccato chi, quei due non devono incontrarsi. ⛔ E il messaggio è lo
+         * stesso per tutti e due, di proposito: chi è stato bloccato non deve
+         * poterlo dedurre dalla risposta del server.
+         */
+        $altro = $c->otherParty($chi);
+
+        if ($altro !== null && $this->blocchi->fraLoroCeUnBlocco($chi, $altro)) {
+            return Permesso::no(
+                Permesso::BLOCCATO,
+                'Non puoi scrivere in questa conversazione.',
             );
         }
 

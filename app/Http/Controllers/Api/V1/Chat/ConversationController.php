@@ -13,6 +13,7 @@ use App\Models\Message;
 use App\Models\ProfiloPubblico;
 use App\Models\Scopes\TenantScope;
 use App\Models\User;
+use App\Services\Account\ChiPossoCercare;
 use App\Services\Chat\CancelloDellaChat;
 use App\Services\Chat\LimiteDeiTreMessaggi;
 use App\Services\Tenancy\ChiSiVede;
@@ -576,6 +577,83 @@ class ConversationController extends Controller
              * 🚨 Dal cancello e non dal limite: per un abbonato dev'essere
              * `null` (nessun limite), e il limite da solo risponderebbe `3`.
              */
+            'restanti' => $this->cancello->puoScrivere($io, $c)->restanti,
+        ]], 201);
+    }
+
+    /**
+     * 🆕 🔎 **Scrivere a una persona trovata col nome utente** — B3, 24/09/2026.
+     *
+     * 📌 Il committente, il 23/09: *«bisognerà inventarsi un sistema di username
+     * per poter scrivere a chiunque»*.
+     *
+     * ══ 🚨 PERCHE' NON BASTAVANO LE DUE ROTTE CHE C'ERANO ═══════════════════
+     *
+     * | Rotta | Con chi | Perché non serviva |
+     * |---|---|---|
+     * | `POST /conversations` | chi è **già** collegato a me | ⛔ una persona trovata per nome utente non lo è |
+     * | `POST /conversations/informazioni` | una **scheda pubblica** del catalogo | ⛔ un trainer trovabile può non averne nessuna |
+     *
+     * 💡 Questa apre un filo **di informazioni** — cioè col limite dei tre
+     * messaggi di presentazione — con chi **posso trovare**. ⚠️ Il cancello è lo
+     * stesso della ricerca (`ChiPossoCercare`): se non lo posso trovare, non
+     * gli posso nemmeno scrivere. ⛔ Averne due vorrebbe dire una porta chiusa
+     * accanto a una aperta.
+     *
+     * 🚨 **404 e non 403** quando non si può: distinguere «esiste ma non lo
+     * puoi trovare» da «non esiste» renderebbe questa rotta un modo per
+     * scoprire chi c'è, una prova alla volta.
+     */
+    public function daNomeUtente(Request $request, ChiPossoCercare $ricerca): JsonResponse
+    {
+        $dati = $request->validate([
+            'utente_id' => ['required', 'integer'],
+        ]);
+
+        $io = $request->user();
+
+        $destinatario = User::query()
+            ->withoutGlobalScopes([TenantScope::class])
+            ->find($dati['utente_id']);
+
+        if ($destinatario === null || $destinatario->username === null) {
+            return response()->json(['message' => __('Persona non trovata.')], 404);
+        }
+
+        /*
+         * ⚠️ Si ripercorre **la ricerca**, non si guarda solo `trovabile`: il
+         * cancello della decisione 53.2 dice che un iscritto lo trovano solo i
+         * suoi, e quella regola deve valere anche qui.
+         */
+        $trovabile = $ricerca->query($io, (string) $destinatario->username)
+            ->whereKey($destinatario->getKey())
+            ->exists();
+
+        if (! $trovabile) {
+            return response()->json(['message' => __('Persona non trovata.')], 404);
+        }
+
+        $permesso = $this->cancello->puoAprireInformazioni($io, $destinatario);
+
+        if (! $permesso->consentito) {
+            return response()->json([
+                'message' => $permesso->spiegazione,
+                'code' => $permesso->codice,
+                'permesso' => $permesso->perLApp(),
+            ], 403);
+        }
+
+        // 🚨 Chi chiede è il **member**, chi risponde è il **trainer**: sono i
+        //    nomi delle due colonne, e invertirli sballa ogni elenco.
+        $c = Conversation::between($destinatario, $io, TipoConversazione::Informazioni);
+
+        return response()->json(['data' => [
+            'id' => $c->id,
+            'tipo' => $c->tipo->value,
+            'con' => [
+                'nome' => $destinatario->name,
+                'username' => $destinatario->username,
+            ],
             'restanti' => $this->cancello->puoScrivere($io, $c)->restanti,
         ]], 201);
     }

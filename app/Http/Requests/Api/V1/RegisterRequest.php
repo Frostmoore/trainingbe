@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\V1;
 
+use App\Services\Account\IlNomeUtente;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
@@ -74,14 +75,24 @@ class RegisterRequest extends FormRequest
              * e niente maiuscole (le normalizza il modello) perché `Marco` e
              * `marco` non diventino due account che all'occhio sono lo stesso.
              */
-            'username' => [
-                'required',
-                'string',
-                'min:3',
-                'max:30',
-                'regex:/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/',
-                'unique:users,username',
-            ],
+            /*
+             * ══ 🆕 FACOLTATIVO DAL 24/09/2026 — decisione 53.5a ══════════════
+             *
+             * 📌 Il committente: *«facoltativo, e lo si chiede quando serve»* —
+             * cioè quando qualcuno accende «fatti trovare».
+             *
+             * ⚠️ **Non è un allentamento, è un allineamento**: il nome era
+             * `required` qui, ma **18 utenti su 38** non ce l'hanno, perché chi
+             * nasce da un invito o dal pannello non passa da questo modulo. Una
+             * regola che vale per metà della popolazione non è una regola.
+             *
+             * 🚨 Le altre condizioni **non si scrivono più qui**: stanno in
+             * `IlNomeUtente::regole()`, insieme a quella nuova — ⛔ un nome
+             * **bruciato** non si riassegna (53.4). Ripeterle qui vorrebbe dire
+             * che il giorno in cui ne nasce una sesta, questo modulo continua a
+             * non conoscerla.
+             */
+            'username' => array_merge(['nullable'], IlNomeUtente::regole()),
 
             /*
              * La password.

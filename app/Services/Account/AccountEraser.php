@@ -234,6 +234,23 @@ class AccountEraser
     {
         $segnaposto = 'eliminato-'.Str::lower(Str::random(16)).'@utente-eliminato.invalid';
 
+        /*
+         * ══ 🆕 🔥 IL NOME UTENTE SI BRUCIA, NON SI LIBERA — B3, 24/09/2026 ═══
+         *
+         * 📌 Decisione del committente (53.4): *«mai riciclati, non avrebbe
+         * alcun senso»*.
+         *
+         * ⛔ Due righe più sotto `username` va a `null`, e **fino a oggi quel
+         * nome tornava libero**. 🚨 Da quando si può cercare una persona per
+         * nome utente, riassegnarlo vuol dire far arrivare **a un altro** i
+         * messaggi destinati a chi non c'è più — e non c'è modo di accorgersene:
+         * chi scrive vede il nome giusto e qualcuno che risponde.
+         *
+         * ⚠️ Si brucia **prima** di azzerarlo, o non ci sarebbe più niente da
+         * bruciare.
+         */
+        app(IlNomeUtente::class)->brucia($utente->username);
+
         $utente->forceFill([
             'name' => self::NOME_ANONIMO,
             'email' => $segnaposto,

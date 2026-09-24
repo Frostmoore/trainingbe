@@ -152,6 +152,25 @@ class User extends Authenticatable implements FilamentUser, HasMedia
              * dichiarazione non si assegna in massa da una richiesta HTTP.
              */
             'affiancamento_accettato_il' => 'datetime',
+
+            /*
+             * 🆕 🆔 **Il nome utente come nome pubblico** — blocco B3, 24/09/2026.
+             *
+             * ⛔ `trovabile` nasce **spento** (decisione 53.1): chi si allena
+             * non si è iscritto per farsi cercare. ⚠️ E non è nullable: un
+             * `null` vorrebbe dire «non si sa», e in una ricerca «non si sa»
+             * finisce per somigliare a «sì».
+             *
+             * 💡 `username_cambiato_il` è `null` per chi non l'ha mai cambiato:
+             * la finestra dei 30 giorni (53.5b) parte dal **primo** cambio, non
+             * dalla registrazione.
+             *
+             * ⚠️ Tutti e due **fuori da `$fillable`**: si scrivono dai servizi
+             * (`IlNomeUtente`), non da una richiesta HTTP in massa.
+             */
+            'trovabile' => 'boolean',
+            'username_cambiato_il' => 'datetime',
+
             'last_login_at' => 'datetime',
 
             /*
