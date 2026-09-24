@@ -16,6 +16,7 @@ use App\Models\TrainerInvite;
 use App\Models\User;
 use App\Services\Scoperta\ChiaveComune;
 use App\Services\Tenancy\CreaTenantPersonale;
+use App\Services\Tenancy\EsciDaUnaPalestra;
 use App\Services\Tenancy\InvitiInPalestra;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
@@ -579,6 +580,75 @@ final class InvitoInPalestraTest extends TestCase
     }
 
     // ───────────────────── V.1.5 — i posti ─────────────────────
+
+    /**
+     * 🆕 🚪 **Il posto si libera SUBITO** — 3b-Z.2, deciso dal committente il
+     * 24/09/2026: *«si libera subito»*.
+     *
+     * ══ 🚨 PERCHE' UN TEST SU UNA COSA CHE GIA' FUNZIONA ═══════════════════
+     *
+     * ⚠️ Il conteggio è in tempo reale — `ContoDegliIscritti::quanti()` legge i
+     * ruoli **adesso** — quindi questo comportamento c'era già il giorno in cui
+     * è stato deciso. ⛔ Ma **una decisione senza guardia è una decisione che si
+     * perde**: basta che un domani qualcuno metta una cache sul conteggio, o
+     * una finestra di grazia di fine mese — tutte cose ragionevoli da
+     * scrivere — e la regola cambia **senza che nessuno se ne accorga**.
+     *
+     * 💡 L'alternativa scartata era «il posto resta occupato fino a fine mese»:
+     * si difende (la palestra ha già pagato), ma vuol dire che chi perde un
+     * cliente il 3 non può sostituirlo fino al 30.
+     */
+    #[Test]
+    public function chi_esce_dalla_palestra_libera_il_posto_subito(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => 2])->save();
+
+        $tizio = $this->creaUtente($this->palestra, UserRole::Member, 'tizio@olimpo.it');
+        $this->creaUtente($this->palestra, UserRole::Member, 'caio@olimpo.it');
+
+        $this->assertSame(
+            0,
+            $this->inviti()->postiRimasti($this->palestra),
+            'Il test parte dal presupposto sbagliato: i posti non sono pieni.',
+        );
+
+        app(EsciDaUnaPalestra::class)(
+            User::withoutGlobalScopes()->findOrFail($tizio->getKey()),
+        );
+
+        /*
+         * 🚨 **Subito, nella stessa richiesta**: non a fine giornata, non dopo
+         * un lavoro in coda, non a fine mese.
+         */
+        $this->assertSame(
+            1,
+            $this->inviti()->postiRimasti($this->palestra),
+            'Il posto di chi è uscito non si è liberato.',
+        );
+    }
+
+    /**
+     * ✅ **E il posto liberato si può usare davvero**, non è solo un numero che
+     * cambia. ⛔ Contarlo libero e poi rifiutare l'invito sarebbe il peggio dei
+     * due mondi: un contatore che promette quello che il sistema nega.
+     */
+    #[Test]
+    public function il_posto_liberato_si_puo_riempire_subito(): void
+    {
+        $piano = Plan::query()->where('code', Plan::GYM)->firstOrFail();
+        $piano->forceFill(['max_members' => 1])->save();
+
+        $tizio = $this->creaUtente($this->palestra, UserRole::Member, 'tizio@olimpo.it');
+
+        app(EsciDaUnaPalestra::class)(
+            User::withoutGlobalScopes()->findOrFail($tizio->getKey()),
+        );
+
+        $invito = $this->inviti()->invita($this->palestra, $this->gestore, 'nuovo@esempio.test');
+
+        $this->assertTrue($invito->eValido());
+    }
 
     /**
      * 🚨 **I posti si contano PRIMA di creare l'invito** — V.1.5.

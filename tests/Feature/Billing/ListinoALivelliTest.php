@@ -396,4 +396,78 @@ final class ListinoALivelliTest extends TestCase
          */
         $this->assertSame($idPlus, $this->piano(Plan::PLUS)->id);
     }
+
+    /**
+     * 🆕 🔒 **NESSUN PREZZO IN VENDITA STA NEL SEEDER** — 3b-Z.6, 24/09/2026.
+     *
+     * 📌 Il committente: *«lo puoi anche buttare via e indirizzare tutto a
+     * listino»*. 💡 Era già così — i piani pubblici leggono da
+     * `config/listino.php` — e questo test è ciò che lo **tiene** così.
+     *
+     * ══ ⛔ IL DIFETTO CHE RENDE IMPOSSIBILE ═════════════════════════════════
+     *
+     * 🚨 Scrivere un prezzo a mano nel seeder «per fare in fretta». Da quel
+     * momento ci sono **due verità**: il listino che il sito mostra e il numero
+     * in tabella che decide cosa si addebita. ⚠️ Non danno nessun errore, e la
+     * differenza si scopre da una fattura sbagliata.
+     *
+     * ⚖️ **I ritirati sono esclusi di proposito**: `is_public = false`, non si
+     * vendono più, e il loro prezzo è quello **con cui furono venduti**.
+     * ⛔ Farli leggere dal listino vorrebbe dire che ritoccando un prezzo di
+     * oggi si riscrive quanto pagò qualcuno l'anno scorso.
+     */
+    #[Test]
+    public function i_prezzi_in_vendita_vengono_tutti_dal_listino(): void
+    {
+        $dalListino = [];
+
+        foreach (config('listino.palestre.piani') as $p) {
+            $dalListino[$p['codice']] = $p['prezzo_cent'];
+        }
+
+        foreach (config('listino.trainer.piani') as $p) {
+            $dalListino[$p['codice']] = $p['prezzo_cent'];
+        }
+
+        /*
+         * 💡 I piani a consumo e quello gratuito hanno `price_cents = 0` per
+         * definizione: non hanno un canone, e quello che si paga sta altrove.
+         */
+        $senzaCanone = [
+            Plan::FREE,
+            config('listino.palestre.a_consumo.codice'),
+            config('listino.trainer.a_consumo.codice'),
+        ];
+
+        $fuoriPosto = [];
+
+        foreach (Plan::query()->where('is_public', true)->get() as $piano) {
+            if (in_array($piano->code, $senzaCanone, true)) {
+                continue;
+            }
+
+            if ($piano->code === Plan::PLUS) {
+                // Il singolo ha la sua chiave, non sta in un elenco di pacchetti.
+                $atteso = (int) config('listino.singolo_cent');
+            } else {
+                $atteso = $dalListino[$piano->code] ?? null;
+            }
+
+            if ($atteso === null) {
+                $fuoriPosto[] = "{$piano->code}: in vendita ma NON nel listino";
+
+                continue;
+            }
+
+            if ((int) $piano->price_cents !== $atteso) {
+                $fuoriPosto[] = "{$piano->code}: in tabella {$piano->price_cents}, nel listino {$atteso}";
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $fuoriPosto,
+            "Un prezzo in vendita non viene dal listino:\n".implode("\n", $fuoriPosto),
+        );
+    }
 }
