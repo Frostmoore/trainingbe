@@ -327,7 +327,19 @@ final class ModuloDellaPromozione
      * 🎯 I bersagli: più di uno, e in **OR**. «Per i trainer e per Tizio» vuol
      * dire chi è trainer **oppure** è Tizio.
      */
-    private static function bersagli(): Repeater
+    /**
+     * 🆕 ⚠️ **Pubblica dal 24/09/2026**, e non per comodità.
+     *
+     * 📌 Il committente, sugli avvisi in-app: *«usiamo gli stessi che possono
+     * essere destinatari di una promozione»*. 💡 Questo modulo è già scritto e
+     * già provato: riusarlo tale e quale è il modo di non avere **due schermate
+     * che chiedono la stessa cosa in due modi diversi**.
+     *
+     * ⛔ E una copia divergerebbe in silenzio: chi aggiunge un tipo di
+     * bersaglio lo aggiungerebbe di qua, e l'altra schermata continuerebbe a
+     * non saperlo.
+     */
+    public static function bersagli(): Repeater
     {
         return Repeater::make('bersagli')
             ->hiddenLabel()
@@ -406,7 +418,7 @@ final class ModuloDellaPromozione
      * destinatari. I parametri stanno nella colonna json `parametri`, e i campi
      * si chiamano `parametri.<chiave>` perché Filament li scriva lì dentro.
      */
-    private static function condizioni(): Repeater
+    public static function condizioni(): Repeater
     {
         $usa = static fn (?string $tipo, string $parametro): bool => TipoDiCondizione::tryFrom((string) $tipo)?->usa($parametro) ?? false;
 

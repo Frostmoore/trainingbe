@@ -8,6 +8,7 @@ use App\Enums\TipoBersaglio;
 use App\Enums\TipoDiCondizione;
 use App\Enums\TipoDiPremio;
 use App\Models\AiCreditMovement;
+use App\Models\Contracts\HaUnPubblico;
 use App\Models\PlanSubscription;
 use App\Models\Promozione;
 use App\Models\PromozioneAssegnazione;
@@ -51,7 +52,16 @@ class ChiLaRiceve
      * vuol dire «chi è trainer **oppure** allievo di Tizio». ⛔ In AND sarebbe
      * «i trainer che sono anche allievi di Tizio», cioè quasi nessuno.
      */
-    public function prende(Promozione $promozione, User $utente): bool
+    /*
+     * 🆕 ⚠️ **`HaUnPubblico` e non `Promozione`** — blocco B4, 24/09/2026.
+     *
+     * 💡 Dal 24/09 la stessa domanda serve anche agli **avvisi in-app**: i
+     * bersagli in OR, le esclusioni che vincono, le condizioni in AND sono
+     * **identici**. ⛔ Duplicare questo servizio vorrebbe dire vederlo divergere
+     * al primo ritocco — e una divergenza qui non dà errore: manda una cosa
+     * alle persone sbagliate.
+     */
+    public function prende(HaUnPubblico $promozione, User $utente): bool
     {
         $inclusi = $promozione->bersagli->reject(fn (PromozioneBersaglio $b): bool => (bool) $b->escludi);
         $esclusi = $promozione->bersagli->filter(fn (PromozioneBersaglio $b): bool => (bool) $b->escludi);
@@ -193,7 +203,7 @@ class ChiLaRiceve
      *
      * @return LazyCollection<int, User>
      */
-    public function destinatari(Promozione $promozione): LazyCollection
+    public function destinatari(HaUnPubblico $promozione): LazyCollection
     {
         $promozione->loadMissing(['bersagli', 'condizioni']);
 

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Account\TimezoneController;
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Ai\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\AvvisoController;
 use App\Http\Controllers\Api\V1\Billing\BillingController;
 use App\Http\Controllers\Api\V1\CatalogoController;
 use App\Http\Controllers\Api\V1\Chat\AllegatoCifratoController;
@@ -364,6 +365,21 @@ Route::prefix('v1')->group(function (): void {
          * 🚨 `throttle` sulla ricerca: senza, provare nomi a tappeto sarebbe un
          * modo di scoprire **chi esiste** una lettera alla volta.
          */
+        /*
+         * ── 📣 Gli avvisi in-app — blocco B4, 24/09/2026 ──────────────
+         *
+         * 📌 Il committente: *«facendo apparire una modale in-app con un tasto
+         * per approvare e uno per rifiutare»*.
+         *
+         * ⚠️ `prossimo` risponde **200 con `data: null`** quando non c'è niente:
+         * «non ce n'è» è una risposta, non un errore, e un 404 a ogni avvio
+         * dell'app sporcherebbe ogni registro di monitoraggio.
+         *
+         * ⛔ L'azione `promo` si esegue **dentro la POST**, sul server.
+         */
+        Route::get('avvisi/prossimo', [AvvisoController::class, 'prossimo']);
+        Route::post('avvisi/{avviso}/decisione', [AvvisoController::class, 'decisione'])->whereNumber('avviso');
+
         Route::get('account/nome-utente', [NomeUtenteController::class, 'mio']);
         Route::patch('account/nome-utente', [NomeUtenteController::class, 'cambia']);
         Route::patch('account/trovabile', [NomeUtenteController::class, 'trovabile']);

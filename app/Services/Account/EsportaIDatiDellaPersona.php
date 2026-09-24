@@ -46,6 +46,21 @@ final class EsportaIDatiDellaPersona
         'allegati_cifrati' => [['sender_id'], ['token']],
         // 💡 Anche l'IP e il browser: sono dati della persona, e l'art. 15 li comprende.
         'audit_logs' => [['actor_id'], []],
+
+        /*
+         * 🆕 📣 **Le decisioni sugli avvisi** — 24/09/2026, blocco B4.
+         *
+         * 🚨 Sono **sue**: quale avviso le è comparso, quando, e cosa ha
+         * risposto. ⚠️ È lo stesso registro che difende **noi** il giorno che
+         * qualcuno dice *«non ho mai accettato»* — e proprio per questo deve
+         * poterlo leggere anche **lei**: un registro che usiamo come prova e
+         * che l'interessato non può vedere non è una prova, è un archivio
+         * segreto.
+         *
+         * 💡 Esce tutto: non c'è dentro niente che sia una chiave o un
+         * segreto nostro.
+         */
+        'avvisi_decisioni' => [['user_id'], []],
         /*
          * 🆕 💰 **I pagamenti** — 22/09/2026, fase F3.
          *

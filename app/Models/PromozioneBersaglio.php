@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\TipoBersaglio;
+use App\Models\Concerns\AppartieneAUnPubblico;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -26,10 +27,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PromozioneBersaglio extends Model
 {
+    use AppartieneAUnPubblico;
+
     protected $table = 'promozione_bersagli';
 
     // 🆕 P5 — `escludi`: la riga toglie invece di aggiungere.
-    protected $fillable = ['promozione_id', 'tipo', 'escludi', 'ruolo', 'tenant_id', 'user_id'];
+    protected $fillable = ['promozione_id', 'pubblico_type', 'pubblico_id', 'tipo', 'escludi', 'ruolo', 'tenant_id', 'user_id'];
 
     protected function casts(): array
     {

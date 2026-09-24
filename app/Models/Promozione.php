@@ -9,9 +9,11 @@ use App\Enums\GenereDiPromozione;
 use App\Enums\StatoPromozione;
 use App\Enums\SuCosaVale;
 use App\Enums\TipoDiPremio;
+use App\Models\Contracts\HaUnPubblico;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -33,7 +35,7 @@ use Illuminate\Support\Str;
  * **premi** — una promozione può darne più d'uno. E chi l'ha presa resta
  * scritto nelle **assegnazioni**: da lì il massimo per persona e il budget.
  */
-class Promozione extends Model
+class Promozione extends Model implements HaUnPubblico
 {
     protected $table = 'promozioni';
 
@@ -76,9 +78,20 @@ class Promozione extends Model
         ];
     }
 
-    public function bersagli(): HasMany
+    /**
+     * 🎯 I bersagli — 🆕 **morph dal 24/09/2026** (blocco B4).
+     *
+     * ⚠️ Erano `hasMany`. Ora la stessa tabella serve anche agli **avvisi
+     * in-app**: la domanda *«chi rientra?»* è identica per tutti e due, e
+     * duplicarla vorrebbe dire vederla divergere al primo ritocco.
+     *
+     * ⛔ L'alternativa era far puntare l'avviso a una **promozione finta**:
+     * l'elenco delle promozioni si sarebbe riempito di righe che promozioni non
+     * sono, e ogni numero letto lì dentro sarebbe stato falso.
+     */
+    public function bersagli(): MorphMany
     {
-        return $this->hasMany(PromozioneBersaglio::class);
+        return $this->morphMany(PromozioneBersaglio::class, 'pubblico');
     }
 
     /** 🆕 P1 — cosa dà: uno o più premi. */
@@ -87,10 +100,10 @@ class Promozione extends Model
         return $this->hasMany(PromozionePremio::class);
     }
 
-    /** 🆕 P5 — le condizioni sui destinatari, in AND. */
-    public function condizioni(): HasMany
+    /** 🆕 P5 — le condizioni sui destinatari, in AND. ⚠️ Morph come i bersagli. */
+    public function condizioni(): MorphMany
     {
-        return $this->hasMany(PromozioneCondizione::class);
+        return $this->morphMany(PromozioneCondizione::class, 'pubblico');
     }
 
     /** 🆕 P1 — chi l'ha presa. */

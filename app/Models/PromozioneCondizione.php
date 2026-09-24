@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\TipoDiCondizione;
+use App\Models\Concerns\AppartieneAUnPubblico;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,9 +18,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PromozioneCondizione extends Model
 {
+    use AppartieneAUnPubblico;
+
     protected $table = 'promozione_condizioni';
 
-    protected $fillable = ['promozione_id', 'tipo', 'parametri'];
+    protected $fillable = ['promozione_id', 'pubblico_type', 'pubblico_id', 'tipo', 'parametri'];
 
     protected function casts(): array
     {
