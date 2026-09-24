@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Resources\WorkoutPlans\Schemas;
 
 use App\Enums\MuscleGroup;
-use App\Enums\UserRole;
 use App\Models\Exercise;
 use App\Models\PlanExercise;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Services\Training\ExerciseMatcher;
-use App\Support\Tenancy\TenantContext;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -19,7 +17,6 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\DB;
 
 /**
  * L'editor di una scheda — B4.4.
@@ -533,25 +530,20 @@ class WorkoutPlanForm
         return $righe === [] ? $nome : $nome.' · '.($rip === [] ? count($righe).' serie' : implode('·', $rip));
     }
 
-    /** @return array<int, string> */
-    private static function iscritti(): array
-    {
-        $tenantId = app(TenantContext::class)->id();
-
-        $query = User::query()
-            ->whereIn('id', DB::table('model_has_roles')
-                ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                ->where('roles.name', UserRole::Member->value)
-                ->where('model_has_roles.tenant_id', $tenantId)
-                ->select('model_has_roles.model_id'));
-
-        // Un trainer puo' assegnare solo ai propri: e' lo stesso confine di B3.5.
-        $utente = auth()->user();
-
-        if ($utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin()) {
-            $query->whereIn('id', $utente->assignedMembers()->pluck('users.id')->all());
-        }
-
-        return $query->orderBy('name')->pluck('name', 'id')->all();
-    }
+    /*
+     * ══ ⛔ VIA `iscritti()`, CHE NON CHIAMAVA PIÙ NESSUNO — 24/09/2026 ═══════
+     *
+     * 🚨 **Era codice morto che insegnava una regola sbagliata.** Riempiva la
+     * tendina «per chi è questa scheda», sparita quando le schede hanno smesso
+     * di avere un destinatario sul server (R2: qui ci sono solo **modelli**,
+     * `member_id IS NULL`).
+     *
+     * ⛔ Dentro c'era, ancora, il filtro sugli **assegnati** per un trainer di
+     * palestra — la regola che il committente ha smentito di nuovo il 24/09:
+     * *«I TRAINER DELLA PALESTRA NON HANNO ALLIEVI ASSEGNATI, SEGUONO TUTTI»*.
+     *
+     * ⚠️ **Il codice morto non è inerte**: è la **quarta** copia di «chi posso
+     * seguire», e chi avesse dovuto rifare quella tendina l'avrebbe copiata da
+     * qui. 💡 Se serve di nuovo un elenco di persone: `ChiPossoSeguire`.
+     */
 }

@@ -78,18 +78,45 @@ class ChiPossoSeguire
          * 16/09 ha fatto riscrivere `limitaAgliAssegnati`.
          */
         if ($utente->isFreeTrainer()) {
-            return User::query()
-                ->withoutGlobalScopes([TenantScope::class])
-                ->whereIn(
-                    'users.id',
-                    $utente->assignedMembers()
-                        ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
-                        ->select('users.id'),
-                );
+            return self::iSuoiAllievi($utente);
         }
 
         // La palestra: chi ha il ruolo `member` **in questo spazio**.
         return User::query()->whereIn('users.id', self::idConRuoloQui(UserRole::Member));
+    }
+
+    /**
+     * 🆕 **Gli allievi SUOI** — quelli che porta lui, ovunque abitino.
+     *
+     * ══ ⛔ NON SONO «GLI ISCRITTI ASSEGNATI A LUI» ═════════════════════════
+     *
+     * 🚨 La differenza è una regola del committente, ripetuta il 16/09, il 23/09
+     * e il 24/09: *«I TRAINER DELLA PALESTRA NON HANNO ALLIEVI ASSEGNATI,
+     * SEGUONO TUTTI»*.
+     *
+     * | Domanda | Risposta |
+     * |---|---|
+     * | «chi posso seguire in questa palestra?» | **tutti** gli iscritti — `query()` |
+     * | «quali allievi sono **miei**?» | le righe di `trainer_member` — **questo metodo** |
+     *
+     * ⛔ Il secondo insieme **non è un sottoinsieme del primo**: un allievo suo
+     * può abitare in tutt'altro spazio (F6.1). 💡 Per questo qui si toglie
+     * `TenantScope` invece di incrociare con la palestra: incrociando, i suoi
+     * allievi di fuori sparirebbero dal conto — **in silenzio**, come sempre.
+     *
+     * ⚠️ `nonLiberati()` come fa l'app in `ChiSiVede::allieviDi()`: un rapporto
+     * chiuso non torna in elenco.
+     */
+    public static function iSuoiAllievi(User $trainer): Builder
+    {
+        return User::query()
+            ->withoutGlobalScopes([TenantScope::class])
+            ->whereIn(
+                'users.id',
+                $trainer->assignedMembers()
+                    ->where(fn ($q) => LoSlotDelTrainer::nonLiberati($q))
+                    ->select('users.id'),
+            );
     }
 
     /**

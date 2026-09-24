@@ -13,13 +13,17 @@ use App\Filament\Gym\Resources\PlanImports\PlanImportResource;
 use App\Filament\Gym\Widgets\GymOverview;
 use App\Filament\Gym\Widgets\IlGiroDellaPalestra;
 use App\Filament\Gym\Widgets\IPostiDellaPalestra;
+use App\Filament\Gym\Widgets\LoSlotDaDecidere;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Reporting\IContiDellaPalestra;
+use App\Services\Tenancy\AllenareInUnaPalestra;
 use App\Services\Tenancy\CreaTenantPersonale;
 use App\Services\Tenancy\InvitiDelTrainer;
+use App\Services\Tenancy\LoSlotDelTrainer;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -628,6 +632,27 @@ final class ITrePannelliDeiTrainerTest extends TestCase
         return $numeri;
     }
 
+    /**
+     * Le **note** sotto i numeri, che sono il posto dove si scrivono le regole
+     * in italiano — e quindi dove si sbagliano.
+     *
+     * @return list<string>
+     */
+    private function leNoteDelCruscotto(User $chi, Tenant $dove): array
+    {
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($chi);
+        $this->ctx()->set($dove);
+
+        $metodo = new \ReflectionMethod(GymOverview::class, 'getStats');
+        $metodo->setAccessible(true);
+
+        return array_values(array_filter(array_map(
+            static fn ($stat): string => (string) $stat->getDescription(),
+            $metodo->invoke(new GymOverview),
+        )));
+    }
+
     /** Un allievo del trainer che vive **nello spazio del trainer**. */
     private function unAllievoInCasa(User $trainer, string $email = 'in-casa@esempio.test'): User
     {
@@ -671,25 +696,25 @@ final class ITrePannelliDeiTrainerTest extends TestCase
 
         $this->assertSame(
             '2',
-            $numeri['Iscritti attivi'] ?? null,
+            $numeri['I tuoi allievi'] ?? null,
             '🚨 Il cruscotto conta solo gli allievi che abitano nello spazio del trainer: '
             .'l\'altro lo paga e non lo vede, e il numero non dà nessun segno di essere monco.',
         );
     }
 
     /**
-     * 🆕 **Il trainer di palestra vede due numeri, e sono due domande diverse.**
+     * 🆕 **Il cruscotto conta lo spazio in cui sei, e basta.**
      *
-     * 📌 Il committente: *«in dashboard dice 0 iscritti. Che di suo sarebbe
-     * anche giusto, ma vorrei che mostrasse un'altra card con allievi seguiti
-     * che indichi tutti gli allievi della palestra»*.
+     * 📌 Il committente, il 24/09: *«se l'hai organizzato a spazi, tanto vale
+     * che nello spazio della palestra in dashboard si vedano solo gli allievi
+     * della palestra. Idem per giulia»*.
      *
-     * ⚠️ Il primo numero resta **i suoi**: è il suo lavoro. 💡 Il secondo è la
-     * palestra in cui lavora, e non gli dice niente che l'elenco degli iscritti
-     * — che dal 16/09 vede tutto in lettura — non gli dica già.
+     * 🚨 Il caso forte è il **doppio cappello**: chi ha allievi suoi **e**
+     * lavora in una palestra. ⛔ Dentro la palestra i suoi non si contano —
+     * stanno nel suo spazio, e lì l'elenco «Iscritti» non li mostra nemmeno.
      */
     #[Test]
-    public function il_trainer_di_palestra_vede_anche_il_totale_della_palestra(): void
+    public function nella_palestra_il_cruscotto_conta_gli_iscritti_della_palestra(): void
     {
         $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $coach = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
@@ -697,30 +722,103 @@ final class ITrePannelliDeiTrainerTest extends TestCase
         $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
         $this->creaUtente($palestra, UserRole::Member, 'due@olimpo.test');
 
-        $numeri = $this->iNumeriDelCruscotto($coach, $palestra);
+        // 🚨 E un allievo **suo**, che abita altrove: dentro la palestra non
+        //    deve entrare nel conto, né togliere niente.
+        $altrove = $this->creaPalestra('Altrove', 'altrove');
+        $suo = $this->creaUtente($altrove, UserRole::Member, 'suo@altrove.test');
 
-        $this->assertSame('0', $numeri['I tuoi allievi'] ?? null, 'Non ha nessun assegnato: il numero suo è zero.');
+        $suo->assignedTrainers()->attach($coach->getKey(), [
+            'tenant_id' => $coach->tenant_id,
+            'assigned_at' => now(),
+            'assigned_by' => $coach->getKey(),
+        ]);
+
+        $numeri = $this->iNumeriDelCruscotto(
+            User::withoutGlobalScopes()->findOrFail($coach->getKey()),
+            $palestra,
+        );
 
         $this->assertSame(
             '2',
-            $numeri['Allievi della palestra'] ?? null,
-            '🚨 Un trainer appena assunto vede solo uno zero, e uno zero da solo sembra un pannello rotto.',
+            $numeri['Iscritti attivi'] ?? null,
+            '🚨 Nella palestra il cruscotto non conta gli iscritti della palestra.',
+        );
+
+        $this->assertCount(
+            1,
+            $numeri,
+            '⛔ C\'è una seconda card che parla di un altro spazio: il pannello prende la forma '
+            .'dello spazio in cui sei, e un numero che viene da fuori non si può seguire.',
         );
     }
 
-    /** ⛔ E un trainer di palestra non ha nessun secondo numero da inventare a casa sua. */
+    /**
+     * ⛔ **E a schermo non compare mai la parola «assegnati».**
+     *
+     * 🚨 Questo test non guarda un numero: guarda **le parole**. 📌 La regola
+     * del committente — *«I TRAINER DELLA PALESTRA NON HANNO ALLIEVI
+     * ASSEGNATI, SEGUONO TUTTI»* — è stata violata tre volte, e l'ultima volta
+     * nel posto peggiore: nel **testo** della card.
+     *
+     * ⚠️ Un test sui numeri non l'avrebbe vista: i numeri erano giusti.
+     */
     #[Test]
-    public function l_indipendente_non_vede_la_card_della_palestra(): void
+    public function nel_cruscotto_non_si_parla_mai_di_allievi_assegnati(): void
     {
-        $libero = $this->conPianoDaTrainer($this->unIndipendente());
-        $this->unAllievoInCasa($libero);
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->creaUtente($palestra, UserRole::Trainer, 'coach@olimpo.test');
+        $this->creaUtente($palestra, UserRole::Member, 'uno@olimpo.test');
 
-        $numeri = $this->iNumeriDelCruscotto($libero, $libero->tenant);
+        $scritte = implode(' | ', array_merge(
+            array_keys($this->iNumeriDelCruscotto($coach, $palestra)),
+            $this->leNoteDelCruscotto($coach, $palestra),
+        ));
 
-        $this->assertArrayNotHasKey(
-            'Allievi della palestra',
-            $numeri,
-            'Nel suo spazio non c\'è nessuna palestra: quel numero sarebbe lo stesso di prima, scritto due volte.',
+        $this->assertStringNotContainsStringIgnoringCase(
+            'assegnat',
+            $scritte,
+            '⛔ Il cruscotto scrive «assegnati» a un trainer di palestra: gli iscritti della '
+            ."palestra li segue tutti, e quel testo gli fa cercare una schermata che non esiste.\n"
+            .'A schermo c\'è: '.$scritte,
+        );
+    }
+
+    /**
+     * 🆕 **E lo stesso trainer, a casa sua, conta i SUOI — ovunque abitino.**
+     *
+     * 🚨 È il rovescio del test qui sopra, e sono **due spazi della stessa
+     * persona**: dentro la palestra i suoi non si vedono, nel suo spazio ci sono
+     * tutti — anche quelli che abitano in una palestra.
+     *
+     * ⛔ Il conto non si incrocia con nessuna palestra: incrociando, l'allievo
+     * suo che abita altrove sparirebbe **in silenzio**.
+     */
+    #[Test]
+    public function nel_suo_spazio_lo_stesso_trainer_conta_i_suoi(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->conPianoDaTrainer($this->unIndipendente('doppio@esempio.test'));
+
+        // Il secondo cappello: trainer **dentro** la palestra, restando a casa sua.
+        DB::table('model_has_roles')->updateOrInsert([
+            'role_id' => DB::table('roles')
+                ->where('name', UserRole::Trainer->value)
+                ->where('tenant_id', $palestra->getKey())
+                ->value('id'),
+            'model_type' => User::class,
+            'model_id' => $coach->getKey(),
+            'tenant_id' => $palestra->getKey(),
+        ], []);
+
+        $this->unAllievoInCasa($coach, 'in-casa@doppio.test');
+        $this->unAllievoAltrove($coach, $palestra);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+
+        $this->assertSame(
+            '2',
+            $this->iNumeriDelCruscotto($fresco, $fresco->tenant)['I tuoi allievi'] ?? null,
+            '🚨 Nel suo spazio manca l\'allievo che abita in una palestra: è suo e lo paga lui.',
         );
     }
 
@@ -778,6 +876,136 @@ final class ITrePannelliDeiTrainerTest extends TestCase
             (string) (new IPostiDellaPalestra)->invitaIscrittoAction()->getLabel(),
             '🚨 Il tasto è quello della palestra: cliccandolo esce «Solo una palestra può invitare».',
         );
+    }
+
+    // ───────────────── 5. lo slot da decidere ─────────────────
+
+    /**
+     * 🎟️ **La domanda sullo slot, adesso anche nel pannello.**
+     *
+     * 📌 Il committente, il 24/09: *«Ok, metti la modale anche sul pannello»*.
+     *
+     * ⛔ **Prima esisteva solo nell'app** (`TrainerController::slotDaDecidere`):
+     * un trainer che lavora dal pannello non l'avrebbe vista mai, la decisione
+     * restava appesa e lui **continuava a pagare** un posto che forse non
+     * voleva.
+     *
+     * 💡 Il caso: il trainer viene assunto in una palestra dove sta già un suo
+     * allievo. Lo fa nascere `AllenareInUnaPalestra::assumi()`, che è la strada
+     * vera — qui non si scrive nessuna riga a mano, o si proverebbe solo che so
+     * scrivere una `update`.
+     */
+    #[Test]
+    public function la_domanda_sullo_slot_si_vede_anche_dal_pannello(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->conPianoDaTrainer($this->unIndipendente());
+
+        // Un suo allievo che è **iscritto alla palestra** dove sta per entrare.
+        $allievo = $this->unAllievoAltrove($coach, $palestra);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+
+        $this->assertSame(
+            1,
+            app(AllenareInUnaPalestra::class)->assumi($fresco, $palestra),
+            'La sovrapposizione non è nata: il test proverebbe il vuoto.',
+        );
+
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($fresco);
+        $this->ctx()->set($fresco->tenant);
+
+        $this->assertTrue(
+            LoSlotDaDecidere::canView(),
+            '🚨 La domanda sullo slot non compare nel pannello: resta appesa e intanto lui paga.',
+        );
+
+        /*
+         * 🚨 `assertActionMounted()` **prima**: prova che la modale si apre **da
+         * sola**, come nell'app. ⛔ Senza, il test passerebbe anche se la
+         * domanda ci fosse solo dietro un pulsante da cercare — che è il
+         * difetto da cui nasce tutto questo.
+         */
+        Livewire::test(LoSlotDaDecidere::class)
+            ->assertActionMounted('decidiLoSlot')
+
+            /*
+             * ⚠️ **E la card sotto c'è comunque.** 🚨 Una modale chiusa per
+             * sbaglio porterebbe via l'unico modo di rispondere, e la domanda
+             * tornerebbe invisibile com'era prima: è il difetto da cui nasce
+             * tutto questo widget.
+             */
+            ->assertSee($allievo->name)
+            ->assertSee('Decidi')
+            ->callMountedAction(['tengo' => true])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('trainer_member', [
+            'trainer_id' => $fresco->getKey(),
+            'member_id' => $allievo->getKey(),
+            'disattivato_il' => null,
+        ]);
+
+        $this->assertFalse(
+            app(LoSlotDelTrainer::class)->daDecidere($fresco)->isNotEmpty(),
+            'Dopo la risposta la domanda si ripresenta: verrebbe chiesta all\'infinito.',
+        );
+    }
+
+    /**
+     * ⛔ **E liberare il posto chiude il rapporto**, che è l'altra metà.
+     *
+     * 🚨 Le due risposte non sono «ok» e «annulla»: una costa soldi, l'altra
+     * costa un allievo. 💡 Per questo il test le prova tutte e due — e guarda
+     * `disattivato_il`, cioè la conseguenza, non il fatto che il pulsante
+     * esista.
+     */
+    #[Test]
+    public function liberare_il_posto_chiude_il_rapporto(): void
+    {
+        $palestra = $this->creaPalestra('Olimpo', 'olimpo');
+        $coach = $this->conPianoDaTrainer($this->unIndipendente());
+        $allievo = $this->unAllievoAltrove($coach, $palestra);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+        app(AllenareInUnaPalestra::class)->assumi($fresco, $palestra);
+
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($fresco);
+        $this->ctx()->set($fresco->tenant);
+
+        /*
+         * ⚠️ `['tengo' => false]` è **esattamente** quello che manda il pulsante
+         * rosso: `makeModalSubmitAction('liberoIlPosto', ['tengo' => false])`.
+         * 💡 Il test percorre la stessa strada, non una scorciatoia.
+         */
+        Livewire::test(LoSlotDaDecidere::class)
+            ->assertActionMounted('decidiLoSlot')
+            ->callMountedAction(['tengo' => false])
+            ->assertHasNoActionErrors();
+
+        $this->assertNotNull(
+            DB::table('trainer_member')
+                ->where('trainer_id', $fresco->getKey())
+                ->where('member_id', $allievo->getKey())
+                ->value('disattivato_il'),
+            '🚨 Ha liberato il posto ma il rapporto è ancora aperto: continuerebbe a pagarlo.',
+        );
+    }
+
+    /** ⛔ E a chi non ha niente da decidere il riquadro non si mostra. */
+    #[Test]
+    public function senza_sovrapposizioni_il_riquadro_non_c_e(): void
+    {
+        $libero = $this->conPianoDaTrainer($this->unIndipendente());
+        $this->unAllievoInCasa($libero);
+
+        Filament::setCurrentPanel('admin');
+        $this->actingAs($libero);
+        $this->ctx()->set($libero->tenant);
+
+        $this->assertFalse(LoSlotDaDecidere::canView());
     }
 
     /**

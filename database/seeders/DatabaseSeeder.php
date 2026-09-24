@@ -48,5 +48,18 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->call(DemoGymSeeder::class);
+
+        /*
+         * 🆕 🏋️ **I due trainer che non sono di una palestra** — 24/09/2026.
+         *
+         * 🚨 Va **dopo** `DemoGymSeeder` e non è un dettaglio d'ordine: i suoi
+         * allievi sono iscritti **delle palestre demo**, e senza quelle non ha
+         * niente da legare.
+         *
+         * ⚠️ Serve perché i pannelli del trainer indipendente e del doppio
+         * cappello, senza dati, sono tre schermate vuote: chi apre il progetto
+         * su un'altra macchina non saprebbe se è un difetto o se mancano i dati.
+         */
+        $this->call(DemoTrainerSeeder::class);
     }
 }

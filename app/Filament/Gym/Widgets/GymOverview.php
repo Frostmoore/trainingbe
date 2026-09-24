@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Gym\Widgets;
 
 use App\Filament\Gym\Support\ChiPossoSeguire;
-use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -61,62 +60,60 @@ class GymOverview extends StatsOverviewWidget
          * 💡 I numeri che lo sostituiscono — posti, costo, guadagno — stanno in
          * `IPostiDellaPalestra` e `IlGiroDiSoldiDellaPalestra` (F5.1, F5.2).
          */
+        /*
+         * ══ 🚨 IL CRUSCOTTO CONTA **QUESTO SPAZIO**, E BASTA ════════════════
+         *
+         * 📌 Il committente, il 24/09: *«se l'hai organizzato a spazi, tanto
+         * vale che nello spazio della palestra in dashboard si vedano solo gli
+         * allievi della palestra. Idem per giulia»*.
+         *
+         * ⛔ **Via la card «I tuoi allievi» dentro la palestra.** Gli allievi
+         * suoi sono roba del **suo** spazio: là si contano, e là si va a
+         * guardarli con «Cambia spazio».
+         *
+         * 💡 E dentro la palestra quel numero era **già incoerente col resto
+         * della pagina**: diceva «3» mentre l'elenco «Iscritti» di quello
+         * spazio ne mostrava dieci, e i suoi tre lì dentro non c'erano — due
+         * abitano altrove. Un numero che rimanda a una lista che in quello
+         * spazio non esiste.
+         */
+        $personale = app(TenantContext::class)->get()?->ePersonale() === true;
+
         $stat = [
-            Stat::make($this->dipendente() ? 'I tuoi allievi' : 'Iscritti attivi', (string) $totale)
-                ->description($this->dipendente()
-                    ? 'Le persone assegnate a te'
+            Stat::make($personale ? 'I tuoi allievi' : 'Iscritti attivi', (string) $totale)
+                ->description($personale
+                    ? 'Le persone che segui, ovunque siano iscritte'
                     : 'Persone con un account funzionante')
                 ->icon('heroicon-m-user-group')
                 ->color('primary'),
         ];
 
         /*
-         * ══ 🆕 👥 LA SECONDA CARD, SOLO PER IL TRAINER DI PALESTRA ══════════
+         * ══ ⛔ LA SECONDA CARD C'E' STATA, PER MEZZA GIORNATA ═══════════════
          *
-         * 📌 Il committente, il 24/09, guardando il pannello di un trainer
-         * dipendente: *«in dashboard dice 0 iscritti. Che di suo sarebbe anche
-         * giusto, ma vorrei che mostrasse un'altra card con allievi seguiti che
-         * indichi tutti gli allievi della palestra»*.
+         * 📌 Il 24/09 il committente aveva chiesto, per il trainer di palestra,
+         * *«un'altra card con allievi seguiti che indichi tutti gli allievi
+         * della palestra»* accanto ai suoi. ⛔ Poi, vedendola: *«se l'hai
+         * organizzato a spazi, tanto vale che nello spazio della palestra si
+         * vedano solo gli allievi della palestra»*.
          *
-         * 💡 Le due domande sono diverse e stanno bene una accanto all'altra:
-         * «quanti ne seguo io» dice quanto lavoro ho, «quanti ce ne sono qui»
-         * dice dov'è il posto in cui lavoro. ⛔ Un trainer appena assunto vedeva
-         * solo uno zero, e uno zero da solo sembra un pannello rotto.
+         * 🚨 **Ed è più coerente, non solo più semplice**: il pannello è uno e
+         * prende la forma dello spazio in cui sei. Un numero che parla di un
+         * altro spazio, in mezzo a una pagina che parla di questo, è la stessa
+         * incoerenza che rendeva quella card inseguibile — diceva «3» mentre
+         * l'elenco accanto ne mostrava dieci, e quei tre lì dentro non c'erano.
          *
-         * ⚠️ **Non è una fuga di dati**: dal 16/09 un trainer di palestra vede
-         * l'elenco completo degli iscritti in lettura (`UserPolicy::viewAny`,
-         * `ChiPossoSeguire`). 🚨 Il numero non dice niente che l'elenco non dica
-         * già — e il giorno che quella decisione cambiasse, questa card va tolta
-         * **insieme** all'elenco, non dopo.
+         * ⚠️ **Nel frattempo quella card ha però insegnato una cosa che resta**:
+         * la sua descrizione diceva *«anche quelli non assegnati a te»*, e gli
+         * iscritti di una palestra **non sono assegnati a nessuno**. La regola
+         * sta in `memory/decisioni.md`, e il test che la tiene ferma guarda **le
+         * parole** del cruscotto, non i numeri.
          */
-        if ($this->dipendente()) {
-            $stat[] = Stat::make('Allievi della palestra', (string) count($this->idDellaPalestra()))
-                ->description('Tutti gli iscritti, anche quelli non assegnati a te')
-                ->icon('heroicon-m-building-storefront')
-                ->color('gray');
-        }
-
         return $stat;
     }
 
     /**
-     * 🏢 Chi guarda è un trainer **dipendente** di questa palestra?
-     *
-     * ⚠️ `isTrainer()` risponde **sullo spazio corrente**: dentro la palestra è
-     * `trainer`, a casa sua è `free_user`. È la stessa domanda che ha tenuto
-     * fuori dal pannello tutti i trainer di palestra per sei giorni
-     * (`RoleAwareLoginResponse`) — qui va bene perché qui lo spazio corrente
-     * **è** la palestra che si sta guardando.
-     */
-    private function dipendente(): bool
-    {
-        $utente = auth()->user();
-
-        return $utente instanceof User && $utente->isTrainer() && ! $utente->isGymAdmin();
-    }
-
-    /**
-     * Le persone che questo cruscotto conta come «mie».
+     * Le persone del numero grosso in cima: **quelle di questo spazio**.
      *
      * ══ 🚨 PERCHE' PASSA DA `ChiPossoSeguire` — F10.7, 24/09/2026 ══════════
      *
@@ -131,9 +128,12 @@ class GymOverview extends StatsOverviewWidget
      * spazio della loro palestra**. 🚨 Ne contava uno su due, e il numero
      * mancante era una persona che lui paga.
      *
-     * 💡 La regola sta scritta **una volta sola** in `ChiPossoSeguire`: chi la
-     * cerca la trova, e chi la cambia la cambia per tutti — elenco iscritti,
-     * tendina dell'import e questo cruscotto.
+     * 💡 Adesso la domanda è una sola, e la risposta dipende **dallo spazio**:
+     *
+     * | Dove sei | Cosa conta |
+     * |---|---|
+     * | in una palestra | gli iscritti **della palestra** — che un trainer segue tutti |
+     * | nel tuo spazio | i **tuoi** allievi, ovunque siano iscritti |
      *
      * @return list<int>
      */
@@ -143,32 +143,9 @@ class GymOverview extends StatsOverviewWidget
             return [];
         }
 
-        $query = ChiPossoSeguire::query()->where('is_active', true);
-
-        /*
-         * ⚠️ Il trainer dipendente resta ai **suoi**: `ChiPossoSeguire` gli dà
-         * tutta la palestra perché quella è la regola degli *elenchi* (16/09,
-         * *«tutti in lettura»*), ma il numero grosso in cima al pannello è «il
-         * mio lavoro», e i totali della palestra stanno nella card accanto.
-         */
-        if ($this->dipendente()) {
-            $query->whereIn('users.id', auth()->user()->assignedMembers()->pluck('users.id')->all());
-        }
-
-        return $query->pluck('users.id')->all();
-    }
-
-    /**
-     * 🆕 Tutti gli iscritti **di questo spazio**, senza il filtro dell'assegnato.
-     *
-     * @return list<int>
-     */
-    private function idDellaPalestra(): array
-    {
-        if (app(TenantContext::class)->id() === null) {
-            return [];
-        }
-
-        return ChiPossoSeguire::query()->where('is_active', true)->pluck('users.id')->all();
+        return ChiPossoSeguire::query()
+            ->where('is_active', true)
+            ->pluck('users.id')
+            ->all();
     }
 }
