@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\InvitiDellaPalestraController;
 use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\LiberatoriaController;
@@ -735,6 +736,28 @@ Route::prefix('v1')->group(function (): void {
         Route::post('trainer/invites', [TrainerController::class, 'invite']);
         Route::post('trainer/invites/{invite}/email', [TrainerController::class, 'rimandaInvito'])->whereNumber('invite');
         Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite');
+
+        /*
+         * 🆕 🏋️ **Gli stessi quattro gesti, lato PALESTRA** — B2, 24/09/2026.
+         *
+         * 📌 Il committente, 23/09: *«trainer e palestre possono proprio fare
+         * gli inviti direttamente dall'app»*. Queste sono le gemelle delle
+         * quattro righe qui sopra, e chiudono la voce 11.
+         *
+         * ⚠️ **Due differenze, e stanno tutte nel corpo della richiesta**: si
+         * sceglie se invitare un **iscritto** o un **trainer**, e i posti
+         * tornano contati a parte perche' sono due limiti diversi del piano.
+         *
+         * 🚨 Il cancello e' **dentro il controller**, come per il trainer: un
+         * middleware in piu' qui sarebbe una seconda sede della stessa regola.
+         * ⛔ E non e' `comandaQui()`: un trainer indipendente a casa sua
+         * comanda, ma casa sua non e' una palestra — lui ha gia' le rotte di
+         * sopra.
+         */
+        Route::get('gym/invites', [InvitiDellaPalestraController::class, 'elenco']);
+        Route::post('gym/invites', [InvitiDellaPalestraController::class, 'crea']);
+        Route::post('gym/invites/{invite}/email', [InvitiDellaPalestraController::class, 'rimanda'])->whereNumber('invite');
+        Route::delete('gym/invites/{invite}', [InvitiDellaPalestraController::class, 'revoca'])->whereNumber('invite');
         Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
 
         /*

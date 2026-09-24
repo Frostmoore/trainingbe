@@ -165,22 +165,17 @@ class TrainerController extends Controller
             ->get();
 
         return response()->json([
-            'data' => $inviti->map(fn (TrainerInvite $i): array => [
-                'id' => $i->getKey(),
-                'token' => $i->token,
-                'url' => self::linkDi($i),
-                'email' => $i->email,
-
-                /*
-                 * 💡 **Una data, non un sì/no**: «mandata il 24/09 alle 14:03»
-                 * è una risposta, «mandata: sì» è metà risposta — e quando un
-                 * invito viene rimandato a un altro indirizzo, la data dice
-                 * qual è l'ultimo invio.
-                 */
-                'email_inviata_il' => $i->email_inviata_il?->toIso8601String(),
-                'creato_il' => $i->created_at?->toIso8601String(),
-                'scade_il' => $i->expires_at->toIso8601String(),
-            ])->values(),
+            /*
+             * 🆕 🔑 **La forma della riga sta su `EUnInvito::perLApp()`** —
+             * B2, 24/09/2026.
+             *
+             * ⛔ Era scritta qui dentro. In B2 la **stessa pagina dell'app**
+             * deve mostrare anche gli inviti di una palestra: una seconda
+             * forma, anche solo con un nome di campo diverso, vorrebbe dire due
+             * rami nel lettore dell'app — cioè il posto in cui si dimentica
+             * sempre uno dei due.
+             */
+            'data' => $inviti->map(fn (TrainerInvite $i): array => $i->perLApp())->values(),
 
             'meta' => $this->inviti->iPosti($trainer),
         ]);
@@ -224,27 +219,20 @@ class TrainerController extends Controller
                 'email' => $invito->email,
                 'email_inviata' => $invito->email_inviata_il !== null,
                 'expires_at' => $invito->expires_at->toIso8601String(),
-                'url' => self::linkDi($invito),
+                'url' => $invito->link(),
             ],
         ], 201);
     }
 
-    /**
-     * Il link da mandare, per questo invito.
+    /*
+     * ⛔ **`linkDi()` non sta piu' qui** — B2, 24/09/2026.
      *
-     * 🚨 **Si compone sul server, da `config('app.url')`.** Lasciarlo comporre
-     * all'app vorrebbe dire che il giorno in cui cambia il dominio bisogna
-     * pubblicare una versione nuova sugli store per farlo cambiare — e nel
-     * frattempo ogni invito mandato punterebbe da nessuna parte.
-     *
-     * 💡 🆕 Ed è un metodo e non una riga ripetuta, da quando gli inviti si
-     * **elencano** (B1.1): due composizioni dello stesso link divergono, e
-     * divergendo mandano gente su un indirizzo che non esiste.
+     * 🔑 In B1 era un metodo privato di questo controller. In B2 sarebbe
+     * diventato **due** metodi privati identici in due controller, e due
+     * composizioni dello stesso link divergono: quando divergono, mandano gente
+     * su un indirizzo che non esiste. 💡 Adesso e' `EUnInvito::link()`, dove
+     * gia' stanno le regole di validita' per la stessa ragione.
      */
-    private static function linkDi(TrainerInvite $invito): string
-    {
-        return rtrim((string) config('app.url'), '/').'/invito/'.$invito->token;
-    }
 
     /**
      * 🆕 📧 **Rimanda per email un invito già creato** — B1.3, 24/09/2026.

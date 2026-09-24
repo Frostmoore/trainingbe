@@ -35,6 +35,15 @@ class TrainerInvite extends Model
      */
     use EUnInvito;
 
+    /**
+     * 🆕 🔗 La pagina che apre questo invito — B2, 24/09/2026.
+     *
+     * ⚠️ **Non è la stessa di `InvitoInPalestra`**, e non è un dettaglio: quella
+     * di un trainer racconta chi ti allenerà, quella di una palestra racconta
+     * dove ti iscrivi. Il link lo compone `EUnInvito::link()` leggendo di qui.
+     */
+    public const PERCORSO_DEL_LINK = 'invito';
+
     protected $fillable = ['tenant_id', 'trainer_id', 'token', 'email', 'expires_at'];
 
     protected function casts(): array

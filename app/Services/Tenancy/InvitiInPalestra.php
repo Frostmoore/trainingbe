@@ -171,6 +171,21 @@ class InvitiInPalestra
         try {
             Mail::to($invito->email)->send(new InvitoInPalestraMail($invito));
 
+            /*
+             * 🆕 📧 **L'invio si segna in tabella** — B2, 24/09/2026, gemello
+             * esatto di quello che B1 ha fatto per gli inviti dei trainer.
+             *
+             * ⛔ Prima il risultato dell'invio viveva solo nel valore di
+             * ritorno, cioè per la durata di una richiesta. 🚨 La schermata
+             * «Inviti in sospeso» dell'app arriva dopo, magari il giorno dopo:
+             * senza una data in tabella dovrebbe scrivere «mandata» sempre —
+             * mentendo quando la mail non è partita — oppure non scriverlo mai,
+             * e chi invita non saprebbe se deve rimandarla.
+             *
+             * ⚠️ `forceFill`: non è un campo che si scrive da un modulo.
+             */
+            $invito->forceFill(['email_inviata_il' => now()])->save();
+
             return true;
         } catch (Throwable $e) {
             Log::error('Invito in palestra: mail non partita.', [

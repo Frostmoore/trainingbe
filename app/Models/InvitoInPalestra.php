@@ -34,6 +34,15 @@ class InvitoInPalestra extends Model
      */
     protected $table = 'tenant_invites';
 
+    /**
+     * 🆕 🔗 La pagina che apre questo invito — B2, 24/09/2026.
+     *
+     * ⚠️ **Diversa da quella di `TrainerInvite`**: qui si racconta una palestra
+     * in cui iscriversi, là una persona che ti allenerà. Il link lo compone
+     * `EUnInvito::link()` leggendo di qui.
+     */
+    public const PERCORSO_DEL_LINK = 'invito-palestra';
+
     protected $fillable = [
         'tenant_id', 'invitato_da', 'token', 'email', 'expires_at',
 
@@ -56,6 +65,15 @@ class InvitoInPalestra extends Model
             'used_at' => 'datetime',
             'revoked_at' => 'datetime',
             'rifiutato_il' => 'datetime',
+
+            /*
+             * 🆕 📧 **Quando è partita la mail** — B2, 24/09/2026.
+             *
+             * ⚠️ Non è `email !== null`: quello dice **a chi** si voleva
+             * mandarlo. La mail può non partire, e in quel caso l'invito resta
+             * valido di proposito — il link c'è e chi invita ce l'ha.
+             */
+            'email_inviata_il' => 'datetime',
         ];
     }
 

@@ -93,4 +93,65 @@ trait EUnInvito
 
         return $token;
     }
+
+    /**
+     * 🆕 🔗 **Il link da mandare** — blocco B2, 24/09/2026.
+     *
+     * ══ 🚨 SI COMPONE SUL SERVER, E NON E' UN DETTAGLIO ════════════════════
+     *
+     * ⛔ Lasciarlo comporre all'app vorrebbe dire che il giorno in cui cambia il
+     * dominio bisogna **pubblicare una versione nuova sugli store** per farlo
+     * cambiare — e nel frattempo ogni invito mandato punterebbe da nessuna
+     * parte. 📌 È già successo il 22/09 col dominio definitivo.
+     *
+     * ══ ⚠️ PERCHE' STA QUI E NON NEI DUE CONTROLLER ════════════════════════
+     *
+     * 🔑 In B1 era un metodo privato di `TrainerController`. In B2 sarebbe
+     * diventato **due** metodi privati identici in due controller, e due
+     * composizioni dello stesso link divergono: quando divergono, mandano gente
+     * su un indirizzo che non esiste — senza nessun errore da nessuna parte,
+     * perché il server risponde 404 a qualcun altro.
+     *
+     * ⚠️ **Il percorso lo dichiara ogni modello**, perché è l'unica cosa che
+     * cambia davvero: `/invito/…` per un trainer, `/invito-palestra/…` per una
+     * palestra. Sono due pagine diverse, con due testi diversi.
+     */
+    public function link(): string
+    {
+        return rtrim((string) config('app.url'), '/')
+            .'/'.trim(static::PERCORSO_DEL_LINK, '/')
+            .'/'.$this->token;
+    }
+
+    /**
+     * 🆕 📨 **Come l'app vede un invito in sospeso** — blocco B2, 24/09/2026.
+     *
+     * 🔑 **Una forma sola per tutti e due gli inviti.** In B1 questa riga stava
+     * dentro `TrainerController::invites()`; in B2 la stessa pagina dell'app
+     * deve poter mostrare gli inviti di una palestra, e una seconda forma —
+     * anche solo con un nome di campo diverso — vorrebbe dire due rami nel
+     * lettore dell'app, cioè il posto in cui si dimentica sempre uno dei due.
+     *
+     * ⚠️ **`email_inviata_il` è una data e non un sì/no**: «mandata il 24/09
+     * alle 14:03» è una risposta, «mandata: sì» è metà risposta — e quando un
+     * invito viene rimandato a un altro indirizzo, la data dice **qual è
+     * l'ultimo invio**.
+     *
+     * 🚨 Il `token` esce perché è **l'invito stesso** e chi lo legge qui è già
+     * chi l'ha creato: è la stessa cosa del link, scritta in due modi.
+     *
+     * @return array<string, mixed>
+     */
+    public function perLApp(): array
+    {
+        return [
+            'id' => $this->getKey(),
+            'token' => $this->token,
+            'url' => $this->link(),
+            'email' => $this->email,
+            'email_inviata_il' => $this->email_inviata_il?->toIso8601String(),
+            'creato_il' => $this->created_at?->toIso8601String(),
+            'scade_il' => $this->expires_at->toIso8601String(),
+        ];
+    }
 }
