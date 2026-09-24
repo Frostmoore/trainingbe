@@ -680,7 +680,16 @@ Route::prefix('v1')->group(function (): void {
          * della stessa regola, e due sedi divergono.
          */
         Route::get('trainer/members', [TrainerController::class, 'members']);
+        /*
+         * 🆕 📋 **Gli inviti in sospeso, elencabili** — B1, 24/09/2026.
+         *
+         * ⛔ Prima non esisteva **nessuna** rotta che li restituisse: un invito
+         * creato dall'app spariva, e il posto che occupava restava occupato
+         * sette giorni senza che nessuno potesse revocarlo.
+         */
+        Route::get('trainer/invites', [TrainerController::class, 'invites']);
         Route::post('trainer/invites', [TrainerController::class, 'invite']);
+        Route::post('trainer/invites/{invite}/email', [TrainerController::class, 'rimandaInvito'])->whereNumber('invite');
         Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite');
         Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
 

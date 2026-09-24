@@ -44,6 +44,16 @@ class TrainerInvite extends Model
             'used_at' => 'datetime',
             'revoked_at' => 'datetime',
             'rifiutato_il' => 'datetime',
+
+            /*
+             * 🆕 📧 **Quando è partita la mail** — B1, 24/09/2026.
+             *
+             * ⚠️ Non è `email !== null`: quello dice **a chi** si voleva
+             * mandarlo. La mail può non partire (trasporto giù, indirizzo
+             * rifiutato) e l'invito resta valido di proposito — il link esiste
+             * e chi invita ce l'ha.
+             */
+            'email_inviata_il' => 'datetime',
         ];
     }
 

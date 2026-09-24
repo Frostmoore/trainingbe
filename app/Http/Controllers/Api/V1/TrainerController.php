@@ -123,6 +123,69 @@ class TrainerController extends Controller
         ]);
     }
 
+    /**
+     * 🆕 📋 **Gli inviti in sospeso** — B1.1, 24/09/2026.
+     *
+     * ══ 🚨 PERCHE' NON C'ERA, E COSA COSTAVA ════════════════════════════════
+     *
+     * 📌 Il committente, il 23/09: *«trainer e palestre possono proprio fare gli
+     * inviti direttamente dall'app… devono poter creare il link di invito e
+     * inviarlo per mail o copiarlo»*.
+     *
+     * ⛔ **Un invito creato dall'app spariva.** Il link finiva negli appunti e
+     * da quel momento non esisteva più in nessuna schermata: non si rivedeva,
+     * non si ricopiava, non si revocava. ⚠️ Se prima di incollarlo si copiava
+     * qualcos'altro, **quel posto restava occupato sette giorni** — perché
+     * `postiRimasti()` conta anche gli inviti validi, ed è giusto che lo faccia.
+     * 🚨 Su un piano da 15 posti è il **7% del pagato**, perso per un tocco.
+     *
+     * ⚠️ **Solo i validi**, e non è pigrizia: la domanda che fa l'app è *«cosa
+     * ho in sospeso?»*. ⛔ Usati e scaduti non servono a chi deve decidere se
+     * revocare, e su un telefono riempirebbero la lista sopra le due righe che
+     * contano.
+     *
+     * 💡 I posti tornano **in questa stessa risposta**: chi guarda l'elenco per
+     * revocare sta guardando il contatore, e farglielo chiedere con una seconda
+     * chiamata vorrebbe dire mostrargli per un istante il numero di prima.
+     */
+    public function invites(Request $request): JsonResponse
+    {
+        $trainer = $this->trainerOrAbort($request);
+
+        /*
+         * 🚨 `withoutGlobalScopes()` e filtro esplicito sul trainer: il modello
+         * è scopato per tenant, e un trainer indipendente **vive in uno spazio
+         * diverso** da quello di certi suoi allievi (F6.1). Con lo scope attivo
+         * l'elenco sarebbe silenziosamente parziale.
+         */
+        $inviti = TrainerInvite::withoutGlobalScopes()
+            ->where('trainer_id', $trainer->getKey())
+            ->validi()
+            ->orderByDesc('created_at')
+            ->get();
+
+        return response()->json([
+            'data' => $inviti->map(fn (TrainerInvite $i): array => [
+                'id' => $i->getKey(),
+                'token' => $i->token,
+                'url' => self::linkDi($i),
+                'email' => $i->email,
+
+                /*
+                 * 💡 **Una data, non un sì/no**: «mandata il 24/09 alle 14:03»
+                 * è una risposta, «mandata: sì» è metà risposta — e quando un
+                 * invito viene rimandato a un altro indirizzo, la data dice
+                 * qual è l'ultimo invio.
+                 */
+                'email_inviata_il' => $i->email_inviata_il?->toIso8601String(),
+                'creato_il' => $i->created_at?->toIso8601String(),
+                'scade_il' => $i->expires_at->toIso8601String(),
+            ])->values(),
+
+            'meta' => $this->inviti->iPosti($trainer),
+        ]);
+    }
+
     /** Crea un invito monouso. */
     public function invite(Request $request): JsonResponse
     {
@@ -134,21 +197,121 @@ class TrainerController extends Controller
 
         $invito = $this->inviti->invita($trainer, $dati['email'] ?? null);
 
+        /*
+         * ══ 🚨 E LA MAIL? PARTE GIA', DENTRO `invita()` — B1.2, 24/09/2026 ══
+         *
+         * ⚠️ **Qui il 24/09 avevo scritto un secondo invio**, convinto che
+         * l'API salvasse l'indirizzo senza mandare niente. ⛔ Falso: avevo letto
+         * `InvitiDelTrainer::invita()` solo fino a metà, e in fondo chiama
+         * `mandaIlLink()` dal 22/09. Il mio «rimedio» mandava **due mail** per
+         * un invito solo, e l'ha beccato un test che pretendeva silenzio.
+         *
+         * 💡 **Quello che mancava davvero non era l'invio: era saperne
+         * l'esito.** `mandaIlLink()` può fallire — e quando fallisce l'invito
+         * resta valido di proposito — ma il risultato viveva solo nel valore di
+         * ritorno, cioè per la durata di una richiesta.
+         *
+         * 🔑 Adesso l'invio si segna in `trainer_invites.email_inviata_il`, e
+         * questa risposta si limita a **leggerlo**: una verità sola, in tabella,
+         * che l'elenco può rileggere anche domani.
+         */
+        $invito->refresh();
+
         return response()->json([
             'data' => [
+                'id' => $invito->getKey(),
                 'token' => $invito->token,
+                'email' => $invito->email,
+                'email_inviata' => $invito->email_inviata_il !== null,
                 'expires_at' => $invito->expires_at->toIso8601String(),
-
-                /*
-                 * 🚨 Il link si costruisce **sul server**, da `config('app.url')`.
-                 * Lasciarlo comporre all'app vorrebbe dire che il giorno in cui
-                 * cambia il dominio bisogna pubblicare una versione nuova sugli
-                 * store per farlo cambiare — e nel frattempo ogni invito
-                 * mandato punterebbe da nessuna parte.
-                 */
-                'url' => rtrim((string) config('app.url'), '/').'/invito/'.$invito->token,
+                'url' => self::linkDi($invito),
             ],
         ], 201);
+    }
+
+    /**
+     * Il link da mandare, per questo invito.
+     *
+     * 🚨 **Si compone sul server, da `config('app.url')`.** Lasciarlo comporre
+     * all'app vorrebbe dire che il giorno in cui cambia il dominio bisogna
+     * pubblicare una versione nuova sugli store per farlo cambiare — e nel
+     * frattempo ogni invito mandato punterebbe da nessuna parte.
+     *
+     * 💡 🆕 Ed è un metodo e non una riga ripetuta, da quando gli inviti si
+     * **elencano** (B1.1): due composizioni dello stesso link divergono, e
+     * divergendo mandano gente su un indirizzo che non esiste.
+     */
+    private static function linkDi(TrainerInvite $invito): string
+    {
+        return rtrim((string) config('app.url'), '/').'/invito/'.$invito->token;
+    }
+
+    /**
+     * 🆕 📧 **Rimanda per email un invito già creato** — B1.3, 24/09/2026.
+     *
+     * 📌 Serve alla pagina «Inviti in sospeso»: un invito mandato a un indirizzo
+     * sbagliato, o finito nello spam, oggi si poteva solo revocare e rifare —
+     * e rifarlo **consuma un altro posto** finché il primo non scade.
+     *
+     * ⚠️ L'email è **facoltativa**: se manca si usa quella con cui l'invito era
+     * nato. ⛔ Se non ce n'è nessuna delle due si risponde **422**: un
+     * destinatario non si inventa.
+     *
+     * 🚨 **Solo su inviti validi.** Rimandare un invito revocato o scaduto
+     * vorrebbe dire mandare a una persona un link che non funziona, e farle
+     * credere che l'app sia rotta.
+     */
+    public function rimandaInvito(Request $request, int $invite): JsonResponse
+    {
+        $trainer = $this->trainerOrAbort($request);
+
+        $dati = $request->validate([
+            'email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $invito = TrainerInvite::withoutGlobalScopes()
+            ->where('trainer_id', $trainer->getKey())
+            ->whereKey($invite)
+            ->first();
+
+        if ($invito === null) {
+            return response()->json(['message' => __('Invito non trovato.')], 404);
+        }
+
+        if (! $invito->eValido()) {
+            return response()->json([
+                'message' => __('Questo invito non è più valido: creane uno nuovo.'),
+            ], 409);
+        }
+
+        $destinatario = $dati['email'] ?? $invito->email;
+
+        if ($destinatario === null || $destinatario === '') {
+            return response()->json([
+                'message' => __('Scrivi a quale indirizzo mandarlo.'),
+                'errors' => ['email' => [__('Scrivi a quale indirizzo mandarlo.')]],
+            ], 422);
+        }
+
+        /*
+         * ⚠️ L'indirizzo nuovo si **scrive sull'invito**, non si usa e basta:
+         * altrimenti l'elenco continuerebbe a mostrare il vecchio, cioè una
+         * riga che dice a chi è stato mandato l'invito — sbagliando.
+         */
+        if ($destinatario !== $invito->email) {
+            $invito->forceFill(['email' => $destinatario])->save();
+        }
+
+        $inviata = $this->inviti->mandaIlLink($invito, $trainer);
+
+        return response()->json([
+            'data' => [
+                'id' => $invito->getKey(),
+                'email' => $invito->email,
+                'email_inviata' => $inviata,
+                'email_inviata_il' => $invito->fresh()?->email_inviata_il?->toIso8601String(),
+            ],
+        ]);
     }
 
     public function revokeInvite(Request $request, int $invite): JsonResponse
