@@ -13,6 +13,7 @@ use App\Models\PlanExercise;
 use App\Models\User;
 use App\Models\WorkoutPlan;
 use App\Models\WorkoutPlanDay;
+use App\Services\Tenancy\ChiSiVede;
 use App\Services\Training\ExerciseMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,6 +40,14 @@ use Illuminate\Support\Facades\DB;
  */
 class WorkoutPlanController extends Controller
 {
+    /*
+     * ⚠️ `ChiSiVede` nel costruttore, e non `app(...)` dentro il metodo: qui
+     * non c'è nessuna catena di dipendenze da innescare — è la stessa forma di
+     * `TrainerController`. 💡 La trappola della ricorsione del container
+     * riguardava un **servizio** che ne chiamava un altro, non un controller.
+     */
+    public function __construct(private readonly ChiSiVede $chiSiVede) {}
+
     public function index(Request $request): JsonResponse
     {
         $piani = WorkoutPlan::query()
@@ -85,7 +94,31 @@ class WorkoutPlanController extends Controller
             return response()->json(['message' => __('Non sei un trainer.')], 403);
         }
 
+        /*
+         * 🆕 🏋️ **ANCHE I MODELLI DELLA PALESTRA** — voce 47, 24/09/2026.
+         *
+         * 📌 Il committente: *«li deve vedere»*.
+         *
+         * ⛔ Prima qui c'era la query nuda, e lo `TenantScope` la restringeva
+         * allo spazio di **casa**. 🚨 Da quando ogni trainer ha una casa sua
+         * (18/09), per un trainer di palestra quella casa è **vuota**: apriva i
+         * modelli e non ne trovava nessuno, mentre la palestra in cui lavora ne
+         * ha. ⚠️ Nessun errore, nessun messaggio: una schermata vuota.
+         *
+         * 🔑 **E' lo stesso difetto di `members()` del 15/09**, con la stessa
+         * causa e la stessa cura: la domanda «quali spazi vedo?» ha **una sola**
+         * risposta, e sta in `ChiSiVede::spaziDi()`. ⛔ Riscriverla qui vorrebbe
+         * dire due regole che divergono — ed è la lezione tornata quattro volte
+         * in due giorni.
+         *
+         * ⚖️ **Non allarga niente a nessun altro**: chi non allena in nessuna
+         * palestra ottiene esattamente quello che otteneva prima, il proprio
+         * spazio. E chi esce da una palestra perde il ruolo, quindi la perde
+         * anche da qui.
+         */
         $modelli = WorkoutPlan::query()
+            ->withoutGlobalScopes()
+            ->whereIn('tenant_id', $this->chiSiVede->spaziDi($utente))
             ->templates()
             ->published()
             ->with(['exercises.exercise', 'creator'])

@@ -10,6 +10,8 @@ use App\Models\Exercise;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
+use App\Services\Tenancy\AllenareInUnaPalestra;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\ChiamaComeApp;
@@ -151,6 +153,80 @@ class PlanTemplatesApiTest extends TestCase
             ->assertJsonPath('data.0.exercises.0.exercise.name', 'Panca piana')
             ->assertJsonPath('data.0.exercises.0.sets', 4)
             ->assertJsonPath('data.0.exercises.0.reps', '8-10');
+    }
+
+    /**
+     * 🆕 🏋️ **Un trainer che ha casa sua vede i modelli DELLA PALESTRA**
+     * — voce 47, 24/09/2026. 📌 Il committente: *«li deve vedere»*.
+     *
+     * ══ ⛔ IL DIFETTO CHE QUESTO TEST CHIUDE ══════════════════════════
+     *
+     * 🚨 Da quando ogni trainer ha **una casa sua** (18/09), lo `TenantScope`
+     * restringeva questa rotta allo spazio di casa — che per un trainer di
+     * palestra è **vuoto**. ⚠️ Risultato: apriva i modelli e non ne trovava
+     * **nessuno**, mentre la palestra in cui lavora ne ha. Nessun errore,
+     * nessun messaggio: una schermata vuota.
+     *
+     * 🔑 È lo stesso difetto di `members()` del 15/09, e la cura è la stessa:
+     * `ChiSiVede::spaziDi()`, una sola risposta alla domanda «quali spazi vedo?».
+     *
+     * 🔍 **Il trainer lo assume `AllenareInUnaPalestra::assumi()`**, la strada
+     * vera: scrivere il ruolo a mano proverebbe solo che so fare una `update`.
+     */
+    #[Test]
+    public function un_trainer_con_casa_sua_vede_i_modelli_della_palestra(): void
+    {
+        $this->modello('Forza in palestra');
+
+        $coach = app(CreaTenantPersonale::class)(
+            'Coach Esterno',
+            'coach@esempio.test',
+            ['password' => self::FAKE_PASSWORD],
+            UserRole::FreeTrainer,
+        );
+        $coach = $this->conPianoDaTrainer($coach);
+
+        $fresco = User::withoutGlobalScopes()->findOrFail($coach->getKey());
+        app(AllenareInUnaPalestra::class)->assumi($fresco, $this->alfa);
+
+        $dati = $this->comeApp($fresco)
+            ->getJson('/api/v1/workout-plans/templates')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(
+            ['Forza in palestra'],
+            array_column($dati, 'name'),
+            'Il trainer non vede i modelli della palestra in cui lavora.',
+        );
+    }
+
+    /**
+     * ⚖️ **E non allarga niente a nessun altro.**
+     *
+     * ⛔ Il rischio di una modifica come questa è di far vedere **tutto a
+     * tutti**: un trainer indipendente che non lavora in nessuna palestra deve
+     * continuare a vedere solo casa propria — cioè, qui, niente.
+     */
+    #[Test]
+    public function un_indipendente_che_non_allena_in_palestra_non_vede_i_suoi_modelli(): void
+    {
+        $this->modello('Forza in palestra');
+
+        $solo = app(CreaTenantPersonale::class)(
+            'Da Solo',
+            'dasolo@esempio.test',
+            ['password' => self::FAKE_PASSWORD],
+            UserRole::FreeTrainer,
+        );
+        $solo = $this->conPianoDaTrainer($solo);
+
+        $dati = $this->comeApp(User::withoutGlobalScopes()->findOrFail($solo->getKey()))
+            ->getJson('/api/v1/workout-plans/templates')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame([], $dati);
     }
 
     private function modello(string $titolo): WorkoutPlan
