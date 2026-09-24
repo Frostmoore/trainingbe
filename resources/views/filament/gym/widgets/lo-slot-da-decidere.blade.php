@@ -8,7 +8,24 @@
     ⛔ Niente classi di Tailwind: il CSS di Filament v5 è precompilato e non le
     contiene. Quelle `tc-` stanno in resources/css/pannello-palestra.css.
 --}}
+{{--
+    ⛔ **NIENTE, quando non c'è più niente da decidere** — 24/09/2026.
+
+    🚨 Il committente, rispondendo «Tengo il posto»: *«mi ha detto che 0 allievi
+    sono entrati nella palestra. È giusto?»*. No: era questa vista.
+
+    ⚠️ `canView()` decide se il widget **compare**, e si chiede al disegno della
+    pagina. ⛔ Ma dopo la risposta il widget è già lì e si ridisegna da solo con
+    zero voci: cadeva nel ramo del plurale e scriveva **«0 tuoi allievi sono
+    entrati nella tua palestra»** — una frase che non vuol dire niente, nel
+    momento esatto in cui uno ha appena deciso una cosa che gli costa.
+
+    💡 Le `<x-filament-actions::modals />` restano **fuori** dall'`@if`: la
+    modale dell'ultima risposta si sta ancora chiudendo, e toglierle di sotto la
+    farebbe sparire a metà.
+--}}
 <x-filament-widgets::widget>
+    @if ($voci->isNotEmpty())
     <x-filament::section>
         <x-slot name="heading">
             @if ($voci->count() === 1)
@@ -47,6 +64,7 @@
             </div>
         @endforeach
     </x-filament::section>
+    @endif
 
     {{-- 🚨 Senza questa riga la modale non si apre. --}}
     <x-filament-actions::modals />

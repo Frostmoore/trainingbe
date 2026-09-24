@@ -939,7 +939,22 @@ final class ITrePannelliDeiTrainerTest extends TestCase
             ->assertSee($allievo->name)
             ->assertSee('Decidi')
             ->callMountedAction(['tengo' => true])
-            ->assertHasNoActionErrors();
+            ->assertHasNoActionErrors()
+
+            /*
+             * ⛔ **E dopo la risposta la card non dice più niente.**
+             *
+             * 📌 Il committente, premendo «Tengo il posto»: *«mi ha detto che 0
+             * allievi sono entrati nella palestra. È giusto?»*. 🚨 No: il widget
+             * era già disegnato e si ridisegnava con zero voci, cadendo nel ramo
+             * del plurale — **«0 tuoi allievi sono entrati nella tua palestra»**,
+             * proprio mentre uno ha appena deciso una cosa che gli costa.
+             *
+             * ⚠️ `canView()` non bastava: quello decide se il widget **compare**,
+             * e si chiede al disegno della pagina, non dopo ogni azione.
+             */
+            ->assertDontSee('sono entrati nella tua palestra')
+            ->assertDontSee($allievo->name);
 
         $this->assertDatabaseHas('trainer_member', [
             'trainer_id' => $fresco->getKey(),
