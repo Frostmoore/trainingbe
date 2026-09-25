@@ -40,6 +40,15 @@ class Avviso extends Model implements HaUnPubblico
         'azione', 'url', 'promozione_id',
         'inizia_il', 'scade_il',
         'urgente', 'anche_push', 'attivo',
+
+        /*
+         * 🆕 🔕 **Dichiara di essere pubblicità** — voce 43, 25/09/2026.
+         *
+         * ⚠️ Assegnabile perché lo sceglie chi scrive l'avviso nel pannello
+         * god. 🚨 Ma **non è una dichiarazione libera**: `saving()` la impone
+         * a chi ha azione `promo` — vedi sotto.
+         */
+        'commerciale',
     ];
 
     protected function casts(): array
@@ -51,7 +60,34 @@ class Avviso extends Model implements HaUnPubblico
             'urgente' => 'boolean',
             'anche_push' => 'boolean',
             'attivo' => 'boolean',
+            'commerciale' => 'boolean',
         ];
+    }
+
+    /**
+     * 🚨 **Un avviso che regala una promozione E' pubblicità, punto** — voce
+     * 43, 25/09/2026.
+     *
+     * ══ ⛔ PERCHE' NON BASTA UNA CASELLA NEL PANNELLO ════════════════════
+     *
+     * ⚠️ Perché la casella la spunta una persona, di fretta, mesi dopo che
+     * qualcuno ha scritto questa regola. 🚨 Lasciarla libera vorrebbe dire che
+     * un'offerta può essere mandata **dichiarandola non commerciale** — e chi
+     * l'ha rifiutata la riceve lo stesso, senza che nessuno abbia mentito
+     * apposta.
+     *
+     * 🔑 Qui non si può: chi attiva una promozione è commerciale **per
+     * definizione**, e il modello lo impone prima di scrivere la riga. 💡 Il
+     * contrario resta libero — un avviso senza `promo` può essere commerciale
+     * lo stesso (un `link` al listino lo è).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $avviso): void {
+            if ($avviso->azione === AzioneDellAvviso::Promo) {
+                $avviso->commerciale = true;
+            }
+        });
     }
 
     /** @return MorphMany<PromozioneBersaglio, $this> */

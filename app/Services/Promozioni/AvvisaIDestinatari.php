@@ -34,6 +34,7 @@ class AvvisaIDestinatari
     public function __construct(
         private readonly PushSender $push,
         private readonly ChiLaRiceve $chiLaRiceve,
+        private readonly ChiNonVuoleOfferte $offerte,
     ) {}
 
     /** Dopo una consegna riuscita. */
@@ -66,6 +67,26 @@ class AvvisaIDestinatari
 
     private function manda(Promozione $promozione, User $utente, bool $ricevuta): void
     {
+        /*
+         * 🆕 🔕 **Chi ha detto «non mandarmi offerte» non riceve l'annuncio**
+         * — voce 43, DPIA R16, 25/09/2026.
+         *
+         * 🚨 **Qui, e non nel chiamante.** ⛔ Questo metodo lo chiamano in
+         * due (`aTutti()` e `dopoLaConsegna()`), e un controllo messo in uno
+         * dei due lascerebbe l'altro a mandare pubblicità a chi l'ha rifiutata
+         * — senza nessun errore, e senza che nessuno se ne accorga tranne la
+         * persona che aveva detto di no.
+         *
+         * ⚠️ **Si ferma l'annuncio, non la promozione.** 💡 Chi ha spento le
+         * offerte e ne riceve una la trova lo stesso nel pannello e nel saldo:
+         * quello a cui si è opposto è la **pubblicità**, non il regalo.
+         * ⛔ Togliergli anche quello sarebbe punirlo per aver esercitato un
+         * diritto.
+         */
+        if (! $this->offerte->siPuoAnnunciareA($utente)) {
+            return;
+        }
+
         $canali = (array) $promozione->avviso;
 
         try {

@@ -171,6 +171,17 @@ class User extends Authenticatable implements FilamentUser, HasMedia
             'trovabile' => 'boolean',
             'username_cambiato_il' => 'datetime',
 
+            /*
+             * 🆕 🔕 **«Non mandarmi offerte»** — voce 43, DPIA R16, 25/09/2026.
+             *
+             * ⚠️ La data dice **da quando** vale l'opposizione, ed è quello che
+             * serve se un giorno qualcuno contesta di aver ricevuto una
+             * pubblicità dopo averla rifiutata. 💡 `null` quando le offerte
+             * sono accese: non c'è nessuna opposizione da datare.
+             */
+            'niente_offerte' => 'boolean',
+            'niente_offerte_dal' => 'datetime',
+
             'last_login_at' => 'datetime',
 
             /*

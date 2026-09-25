@@ -23,6 +23,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\Layout\Stack;
@@ -146,6 +147,19 @@ class AvvisoResource extends Resource
                         ->label('Urgente: scavalca il tetto di frequenza')
                         ->default(false)
                         ->helperText('Di serie una persona riceve al massimo 4 avvisi al mese, uno ogni 24 ore. Un avviso di servizio non può aspettare.'),
+
+                    Toggle::make('commerciale')
+                        ->label('È pubblicità')
+                        ->default(false)
+                        ->disabled(fn (Get $get): bool => $get('azione') === 'promo')
+                        ->dehydrated()
+                        ->helperText(
+                            'Chi ha spento le offerte dal profilo non lo vedrà. '
+                            .'⚠️ Con azione «attiva una promozione» è acceso per forza: '
+                            .'una offerta è pubblicità, e non si può dichiarare il contrario. '
+                            .'⛔ E se l’avviso è anche «urgente» passa lo stesso: usare '
+                            .'l’urgente per la pubblicità vuol dire scavalcare un rifiuto.'
+                        ),
 
                     Toggle::make('attivo')
                         ->label('Acceso')

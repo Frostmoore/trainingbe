@@ -389,8 +389,21 @@ Una promozione te la possiamo far sapere **nell'app**, con una **notifica**, per
 pannello, se sei una palestra o un trainer. Le promozioni «per tutti» si vedono anche sul sito.
 
 ⚖️ Lo facciamo per il nostro **legittimo interesse** a proporre ai nostri clienti servizi simili a
-quelli che usano già (art. 6(1)(f)). **Puoi opporti quando vuoi**, senza motivare, scrivendo a
-**info@smp-digital.it**: da quel momento non ti mandiamo più avvisi di promozioni.
+quelli che usano già (art. 6(1)(f)).
+
+🆕 🔕 **Puoi opporti quando vuoi, con un interruttore.** Nell'app: **Profilo → Privacy → Le
+offerte → «Non mandarmi offerte»**. Non devi motivare e non devi scrivere a nessuno; se preferisci
+farlo per iscritto, **info@smp-digital.it** va bene lo stesso.
+
+Da quel momento non ricevi più **né gli annunci delle promozioni** (notifica ed email) **né i
+messaggi nell'app che propongono un acquisto**.
+
+⚠️ **Cosa resta**, perché non è pubblicità: gli avvisi di servizio (per esempio che l'abbonamento
+sta per scadere), le notifiche dei messaggi che ti scrivono le persone, e le email necessarie a farti
+usare il servizio — password, inviti, ricevute.
+
+💡 E se ti spetta una promozione **la ricevi comunque**: quello che si spegne è l'annuncio, non
+il regalo. La trovi nel tuo saldo e, se sei una palestra o un trainer, nel pannello.
 
 ### 3.14 🖼️ Le immagini dei prodotti
 

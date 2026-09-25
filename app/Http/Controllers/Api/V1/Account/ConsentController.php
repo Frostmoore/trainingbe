@@ -144,6 +144,20 @@ class ConsentController extends Controller
              * e' un booleano invece di una data: la differenza si vede da fuori.
              */
             'consiglio_automatico' => ['sometimes', 'boolean'],
+
+            /*
+             * 🆕 🔕 **«Non mandarmi offerte»** — voce 43, DPIA R16, 25/09/2026.
+             *
+             * 🔑 **Qui e non in una rotta sua**, perché nell'app sta nella
+             * stessa schermata: chi apre «privacy» cerca lì anche questo.
+             *
+             * ⚠️ **E' un opt-out, non un consenso**, come
+             * `consiglio_automatico`: di serie le offerte arrivano (legittimo
+             * interesse, informativa §3.13) e chi non le vuole lo dice. ⛔ Per
+             * questo è un booleano e non una data di consenso — la differenza
+             * si vede da fuori.
+             */
+            'niente_offerte' => ['sometimes', 'boolean'],
         ]);
 
         $utente = $request->user();
@@ -239,6 +253,26 @@ class ConsentController extends Controller
             $utente->forceFill(['consiglio_automatico' => (bool) $dati['consiglio_automatico']])->save();
         }
 
+        if (array_key_exists('niente_offerte', $dati)) {
+            $niente = (bool) $dati['niente_offerte'];
+
+            /*
+             * 🚨 **La data si scrive solo quando lo stato cambia davvero.**
+             *
+             * ⛔ Riscriverla a ogni `PATCH` vorrebbe dire che chi apre la
+             * schermata e tocca l'interruttore due volte si ritrova la data di
+             * adesso: e quella data serve a dimostrare **da quando** vale
+             * l'opposizione (art. 21). 💡 Una prova che si riscrive da sola
+             * non è una prova.
+             */
+            if ((bool) $utente->niente_offerte !== $niente) {
+                $utente->forceFill([
+                    'niente_offerte' => $niente,
+                    'niente_offerte_dal' => $niente ? now() : null,
+                ])->save();
+            }
+        }
+
         return response()->json(['data' => $this->stato($utente->refresh())]);
     }
 
@@ -261,6 +295,10 @@ class ConsentController extends Controller
 
             // 💡 Preferenza, non consenso: un booleano, non una data.
             'consiglio_automatico' => (bool) $utente->consiglio_automatico,
+
+            // 🆕 🔕 L'opposizione alle offerte, e **da quando** vale.
+            'niente_offerte' => (bool) $utente->niente_offerte,
+            'niente_offerte_dal' => $utente->niente_offerte_dal?->toIso8601String(),
             'age_confirmed_at' => $utente->age_confirmed_at?->toIso8601String(),
             'terms_accepted_at' => $utente->terms_accepted_at?->toIso8601String(),
 

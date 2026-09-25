@@ -8,6 +8,7 @@ use App\Models\Avviso;
 use App\Models\AvvisoDecisione;
 use App\Models\User;
 use App\Services\Promozioni\ChiLaRiceve;
+use App\Services\Promozioni\ChiNonVuoleOfferte;
 use Illuminate\Support\Carbon;
 
 /**
@@ -37,7 +38,10 @@ use Illuminate\Support\Carbon;
  */
 class QualeAvvisoMostrare
 {
-    public function __construct(private readonly ChiLaRiceve $pubblico) {}
+    public function __construct(
+        private readonly ChiLaRiceve $pubblico,
+        private readonly ChiNonVuoleOfferte $offerte,
+    ) {}
 
     /**
      * L'avviso da mostrare adesso, o `null`.
@@ -75,6 +79,24 @@ class QualeAvvisoMostrare
                  * 💡 `continue` e non `return null`: più avanti nell'elenco può
                  * esserci un **urgente**, che il tetto non lo guarda.
                  */
+                continue;
+            }
+
+            /*
+             * 🆕 🔕 **Gli avvisi che propongono un acquisto non si mostrano a
+             * chi ha detto «non mandarmi offerte»** — voce 43, DPIA R16.
+             *
+             * 🚨 **Prima di `prende()` e prima di segnare il mostrato**, ed è
+             * l'ordine che conta: un avviso saltato per questa ragione non
+             * deve consumare il tetto di chi non lo vedrà mai. ⛔ Altrimenti
+             * chi rifiuta la pubblicità si mangerebbe i quattro avvisi del
+             * mese in avvisi invisibili, e non riceverebbe quelli veri.
+             *
+             * ⚠️ Il confine fra ciò che si spegne e ciò che passa sta in
+             * `ChiNonVuoleOfferte`, non qui: è una decisione di prodotto, non
+             * un `if` di questo metodo.
+             */
+            if (! $this->offerte->puoVedere($utente, $avviso)) {
                 continue;
             }
 
