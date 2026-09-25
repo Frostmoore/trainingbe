@@ -7,6 +7,8 @@ namespace Tests\Feature\Promozioni;
 use App\Enums\AzioneDellAvviso;
 use App\Enums\TipoBersaglio;
 use App\Enums\UserRole;
+use App\Http\Controllers\NienteOfferteController;
+use App\Mail\BenvenutoMail;
 use App\Mail\PromozionePerTeMail;
 use App\Models\Avviso;
 use App\Models\AvvisoDecisione;
@@ -322,5 +324,133 @@ final class NonMandarmiOfferteTest extends TestCase
             ->assertOk();
 
         $this->assertEquals($prima, $this->tizio->fresh()?->niente_offerte_dal);
+    }
+
+    // ───────────────── 5. Il collegamento nelle email ─────────────────
+
+    /**
+     * 🚨 **Ogni email promozionale porta il modo di non riceverne più** — art.
+     * 130, c. 4, Codice privacy. 📌 Il committente, 25/09: *«in ogni email
+     * promozionale per disiscriversi dalle email promozionali»*.
+     */
+    #[Test]
+    public function lemail_di_una_promozione_porta_il_collegamento(): void
+    {
+        $mail = new PromozionePerTeMail($this->unaPromozione(), $this->tizio, ricevuta: false);
+
+        $reso = $mail->render();
+
+        $this->assertStringContainsString('/niente-offerte/'.$this->tizio->getKey(), $reso);
+        $this->assertStringContainsString('signature=', $reso, 'Il collegamento non è firmato.');
+    }
+
+    /**
+     * 🔑 **E l'header che fa comparire il pulsante nel client di posta** (RFC
+     * 8058). 💡 Un collegamento in fondo lo trova chi scorre fino in fondo;
+     * questo lo vede chiunque, prima ancora di aprire il messaggio.
+     */
+    #[Test]
+    public function lemail_dichiara_lheader_standard_della_disiscrizione(): void
+    {
+        $mail = new PromozionePerTeMail($this->unaPromozione(), $this->tizio, ricevuta: false);
+
+        $header = $mail->headers()->text;
+
+        $this->assertArrayHasKey('List-Unsubscribe', $header);
+        $this->assertStringContainsString('/niente-offerte/', $header['List-Unsubscribe']);
+        $this->assertSame('List-Unsubscribe=One-Click', $header['List-Unsubscribe-Post']);
+    }
+
+    /**
+     * ⛔ **Le email transazionali NON lo hanno, ed è la metà che conta.**
+     *
+     * 📌 Il committente: *«quelle transazionali o urgenti restano»*. 🚨 Offrire
+     * di disiscriversi da una ricevuta o da un invito vorrebbe dire promettere
+     * qualcosa che non possiamo mantenere: quelle email le mandiamo comunque,
+     * perché senza non si usa il servizio.
+     */
+    #[Test]
+    public function le_email_di_servizio_non_offrono_di_disiscriversi(): void
+    {
+        $utente = User::withoutGlobalScopes()->findOrFail($this->tizio->getKey());
+
+        $benvenuto = (new BenvenutoMail($utente))->render();
+
+        $this->assertStringNotContainsString('niente-offerte', $benvenuto);
+        $this->assertStringNotContainsString('disiscriv', mb_strtolower($benvenuto));
+    }
+
+    // ───────────────── 6. La pagina pubblica ─────────────────
+
+    /**
+     * 🚨 **Il `GET` non spegne niente.**
+     *
+     * ⛔ I filtri antispam e le anteprime dei client di posta **aprono i link da
+     * soli**: un `GET` che eseguisse vorrebbe dire persone disiscritte da un
+     * antivirus, senza aver toccato niente. ⚠️ E la prima volta che succede non
+     * lo capisce nessuno.
+     */
+    #[Test]
+    public function aprire_il_collegamento_non_spegne_ancora_niente(): void
+    {
+        $this->get(NienteOfferteController::indirizzo($this->tizio->getKey()))
+            ->assertOk()
+            ->assertSee('Non ricevere più offerte');
+
+        $this->assertFalse((bool) $this->tizio->fresh()?->niente_offerte);
+    }
+
+    /** ✅ È il `POST` che spegne, ed è quello che chiama anche il client di posta. */
+    #[Test]
+    public function il_bottone_spegne_le_offerte(): void
+    {
+        $this->post(NienteOfferteController::indirizzoDelPost($this->tizio->getKey()))
+            ->assertRedirect();
+
+        $this->assertTrue((bool) $this->tizio->fresh()?->niente_offerte);
+        $this->assertNotNull($this->tizio->fresh()?->niente_offerte_dal);
+    }
+
+    /**
+     * 🔑 **Senza firma non si disiscrive nessuno.**
+     *
+     * ⛔ La rotta è pubblica e porta un id nell'indirizzo: senza la firma,
+     * quell'id basterebbe a disiscrivere chiunque tirando a indovinare un
+     * numero.
+     */
+    #[Test]
+    public function senza_firma_il_collegamento_non_vale(): void
+    {
+        $this->post('/niente-offerte/'.$this->tizio->getKey())->assertForbidden();
+        $this->get('/niente-offerte/'.$this->tizio->getKey())->assertForbidden();
+
+        $this->assertFalse((bool) $this->tizio->fresh()?->niente_offerte);
+    }
+
+    /**
+     * 🚨 **Non si può usare per sapere se una persona è iscritta.**
+     *
+     * ⛔ Rispondere «questo account non esiste» a un indirizzo pubblico
+     * trasformerebbe il collegamento in un modo per verificare se un id
+     * corrisponde a qualcuno. 💡 Chi arriva con un id che non c'è più vede la
+     * stessa pagina degli altri.
+     */
+    #[Test]
+    public function un_id_che_non_esiste_non_lo_dichiara(): void
+    {
+        $this->get(NienteOfferteController::indirizzo(999999))
+            ->assertOk()
+            ->assertSee('Non ricevere più offerte');
+    }
+
+    /** ⚠️ Chi l'ha già fatto lo legge, invece di premere un bottone inutile. */
+    #[Test]
+    public function chi_lo_ha_gia_fatto_se_lo_sente_dire(): void
+    {
+        $this->spegneLeOfferte($this->tizio);
+
+        $this->get(NienteOfferteController::indirizzo($this->tizio->getKey()))
+            ->assertOk()
+            ->assertSee('È fatto.');
     }
 }

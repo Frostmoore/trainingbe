@@ -50,7 +50,21 @@ return Application::configure(basePath: dirname(__DIR__))
          * `StripeWebhookController`, che e' un controllo piu' forte di un
          * token di sessione.
          */
-        $middleware->validateCsrfTokens(except: ['stripe/webhook']);
+        /*
+         * 🆕 🔕 **E la disiscrizione dalle offerte** — voce 43, 25/09/2026.
+         *
+         * 🚨 Quel `POST` lo chiama anche **il client di posta**, da solo, quando
+         * qualcuno preme «Annulla iscrizione» in Gmail o Apple Mail (RFC 8058,
+         * header `List-Unsubscribe-Post`). ⛔ Gmail non ha la nostra sessione e
+         * non ha compilato nessun modulo: con il CSRF attivo quel pulsante
+         * risponderebbe **419**, e la persona resterebbe iscritta credendo di
+         * essersi tolta.
+         *
+         * ⚠️ **L'esenzione non lo lascia scoperto**: quell'indirizzo è **firmato**
+         * (`signed`), e la firma la puo' fare solo chi ha `APP_KEY`. È la stessa
+         * ragione del webhook qui sopra.
+         */
+        $middleware->validateCsrfTokens(except: ['stripe/webhook', 'niente-offerte/*']);
 
         /*
          * 🆕 **Il cancello della versione su TUTTE le rotte API** — FASE 10.4.

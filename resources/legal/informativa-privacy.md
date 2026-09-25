@@ -391,9 +391,13 @@ pannello, se sei una palestra o un trainer. Le promozioni «per tutti» si vedon
 ⚖️ Lo facciamo per il nostro **legittimo interesse** a proporre ai nostri clienti servizi simili a
 quelli che usano già (art. 6(1)(f)).
 
-🆕 🔕 **Puoi opporti quando vuoi, con un interruttore.** Nell'app: **Profilo → Privacy → Le
-offerte → «Non mandarmi offerte»**. Non devi motivare e non devi scrivere a nessuno; se preferisci
-farlo per iscritto, **info@smp-digital.it** va bene lo stesso.
+🆕 🔕 **Puoi opporti quando vuoi, in tre modi**, senza motivare e senza costi:
+
+- **dall'app**: Profilo → Privacy → Le offerte → «Non mandarmi offerte»;
+- **da ogni email promozionale**: in fondo c'è un collegamento, e non devi entrare in nessun account
+  per usarlo. Molti programmi di posta mostrano anche un pulsante **«Annulla iscrizione»** accanto al
+  mittente: funziona;
+- **scrivendo** a **info@smp-digital.it**, se preferisci.
 
 Da quel momento non ricevi più **né gli annunci delle promozioni** (notifica ed email) **né i
 messaggi nell'app che propongono un acquisto**.

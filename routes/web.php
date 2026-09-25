@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IscrizioneController;
+use App\Http\Controllers\NienteOfferteController;
 use App\Http\Controllers\OffertaController;
 use App\Http\Controllers\ReimpostaPasswordController;
 use App\Http\Controllers\ScriviciController;
@@ -210,6 +211,37 @@ Route::get('/promo/{codice}', [SitoController::class, 'promo'])
 Route::get('/invito/{token}', [SitoController::class, 'invito'])
     ->where('token', '[A-Za-z0-9]{32}')
     ->name('sito.invito');
+
+/*
+| 🔕 **Disiscriversi dalle email promozionali** — voce 43, art. 130, c. 4,
+| Codice privacy. 25/09/2026.
+|
+| 📌 Il committente, 25/09: *«in ogni email promozionale per disiscriversi
+| dalle email promozionali. Quelle transazionali o urgenti restano»*.
+|
+| 🚨 **`signed` e non `auth`**: chi riceve una nostra email deve potersi
+| opporre **senza entrare**. ⛔ Un collegamento che porta alla schermata di
+| accesso non e' una «modalita' semplificata»: chi non ricorda la password
+| rinuncia, e l'opposizione resta teorica.
+|
+| ⚠️ **Il `GET` non spegne niente**, e la ragione e' la stessa scritta qui
+| sotto per gli inviti: i filtri antispam e le anteprime dei client di posta
+| aprono i link **da soli**. ⛔ Un `GET` che eseguisse vorrebbe dire persone
+| disiscritte da un antivirus, senza aver toccato niente.
+|
+| 🔑 A spegnere e' il `POST`, che e' anche quello che il client di posta
+| chiama da solo quando si preme «Annulla iscrizione» (RFC 8058, header
+| `List-Unsubscribe-Post`).
+*/
+Route::get('/niente-offerte/{user}', [NienteOfferteController::class, 'mostra'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('sito.niente-offerte');
+
+Route::post('/niente-offerte/{user}', [NienteOfferteController::class, 'spegni'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('sito.niente-offerte.spegni');
 
 /*
 | L'atterraggio di un invito di una PALESTRA — 3b-V.3.1.
