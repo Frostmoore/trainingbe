@@ -436,8 +436,26 @@ class AuthApiTest extends TestCase
     }
 
     #[Test]
-    public function it_blocks_the_app_when_the_gym_is_suspended(): void
+    public function una_palestra_sospesa_non_chiude_fuori_l_iscritto(): void
     {
+        /*
+         * 🆕 🔑 **Questo test diceva il contrario fino al 26/09/2026**, e si
+         * chiamava `it_blocks_the_app_when_the_gym_is_suspended`.
+         *
+         * 📌 Il committente, provando l'app: *«non ha senso che mi dica che la
+         * palestra è sospesa e non mi faccia accedere… il mio account è e sarà
+         * sempre mio: se il mio abbonamento lo paga qualcun altro lo
+         * ringrazio, ma non mi può togliere l'accesso»*.
+         *
+         * 🚨 Un test verde non vuol dire che la regola sia giusta: questo era
+         * verde da sempre, e proteggeva un comportamento indifendibile.
+         * ⚖️ Allenamenti e diario sono dati personali dell'iscritto, e accesso
+         * e portabilità (artt. 15 e 20 GDPR) non dipendono da chi paga.
+         *
+         * 💡 Ora lo stato della palestra decide **cosa funziona**, non **se si
+         * entra**: vedi `EnsureTenantActive`, rimasto solo sulle rotte che la
+         * palestra finanzia.
+         */
         $u = $this->iscritto('anna@alfa.test');
 
         $this->actingAs($u, 'sanctum')->getJson('/api/v1/auth/me')->assertOk();
@@ -446,6 +464,23 @@ class AuthApiTest extends TestCase
 
         $this->actingAs($u->fresh(), 'sanctum')
             ->getJson('/api/v1/auth/me')
+            ->assertOk();
+    }
+
+    /**
+     * ⚠️ **Ma quello che paga la palestra resta chiuso.** 💡 Senza questo, il
+     * rimedio sarebbe diventato «la sospensione non ha alcun effetto», e la
+     * palestra continuerebbe a ricevere gratis quello per cui non paga.
+     */
+    #[Test]
+    public function ma_le_funzioni_che_paga_la_palestra_si_fermano(): void
+    {
+        $u = $this->iscritto('anna@alfa.test');
+
+        $this->alfa->update(['status' => TenantStatus::Suspended]);
+
+        $this->actingAs($u->fresh(), 'sanctum')
+            ->getJson('/api/v1/trainer/members')
             ->assertForbidden()
             ->assertJsonPath('code', 'tenant_inactive');
     }

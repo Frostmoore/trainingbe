@@ -114,14 +114,23 @@ class SocialAuthController extends Controller
 
         $tenant = Tenant::find($utente->tenant_id);
 
-        if ($tenant === null || ! $tenant->isActive()) {
-            // La stessa risposta del middleware `tenant.active`, cosi' l'app
-            // porta alla schermata «palestra sospesa» invece che al login —
-            // dove riproverebbe all'infinito con credenziali giuste.
+        /*
+         * 🆕 🔑 **Una palestra sospesa non chiude la porta a nessuno** —
+         * decisione del committente, 26/09/2026 (`memory/decisioni.md`).
+         *
+         * 🚨 Qui c'era un 403 `tenant_inactive`, e valeva anche per «Continua
+         * con Google»: stessa persona, stessa identità verificata da Google, e
+         * la porta chiusa lo stesso perché un terzo non aveva pagato.
+         *
+         * ⚠️ Resta il solo controllo su `$tenant === null`, che è un'altra
+         * cosa: non «non paga», ma «non esiste». Proseguire senza contesto
+         * vorrebbe dire un global scope che non filtra.
+         */
+        if ($tenant === null) {
             return response()->json([
-                'message' => __('La tua palestra è sospesa. Contattala per riattivare l\'accesso.'),
-                'code' => 'tenant_inactive',
-            ], 403);
+                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
+                'code' => 'tenant_missing',
+            ], 409);
         }
 
         $identita->forceFill(['last_login_at' => now()])->save();
@@ -288,11 +297,17 @@ class SocialAuthController extends Controller
 
         $tenant = Tenant::find($utente->tenant_id);
 
-        if ($tenant === null || ! $tenant->isActive()) {
+        /*
+         * 🆕 🔑 Come sopra: la palestra sospesa non decide chi entra.
+         * ⚠️ Questo è il ramo di chi **collega** un fornitore a un account che
+         * ha già: negarglielo vorrebbe dire impedirgli perfino di aggiungersi
+         * un modo in più per rientrare.
+         */
+        if ($tenant === null) {
             return response()->json([
-                'message' => __('La tua palestra è sospesa. Contattala per riattivare l\'accesso.'),
-                'code' => 'tenant_inactive',
-            ], 403);
+                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
+                'code' => 'tenant_missing',
+            ], 409);
         }
 
         SocialIdentity::create([

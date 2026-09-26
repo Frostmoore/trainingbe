@@ -429,14 +429,30 @@ class SocialAuthApiTest extends TestCase
 
         $this->alfa->forceFill(['status' => TenantStatus::Suspended])->save();
 
-        $this->accedi()
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'tenant_inactive');
+        /*
+         * 🆕 🔑 **Entra lo stesso** — decisione del committente, 26/09/2026.
+         * 🚨 Qui si aspettava un 403: la stessa persona, la stessa identità
+         * verificata da Google, e la porta chiusa perché un terzo non aveva
+         * pagato. Lo stato della palestra decide cosa funziona, non chi entra.
+         */
+        $this->accedi()->assertOk();
     }
 
     #[Test]
-    public function col_la_palestra_sospesa_il_primo_accesso_non_collega_niente(): void
+    public function con_la_palestra_sospesa_il_primo_accesso_collega_lo_stesso(): void
     {
+        /*
+         * 🆕 🔑 **Ribaltato il 26/09/2026.** Si chiamava
+         * `col_la_palestra_sospesa_il_primo_accesso_non_collega_niente`.
+         *
+         * 🚨 Impedire di **collegare** Google a un account che già esiste era
+         * la forma più sottile dello stesso furto: non solo non entri, ma non
+         * puoi nemmeno aggiungerti un modo in più per rientrare domani.
+         *
+         * 💡 Ora l'identità si collega, e la persona entra. Quello che la
+         * palestra finanzia resta chiuso: lo prova
+         * `ma_le_funzioni_che_paga_la_palestra_si_fermano` in `AuthApiTest`.
+         */
         $this->creaUtente($this->alfa, UserRole::Member, 'sospeso@esempio.it');
         $this->alfa->forceFill(['status' => TenantStatus::Suspended])->save();
 
@@ -447,11 +463,9 @@ class SocialAuthApiTest extends TestCase
             emailVerified: true,
         ));
 
-        $this->accedi()
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'tenant_inactive');
+        $this->accedi()->assertOk();
 
-        $this->assertSame(0, SocialIdentity::count());
+        $this->assertSame(1, SocialIdentity::count());
     }
 
     #[Test]

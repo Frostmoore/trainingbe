@@ -266,7 +266,7 @@ Route::prefix('v1')->group(function (): void {
         // `code: tenant_inactive` le dice subito di mostrare la schermata di
         // servizio sospeso, invece di lasciarla proseguire e fallire più avanti
         // in modo confuso.
-        Route::middleware(['auth:sanctum', 'tenant', 'tenant.active'])->group(function (): void {
+        Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
             Route::get('me', [AuthController::class, 'me']);
         });
     });
@@ -280,7 +280,7 @@ Route::prefix('v1')->group(function (): void {
     |
     | 🚨 Non aggiungere endpoint di dominio senza quella catena.
     */
-    Route::middleware(['auth:sanctum', 'tenant', 'tenant.active'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
 
         // ── Profilo (C1) ─────────────────────────────────────────────────
         //
@@ -631,13 +631,13 @@ Route::prefix('v1')->group(function (): void {
          * togliere posto a una richiesta buona.
          */
         Route::middleware(['ai.plan', 'ai.consent', 'throttle:ai', 'ai.tetto'])->group(function (): void {
-            Route::post('ai/food/text', [AiController::class, 'foodFromText']);
-            Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto']);
-            Route::get('ai/advice', [AiController::class, 'advice']);
+            Route::post('ai/food/text', [AiController::class, 'foodFromText'])->middleware('tenant.active');
+            Route::post('ai/food/photo', [AiController::class, 'foodFromPhoto'])->middleware('tenant.active');
+            Route::get('ai/advice', [AiController::class, 'advice'])->middleware('tenant.active');
 
             // 3b-I.A — l'analisi della progressione: solo abbonati, il gate
             // e' dentro il metodo (403) perche' l'app lo traduce in modale.
-            Route::post('ai/scheda/progresso', [AiController::class, 'progressoScheda']);
+            Route::post('ai/scheda/progresso', [AiController::class, 'progressoScheda'])->middleware('tenant.active');
 
             /*
              * 🥣 **Il setaccio sulla stima** — I2.5, 03/09/2026.
@@ -655,7 +655,7 @@ Route::prefix('v1')->group(function (): void {
              * validazione su trenta voci, e il tetto lo protegge dall'app che
              * ripete la stessa richiesta perche' la risposta e' andata persa.
              */
-            Route::post('ai/food/valida', [AiController::class, 'valida']);
+            Route::post('ai/food/valida', [AiController::class, 'valida'])->middleware('tenant.active');
         });
 
         /*
@@ -674,11 +674,11 @@ Route::prefix('v1')->group(function (): void {
          * poter leggere una stima che quel consenso ha prodotto.
          */
         Route::middleware(['ai.plan', 'ai.consent', 'throttle:60,1'])->group(function (): void {
-            Route::get('ai/food/stime/in-corso', [AiController::class, 'stimaInCorso']);
-            Route::get('ai/food/stime/{stima}', [AiController::class, 'statoStima']);
+            Route::get('ai/food/stime/in-corso', [AiController::class, 'stimaInCorso'])->middleware('tenant.active');
+            Route::get('ai/food/stime/{stima}', [AiController::class, 'statoStima'])->middleware('tenant.active');
         });
 
-        Route::get('ai/usage', [AiController::class, 'usage']);
+        Route::get('ai/usage', [AiController::class, 'usage'])->middleware('tenant.active');
 
         /*
          * ── 💳 Il pagamento — 3b-H, 26/08/2026 ────────────────────────────
@@ -746,7 +746,7 @@ Route::prefix('v1')->group(function (): void {
          * middleware in più su queste cinque rotte sarebbe una seconda sede
          * della stessa regola, e due sedi divergono.
          */
-        Route::get('trainer/members', [TrainerController::class, 'members']);
+        Route::get('trainer/members', [TrainerController::class, 'members'])->middleware('tenant.active');
         /*
          * 🆕 📋 **Gli inviti in sospeso, elencabili** — B1, 24/09/2026.
          *
@@ -754,10 +754,10 @@ Route::prefix('v1')->group(function (): void {
          * creato dall'app spariva, e il posto che occupava restava occupato
          * sette giorni senza che nessuno potesse revocarlo.
          */
-        Route::get('trainer/invites', [TrainerController::class, 'invites']);
-        Route::post('trainer/invites', [TrainerController::class, 'invite']);
-        Route::post('trainer/invites/{invite}/email', [TrainerController::class, 'rimandaInvito'])->whereNumber('invite');
-        Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite');
+        Route::get('trainer/invites', [TrainerController::class, 'invites'])->middleware('tenant.active');
+        Route::post('trainer/invites', [TrainerController::class, 'invite'])->middleware('tenant.active');
+        Route::post('trainer/invites/{invite}/email', [TrainerController::class, 'rimandaInvito'])->whereNumber('invite')->middleware('tenant.active');
+        Route::delete('trainer/invites/{invite}', [TrainerController::class, 'revokeInvite'])->whereNumber('invite')->middleware('tenant.active');
 
         /*
          * 🆕 🏋️ **Gli stessi quattro gesti, lato PALESTRA** — B2, 24/09/2026.
@@ -776,11 +776,11 @@ Route::prefix('v1')->group(function (): void {
          * comanda, ma casa sua non e' una palestra — lui ha gia' le rotte di
          * sopra.
          */
-        Route::get('gym/invites', [InvitiDellaPalestraController::class, 'elenco']);
-        Route::post('gym/invites', [InvitiDellaPalestraController::class, 'crea']);
-        Route::post('gym/invites/{invite}/email', [InvitiDellaPalestraController::class, 'rimanda'])->whereNumber('invite');
-        Route::delete('gym/invites/{invite}', [InvitiDellaPalestraController::class, 'revoca'])->whereNumber('invite');
-        Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member');
+        Route::get('gym/invites', [InvitiDellaPalestraController::class, 'elenco'])->middleware('tenant.active');
+        Route::post('gym/invites', [InvitiDellaPalestraController::class, 'crea'])->middleware('tenant.active');
+        Route::post('gym/invites/{invite}/email', [InvitiDellaPalestraController::class, 'rimanda'])->whereNumber('invite')->middleware('tenant.active');
+        Route::delete('gym/invites/{invite}', [InvitiDellaPalestraController::class, 'revoca'])->whereNumber('invite')->middleware('tenant.active');
+        Route::post('trainer/members/{member}/toggle', [TrainerController::class, 'toggleMember'])->whereNumber('member')->middleware('tenant.active');
 
         /*
          * 🆕 🎟️ **Le scelte sullo slot** — AH.1-ter.6, 18/09/2026.
@@ -789,8 +789,8 @@ Route::prefix('v1')->group(function (): void {
          * al momento del passaggio non e' presente»: l'app chiede queste
          * all'apertura, e se c'e' qualcosa mostra la modale.
          */
-        Route::get('trainer/slot-da-decidere', [TrainerController::class, 'slotDaDecidere']);
-        Route::post('trainer/slot/{member}', [TrainerController::class, 'decidiLoSlot'])->whereNumber('member');
+        Route::get('trainer/slot-da-decidere', [TrainerController::class, 'slotDaDecidere'])->middleware('tenant.active');
+        Route::post('trainer/slot/{member}', [TrainerController::class, 'decidiLoSlot'])->whereNumber('member')->middleware('tenant.active');
 
         /*
          * ── I piani alimentari scritti da un trainer — G5.3 ───────────────
@@ -814,14 +814,14 @@ Route::prefix('v1')->group(function (): void {
          * altra chiamata: l'ordine non si cambia per una rotta.
          */
         Route::post('nutrition-plans/stima-alimento', [AiController::class, 'planFood'])
-            ->middleware(['ai.plan', 'ai.consent', 'throttle:ai']);
+            ->middleware(['ai.plan', 'ai.consent', 'throttle:ai'])->middleware('tenant.active');
 
-        Route::get('nutrition-plans', [NutritionPlanController::class, 'index']);
-        Route::get('nutrition-plans/templates', [NutritionPlanController::class, 'templates']);
-        Route::get('nutrition-plans/{plan}', [NutritionPlanController::class, 'show'])->whereNumber('plan');
-        Route::post('nutrition-plans', [NutritionPlanController::class, 'store']);
-        Route::put('nutrition-plans/{plan}', [NutritionPlanController::class, 'update'])->whereNumber('plan');
-        Route::delete('nutrition-plans/{plan}', [NutritionPlanController::class, 'destroy'])->whereNumber('plan');
+        Route::get('nutrition-plans', [NutritionPlanController::class, 'index'])->middleware('tenant.active');
+        Route::get('nutrition-plans/templates', [NutritionPlanController::class, 'templates'])->middleware('tenant.active');
+        Route::get('nutrition-plans/{plan}', [NutritionPlanController::class, 'show'])->whereNumber('plan')->middleware('tenant.active');
+        Route::post('nutrition-plans', [NutritionPlanController::class, 'store'])->middleware('tenant.active');
+        Route::put('nutrition-plans/{plan}', [NutritionPlanController::class, 'update'])->whereNumber('plan')->middleware('tenant.active');
+        Route::delete('nutrition-plans/{plan}', [NutritionPlanController::class, 'destroy'])->whereNumber('plan')->middleware('tenant.active');
 
         // ── L'importazione di un piano da PDF (N20) ────────────
         //
@@ -860,9 +860,9 @@ Route::prefix('v1')->group(function (): void {
          * quello che una revoca deve fare.
          */
         Route::post('importazioni', [ImportazioneDaDocumentoController::class, 'store'])
-            ->middleware(['ai.consent', 'throttle:importazioni']);
+            ->middleware(['ai.consent', 'throttle:importazioni'])->middleware('tenant.active');
         Route::get('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'show'])
-            ->whereNumber('importazione');
+            ->whereNumber('importazione')->middleware('tenant.active');
         /*
          * ⛔ **`importazioni/{id}/pdf` non esiste piu'** — K1-bis, 03/09/2026.
          *
@@ -871,7 +871,7 @@ Route::prefix('v1')->group(function (): void {
          * documento se ne va appena il job ha finito.
          */
         Route::delete('importazioni/{importazione}', [ImportazioneDaDocumentoController::class, 'destroy'])
-            ->whereNumber('importazione');
+            ->whereNumber('importazione')->middleware('tenant.active');
 
         // ── Chat (B8.4) ──────────────────────────────────────────────────
         //

@@ -94,7 +94,30 @@ class PianoAttivo
          * ⚠️ Resta **nella palestra**: chat, schede e trainer non cambiano.
          * Cambia solo cosa gli paga la palestra.
          */
-        if ($this->abbonamenti->eTolto($tenantId, $utente->getKey())) {
+        /*
+         * 🆕 💰 **Si guardano TUTTI quelli che pagano per te** — F1.2 di
+         * `memory/plan_spazi_personali.md`, 26/09/2026.
+         *
+         * 📌 Il committente: *«il mio abbonamento deve rimanere attivo
+         * fintanto che anche uno solo di questi enti paga per il mio
+         * abbonamento»*.
+         *
+         * ⛔ Qui sotto si guardava **il solo `$tenantId`**: una scatola sola.
+         * 🚨 Una persona seguita da due trainer perdeva tutto se smetteva di
+         * pagare quello a cui puntava il suo `tenant_id`, anche con l'altro
+         * in regola.
+         *
+         * 🔑 **`eTolto` si valuta per CIASCUN tenant, non una volta sola**:
+         * chi è stato tolto dalla palestra non deve più contarla, ⛔ ma i suoi
+         * trainer sì. Valutarlo prima, sul solo tenant proprio, avrebbe fatto
+         * ricadere sul gratuito anche chi ha un trainer che paga.
+         */
+        $paganti = array_values(array_filter(
+            app(ChiPagaPerTe::class)->tenantIds($utente),
+            fn (int $id): bool => ! $this->abbonamenti->eTolto($id, $utente->getKey()),
+        ));
+
+        if ($paganti === []) {
             return $this->piadinoDiRiserva();
         }
 
@@ -112,17 +135,93 @@ class PianoAttivo
          * codice e non per prezzo: anche `trainer_consumo` costa 0 a listino, e
          * si paga a consumo.
          */
-        $abbonamento = $this->context->runWithoutTenant(
-            fn (): ?PlanSubscription => PlanSubscription::query()
-                ->where('tenant_id', $tenantId)
+        $attivi = $this->context->runWithoutTenant(
+            fn (): array => PlanSubscription::query()
+                ->whereIn('tenant_id', $paganti)
                 ->attivi()
                 ->whereDoesntHave('plan', fn ($q) => $q->where('code', Plan::TRAINER_FREE))
                 ->with('plan')
-                ->orderByDesc('starts_at')
-                ->first(),
+                ->get()
+                ->all(),
         );
 
-        return $abbonamento?->plan ?? $this->piadinoDiRiserva();
+        /*
+         * 🆕 🏆 **Il migliore, non il primo** — F1.2, 26/09/2026.
+         *
+         * ⛔ Con `->first()` il risultato dipendeva dall'ordine delle righe:
+         * la stessa persona, con gli stessi paganti, poteva ottenere un piano
+         * diverso a seconda di come il database restituiva le righe. 🚨 Un
+         * difetto che si manifesta **a intermittenza**, cioè il peggiore da
+         * cercare.
+         *
+         * 💡 `Plan::TIER` è già l'ordinamento ufficiale dei piani, lo stesso
+         * che usa `livello()`: qui si riusa, non se ne inventa un altro.
+         */
+        /*
+         * 🆕 🥇 **Prima il più recente DI OGNI pagante, poi il migliore fra
+         * loro** — F1.2, 26/09/2026.
+         *
+         * 🚨 I due passaggi non si possono invertire, e il primo tentativo lo
+         * sbagliava: prendere «il migliore fra tutti» ignora che **sullo
+         * stesso tenant un abbonamento nuovo SOSTITUISCE il vecchio**. ⛔ Una
+         * palestra che passa da `gym` a `plus` si vedeva ancora riconosciuto
+         * il piano vecchio, perché era «migliore». L'ha scoperto
+         * `AbbonatoETierTest`, che era verde da prima.
+         *
+         * 💡 Quindi: **dentro** ogni pagante vince il più recente — è la
+         * successione, non una gara — e **fra** i paganti vince il migliore.
+         */
+        $piuRecentePerPagante = [];
+
+        foreach ($attivi as $abbonamento) {
+            $tenantId = (int) $abbonamento->tenant_id;
+            $corrente = $piuRecentePerPagante[$tenantId] ?? null;
+
+            if ($corrente === null || $abbonamento->starts_at > $corrente->starts_at) {
+                $piuRecentePerPagante[$tenantId] = $abbonamento;
+            }
+        }
+
+        $migliore = null;
+        $rangoMigliore = -1;
+
+        foreach ($piuRecentePerPagante as $abbonamento) {
+            $piano = $abbonamento->plan;
+
+            if ($piano === null) {
+                continue;
+            }
+
+            $rango = $this->quantoTiDa($piano);
+
+            if ($rango > $rangoMigliore) {
+                $rangoMigliore = $rango;
+                $migliore = $piano;
+            }
+        }
+
+        return $migliore ?? $this->piadinoDiRiserva();
+    }
+
+    /**
+     * 🏆 **Quanto questo piano dà A TE** — non quanto vale per chi lo compra.
+     *
+     * ⚠️ Più alto = meglio.
+     *
+     * 🚨 **Non si usa `max_members`**, ed è l'errore che avevo fatto: quello è
+     * quanti allievi può avere la palestra o il trainer. ⛔ Alla persona non
+     * dà **niente**, e usarlo come criterio faceva vincere il piano di chi ha
+     * più clienti invece di quello che le serve di più.
+     *
+     * ⛔ E nemmeno il prezzo: un piano a consumo costa 0 a listino.
+     *
+     * 💡 Si guardano le cose che la persona **riceve**: l'AI, e quanta.
+     */
+    private function quantoTiDa(Plan $piano): int
+    {
+        return ($piano->ai_enabled ? 1_000_000 : 0)
+            + ((int) ($piano->ai_monthly_calls_per_member ?? 0) * 100)
+            + (int) ($piano->ai_monthly_photo_calls_per_member ?? 0);
     }
 
     /**
@@ -399,7 +498,32 @@ class PianoAttivo
      */
     public function chiPaga(?User $utente): ?string
     {
-        $tenant = $utente?->tenant;
+        if ($utente === null) {
+            return null;
+        }
+
+        /*
+         * 🆕 💰 **Chi paga DAVVERO, non dove abiti** — F1.3, 26/09/2026.
+         *
+         * ⛔ Qui si guardava `$utente->tenant`, cioè la scatola di casa. 🚨 Con
+         * più paganti diceva la cosa sbagliata: a chi ha un trainer esterno
+         * che paga rispondeva «palestra» — o «io» — cioè indicava qualcuno che
+         * non sta pagando niente.
+         *
+         * 💡 Ora si parte dal **piano che ha vinto** e si risale al tenant che
+         * lo possiede: l'etichetta dice chi ti sta davvero mantenendo
+         * l'abbonamento.
+         *
+         * ⚠️ Se nessuno paga si risponde `null`, come prima: «nessuno» non è
+         * un pagante, e l'app deve poterlo distinguere.
+         */
+        $piano = $this->per($utente);
+
+        if ($piano->code === Plan::FREE) {
+            return null;
+        }
+
+        $tenant = $this->tenantDelPiano($utente, $piano);
 
         if ($tenant === null) {
             return null;
@@ -410,6 +534,38 @@ class PianoAttivo
         }
 
         return $tenant->ePersonale() ? 'trainer' : 'palestra';
+    }
+
+    /**
+     * 🔎 Il tenant a cui appartiene l'abbonamento che sta pagando.
+     *
+     * ⚠️ Si cerca **fra i paganti di questa persona**, non fra tutti: il
+     * medesimo piano può essere sottoscritto da mille palestre, e prendere la
+     * prima vorrebbe dire nominare un estraneo.
+     */
+    private function tenantDelPiano(User $utente, Plan $piano): ?Tenant
+    {
+        $paganti = app(ChiPagaPerTe::class)->tenantIds($utente);
+
+        if ($paganti === []) {
+            return null;
+        }
+
+        return $this->context->runWithoutTenant(function () use ($paganti, $piano): ?Tenant {
+            /*
+             * ⚠️ Si interroga `PlanSubscription` direttamente e **non** una
+             * relazione su `Tenant`: quella relazione non esiste, e
+             * aggiungerla solo per questo vorrebbe dire una strada in più da
+             * tenere allineata allo scoping.
+             */
+            $id = PlanSubscription::query()
+                ->whereIn('tenant_id', $paganti)
+                ->attivi()
+                ->where('plan_id', $piano->getKey())
+                ->value('tenant_id');
+
+            return $id === null ? null : Tenant::query()->find($id);
+        });
     }
 
     /**

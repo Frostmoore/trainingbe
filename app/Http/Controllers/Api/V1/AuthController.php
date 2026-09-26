@@ -412,11 +412,38 @@ class AuthController extends Controller
          * obbligatorio — ma se succede il posto giusto dove fermarsi è questo,
          * non due righe più in là dentro `runAs(null)`.
          */
-        if ($tenant === null || ! $tenant->isActive()) {
+        /*
+         * 🆕 🔑 **Una palestra sospesa NON chiude la porta a nessuno** —
+         * decisione del committente, 26/09/2026 (`memory/decisioni.md`).
+         *
+         * 📌 *«non ha senso che mi dica che la palestra è sospesa e non mi
+         * faccia accedere, al massimo non mi dà i privilegi dell'abbonamento
+         * ma non devo PERDERE L'ACCESSO AL MIO ACCOUNT se la palestra non ha
+         * pagato»*. E ancora: *«il mio account è e sarà sempre mio: se il mio
+         * abbonamento lo paga qualcun altro lo ringrazio, ma non mi può
+         * togliere l'accesso»*.
+         *
+         * 🚨 **Qui c'era un 403 `tenant_inactive`**, e chiudeva fuori una
+         * persona dai **propri** dati per un inadempimento commerciale di un
+         * terzo. ⚖️ Indifendibile anche sul piano giuridico: allenamenti e
+         * diario sono dati personali dell'iscritto, e accesso e portabilità
+         * (artt. 15 e 20 GDPR) non dipendono da chi paga il servizio.
+         *
+         * 💡 Ora lo stato della palestra non decide più **se** si entra, ma
+         * **cosa funziona**: `tenant.active` è rimasto solo sulle rotte che la
+         * palestra finanzia (`ai`, `trainer`, `gym`, `nutrition-plans`,
+         * `importazioni`). Tutto il resto è della persona e resta suo.
+         *
+         * ⚠️ Il controllo su `$tenant === null` **resta**, e non è la stessa
+         * cosa: quello non è «la palestra non paga», è «la palestra non
+         * esiste». Proseguire con un contesto vuoto vorrebbe dire un global
+         * scope che non filtra, cioè una persona che vede i dati di tutti.
+         */
+        if ($tenant === null) {
             return response()->json([
-                'message' => __('La tua palestra è sospesa. Contattala per riattivare l\'accesso.'),
-                'code' => 'tenant_inactive',
-            ], 403);
+                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
+                'code' => 'tenant_missing',
+            ], 409);
         }
 
         $user->forceFill(['last_login_at' => now()])->saveQuietly();

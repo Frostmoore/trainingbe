@@ -235,7 +235,7 @@ class RegistrazioneLiberaTest extends TestCase
      * riprovare all'infinito una password che è giusta.
      */
     #[Test]
-    public function logging_in_without_a_code_still_checks_the_gym_is_active(): void
+    public function una_palestra_sospesa_non_impedisce_di_entrare(): void
     {
         $palestra = $this->creaPalestra('Alfa', 'alfa');
         $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test', [
@@ -250,19 +250,23 @@ class RegistrazioneLiberaTest extends TestCase
 
         $palestra->forceFill(['status' => TenantStatus::Suspended])->save();
 
-        // 🚨 Sospesa: non si entra, e si dice **perché**.
+        /*
+         * 🆕 🔑 **Sospesa: si entra lo stesso** — 26/09/2026.
+         *
+         * 🚨 Qui si pretendeva un 403. 📌 Il committente: *«il mio account
+         * è e sarà sempre mio: se il mio abbonamento lo paga qualcun altro
+         * lo ringrazio, ma non mi può togliere l'accesso»*.
+         */
         $this->postJson('/api/v1/auth/login', [
             'login' => 'iscritto@alfa.test',
             'password' => self::FAKE_PASSWORD,
-        ])
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'tenant_inactive');
+        ])->assertOk();
 
         // ⚠️ E vale anche per il nome utente: è la stessa porta.
         $this->postJson('/api/v1/auth/login', [
             'login' => 'iscritto.alfa',
             'password' => self::FAKE_PASSWORD,
-        ])->assertStatus(403);
+        ])->assertOk();
     }
 
     /** Una password sbagliata resta indistinguibile da un indirizzo inesistente. */
