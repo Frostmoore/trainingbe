@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\Chat\ConversationController;
 use App\Http\Controllers\Api\V1\Chat\DeviceTokenController;
 use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\FornitoriSocialController;
 use App\Http\Controllers\Api\V1\InvitiDellaPalestraController;
 use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
@@ -81,7 +82,28 @@ Route::prefix('v1')->group(function (): void {
      * ⛔ Qui c'era `GET branding/lookup?code=`: i colori di una palestra dal suo
      * codice. Tolta con F11 (24/09/2026): il codice palestra non esiste più, e
      * il branding arriva con l'accesso (`tokenResponse`) o con l'invito.
+     *
+     * 🚨 **E togliendola si è portata via una cosa che serviva ancora**: era
+     * l'unica rotta pubblica da cui l'app sapeva, **prima** della schermata
+     * d'accesso, quali fornitori social esistono. ⛔ Da allora chi apriva l'app
+     * per la prima volta non vedeva mai i pulsanti «Continua con Google»,
+     * perché `GymBranding.neutral` ha l'elenco vuoto. 💡 Nessuno se n'era
+     * accorto perché l'accesso social era comunque spento: il sintomo del
+     * difetto era identico al comportamento atteso. Rimediata qui sotto.
      */
+
+    /*
+     * 🔑 **Con cosa si può entrare** — voce 25, 26/09/2026.
+     *
+     * ⚖️ Pubblica per forza: la domanda arriva da chi non è ancora nessuno.
+     * ⛔ Non dice niente di personale e non espone gli identificativi dei
+     * client: solo quali fornitori sono accesi.
+     *
+     * ⚠️ `throttle` come `versione`: è una rotta aperta, e una rotta aperta
+     * senza limite è un invito.
+     */
+    Route::get('auth/fornitori', FornitoriSocialController::class)
+        ->middleware('throttle:60,1');
 
     /*
      * ── 🔗 L'invito di una palestra — 3b-V.2 ──────────────────────────────
