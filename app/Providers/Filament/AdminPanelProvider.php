@@ -7,7 +7,6 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\Login;
 use App\Http\Controllers\DocumentoDellImport;
 use App\Http\Controllers\FattureDaScaricare;
-use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\PretendeLaLiberatoria;
 use App\Http\Middleware\ResolveTenant;
 use App\Http\Middleware\SpazioDelPannello;
@@ -31,15 +30,16 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /**
  * Il pannello della palestra — amministratori e trainer.
  *
- * 🚨 **`ResolveTenant` ed `EnsureTenantActive` stanno in `authMiddleware`, non
- * in `middleware`.** Devono girare **dopo** l'autenticazione: `ResolveTenant`
- * legge il tenant dall'utente autenticato, e prima del login non c'è nessun
- * utente da cui leggerlo. Metterli nella catena generale non darebbe errore —
- * darebbe un contesto vuoto, cioè **nessun filtro**: ogni amministratore
- * vedrebbe gli iscritti di tutte le palestre.
+ * 🚨 **`ResolveTenant` sta in `authMiddleware`, non in `middleware`.** Deve
+ * girare **dopo** l'autenticazione: legge il tenant dall'utente autenticato, e
+ * prima del login non c'è nessun utente da cui leggerlo. Metterlo nella catena
+ * generale non darebbe errore — darebbe un contesto vuoto, cioè **nessun
+ * filtro**: ogni amministratore vedrebbe gli iscritti di tutte le palestre.
  *
- * `EnsureTenantActive` chiude il pannello quando l'abbonamento scade, anche a
- * sessione già aperta.
+ * ⛔ **E qui NON c'è `EnsureTenantActive`**, dal 28/09/2026: il pannello è il
+ * posto da cui si paga, e sbarrarlo a chi deve pagare è l'unico errore che si
+ * paga in contanti. 🔑 Chi non ha pagato entra e trova `AvvisoDaPagare`. La
+ * ragione per esteso sta accanto alla riga che non c'è più.
  */
 class AdminPanelProvider extends PanelProvider
 {
@@ -100,7 +100,46 @@ class AdminPanelProvider extends PanelProvider
                 SpazioDelPannello::class,
 
                 Authenticate::class,
-                EnsureTenantActive::class,
+
+                /*
+                 * ⛔ **QUI NON CI VA `EnsureTenantActive`** — 28/09/2026, 63.A.
+                 *
+                 * ══ 🚨 COSA E' SUCCESSO ═══════════════════════════════════
+                 *
+                 * `be v36.29.0` ha aperto `canAccessPanel('admin')` a chi non
+                 * ha pagato, ha aggiunto il widget `AvvisoDaPagare` e ha reso
+                 * verdi dieci test. ⛔ **E il pannello continuava a rispondere
+                 * 403.** Perche' quei test chiamavano `canAccessPanel()` a
+                 * mano, mentre in una richiesta vera questo middleware girava
+                 * subito dopo e chiudeva la porta un livello piu' sotto — con
+                 * un 403 **JSON**, che in un browser e' una riga di testo.
+                 *
+                 * 🔑 Cioe' la cosa chiesta dal committente non funzionava, e
+                 * l'unica cosa che poteva accorgersene non esisteva: una
+                 * richiesta HTTP vera. Ora esiste
+                 * (`tests/Feature/Accesso/IlPannelloSiApreDavveroTest.php`).
+                 *
+                 * ══ ⚖️ PERCHE' TOGLIERLO E' GIUSTO, NON COMODO ════════════
+                 *
+                 * 📌 *«se una palestra o un free_trainer non hanno pagato,
+                 * devono poter accedere a app e pannello … nel pannello devono
+                 * avere qualcosa che gli comunichi che devono pagare, con un
+                 * modo per permettere loro di pagare»*.
+                 *
+                 * 🔑 **Il pannello e' il posto da cui si paga.** Sbarrarlo a
+                 * chi deve pagare e' l'unico errore che si paga in contanti:
+                 * *«se uno non puo' entrare, non mi puo' pagare»*.
+                 *
+                 * ⚠️ **Sull'API resta**, e deve restare: li' `tenant.active`
+                 * spegne i **vantaggi** che la palestra finanzia (l'AI, i
+                 * contenuti), che e' una cosa diversa dal chiudere la porta.
+                 * 💡 La regola in una riga: **si entra sempre; quello che si
+                 * vede dipende da chi sei e da dove sei.**
+                 *
+                 * ⛔ Chi rimettesse questa riga richiuderebbe il pannello senza
+                 * rompere nessun test dei permessi: e' per questo che il
+                 * commento e' lungo.
+                 */
 
                 /*
                  * 🆕 ✍️ **E la liberatoria dell'art. 28** — 20/09/2026.

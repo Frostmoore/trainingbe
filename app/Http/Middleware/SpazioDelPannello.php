@@ -112,19 +112,30 @@ class SpazioDelPannello
         $palestra = Tenant::withoutGlobalScopes()->find($scelto);
 
         /*
-         * 🚨 **Tre ragioni per lasciar perdere la scelta, e una sola uscita.**
+         * 🚨 **Due ragioni per lasciar perdere la scelta, e una sola uscita.**
          *
-         * ⚠️ La terza — la palestra sospesa — non è pignoleria: `EnsureTenantActive`
-         * gira **dopo** di qui e chiude il pannello a chi ha in mano un tenant
-         * inattivo. Con la scelta ancora in sessione quella persona resterebbe
-         * **chiusa fuori da tutto**, compresa la pagina per tornare a casa sua:
-         * un vicolo cieco da cui si esce solo svuotando i cookie.
+         * ══ ⛔ E UNA TERZA CHE E' STATA TOLTA — 28/09/2026, 63.A ═══════════
          *
-         * 💡 Così invece la palestra sospesa la sfila da sola, e lei si ritrova
-         * nel proprio spazio — che è suo e funziona.
+         * Qui c'era anche `! $palestra->isActive()`, e la sua ragione era vera:
+         * `EnsureTenantActive` girava **dopo** di qui e chiudeva il pannello a
+         * chi aveva in mano un tenant inattivo, quindi con la scelta in sessione
+         * quella persona restava chiusa fuori da tutto.
+         *
+         * 🔑 Dal 28/09 `EnsureTenantActive` **non è più nel pannello**: chi non
+         * ha pagato entra e trova `AvvisoDaPagare`. ⛔ Quel rifiuto ha perso il
+         * suo motivo, e ne era rimasto solo il danno — **e il danno era grosso**:
+         *
+         * 🚨 Il trainer indipendente che lavora anche in una palestra sospesa
+         * scegliendo la palestra veniva **riportato a casa sua senza un
+         * messaggio**. Il titolare gli diceva *«guarda l'avviso nel pannello
+         * della palestra»*, lui cliccava, si ritrovava nel proprio spazio dove
+         * tutto funziona, e concludeva che l'avviso non esistesse.
+         *
+         * ⚠️ **Non era un errore: era una bugia silenziosa**, che è peggio.
+         * `IlPannelloSiApreDavveroTest::chi_ha_due_spazi_entra_anche_in_quello_
+         * della_palestra_sospesa` la rimette in piedi se qualcuno la riscrive.
          */
         if ($palestra === null
-            || ! $palestra->isActive()
             || ! $this->chiSiVede->spaziDi($utente)->contains($scelto)) {
             /*
              * ⚠️ **Si dimentica**, invece di lasciarla lì a fallire a ogni
@@ -178,8 +189,20 @@ class SpazioDelPannello
             return null;
         }
 
-        $palestra = Tenant::withoutGlobalScopes()->find($prima);
-
-        return $palestra !== null && $palestra->isActive() ? $palestra : null;
+        /*
+         * ⛔ **Qui c'era `&& $palestra->isActive()`** — tolto il 28/09/2026, 63.A.
+         *
+         * 🚨 Era il difetto peggiore dei due, perché colpiva chi **non ha
+         * nessun'altra strada**: il trainer che a casa non ha un ruolo da
+         * pannello e lavora solo in quella palestra. Con la palestra sospesa
+         * questo metodo rispondeva `null`, il contesto restava il suo spazio
+         * personale vuoto, e lui apriva un pannello **senza niente dentro** —
+         * senza iscritti, senza schede, e **senza l'avviso** che spiegava perché.
+         *
+         * 💡 Ora ci atterra comunque, e ci trova scritto cosa è successo. ⚖️ Uno
+         * spazio sospeso in cui si legge la verità è meglio di uno spazio vuoto
+         * che non la dice.
+         */
+        return Tenant::withoutGlobalScopes()->find($prima);
     }
 }

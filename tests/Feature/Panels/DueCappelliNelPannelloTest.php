@@ -305,15 +305,34 @@ class DueCappelliNelPannelloTest extends TestCase
     }
 
     /**
-     * 🚨 **E la palestra sospesa non lo chiude fuori da tutto.**
+     * 🔄 **RIBALTATO il 28/09/2026 — e il perché vale più del test.**
      *
-     * ⚠️ `EnsureTenantActive` gira dopo e sbarra chi ha in mano un tenant
-     * inattivo: con la scelta ancora in sessione, quella persona non
-     * raggiungerebbe nemmeno la pagina per tornare a casa sua. 💡 Un vicolo
-     * cieco da cui si esce solo svuotando i cookie.
+     * ══ ⛔ COM'ERA, E PERCHÉ ERA GIUSTO ALLORA ═════════════════════════════
+     *
+     * Questo test pretendeva il **contrario**: che scegliendo una palestra
+     * sospesa si finisse **a casa propria**. La ragione era vera:
+     * `EnsureTenantActive` girava dopo `SpazioDelPannello` e sbarrava chi aveva
+     * in mano un tenant inattivo, quindi con quella scelta in sessione la
+     * persona non raggiungeva nemmeno la pagina per tornare a casa — un vicolo
+     * cieco da cui si usciva solo svuotando i cookie.
+     *
+     * ══ 🚨 COSA È CAMBIATO SOTTO ══════════════════════════════════════════
+     *
+     * Dal 28/09 `EnsureTenantActive` **non è più nel pannello** (63.A): chi non
+     * ha pagato entra e trova `AvvisoDaPagare` col tasto per pagare. ⛔ Il vicolo
+     * cieco non esiste più, e quello che restava era **una bugia silenziosa**: il
+     * titolare diceva *«guarda l'avviso nel pannello della palestra»*, il trainer
+     * cliccava, si ritrovava nel proprio spazio dove tutto funziona, e concludeva
+     * che l'avviso non ci fosse.
+     *
+     * 🔑 **È la lezione numero uno di questo progetto**: quando si spegne una cosa
+     * che era accesa, niente di ciò che dipendeva da lei si può dare per buono —
+     * comprese le prove che lo proteggevano. ⛔ Questo test era **verde e
+     * sbagliato**, e nessuna macchina poteva accorgersene: solo la catena di
+     * ragionamento che lo aveva scritto.
      */
     #[Test]
-    public function una_palestra_sospesa_non_lo_lascia_chiuso_fuori(): void
+    public function una_palestra_sospesa_si_puo_scegliere_ed_e_li_che_si_atterra(): void
     {
         $palestra = $this->creaPalestra('Olimpo', 'olimpo');
         $trainer = $this->unTrainerIndipendente();
@@ -322,9 +341,10 @@ class DueCappelliNelPannelloTest extends TestCase
         $palestra->forceFill(['status' => TenantStatus::Suspended])->save();
 
         $this->assertSame(
-            $trainer->tenant_id,
+            $palestra->getKey(),
             $this->spazioDopoIlMiddleware($trainer->fresh(), $palestra->getKey()),
-            'Con la palestra sospesa resta incastrato fuori dal pannello.',
+            '🚨 La scelta della palestra sospesa è stata scartata in silenzio: '
+            .'chi va a cercare l\'avviso per pagare si ritrova a casa sua e conclude che non esista.',
         );
     }
 

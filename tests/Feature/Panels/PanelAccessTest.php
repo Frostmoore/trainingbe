@@ -182,15 +182,31 @@ class PanelAccessTest extends TestCase
         $this->actingAs($this->gymAdmin->fresh())->get('/admin')->assertForbidden();
     }
 
+    /**
+     * 🔄 **RIBALTATO il 28/09/2026** (63.A): si chiamava
+     * `a_suspended_gym_closes_the_panel` e pretendeva **403**.
+     *
+     * 📌 Il committente, 27/09: *«se una palestra o un free_trainer non hanno
+     * pagato, devono poter accedere a app e pannello … nel pannello devono avere
+     * qualcosa che gli comunichi che devono pagare, con un modo per permettere
+     * loro di pagare»*. 🔑 **Il pannello è il posto da cui si paga**: sbarrarlo a
+     * chi deve pagare è l'unico errore che si paga in contanti.
+     *
+     * ⛔ Questo test era la **guardia** che teneva in piedi la porta chiusa: la
+     * `v36.29.0` aveva aperto `canAccessPanel()` credendo di aver risolto, e
+     * questa riga continuava a passare perché il 403 arrivava da un middleware,
+     * un livello più sotto. 💡 Ora dice la cosa giusta, e l'avviso che si deve
+     * trovare dentro lo prova `IlPannelloSiApreDavveroTest`.
+     */
     #[Test]
-    public function a_suspended_gym_closes_the_panel(): void
+    public function a_suspended_gym_still_opens_the_panel(): void
     {
         $this->actingAs($this->gymAdmin)->get('/admin')->assertOk();
 
         $this->palestra->update(['status' => TenantStatus::Suspended]);
 
         $this->flushSession();
-        $this->actingAs($this->gymAdmin->fresh())->get('/admin')->assertForbidden();
+        $this->actingAs($this->gymAdmin->fresh())->get('/admin')->assertOk();
     }
 
     // ───────────────────── lo smistamento dopo il login ─────────────────────

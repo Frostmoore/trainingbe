@@ -876,7 +876,40 @@ class AiApiTest extends TestCase
         $riga = AiAdvice::withoutGlobalScopes()->firstOrFail();
 
         $this->assertStringNotContainsString('2100', $riga->context_hash);
-        $this->assertStringNotContainsString('2100', (string) $riga->toJson());
+
+        /*
+         * ⚠️ **Gli identificatori si escludono, e non è un allentamento** —
+         * 28/09/2026.
+         *
+         * ⛔ Prima qui c'era `assertStringNotContainsString('2100', $riga->toJson())`,
+         * cioè si cercava un numero **dentro tutto il JSON della riga**. 🚨 Il
+         * 28/09 è diventato rosso senza che nessuno avesse toccato l'AI: la
+         * numerazione automatica era arrivata a `tenant_id = 21005`, che contiene
+         * «2100». Un test che accusa la privacy di un difetto inesistente, e che
+         * il giorno prima passava per puro caso.
+         *
+         * 🔑 **La garanzia resta intera**: si controllano tutte le colonne tranne
+         * le tre chiavi, quindi una colonna **nuova** che conservasse il valore
+         * farebbe cadere questo test esattamente come prima. ⛔ Le chiavi, invece,
+         * non possono per costruzione contenere un fabbisogno: sono contatori.
+         *
+         * 💡 La lezione è che un test deve guardare **il posto giusto**: cercare
+         * una stringa in un impasto di campi diversi è un test che un giorno dirà
+         * una cosa falsa, e non si sa quale dei due giorni sia quello.
+         */
+        $daGuardare = array_diff_key(
+            $riga->getAttributes(),
+            array_flip(['id', 'tenant_id', 'user_id']),
+        );
+
+        foreach ($daGuardare as $colonna => $valore) {
+            $this->assertStringNotContainsString(
+                '2100',
+                (string) $valore,
+                "🚨 Il fabbisogno inoltrato è finito nella colonna `{$colonna}`: "
+                .'il server lo passa al modello e NON lo conserva (fase S5).',
+            );
+        }
     }
 
     /**

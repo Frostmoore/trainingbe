@@ -48,6 +48,25 @@ class AvvisoDaPagare extends Widget
     protected int|string|array $columnSpan = 'full';
 
     /**
+     * ⛔ **Non pigro** — 28/09/2026, 63.A.
+     *
+     * 🚨 Di serie Filament carica i widget **dopo** la pagina, con una seconda
+     * richiesta. ⛔ Per questo riquadro è sbagliato due volte:
+     *
+     * 1. 👁️ **Per chi legge**: è la cosa più importante della pagina e arriverebbe
+     *    ultima, comparendo con uno scatto sotto gli occhi di qualcuno che nel
+     *    frattempo ha già cominciato a cliccare altrove.
+     * 2. 🚨 **Per chi verifica**: caricato dopo, **non è nella pagina**. Un test
+     *    che apre `/admin` e cerca l'avviso non lo trova, e il modo comodo di
+     *    farlo passare sarebbe interrogare il widget da solo — cioè tornare
+     *    esattamente all'errore che ha fatto sembrare funzionante la `v36.29.0`.
+     *
+     * 💡 Con `false` il riquadro è dentro l'HTML della pagina, e la prova che il
+     * cliente lo vede è la stessa prova che lo vede il test.
+     */
+    protected static bool $isLazy = false;
+
+    /**
      * ⚠️ **Si mostra solo quando serve.** ⛔ Un avviso che c'è sempre non lo
      * legge nessuno, e quando conta davvero è indistinguibile dallo sfondo.
      */
