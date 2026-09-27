@@ -439,11 +439,45 @@ class AuthController extends Controller
          * esiste». Proseguire con un contesto vuoto vorrebbe dire un global
          * scope che non filtra, cioè una persona che vede i dati di tutti.
          */
+        /*
+         * 🆕 🏠 **SENZA SPAZIO NON SI RIFIUTA: SE NE DÀ UNO** — 63.2, 27/09/2026.
+         *
+         * ══ ⛔ QUI C'ERA UN 409 `tenant_missing`, E CHIUDEVA FUORI ═══════════
+         *
+         * 🚨 È **il guasto del 27/09**: il super admin aveva `tenant_id = null` e
+         * non entrava nell'app. ⛔ Allora l'ho «risolto» dandogli uno spazio **a
+         * mano**, sul database. 💡 Cioè ho sistemato **quella persona**, non il
+         * difetto: chiunque si fosse trovato senza spazio — per un dato sporco, una
+         * migrazione a metà, un ripristino parziale — sarebbe rimasto fuori.
+         *
+         * 🔑 L'ha trovato `SiEntraSempreTest`, che rompe una cosa alla volta e
+         * pretende che l'accesso regga. ⚠️ **La matrice dei 25 casi non lo vedeva**:
+         * nessuno dei venticinque aveva `tenant_id` nullo.
+         *
+         * ══ ⚖️ PERCHE' NON SI PROSEGUE SEMPLICEMENTE SENZA CONTESTO ═════════
+         *
+         * ⛔ Perché la vecchia nota aveva ragione su una cosa: con un contesto vuoto
+         * il `TenantScope` **non filtra**, e quella persona vedrebbe i dati di
+         * tutti. 🚨 Non è un dettaglio: è il difetto peggiore che questo progetto
+         * possa avere.
+         *
+         * 💡 Quindi non si sceglie fra «fuori» e «dentro senza filtro»: si **crea la
+         * casa**, che è la decisione F2 del progetto — *ogni persona ha uno spazio
+         * suo*. ⚠️ E si usa la stessa macchina del comando `abbonamenti:casa-a-tutti`
+         * (`CreaTenantPersonale::perChiEsisteGia()`): ⛔ una seconda strada per
+         * creare uno spazio vorrebbe dire due spazi fatti in modo diverso.
+         *
+         * ⚠️ **Succede una volta sola per persona**: al giro dopo lo spazio c'è.
+         */
         if ($tenant === null) {
-            return response()->json([
-                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
-                'code' => 'tenant_missing',
-            ], 409);
+            $tenant = app(CreaTenantPersonale::class)->dagliUnaCasa($user);
+
+            Log::warning('Accesso: utente senza spazio, gliene è stato creato uno.', [
+                'utente' => $user->getKey(),
+                'spazio' => $tenant->getKey(),
+            ]);
+
+            $user->refresh();
         }
 
         $user->forceFill(['last_login_at' => now()])->saveQuietly();

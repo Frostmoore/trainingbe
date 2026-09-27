@@ -126,11 +126,31 @@ class SocialAuthController extends Controller
          * cosa: non «non paga», ma «non esiste». Proseguire senza contesto
          * vorrebbe dire un global scope che non filtra.
          */
+        /*
+         * 🆕 🏠 **Senza spazio non si rifiuta: se ne dà uno** — 63.2, 27/09/2026.
+         *
+         * ⛔ Qui c'era un **409 `tenant_missing`**, e chiudeva fuori chi si trovava
+         * senza spazio per un dato sporco, una migrazione a metà, un ripristino
+         * parziale. 🚨 È il guasto del 27/09, che allora avevo «risolto» dando uno
+         * spazio **a mano** a quella persona — cioè non l'avevo risolto.
+         *
+         * ⚠️ **E qui pesa di più che sull'accesso con la password**: chi entra con
+         * Google spesso non *ha* una password da provare come alternativa. ⛔ Un
+         * rifiuto qui è una porta chiusa senza seconda strada.
+         *
+         * ⚖️ Non si prosegue senza contesto — il `TenantScope` non filtrerebbe e
+         * quella persona vedrebbe i dati di tutti. 💡 Si **crea la casa**, con la
+         * stessa macchina di `AuthController` e del comando `casa-a-tutti`.
+         */
         if ($tenant === null) {
-            return response()->json([
-                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
-                'code' => 'tenant_missing',
-            ], 409);
+            $tenant = app(CreaTenantPersonale::class)->dagliUnaCasa($utente);
+
+            Log::warning('Accesso social: utente senza spazio, gliene è stato creato uno.', [
+                'utente' => $utente->getKey(),
+                'spazio' => $tenant->getKey(),
+            ]);
+
+            $utente->refresh();
         }
 
         $identita->forceFill(['last_login_at' => now()])->save();
@@ -303,11 +323,31 @@ class SocialAuthController extends Controller
          * ha già: negarglielo vorrebbe dire impedirgli perfino di aggiungersi
          * un modo in più per rientrare.
          */
+        /*
+         * 🆕 🏠 **Come sopra: senza spazio se ne dà uno** — 63.2, 27/09/2026.
+         *
+         * ⛔ Qui c'era un **409 `tenant_missing`**, e chiudeva fuori chi si trovava
+         * senza spazio per un dato sporco, una migrazione a metà, un ripristino
+         * parziale. 🚨 È il guasto del 27/09, che allora avevo «risolto» dando uno
+         * spazio **a mano** a quella persona — cioè non l'avevo risolto.
+         *
+         * ⚠️ **E questo è il ramo di chi COLLEGA un fornitore a un account che ha
+         * già**: negarglielo vorrebbe dire impedirgli perfino di aggiungersi un modo
+         * in più per rientrare — cioè il contrario di quello che sta cercando di fare.
+         *
+         * ⚖️ Non si prosegue senza contesto — il `TenantScope` non filtrerebbe e
+         * quella persona vedrebbe i dati di tutti. 💡 Si **crea la casa**, con la
+         * stessa macchina di `AuthController` e del comando `casa-a-tutti`.
+         */
         if ($tenant === null) {
-            return response()->json([
-                'message' => __('Non riusciamo a caricare il tuo spazio. Riprova fra poco.'),
-                'code' => 'tenant_missing',
-            ], 409);
+            $tenant = app(CreaTenantPersonale::class)->dagliUnaCasa($utente);
+
+            Log::warning('Accesso social: utente senza spazio, gliene è stato creato uno.', [
+                'utente' => $utente->getKey(),
+                'spazio' => $tenant->getKey(),
+            ]);
+
+            $utente->refresh();
         }
 
         SocialIdentity::create([

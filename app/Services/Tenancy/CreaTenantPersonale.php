@@ -161,6 +161,46 @@ final class CreaTenantPersonale
     }
 
     /**
+     * 🏠 **Dà una casa a chi non ce l'ha, e GLIELA ATTACCA** — 63.2, 27/09/2026.
+     *
+     * ══ 🚨 PERCHE' ESISTE, OLTRE A `perChiEsisteGia()` ══════════════════════
+     *
+     * ⛔ `perChiEsisteGia()` crea lo spazio, i suoi ruoli e il proprietario, ma
+     * **non scrive `users.tenant_id`**: lo fa il chiamante. 💡 Ed è giusto così per
+     * il comando `abbonamenti:casa-a-tutti`, che a volte vuole la casa **senza**
+     * spostare chi vive già in una palestra.
+     *
+     * 🚨 **Ma è una trappola per chiunque altro.** Chiamandolo dall'accesso, la
+     * persona entrava e restava **senza spazio**: il giro dopo si ricreava una casa
+     * nuova, e ogni accesso lasciava un tenant orfano dietro di sé. ⛔ L'ho scritto
+     * così al primo tentativo, e l'ha trovato `SiEntraSempreTest` con
+     * l'asserzione *«e lo spazio gli è stato dato»* — non quella sul codice 200.
+     *
+     * 💡 Per questo qui c'è un metodo che fa **tutte e due** le cose: chi deve solo
+     * «dare una casa a questa persona» non ha modo di dimenticarne metà.
+     *
+     * ⚠️ **Idempotente**: se la casa c'è già, la restituisce e non ne crea un'altra.
+     */
+    public function dagliUnaCasa(User $utente): Tenant
+    {
+        return $this->context->runWithoutTenant(function () use ($utente): Tenant {
+            $gia = $utente->tenant_id === null
+                ? null
+                : Tenant::withoutGlobalScopes()->find($utente->tenant_id);
+
+            if ($gia !== null) {
+                return $gia;
+            }
+
+            $casa = $this->perChiEsisteGia($utente);
+
+            $utente->forceFill(['tenant_id' => $casa->getKey()])->save();
+
+            return $casa;
+        });
+    }
+
+    /**
      * 🆕 🏠 **Uno spazio personale per chi esiste già** — decisione 2, 18/09/2026.
      *
      * 📌 Il committente: *«ogni trainer ha sempre uno spazio suo»*.
