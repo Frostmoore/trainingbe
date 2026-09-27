@@ -193,6 +193,24 @@ final class EsciDaUnaPalestra
      */
     public const REGOLE_PROPRIE = [
         /*
+         * 🆕 🏠 **Le appartenenze** — F2.1, 27/09/2026.
+         *
+         * 🚨 Qui `tenant_id` **non vuol dire «di chi è la riga»**: vuol dire
+         * «a chi appartiene questa persona». ⛔ Spostarlo quando esce da una
+         * palestra riscriverebbe la storia — direbbe che è sempre appartenuta
+         * a qualcun altro — invece di dire che quell'appartenenza **è finita**.
+         *
+         * 💡 La regola sua è: l'appartenenza a quella palestra si **chiude**
+         * (`finita_il`), le altre non si toccano. ⚠️ Non si cancella: la
+         * storia serve, ed è quella che fa ripartire l'abbonamento di prima
+         * quando tutti se ne vanno.
+         *
+         * ⏳ La chiusura la scriverà **F2.4**: oggi questa tabella è ancora
+         * solo descrittiva e nessuno la legge.
+         */
+        'appartenenze',
+
+        /*
          * 🆕 ✍️ **La liberatoria firmata non si sposta** — 20/09/2026.
          *
          * 🚨 È un **atto avvenuto**: «il giorno X, dentro la palestra Y, questa
