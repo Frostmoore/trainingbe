@@ -80,8 +80,8 @@ class SoloLAvvisoSeNonHaiPagatoTest extends TestCase
         $this->actingAs($this->capo->fresh())
             ->get(Cruscotto::getUrl(panel: 'admin'))
             ->assertSuccessful()
-            ->assertSee('il servizio è sospeso', escape: false)
-            ->assertSee('Riattiva il servizio', escape: false);
+            ->assertSee('Non siamo riusciti a incassare', escape: false)
+            ->assertSee('Modifica il metodo di pagamento', escape: false);
     }
 
     /**
@@ -205,7 +205,7 @@ class SoloLAvvisoSeNonHaiPagatoTest extends TestCase
         $this->actingAs($this->capo->fresh())
             ->get(Cruscotto::getUrl(panel: 'admin'))
             ->assertSuccessful()
-            ->assertDontSee('il servizio è sospeso', escape: false);
+            ->assertDontSee('Non siamo riusciti a incassare', escape: false);
     }
 
     /**
@@ -287,7 +287,7 @@ class SoloLAvvisoSeNonHaiPagatoTest extends TestCase
         $cruscotto = $this->actingAs($suo->fresh())->get(Cruscotto::getUrl(panel: 'admin'));
 
         $cruscotto->assertSuccessful()
-            ->assertSee('il servizio è sospeso', escape: false)
+            ->assertSee('Non siamo riusciti a incassare', escape: false)
             ->assertSee('Cambia spazio', escape: false);
 
         /* 2️⃣ E la pagina si apre davvero, non viene rimandata al cruscotto. */
@@ -302,7 +302,7 @@ class SoloLAvvisoSeNonHaiPagatoTest extends TestCase
 
         $nellaPalestra->assertSuccessful()
             ->assertSee('Palestra In Regola', escape: false)
-            ->assertDontSee('il servizio è sospeso', escape: false);
+            ->assertDontSee('Non siamo riusciti a incassare', escape: false);
     }
 
     /**

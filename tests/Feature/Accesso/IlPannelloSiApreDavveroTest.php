@@ -133,8 +133,8 @@ class IlPannelloSiApreDavveroTest extends TestCase
         $this->actingAs($capo->fresh())
             ->get('/admin')
             ->assertSuccessful()
-            ->assertSee('il servizio è sospeso', escape: false)
-            ->assertSee('Riattiva il servizio', escape: false);
+            ->assertSee('Non siamo riusciti a incassare', escape: false)
+            ->assertSee('Modifica il metodo di pagamento', escape: false);
     }
 
     /**
@@ -205,10 +205,20 @@ class IlPannelloSiApreDavveroTest extends TestCase
 
         $risposta->assertSuccessful();
 
-        $risposta->assertSee(
-            'Palestra Ferma: il servizio è sospeso',
-            escape: false,
-        );
+        $risposta->assertSee('Non siamo riusciti a incassare', escape: false);
+
+        /*
+         * 🔑 **E deve NOMINARE la palestra.** ⚠️ Chi porta due cappelli ha due
+         * spazi: un avviso che non dice **di quale** sta parlando lo manda a
+         * controllare il metodo di pagamento sbagliato.
+         *
+         * ⛔ Riscrivendo il testo il 27/09 questa asserzione si era indebolita da
+         * sé: cercava la frase intera «Palestra Ferma: il servizio è sospeso», e
+         * sostituendo la frase era rimasto solo il pezzo senza il nome.
+         * 💡 Cambiare un testo può **togliere una garanzia** senza far diventare
+         * rosso niente.
+         */
+        $risposta->assertSee('Palestra Ferma', escape: false);
     }
 
     /**
@@ -245,7 +255,7 @@ class IlPannelloSiApreDavveroTest extends TestCase
         $this->actingAs($suo->fresh())
             ->get('/admin')
             ->assertSuccessful()
-            ->assertDontSee('il servizio è sospeso', escape: false);
+            ->assertDontSee('Non siamo riusciti a incassare', escape: false);
     }
 
     /**
@@ -293,7 +303,7 @@ class IlPannelloSiApreDavveroTest extends TestCase
 
         $risposta->assertSee('Unica Palestra', escape: false);
 
-        $risposta->assertSee('il servizio è sospeso', escape: false);
+        $risposta->assertSee('Non siamo riusciti a incassare', escape: false);
     }
 
     /**

@@ -107,6 +107,41 @@ class IlTuoPiano extends Page
         $vendita = app(PianiInVendita::class);
         $listino = $vendita->listinoPer($this->utente());
 
+        /*
+         * 🆕 🔒 **Prima si paga il mese, poi si cambia piano** — 27/09/2026.
+         *
+         * 📌 Il committente: *«quando clicchi su rinnova ora, deve solo farmi
+         * pagare, non mi deve permettere di cambiare il piano. Quello devo poterlo
+         * fare solo dopo che il pagamento è stato effettuato per il mese corrente»*.
+         *
+         * ══ 🚨 PERCHE' IL CONTROLLO STA QUI E NON SOLO NELLA VISTA ══════════
+         *
+         * ⛔ Nascondere i pulsanti **non è un controllo**: `scegli()` è un metodo
+         * Livewire, e chi sa aprire la console del browser lo chiama con qualunque
+         * codice di piano. 🔑 È la stessa lezione della `v36.29.0` al rovescio: là
+         * c'era il controllo e non la porta, qui ci sarebbe la porta senza il
+         * controllo.
+         *
+         * ⚖️ E la ragione commerciale: chi non ha saldato il mese non scappa su un
+         * piano più piccolo prima di pagare, e non ne compra uno più grande
+         * lasciando indietro il dovuto.
+         *
+         * 💡 Il messaggio dice **cosa fare**, non «non puoi»: il tasto per il
+         * metodo di pagamento è sulla stessa pagina.
+         */
+        if (($listino['pagamento_in_sospeso'] ?? false) === true) {
+            Notification::make()
+                ->title('Prima sistemiamo il pagamento')
+                ->body(
+                    'Non siamo ancora riusciti a incassare l\'addebito di questo mese. '
+                    .'Appena è a posto puoi cambiare piano quando vuoi.'
+                )
+                ->warning()
+                ->send();
+
+            return;
+        }
+
         $voce = collect($listino['piani'])->firstWhere('codice', $codice) ?? [];
         $consumo = $voce['a_consumo'] ?? false;
 

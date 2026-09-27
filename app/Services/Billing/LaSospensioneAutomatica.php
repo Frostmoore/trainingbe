@@ -336,7 +336,41 @@ class LaSospensioneAutomatica
     public function staPagando(Tenant $spazio): bool
     {
         return $this->haUnAbbonamentoVivo($spazio)
-            && $this->insolvenzaDelConsumo($spazio) === null;
+            && $this->insolvenzaDelConsumo($spazio) === null
+            && ! $this->canoneNonIncassato($spazio);
+    }
+
+    /**
+     * 💳 **C'è un canone che non siamo riusciti a incassare?**
+     *
+     * ══ ⚠️ PERCHE' NON BASTA `haUnAbbonamentoVivo()` ═══════════════════════
+     *
+     * 🚨 Quando Stripe non riesce a incassare un canone, `Cassa` segna
+     * `pagamento_fallito_il` e **non spegne niente**: l'abbonamento resta vivo,
+     * `ends_at` è nel futuro, e Stripe riprova per giorni. ⛔ È voluto — spegnere
+     * al primo rifiuto punirebbe chi ha cambiato carta di venerdì.
+     *
+     * 💡 Ma *«il servizio è ancora acceso»* e *«il mese è pagato»* sono due cose
+     * diverse, e per **cambiare piano** conta la seconda.
+     *
+     * 📌 Il committente, 27/09: *«quando clicchi su rinnova ora, deve solo farmi
+     * pagare, non mi deve permettere di cambiare il piano. Quello devo poterlo fare
+     * solo dopo che il pagamento è stato effettuato per il mese corrente»*.
+     *
+     * ⚠️ **Questo NON fa sospendere nessuno**: la sospensione ha le sue condizioni
+     * di tempo, e questa domanda non ne fa parte. 💡 Entra in `staPagando()`, che
+     * governa la **riattivazione** e il **cambio di piano** — dove la risposta
+     * giusta è «no, prima paga il mese».
+     */
+    public function canoneNonIncassato(Tenant $spazio): bool
+    {
+        return $this->context->runWithoutTenant(
+            fn (): bool => PlanSubscription::withoutGlobalScopes()
+                ->where('tenant_id', $spazio->getKey())
+                ->attivi()
+                ->whereNotNull('pagamento_fallito_il')
+                ->exists(),
+        );
     }
 
     /**

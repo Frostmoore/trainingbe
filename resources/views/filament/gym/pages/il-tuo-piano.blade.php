@@ -65,6 +65,31 @@
             </div>
         </x-filament::section>
 
+        {{--
+            🆕 💳 **Perché i pulsanti sono spenti** — 27/09/2026.
+
+            ⛔ Senza questa riga i pulsanti risulterebbero spenti **senza una ragione**, e
+            una cosa che non funziona e non dice perché si legge come un guasto. 🚨 È lo
+            stesso difetto dei messaggi che mostravano una diagnosi falsa: manda la persona
+            a cercare la causa nel posto sbagliato.
+        --}}
+        @if ($listino['pagamento_in_sospeso'] ?? false)
+            <x-filament::section>
+                <div class="flex items-start gap-3">
+                    <x-filament::icon
+                        icon="heroicon-o-information-circle"
+                        class="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500"
+                    />
+
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Il cambio di piano si riapre appena incassiamo l'addebito di questo
+                        mese. Intanto puoi sistemare il metodo di pagamento qui sopra: non
+                        serve fare altro, ci riproviamo da soli.
+                    </p>
+                </div>
+            </x-filament::section>
+        @endif
+
         <div class="tc-piani">
             @foreach ($listino['piani'] as $p)
                 @php($suo = $p['codice'] === $listino['piano_attuale'])
@@ -108,9 +133,46 @@
                                     Stripe PASSA a un altro (conguaglio), gli altri lo
                                     SCELGONO (pagamento). La strada la decide il server.
                                 --}}
-                                <x-filament::button wire:click="scegli('{{ $p['codice'] }}')" wire:loading.attr="disabled">
+                                {{--
+                                    🆕 🔒 **Finché il mese non è incassato, non si cambia piano**
+                                    — 27/09/2026. 📌 *«quando clicchi su rinnova ora, deve solo
+                                    farmi pagare, non mi deve permettere di cambiare il piano»*.
+
+                                    ⚠️ Il pulsante si **spegne** e non sparisce: un piano che
+                                    scompare fa credere di averlo perso. 💡 Spento con accanto il
+                                    perché si legge come una condizione, non come un guasto.
+
+                                    ⛔ E questo è solo l'aspetto: il cancello vero è in
+                                    `IlTuoPiano::scegli()`, perché `wire:click` si chiama dalla
+                                    console del browser.
+                                --}}
+                                @php($troppoPiccolo = $p['troppo_piccolo'] ?? null)
+
+                                <x-filament::button
+                                    wire:click="scegli('{{ $p['codice'] }}')"
+                                    wire:loading.attr="disabled"
+                                    :disabled="($listino['pagamento_in_sospeso'] ?? false) || $troppoPiccolo !== null"
+                                >
                                     {{ $listino['puo_cambiare'] && ! $p['a_consumo'] ? 'Passa a questo' : 'Scegli' }}
                                 </x-filament::button>
+
+                                {{--
+                                    🆕 🚫 **Il perché, accanto al pulsante spento** — 27/09/2026.
+
+                                    📌 *«Per poterlo selezionare, devo prima liberare gli slot in
+                                    eccesso»*. ⚠️ Quindi il piano si **vede** e non si sceglie: ⛔
+                                    nasconderlo farebbe credere che non esista, e chi sta valutando
+                                    di scendere non capirebbe cosa gli manca.
+
+                                    🔑 Il testo è **lo stesso** che lancerebbe il server, perché
+                                    viene dallo stesso metodo: il pulsante e il rifiuto non possono
+                                    dire due cose diverse.
+                                --}}
+                                @if ($troppoPiccolo !== null)
+                                    <p class="tc-piano-testo" style="margin-top: .5rem">
+                                        {{ $troppoPiccolo }}
+                                    </p>
+                                @endif
                             @endif
                         </div>
                     </div>

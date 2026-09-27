@@ -100,7 +100,7 @@ class AdminPanelProvider extends PanelProvider
                 }
 
                 $voci = [
-                    NavigationItem::make('Riattiva il servizio')
+                    NavigationItem::make('Metodo di pagamento')
                         ->icon('heroicon-o-credit-card')
                         ->url(IlTuoPiano::getUrl(panel: 'admin'))
                         ->isActiveWhen(fn (): bool => request()->routeIs(IlTuoPiano::getRouteName())),

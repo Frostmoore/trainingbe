@@ -154,7 +154,8 @@ final class CasiDiProva
 
             $this->voce('P2', 'pannello', 'Palestra che NON ha pagato', [
                 'Entra (mai un 403)',
-                'In cima l\'avviso «il servizio è sospeso» col tasto «Riattiva il servizio»',
+                "In cima l'avviso «non siamo riusciti a incassare», col nome dello spazio",
+                'E il tasto «Modifica il metodo di pagamento»',
                 'Il menù con una voce sola',
             ], [
                 'Gli altri riquadri del cruscotto',

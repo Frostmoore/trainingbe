@@ -15,6 +15,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\ContoDegliIscritti;
 use App\Services\Billing\Exceptions\AbbonamentoNonSuStripeException;
+use App\Services\Billing\LaSospensioneAutomatica;
 use App\Services\Billing\RegistroDeiPagamenti;
 use App\Services\Tenancy\InvitiDelTrainer;
 use App\Support\Tenancy\TenantContext;
@@ -107,6 +108,19 @@ class PianiInVendita
                 'Hai già un piano attivo: cambialo invece di comprarne un altro, così non paghi due volte.'
             );
         }
+
+        /*
+         * 🚨 **E anche chi COMPRA, non solo chi cambia** — 27/09/2026.
+         *
+         * ⛔ Fino al 27/09 `pretendiCheCiStianoTutti()` girava **solo** in
+         * `cambiaVerso()`, cioè solo sul cambio di un canone già attivo su Stripe.
+         * 🚨 Chi arrivava dall'altra strada — abbonamento scaduto, o mai avuto —
+         * poteva **comprare** un piano troppo piccolo per i suoi iscritti. ⛔ E
+         * pagarlo: il rifiuto sarebbe arrivato al primo cambio, a soldi già usciti.
+         *
+         * 💡 La stessa regola sulle due strade, chiamata da un posto solo.
+         */
+        $this->pretendiCheCiStianoTutti($tenant, $piano);
 
         return $piano->aConsumo()
             ? $this->apriIlConsumo($utente, $tenant, $piano, $tornaA)
@@ -666,11 +680,11 @@ class PianiInVendita
      * ⚠️ **Vuoto per chi non è titolare**: un iscritto non vede i piani della sua
      * palestra, e non deve — non li può comprare.
      *
-     * @return array{piani: list<array<string, mixed>>, piano_attuale: ?string, puo_cambiare: bool, pagamento_fallito_il: ?string}
+     * @return array{piani: list<array<string, mixed>>, piano_attuale: ?string, puo_cambiare: bool, pagamento_fallito_il: ?string, pagamento_in_sospeso: bool}
      */
     public function listinoPer(User $utente): array
     {
-        $vuoto = ['piani' => [], 'piano_attuale' => null, 'puo_cambiare' => false, 'pagamento_fallito_il' => null];
+        $vuoto = ['piani' => [], 'piano_attuale' => null, 'puo_cambiare' => false, 'pagamento_fallito_il' => null, 'pagamento_in_sospeso' => false];
 
         if (! Cassa::loPuoGestire($utente) || $utente->tenant === null) {
             return $vuoto;
@@ -700,6 +714,19 @@ class PianiInVendita
                     'a_consumo' => $p->aConsumo(),
                     'prezzo_iscritto_cent' => $p->prezzo_iscritto_cent,
                     'minimo_iscritti' => $p->minimo_iscritti,
+
+                    /*
+                     * 🆕 🚫 **Perché questo piano non si può scegliere** — 27/09/2026.
+                     *
+                     * 📌 *«Per poterlo selezionare, devo prima liberare gli slot in
+                     * eccesso»*. ⛔ Prima la regola esisteva solo come eccezione: la si
+                     * scopriva **cliccando**.
+                     *
+                     * ⚠️ `null` vuol dire «si può». 💡 Il testo è lo **stesso** che
+                     * lancerebbe il server, perchè viene dallo stesso metodo: così il
+                     * pulsante e il rifiuto non possono dire due cose diverse.
+                     */
+                    'troppo_piccolo' => $this->percheNonCiStanno($tenant, $p),
                 ])->values()->all(),
 
             /*
@@ -712,6 +739,28 @@ class PianiInVendita
             'puo_cambiare' => $this->abbonamentoStripeAttivo($tenant) !== null,
 
             'pagamento_fallito_il' => $attivo?->pagamento_fallito_il?->toDateString(),
+
+            /*
+             * 🆕 🔒 **Il mese corrente è pagato?** — 27/09/2026.
+             *
+             * 📌 Il committente: *«quando clicchi su rinnova ora, deve solo farmi
+             * pagare, non mi deve permettere di cambiare il piano. Quello devo
+             * poterlo fare solo dopo che il pagamento è stato effettuato per il mese
+             * corrente»*.
+             *
+             * ⚠️ **Non è `puo_cambiare` con un altro nome.** Quello dice *«il cambio
+             * sarebbe un conguaglio su Stripe o un acquisto nuovo?»*, cioè **come** si
+             * cambia. ⛔ Questo dice **se** si può cambiare, ed è una domanda
+             * commerciale: chi non ha pagato il mese non scappa su un piano piccolo
+             * prima di saldare, e non ne compra uno grande lasciando indietro il
+             * dovuto.
+             *
+             * 🔑 La risposta viene da `LaSospensioneAutomatica::staPagando()`, che
+             * mette insieme le tre strade in cui un incasso può mancare: canone
+             * scaduto, canone rifiutato, fattura del consumo insolvente. ⛔ Riscriverla
+             * qui vorrebbe dire una seconda copia della stessa regola.
+             */
+            'pagamento_in_sospeso' => ! app(LaSospensioneAutomatica::class)->staPagando($tenant),
         ];
     }
 
@@ -752,11 +801,38 @@ class PianiInVendita
     }
 
     /**
-     * ⛔ Scendere non lascia nessuno fuori.
+     * ⛔ **Scendere non lascia nessuno fuori.**
      *
      * @throws InvalidArgumentException
      */
     private function pretendiCheCiStianoTutti(Tenant $tenant, Plan $nuovo): void
+    {
+        $perche = $this->percheNonCiStanno($tenant, $nuovo);
+
+        if ($perche !== null) {
+            throw new InvalidArgumentException($perche);
+        }
+    }
+
+    /**
+     * 🔎 **Perché questo piano è troppo piccolo?** — `null` se ci stanno tutti.
+     *
+     * ══ 📌 PERCHE' E' UNA DOMANDA E NON SOLO UN LANCIO — 27/09/2026 ═════════
+     *
+     * 📌 Il committente: *«non si può andare a un piano per il quale si hanno troppi
+     * iscritti. Ho un piano Palestra Advanced e 20 iscritti con 3 trainer. Non posso
+     * cambiare piano in palestra basic, perché quello ha il limite di 10 iscritti e 2
+     * trainer. **Per poterlo selezionare**, devo prima liberare gli slot in eccesso»*.
+     *
+     * 🔑 «Per poterlo selezionare»: la regola non serve solo a **rifiutare**, serve a
+     * **mostrare**. ⛔ Prima esisteva solo come eccezione, quindi la si scopriva
+     * cliccando — e su un piano da comprare, dopo aver aperto il pagamento.
+     *
+     * ⚠️ **Una domanda e un lancio, non due regole**: `pretendiCheCiStianoTutti()`
+     * chiama questa. 💡 Se divergessero, il pulsante direbbe una cosa e il server
+     * un'altra — ed è il difetto più fastidioso, perché sembra un guasto.
+     */
+    public function percheNonCiStanno(Tenant $tenant, Plan $nuovo): ?string
     {
         if ($nuovo->kind === PlanKind::Trainer && $nuovo->max_members !== null) {
             $proprietario = User::withoutGlobalScopes()->find($tenant->proprietario_id);
@@ -765,9 +841,8 @@ class PianiInVendita
             $occupati = ($attuale?->max_members ?? 0) - ($rimasti ?? 0);
 
             if ($occupati > $nuovo->max_members) {
-                throw new InvalidArgumentException(
-                    "Hai {$occupati} allievi e questo piano ne tiene {$nuovo->max_members}: libera qualche posto prima di scendere."
-                );
+                return "Hai {$occupati} allievi e questo piano ne tiene {$nuovo->max_members}: "
+                    .'libera qualche posto prima di scendere.';
             }
         }
 
@@ -776,17 +851,17 @@ class PianiInVendita
             $trainer = $this->conto->quanti($tenant, UserRole::Trainer);
 
             if ($nuovo->max_members !== null && $iscritti > $nuovo->max_members) {
-                throw new InvalidArgumentException(
-                    "Hai {$iscritti} iscritti e questo piano ne tiene {$nuovo->max_members}: non puoi scendere senza lasciare fuori qualcuno."
-                );
+                return "Hai {$iscritti} iscritti e questo piano ne tiene {$nuovo->max_members}: "
+                    .'libera qualche posto prima di scendere.';
             }
 
             if ($nuovo->max_trainers !== null && $trainer > $nuovo->max_trainers) {
-                throw new InvalidArgumentException(
-                    "Hai {$trainer} trainer e questo piano ne tiene {$nuovo->max_trainers}."
-                );
+                return "Hai {$trainer} trainer e questo piano ne tiene {$nuovo->max_trainers}: "
+                    .'togline qualcuno prima di scendere.';
             }
         }
+
+        return null;
     }
 
     /**
