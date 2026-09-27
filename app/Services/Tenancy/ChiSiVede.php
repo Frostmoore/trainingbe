@@ -109,7 +109,45 @@ final class ChiSiVede
     {
         return $this->palestreDoveAllena($persona)
             ->push($persona->tenant_id)
+            ->merge($this->doveAppartiene($persona))
             ->filter()
+            ->map(static fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * 🆕 🏠 **Gli spazi a cui questa persona appartiene** — F2.3 di
+     * `memory/plan_spazi_personali.md`, 27/09/2026.
+     *
+     * ══ 🚨 PERCHE' SI AGGIUNGE INVECE DI SOSTITUIRE ═══════════════════════
+     *
+     * ⛔ Fino a oggi «di quali spazi fai parte» si deduceva da `users.tenant_id`
+     * e dai ruoli — cioè dal fatto che la persona **ci abitasse dentro**, dopo
+     * il trasloco. 🚨 Quando il trasloco sparirà (F2.3) quella deduzione
+     * smetterà di funzionare, e la risposta dovrà venire da `appartenenze`.
+     *
+     * 💡 **Oggi le due fonti dicono la stessa cosa** — la tabella è stata
+     * riempita da lì. Aggiungendo questa senza togliere quella, se la suite
+     * resta verde è la **prova** che la tabella descrive il mondo com'è. ⚠️ È
+     * il momento buono per fare il passaggio: dopo, le due fonti divergono e
+     * confrontarle non dimostra più niente.
+     *
+     * ⚖️ **Non allarga niente**: restituisce solo appartenenze **vive** di
+     * questa persona. ⛔ Chi è uscito da una palestra ha la riga chiusa e non
+     * la vede più.
+     *
+     * @return Collection<int, int>
+     */
+    public function doveAppartiene(User $persona): Collection
+    {
+        return DB::table('appartenenze')
+            ->join('tenants', 'tenants.id', '=', 'appartenenze.tenant_id')
+            ->where('appartenenze.user_id', $persona->getKey())
+            ->whereNull('appartenenze.finita_il')
+            // ⚠️ Una palestra cancellata non è uno spazio in cui si sta.
+            ->whereNull('tenants.deleted_at')
+            ->pluck('appartenenze.tenant_id')
             ->map(static fn ($id): int => (int) $id)
             ->unique()
             ->values();

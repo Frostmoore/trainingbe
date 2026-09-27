@@ -40,6 +40,18 @@ final class EsportaIDatiDellaPersona
      */
     public const ESPORTATE = [
         'ai_advices' => [['user_id'], []],
+        /*
+         * 🆕 🏠 **Le appartenenze** — F2.1, 27/09/2026.
+         *
+         * ⚖️ **Sono dati suoi, e vanno esportati.** Dicono a quale palestra e a
+         * quali trainer questa persona è appartenuta, e da quando a quando: è
+         * la storia del suo rapporto col servizio, e l'art. 15 la comprende.
+         *
+         * 🔑 **Anche quelle finite.** ⛔ Esportare solo le vive vorrebbe dire
+         * consegnare una fotografia invece di una storia, e nascondere proprio
+         * la parte che serve a chi contesta un addebito.
+         */
+        'appartenenze' => [['user_id'], []],
         'ai_credit_movements' => [['user_id'], ['operatore_id']],
         'ai_usage_logs' => [['user_id'], []],
         // ⚠️ Il token è il link per scaricare l'allegato: finché vale, apre.
