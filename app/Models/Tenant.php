@@ -103,6 +103,17 @@ class Tenant extends Model
             'kind' => TenantKind::class,
             'settings' => 'array',
             'trial_ends_at' => 'datetime',
+
+            /*
+             * 🤖 🆕 **Quando l'ha sospesa la macchina** — 27/09/2026.
+             *
+             * ⚠️ **Non è `fillable`, e non deve diventarlo**: dice *«questa
+             * sospensione l'ha decisa il codice, non una persona»*, e la scrive
+             * solo `LaSospensioneAutomatica` con `forceFill`. ⛔ Se un modulo
+             * potesse impostarla, si potrebbe far annullare da un pagamento una
+             * sospensione decisa da una persona.
+             */
+            'sospensione_automatica_dal' => 'datetime',
             'ai_monthly_calls_per_member' => 'integer',
             'ai_monthly_photo_calls_per_member' => 'integer',
             'prezzo_per_allievo_cent' => 'integer',

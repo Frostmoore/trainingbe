@@ -305,7 +305,7 @@ class DueCappelliNelPannelloTest extends TestCase
     }
 
     /**
-     * 🔄 **RIBALTATO il 28/09/2026 — e il perché vale più del test.**
+     * 🔄 **RIBALTATO il 27/09/2026 — e il perché vale più del test.**
      *
      * ══ ⛔ COM'ERA, E PERCHÉ ERA GIUSTO ALLORA ═════════════════════════════
      *
@@ -318,7 +318,7 @@ class DueCappelliNelPannelloTest extends TestCase
      *
      * ══ 🚨 COSA È CAMBIATO SOTTO ══════════════════════════════════════════
      *
-     * Dal 28/09 `EnsureTenantActive` **non è più nel pannello** (63.A): chi non
+     * Dal 27/09 `EnsureTenantActive` **non è più nel pannello** (63.A): chi non
      * ha pagato entra e trova `AvvisoDaPagare` col tasto per pagare. ⛔ Il vicolo
      * cieco non esiste più, e quello che restava era **una bugia silenziosa**: il
      * titolare diceva *«guarda l'avviso nel pannello della palestra»*, il trainer

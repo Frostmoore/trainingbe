@@ -117,6 +117,53 @@ class PianoAttivo
             fn (int $id): bool => ! $this->abbonamenti->eTolto($id, $utente->getKey()),
         ));
 
+        /*
+         * 🆕 ⛔ **E uno spazio SOSPESO non paga per nessuno** — 27/09/2026, 63.C.
+         *
+         * ══ 🚨 IL DISACCORDO CHE QUESTA RIGA CHIUDE ═══════════════════════
+         *
+         * 📌 Il committente: *«chi non ha pagato … sull'app vede l'interfaccia dei
+         * non abbonati»*.
+         *
+         * ⛔ Prima qui si guardava **solo l'abbonamento**, non lo stato dello
+         * spazio. 🚨 Effetto: una persona la cui palestra era sospesa **risultava
+         * abbonata** — l'app le mostrava le carte accese, i vantaggi, l'AI — e poi
+         * ogni chiamata finanziata dalla palestra le rispondeva **403
+         * `tenant_inactive`**.
+         *
+         * ⚠️ Cioè l'app prometteva e il server rifiutava: il difetto più
+         * fastidioso di tutti, perché sembra un guasto e non una sospensione.
+         *
+         * ── 💡 Perché è la strada giusta, e non una schermata nuova ────────
+         *
+         * 🔑 Togliendo il pagante sospeso, `per()` ricade sul piano gratuito **da
+         * sé**: la persona vede **esattamente** l'interfaccia di chi non è
+         * abbonato, che è quella che il committente ha chiesto. ⛔ Una seconda
+         * schermata «quasi uguale» sarebbe divergente alla prima modifica.
+         *
+         * ── ⚖️ E non toglie quello che paga qualcun altro ──────────────────
+         *
+         * 🚨 Il filtro è **per pagante**, non per persona: chi ha una palestra
+         * sospesa **e** un trainer che paga tiene il piano del trainer. ⛔ È il
+         * caso **A13** della matrice, e sbagliarlo vorrebbe dire punire l'allievo
+         * per un debito che non è né suo né del suo trainer.
+         *
+         * ⚠️ Si chiede a `Tenant::isActive()` e non a `status`, perché quella
+         * risposta include le prove scadute: **una regola sola, in un posto solo**.
+         */
+        if ($paganti !== []) {
+            $vivi = $this->context->runWithoutTenant(
+                fn (): array => Tenant::withoutGlobalScopes()
+                    ->whereIn('id', $paganti)
+                    ->get()
+                    ->filter(fn (Tenant $spazio): bool => $spazio->isActive())
+                    ->map(fn (Tenant $spazio): int => (int) $spazio->getKey())
+                    ->all(),
+            );
+
+            $paganti = array_values(array_intersect($paganti, $vivi));
+        }
+
         if ($paganti === []) {
             return $this->piadinoDiRiserva();
         }

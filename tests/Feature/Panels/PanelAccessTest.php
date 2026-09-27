@@ -183,7 +183,7 @@ class PanelAccessTest extends TestCase
     }
 
     /**
-     * 🔄 **RIBALTATO il 28/09/2026** (63.A): si chiamava
+     * 🔄 **RIBALTATO il 27/09/2026** (63.A): si chiamava
      * `a_suspended_gym_closes_the_panel` e pretendeva **403**.
      *
      * 📌 Il committente, 27/09: *«se una palestra o un free_trainer non hanno

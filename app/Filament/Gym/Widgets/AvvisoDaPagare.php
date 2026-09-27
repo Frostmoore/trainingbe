@@ -48,7 +48,7 @@ class AvvisoDaPagare extends Widget
     protected int|string|array $columnSpan = 'full';
 
     /**
-     * ⛔ **Non pigro** — 28/09/2026, 63.A.
+     * ⛔ **Non pigro** — 27/09/2026, 63.A.
      *
      * 🚨 Di serie Filament carica i widget **dopo** la pagina, con una seconda
      * richiesta. ⛔ Per questo riquadro è sbagliato due volte:

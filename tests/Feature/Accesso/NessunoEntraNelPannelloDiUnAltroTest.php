@@ -13,7 +13,7 @@ use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
 /**
- * 🔒 **Nessuno entra nel pannello di un altro** — 63.B, 28/09/2026.
+ * 🔒 **Nessuno entra nel pannello di un altro** — 63.B, 27/09/2026.
  *
  * ══ 🚨 PERCHE' ESISTE, E PERCHE' ESISTE PROPRIO ADESSO ════════════════════
  *

@@ -114,14 +114,14 @@ class SpazioDelPannello
         /*
          * 🚨 **Due ragioni per lasciar perdere la scelta, e una sola uscita.**
          *
-         * ══ ⛔ E UNA TERZA CHE E' STATA TOLTA — 28/09/2026, 63.A ═══════════
+         * ══ ⛔ E UNA TERZA CHE E' STATA TOLTA — 27/09/2026, 63.A ═══════════
          *
          * Qui c'era anche `! $palestra->isActive()`, e la sua ragione era vera:
          * `EnsureTenantActive` girava **dopo** di qui e chiudeva il pannello a
          * chi aveva in mano un tenant inattivo, quindi con la scelta in sessione
          * quella persona restava chiusa fuori da tutto.
          *
-         * 🔑 Dal 28/09 `EnsureTenantActive` **non è più nel pannello**: chi non
+         * 🔑 Dal 27/09 `EnsureTenantActive` **non è più nel pannello**: chi non
          * ha pagato entra e trova `AvvisoDaPagare`. ⛔ Quel rifiuto ha perso il
          * suo motivo, e ne era rimasto solo il danno — **e il danno era grosso**:
          *
@@ -190,7 +190,7 @@ class SpazioDelPannello
         }
 
         /*
-         * ⛔ **Qui c'era `&& $palestra->isActive()`** — tolto il 28/09/2026, 63.A.
+         * ⛔ **Qui c'era `&& $palestra->isActive()`** — tolto il 27/09/2026, 63.A.
          *
          * 🚨 Era il difetto peggiore dei due, perché colpiva chi **non ha
          * nessun'altra strada**: il trainer che a casa non ha un ruolo da

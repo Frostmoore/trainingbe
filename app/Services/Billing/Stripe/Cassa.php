@@ -15,6 +15,7 @@ use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Billing\LaSospensioneAutomatica;
 use App\Services\Billing\LePromozioni;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
@@ -804,6 +805,17 @@ class Cassa
         };
 
         /*
+         * 🆕 🔓 **Ha pagato: se era sospeso dalla macchina, torna su** — 27/09/2026.
+         *
+         * ⚠️ Sta **dopo** il `match` e non dentro uno dei suoi rami, perché la
+         * domanda è la stessa per tutti: *«questo spazio adesso ha un abbonamento
+         * vivo?»*. 💡 `seHaRipagato()` la fa da sé e non fa niente se la risposta
+         * è no — quindi un pacchetto di gettoni non riattiva niente, ed è giusto:
+         * ⛔ i gettoni non sono l'abbonamento.
+         */
+        app(LaSospensioneAutomatica::class)->seHaRipagato($utente->tenant_id);
+
+        /*
          * 🆕 🐛 **Le promozioni usate si segnano QUI** — P1.6 di `plan_promozioni.md`.
          *
          * ⛔ Fino al 23/09 i codici finivano nei `metadata` e al ritorno non li
@@ -995,6 +1007,24 @@ class Cassa
          * attraverso questa classe.
          */
         $riga->forceFill(['pagamento_fallito_il' => null])->save();
+
+        /*
+         * 🆕 🔓 **E se era sospeso dalla macchina, torna su SUBITO** — 27/09/2026.
+         *
+         * 🚨 Dal 27/09 chi non paga viene sospeso da un giro notturno
+         * (`LaSospensioneAutomatica`). ⛔ Senza questa riga, chi ripaga
+         * resterebbe sospeso **fino alla notte successiva**: una macchina che
+         * prende i soldi e non ridà il servizio, che è peggio del buco che
+         * quella classe è venuta a chiudere.
+         *
+         * ⚠️ **Riattiva solo ciò che ha sospeso lei**: una sospensione decisa da
+         * una persona in `/god` — per un abuso, per esempio — non si annulla
+         * perché arriva un bonifico. Il controllo sta dentro
+         * `seHaRipagato()`, non qui: è pubblico e lo chiama anche il giro
+         * notturno, e un controllo che sta solo nel chiamante è un controllo che
+         * il secondo chiamante non ha.
+         */
+        app(LaSospensioneAutomatica::class)->seHaRipagato($riga->tenant_id);
 
         /*
          * 🆕 ⚡ P6 — **il rinnovo per le promozioni**: gettoni «a ogni rinnovo»

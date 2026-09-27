@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
+use App\Filament\Gym\Pages\Cruscotto;
+use App\Filament\Gym\Pages\IlTuoPiano;
 use App\Http\Controllers\DocumentoDellImport;
 use App\Http\Controllers\FattureDaScaricare;
 use App\Http\Middleware\PretendeLaLiberatoria;
 use App\Http\Middleware\ResolveTenant;
+use App\Http\Middleware\SoloLAvvisoSeNonHaiPagato;
 use App\Http\Middleware\SpazioDelPannello;
 use App\Support\Tenancy\PanelBranding;
 use App\Support\Tenancy\TenantContext;
@@ -16,7 +19,8 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
+use Filament\Navigation\NavigationBuilder;
+use Filament\Navigation\NavigationItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -36,7 +40,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * generale non darebbe errore — darebbe un contesto vuoto, cioè **nessun
  * filtro**: ogni amministratore vedrebbe gli iscritti di tutte le palestre.
  *
- * ⛔ **E qui NON c'è `EnsureTenantActive`**, dal 28/09/2026: il pannello è il
+ * ⛔ **E qui NON c'è `EnsureTenantActive`**, dal 27/09/2026: il pannello è il
  * posto da cui si paga, e sbarrarlo a chi deve pagare è l'unico errore che si
  * paga in contanti. 🔑 Chi non ha pagato entra e trova `AvvisoDaPagare`. La
  * ragione per esteso sta accanto alla riga che non c'è più.
@@ -62,8 +66,45 @@ class AdminPanelProvider extends PanelProvider
             ->colors(fn (): array => PanelBranding::colorsFor(app(TenantContext::class)->get()))
             ->discoverResources(in: app_path('Filament/Gym/Resources'), for: 'App\Filament\Gym\Resources')
             ->discoverPages(in: app_path('Filament/Gym/Pages'), for: 'App\Filament\Gym\Pages')
-            ->pages([Dashboard::class])
+            ->pages([Cruscotto::class])
             ->discoverWidgets(in: app_path('Filament/Gym/Widgets'), for: 'App\Filament\Gym\Widgets')
+
+            /*
+             * 🆕 🔒 **Con il servizio sospeso il menù ha una voce sola** — 27/09/2026.
+             *
+             * 📌 *«sul pannello vede solo l'avviso e non può fare nulla»*.
+             *
+             * ⛔ `SoloLAvvisoSeNonHaiPagato` impedisce di **arrivare** alle altre
+             * pagine, ma senza questo il menù continuerebbe a elencarle tutte.
+             * 🚨 Venti voci che rimbalzano tutte allo stesso posto sono peggio di
+             * un errore: sembrano un guasto, non una sospensione.
+             *
+             * ── 💡 Perché `true` e non una lista ──────────────────────────────
+             *
+             * Restituendo `true` Filament usa la **navigazione normale**, quella
+             * costruita dalle risorse (`resolveNavigationBuilder()` lo tratta come
+             * «nessun costruttore personalizzato»). ⛔ Ricostruire qui il menù
+             * completo per il caso sano vorrebbe dire tenerne **due copie**, e la
+             * copia si dimentica alla prima risorsa nuova.
+             *
+             * ⚠️ La chiusura si valuta **al disegno della pagina**, quando il
+             * contesto c'è già: qui dentro `TenantContext` è affidabile, nel corpo
+             * di `panel()` no.
+             */
+            ->navigation(function (NavigationBuilder $menu): NavigationBuilder|bool {
+                $spazio = app(TenantContext::class)->get();
+
+                if ($spazio === null || $spazio->isActive()) {
+                    return true;
+                }
+
+                return $menu->items([
+                    NavigationItem::make('Riattiva il servizio')
+                        ->icon('heroicon-o-credit-card')
+                        ->url(IlTuoPiano::getUrl(panel: 'admin'))
+                        ->isActiveWhen(fn (): bool => request()->routeIs(IlTuoPiano::getRouteName())),
+                ]);
+            })
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -101,8 +142,10 @@ class AdminPanelProvider extends PanelProvider
 
                 Authenticate::class,
 
+                SoloLAvvisoSeNonHaiPagato::class,
+
                 /*
-                 * ⛔ **QUI NON CI VA `EnsureTenantActive`** — 28/09/2026, 63.A.
+                 * ⛔ **QUI NON CI VA `EnsureTenantActive`** — 27/09/2026, 63.A.
                  *
                  * ══ 🚨 COSA E' SUCCESSO ═══════════════════════════════════
                  *
@@ -189,6 +232,16 @@ class AdminPanelProvider extends PanelProvider
             ->persistentMiddleware([
                 ResolveTenant::class,
                 SpazioDelPannello::class,
+
+                /*
+                 * 🆕 🔒 **Anche qui, e non è una ripetizione** — 27/09/2026.
+                 *
+                 * 🚨 Le richieste di Livewire non passano da `authMiddleware`:
+                 * senza questa riga, chi aveva **una scheda già aperta** quando
+                 * è arrivata la sospensione continuerebbe a premere bottoni.
+                 * ⛔ Un blocco che si aggira **non** ricaricando la pagina.
+                 */
+                SoloLAvvisoSeNonHaiPagato::class,
             ])
 
             /*

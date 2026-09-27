@@ -879,11 +879,11 @@ class AiApiTest extends TestCase
 
         /*
          * ⚠️ **Gli identificatori si escludono, e non è un allentamento** —
-         * 28/09/2026.
+         * 27/09/2026.
          *
          * ⛔ Prima qui c'era `assertStringNotContainsString('2100', $riga->toJson())`,
          * cioè si cercava un numero **dentro tutto il JSON della riga**. 🚨 Il
-         * 28/09 è diventato rosso senza che nessuno avesse toccato l'AI: la
+         * 27/09 è diventato rosso senza che nessuno avesse toccato l'AI: la
          * numerazione automatica era arrivata a `tenant_id = 21005`, che contiene
          * «2100». Un test che accusa la privacy di un difetto inesistente, e che
          * il giorno prima passava per puro caso.

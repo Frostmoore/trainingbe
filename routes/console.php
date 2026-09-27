@@ -307,3 +307,29 @@ Schedule::command('promozioni:giro')
 Schedule::command('promozioni:giro --solo=automatiche')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
+
+/*
+ * ══ 🤖 CHI NON PAGA SI SOSPENDE DA SE' — 27/09/2026 ═══════════════════════
+ *
+ * 📌 Il committente: *«per prima cosa ovviamente facciamo che chi non ha pagato
+ * si sospende in automatico»*.
+ *
+ * ⛔ Prima non lo faceva nessuno: `Cassa::abbonamentoFinito()` chiudeva la riga
+ * dell'abbonamento e lo **stato del tenant restava `active` per sempre**.
+ * 🚨 Quindi `AvvisoDaPagare`, che guarda quello stato, non compariva mai, e il
+ * cliente moroso vedeva l'AI spenta senza che nessuno gli dicesse di pagare.
+ *
+ * ⚠️ **Alle 4:40, DOPO il rinnovo dei regali (3:40).** Un regalo rinnovato è un
+ * abbonamento vivo: girando prima, sospenderemmo qualcuno un minuto prima che il
+ * suo abbonamento venga allungato. 🚨 È lo stesso genere di difetto che il
+ * commento del rinnovo descrive — si vede una volta al mese, per un'ora.
+ *
+ * 🔑 **E fa due cose, non una**: sospende i morosi **e riattiva** chi ha
+ * ripagato. ⛔ Una macchina che sospende e non riattiva prende i soldi e non
+ * ridà il servizio. 💡 La riattivazione vera avviene sul pagamento, dentro
+ * `Cassa`; questo giro è la rete di sicurezza per i pagamenti che non passano da
+ * un webhook.
+ */
+Schedule::command('abbonamenti:sospendi-i-morosi --scrivi')
+    ->dailyAt('4:40')
+    ->withoutOverlapping();
