@@ -64,6 +64,7 @@ class AddebitoMensile extends Model
     protected function casts(): array
     {
         return [
+            'fallito_il' => 'datetime',
             'iscritti_contati' => 'integer',
             'iscritti_fatturati' => 'integer',
             'prezzo_iscritto_cent' => 'integer',

@@ -6,6 +6,7 @@ namespace App\Services\Billing;
 
 use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
+use App\Models\AddebitoMensile;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
@@ -51,14 +52,31 @@ use Illuminate\Support\Facades\DB;
  * | stato `active` o `trial` | si riscriverebbe sopra una decisione già presa |
  * | `ends_at` passato da più di un giorno | si sospenderebbe per il ritardo di un webhook |
  *
- * ══ ⛔ COSA NON COPRE, E NON E' UNA DIMENTICANZA ═══════════════════════════
+ * ══ 💶 E IL CONSUMO? STESSA REGOLA, ALTRO SEGNALE ═══════════════
  *
- * 🚨 **I piani a consumo** (`Plan::aConsumo()`): là non c'è un abbonamento che
- * finisce, c'è una fattura mensile che può restare non pagata
- * (`AddebitoMensile::FALLITO`). ⚠️ Sospendere dopo *quante* fatture fallite è una
- * **decisione commerciale** che non è stata presa, e inventarla qui vorrebbe dire
- * spegnere un cliente in base a un numero che nessuno ha scelto. 💡 Il punto è
- * segnato nel `plan_accesso.md`, fase F3.
+ * 📌 Il committente, 27/09: *«quelli che tu chiami piano a consumo non è
+ * nient'altro che un abbonamento dal prezzo variabile in base agli iscritti,
+ * quindi può funzionare esattamente come l'abbonamento normale: quando fallisce
+ * il pagamento si sospende, stessa cosa di tutti gli abbonamenti»*.
+ *
+ * 🚨 **La prima versione di questa classe lo lasciava fuori, e la premessa era
+ * sbagliata**: avevo scritto che «là non c'è un abbonamento che finisce» e da quello
+ * avevo dedotto che servisse una decisione commerciale nuova. ⛔ Non serviva.
+ *
+ * 🔑 Cambia solo **da dove arriva il segnale**:
+ *
+ * | | Il segnale di «non paga» |
+ * |---|---|
+ * | **canone** | `ends_at` passato — la grazia di Stripe è già dentro |
+ * | **consumo** | la fattura del mese insolvente da 8 giorni (`addebiti_mensili.fallito_il`) |
+ *
+ * ⚖️ Due strade, **una regola**: *se non paga, si sospende*. 💡 E la domanda
+ * unica è `staPagando()`, che le mette insieme.
+ *
+ * ⚠️ **Un piano a consumo ha `price_cents = 0`** — il prezzo è per iscritto — e
+ * per un pelo `eraUnClientePagante()` lo escludeva: sarebbe rimasto fuori dai
+ * candidati e non si sarebbe sospeso mai. 💡 Trovato guardando i piani veri a
+ * database invece di fidarsi di come «dovrebbero» essere fatti.
  */
 class LaSospensioneAutomatica
 {
@@ -82,6 +100,23 @@ class LaSospensioneAutomatica
      * sbaglio costa una telefonata e la fiducia.
      */
     public const GIORNI_DI_ATTESA = 1;
+
+    /**
+     * ⏳ **E quanti si aspetta per il CONSUMO, dalla prima fattura insolvente.**
+     *
+     * ⚠️ Qui sono **otto** e non uno, e la differenza non è arbitraria: per un
+     * canone i sette giorni di grazia di Stripe sono **già dentro `ends_at`**
+     * (`Cassa::conLaGrazia()`), quindi là resta solo il giorno di margine per il
+     * ritardo di un webhook.
+     *
+     * 🔑 Per il consumo quella grazia **non è dentro niente**: la fattura del
+     * mese resta lì, insolvente, mentre Stripe riprova. 💡 Quindi i sette giorni
+     * si contano qui, più lo stesso giorno di margine: **7 + 1**.
+     *
+     * ⚖️ È la stessa finestra reale, scritta in un posto diverso perché il
+     * segnale arriva da un'altra strada.
+     */
+    public const GIORNI_PRIMA_DI_SOSPENDERE_IL_CONSUMO = 8;
 
     public function __construct(private readonly TenantContext $context) {}
 
@@ -160,7 +195,21 @@ class LaSospensioneAutomatica
                     ->join('plans as pl', 'pl.id', '=', 'ps.plan_id')
                     ->whereColumn('ps.tenant_id', 'tenants.id')
                     ->whereIn('pl.kind', [PlanKind::Gym->value, PlanKind::Trainer->value])
-                    ->where('pl.price_cents', '>', 0)
+                    /*
+                     * 🚨 **Anche i piani a CONSUMO, e per un pelo non era così.**
+                     *
+                     * ⛔ Qui c'era solo `price_cents > 0`. I piani a consumo hanno
+                     * `price_cents = 0` — il prezzo è per iscritto — quindi
+                     * sarebbero stati **esclusi dai candidati** e non si sarebbero
+                     * sospesi mai, nemmeno con la regola nuova sull'insolvenza.
+                     *
+                     * 💡 Trovato guardando i piani veri a database invece di
+                     * fidarsi di come «dovrebbero» essere fatti.
+                     */
+                    ->where(fn ($q) => $q
+                        ->where('pl.price_cents', '>', 0)
+                        ->orWhereNotNull('pl.prezzo_iscritto_cent')
+                    )
                     ->selectRaw('1')
                 )
                 ->get()
@@ -191,7 +240,7 @@ class LaSospensioneAutomatica
                     ->whereNotNull('sospensione_automatica_dal')
                     ->get()
                     ->all(),
-                fn (Tenant $spazio): bool => $this->haUnAbbonamentoVivo($spazio),
+                fn (Tenant $spazio): bool => $this->staPagando($spazio),
             )),
         );
     }
@@ -212,8 +261,35 @@ class LaSospensioneAutomatica
             return false;
         }
 
-        if (! $this->eraUnClienteACanone($spazio)) {
+        if (! $this->eraUnClientePagante($spazio)) {
             return false;
+        }
+
+        /*
+         * 💶 **Il consumo è un abbonamento a prezzo variabile** — 27/09/2026.
+         *
+         * 📌 Il committente: *«quelli che tu chiami piano a consumo non è
+         * nient'altro che un abbonamento dal prezzo variabile in base agli
+         * iscritti, quindi può funzionare esattamente come l'abbonamento normale:
+         * quando fallisce il pagamento si sospende, stessa cosa di tutti gli
+         * abbonamenti»*.
+         *
+         * 🚨 **La mia distinzione era sbagliata.** Avevo lasciato il consumo fuori
+         * dicendo che «là non c'è un abbonamento che finisce», e da quella premessa
+         * avevo dedotto che servisse una decisione commerciale nuova. ⛔ Non
+         * serviva: la regola è la stessa, cambia solo **da dove arriva il segnale**.
+         *
+         * 🔑 Per un canone il segnale è `ends_at` passato; per il consumo è la
+         * fattura del mese insolvente da abbastanza tempo. ⚠️ Due strade, **una
+         * regola**: *se non paga, si sospende*.
+         */
+        $insolvenza = $this->insolvenzaDelConsumo($spazio);
+
+        if ($insolvenza !== null) {
+            return $insolvenza
+                ->copy()
+                ->addDays(self::GIORNI_PRIMA_DI_SOSPENDERE_IL_CONSUMO)
+                ->isPast();
         }
 
         if ($this->haUnAbbonamentoVivo($spazio)) {
@@ -221,6 +297,46 @@ class LaSospensioneAutomatica
         }
 
         return $this->finitoDaAbbastanzaTempo($spazio);
+    }
+
+    /**
+     * 💶 Da quando la fattura del consumo non è pagata, se non è pagata.
+     *
+     * ⚠️ **La più vecchia fra quelle insolventi**: se ne restano due, la domanda è
+     * *«da quanto non paga»*, non *«qual è l'ultima che ha saltato»*.
+     *
+     * 💡 `fallito_il` si scrive alla **prima** insolvenza e non si riscrive ai
+     * ritentativi di Stripe, altrimenti la sospensione slitterebbe in avanti a ogni
+     * tentativo e non arriverebbe mai.
+     */
+    public function insolvenzaDelConsumo(Tenant $spazio): ?Carbon
+    {
+        $quando = $this->context->runWithoutTenant(
+            fn (): mixed => AddebitoMensile::query()
+                ->withoutGlobalScopes()
+                ->where('tenant_id', $spazio->getKey())
+                ->where('stato', AddebitoMensile::FALLITO)
+                ->whereNotNull('fallito_il')
+                ->min('fallito_il'),
+        );
+
+        return $quando === null
+            ? null
+            : Carbon::parse((string) $quando);
+    }
+
+    /**
+     * ✅ **Questo spazio sta pagando?** — la domanda unica, usata nei due versi.
+     *
+     * ⚠️ **Asimmetrica, e apposta**: per **sospendere** si pretende che
+     * l'insolvenza sia vecchia (vedi `vaSospeso()`); per **riattivare** basta che
+     * non ci sia più. 🔑 Si sospende piano e si riattiva subito — l'errore in
+     * quella direzione costa un giorno di servizio regalato, nell'altra un cliente.
+     */
+    public function staPagando(Tenant $spazio): bool
+    {
+        return $this->haUnAbbonamentoVivo($spazio)
+            && $this->insolvenzaDelConsumo($spazio) === null;
     }
 
     /**
@@ -243,14 +359,18 @@ class LaSospensioneAutomatica
      * ⚠️ **`price_cents > 0`**: il piano trainer gratuito è un piano, non un
      * debito. Chi ci sta sopra non è in ritardo con niente.
      */
-    public function eraUnClienteACanone(Tenant $spazio): bool
+    public function eraUnClientePagante(Tenant $spazio): bool
     {
         return $this->context->runWithoutTenant(
             fn (): bool => PlanSubscription::withoutGlobalScopes()
                 ->where('tenant_id', $spazio->getKey())
                 ->whereHas('plan', fn ($q) => $q
                     ->whereIn('kind', [PlanKind::Gym->value, PlanKind::Trainer->value])
-                    ->where('price_cents', '>', 0)
+                    ->where(fn ($p) => $p
+                        ->where('price_cents', '>', 0)
+                        // 💶 A consumo il prezzo è per iscritto: `price_cents` è 0.
+                        ->orWhereNotNull('prezzo_iscritto_cent')
+                    )
                 )
                 ->exists(),
         );
@@ -386,7 +506,7 @@ class LaSospensioneAutomatica
             return;
         }
 
-        if (! $this->haUnAbbonamentoVivo($spazio)) {
+        if (! $this->staPagando($spazio)) {
             return;
         }
 

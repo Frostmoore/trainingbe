@@ -1109,6 +1109,23 @@ class Cassa
             $addebito?->forceFill([
                 'stato' => AddebitoMensile::FALLITO,
                 'errore' => 'Il pagamento non è andato a buon fine. Stripe riproverà nei prossimi giorni.',
+
+                /*
+                 * 🆕 ⏱️ **Da quando non è pagata** — 27/09/2026.
+                 *
+                 * 📌 Il committente: *«quando fallisce il pagamento si sospende,
+                 * stessa cosa di tutti gli abbonamenti»*. 🔑 Il consumo è un
+                 * abbonamento a prezzo variabile, quindi segue la stessa regola —
+                 * ma il segnale «Stripe ha smesso di riprovare» qui **non arriva**
+                 * come evento, perché la fattura del mese non è un ciclo di
+                 * abbonamento. 💡 Quindi si conta il tempo.
+                 *
+                 * ⚠️ **`??` e non un'assegnazione secca**: la data è quella della
+                 * **prima** insolvenza. ⛔ Riscriverla a ogni ritentativo di Stripe
+                 * rimanderebbe la sospensione in avanti a ogni tentativo, e non
+                 * arriverebbe mai.
+                 */
+                'fallito_il' => $addebito->fallito_il ?? now(),
             ])->save();
 
             Log::warning('Stripe: addebito a consumo non pagato.', ['fattura' => $fattura['id'] ?? null]);
@@ -1221,6 +1238,16 @@ class Cassa
             'stato' => AddebitoMensile::INCASSATO,
             'incassato_il' => now(),
             'errore' => null,
+
+            /*
+             * 🆕 🔓 **Pagata: l'insolvenza se ne va** — 27/09/2026.
+             *
+             * 🚨 Senza questa riga la sospensione automatica non si annullerebbe
+             * mai per un cliente a consumo: pagherebbe e resterebbe sospeso.
+             * ⛔ Una macchina che prende i soldi e non ridà il servizio è il
+             * risultato peggiore possibile.
+             */
+            'fallito_il' => null,
         ])->save();
 
         /*

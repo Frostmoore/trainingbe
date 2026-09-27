@@ -7,6 +7,7 @@ namespace Tests\Feature\Billing;
 use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Models\AddebitoMensile;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
@@ -127,13 +128,13 @@ class ChiNonPagaSiSospendeTest extends TestCase
      * ══ ⛔ COME L'HO TROVATO, E PERCHE' VA SCRITTO ═════════════════════════
      *
      * Il test qui sopra — *«lo spazio di chi non ha mai pagato non si tocca»* —
-     * era **vacuo**: togliendo la guardia `eraUnClienteACanone()` restava verde.
+     * era **vacuo**: togliendo la guardia `eraUnClientePagante()` restava verde.
      * 🔑 Perché quello spazio non ha **nessun** abbonamento, quindi si salva per
      * la regola sulla **data**, non per la guardia che credevo di provare.
      *
      * 🚨 **Questo è il caso che conta**: una persona che aveva il piano
      * individuale (`plus`) e lo ha lasciato scadere. Ha un abbonamento **finito**,
-     * quindi passa la regola sulla data — e **solo** `eraUnClienteACanone()` la
+     * quindi passa la regola sulla data — e **solo** `eraUnClientePagante()` la
      * salva.
      *
      * ⛔ Se quella guardia fosse sbagliata, ogni notte alle 4:40 verrebbe sospeso
@@ -342,7 +343,194 @@ class ChiNonPagaSiSospendeTest extends TestCase
         );
     }
 
+    // ───────────── il consumo: stessa regola, altro segnale ─────────────
+
+    /**
+     * 💶 **IL PIANO A CONSUMO SI SOSPENDE COME TUTTI GLI ALTRI.**
+     *
+     * ══ 📌 LA CORREZIONE DEL COMMITTENTE ══════════════════════════════════
+     *
+     * 📌 27/09: *«quelli che tu chiami piano a consumo non è nient'altro che un
+     * abbonamento dal prezzo variabile in base agli iscritti, quindi può funzionare
+     * esattamente come l'abbonamento normale: quando fallisce il pagamento si
+     * sospende, stessa cosa di tutti gli abbonamenti»*.
+     *
+     * 🚨 **Avevo lasciato il consumo fuori** scrivendo che «là non c'è un abbonamento
+     * che finisce», e da quella premessa avevo dedotto che servisse una decisione
+     * commerciale nuova. ⛔ Non serviva: cambia solo **da dove arriva il segnale** —
+     * la fattura del mese insolvente invece di `ends_at` passato.
+     */
+    #[Test]
+    public function il_piano_a_consumo_insolvente_si_sospende(): void
+    {
+        [$palestra, $addebito] = $this->unaPalestraAConsumo('Consumo Moroso');
+
+        /* ⛔ La fattura del mese non è andata: è quello che fa `Cassa`. */
+        $addebito->forceFill([
+            'stato' => AddebitoMensile::FALLITO,
+            'fallito_il' => now()->subDays(9),
+        ])->save();
+
+        app(LaSospensioneAutomatica::class)->giro();
+
+        self::assertSame(
+            TenantStatus::Suspended,
+            Tenant::withoutGlobalScopes()->findOrFail($palestra->getKey())->status,
+            '🚨 Un cliente a consumo non paga da nove giorni e il servizio è ancora acceso.',
+        );
+    }
+
+    /**
+     * ⏳ **Ma non al primo rifiuto della carta.**
+     *
+     * ⚠️ Stripe riprova per giorni: spegnere subito vorrebbe dire punire chi ha
+     * cambiato carta di venerdì. 💡 Sono gli stessi sette giorni di grazia che per un
+     * canone sono **già dentro `ends_at`**, più un giorno di margine.
+     */
+    #[Test]
+    public function il_consumo_non_si_sospende_al_primo_rifiuto(): void
+    {
+        [$palestra, $addebito] = $this->unaPalestraAConsumo('Consumo Ieri');
+
+        $addebito->forceFill([
+            'stato' => AddebitoMensile::FALLITO,
+            'fallito_il' => now()->subDay(),
+        ])->save();
+
+        app(LaSospensioneAutomatica::class)->giro();
+
+        self::assertSame(
+            TenantStatus::Active,
+            Tenant::withoutGlobalScopes()->findOrFail($palestra->getKey())->status,
+            '⛔ Sospeso al primo rifiuto: Stripe sta ancora riprovando.',
+        );
+    }
+
+    /**
+     * 🔓 **E se poi paga, torna su.**
+     *
+     * 🚨 È la metà che si dimentica, e per il consumo era **più facile dimenticarla**:
+     * l'abbonamento resta vivo tutto il tempo, quindi la riattivazione non può
+     * guardare solo quello. 💡 Per questo c'è `staPagando()`, che chiede **entrambe**
+     * le cose.
+     */
+    #[Test]
+    public function il_consumo_pagato_riattiva_lo_spazio(): void
+    {
+        [$palestra, $addebito] = $this->unaPalestraAConsumo('Consumo Tornato');
+
+        $addebito->forceFill([
+            'stato' => AddebitoMensile::FALLITO,
+            'fallito_il' => now()->subDays(20),
+        ])->save();
+
+        app(LaSospensioneAutomatica::class)->giro();
+
+        self::assertSame(
+            TenantStatus::Suspended,
+            Tenant::withoutGlobalScopes()->findOrFail($palestra->getKey())->status,
+            'Il presupposto: deve prima essere sospesa.',
+        );
+
+        /* 💳 Paga: è quello che fa `Cassa::addebitoPagato()`. */
+        $addebito->forceFill([
+            'stato' => AddebitoMensile::INCASSATO,
+            'incassato_il' => now(),
+            'fallito_il' => null,
+        ])->save();
+
+        app(LaSospensioneAutomatica::class)->giro();
+
+        self::assertSame(
+            TenantStatus::Active,
+            Tenant::withoutGlobalScopes()->findOrFail($palestra->getKey())->status,
+            '🚨 Ha pagato e resta sospeso: la macchina prende i soldi e non ridà il servizio.',
+        );
+    }
+
+    /**
+     * 🚨 **E il test che il BUCO avrebbe lasciato passare.**
+     *
+     * ⛔ `eraUnClientePagante()` pretendeva `price_cents > 0`. Un piano a consumo ha
+     * `price_cents = 0` — il prezzo è **per iscritto** — quindi sarebbe stato escluso
+     * dai candidati e **non si sarebbe sospeso mai**, nemmeno con la regola nuova.
+     *
+     * 💡 Trovato guardando i piani veri a database (`gym_consumo`, `price_cents=0`,
+     * `prezzo_iscritto_cent=280`) invece di fidarsi di come «dovrebbero» essere fatti.
+     */
+    #[Test]
+    public function un_piano_a_consumo_conta_come_cliente_pagante(): void
+    {
+        [$palestra] = $this->unaPalestraAConsumo('Consumo Riconosciuto');
+
+        self::assertTrue(
+            app(LaSospensioneAutomatica::class)->eraUnClientePagante($palestra),
+            '🚨 Un cliente a consumo non è riconosciuto come pagante: resterebbe fuori '
+            .'dai candidati e non si sospenderebbe mai, qualunque regola si scriva.',
+        );
+    }
+
     // ───────────────────────── aiuti ─────────────────────────
+
+    /**
+     * 💶 Una palestra sul piano **a consumo**, con la fattura del mese già emessa.
+     *
+     * @return array{0: Tenant, 1: AddebitoMensile}
+     */
+    private function unaPalestraAConsumo(string $nome): array
+    {
+        $slug = str_replace(' ', '-', mb_strtolower($nome));
+
+        $palestra = $this->creaPalestra($nome, $slug);
+        $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@'.$slug.'.test');
+
+        $piano = $this->pianoAConsumo();
+
+        PlanSubscription::withoutGlobalScopes()
+            ->where('tenant_id', $palestra->getKey())
+            ->delete();
+
+        /*
+         * ⚠️ `ends_at = null`: un abbonamento a consumo **non scade**, è il prezzo che
+         * cambia ogni mese. 🔑 Ed è proprio per questo che il segnale non può essere
+         * `ends_at` e deve essere la fattura.
+         */
+        PlanSubscription::withoutGlobalScopes()->create([
+            'tenant_id' => $palestra->getKey(),
+            'plan_id' => $piano->getKey(),
+            'starts_at' => now()->subYear(),
+            'ends_at' => null,
+        ]);
+
+        $addebito = AddebitoMensile::query()->create([
+            'tenant_id' => $palestra->getKey(),
+            'plan_id' => $piano->getKey(),
+            'periodo' => now()->subMonth()->format('Y-m'),
+            'iscritti_contati' => 120,
+            'iscritti_fatturati' => 120,
+            'prezzo_iscritto_cent' => (int) $piano->prezzo_iscritto_cent,
+            'importo_cent' => 120 * (int) $piano->prezzo_iscritto_cent,
+            'stato' => AddebitoMensile::EMESSO,
+        ]);
+
+        return [$palestra, $addebito];
+    }
+
+    private function pianoAConsumo(): Plan
+    {
+        return Plan::query()->whereNotNull('prezzo_iscritto_cent')->first()
+            ?? Plan::create([
+                'code' => 'gym_consumo',
+                'name' => 'Palestra a consumo',
+                'kind' => PlanKind::Gym,
+                'ai_enabled' => true,
+                'max_members' => 1000,
+                /* 🚨 Zero, ed è il punto: il prezzo è per iscritto. */
+                'price_cents' => 0,
+                'prezzo_iscritto_cent' => 280,
+                'is_public' => true,
+            ]);
+    }
 
     /** Una palestra con un abbonamento a canone vivo. */
     private function unaPalestraChePagava(string $nome): Tenant
@@ -358,7 +546,7 @@ class ChiNonPagaSiSospendeTest extends TestCase
          * palestra non risulterebbe mai «un cliente a canone» e i test in
          * positivo passerebbero per il motivo sbagliato — cioè non passerebbero.
          */
-        if (! app(LaSospensioneAutomatica::class)->eraUnClienteACanone($palestra)) {
+        if (! app(LaSospensioneAutomatica::class)->eraUnClientePagante($palestra)) {
             $this->abbonaloA($palestra, $this->pianoDaPalestraAPagamento());
         }
 
