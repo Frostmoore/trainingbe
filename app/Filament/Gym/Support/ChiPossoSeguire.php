@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * ho insegnato a `MemberResource` che gli allievi di un trainer indipendente
  * **non stanno tutti nel suo spazio**; il 24/09 il committente ha chiesto
  * *«sei sicuro che l'import da pdf funzioni qui?»* — e no: il menù a tendina
- * di `PlanImportResource::iscritti()` andava ancora a cercare *«chi ha il ruolo
+ * di `PlanImportResource::iscritti()` (⛔ **non esiste più dal 27/09/2026**) andava a cercare *«chi ha il ruolo
  * member in questo tenant»*.
  *
  * 📏 Misurato su una trainer con due allievi: ne offriva **uno**. ⚠️ E l'altro

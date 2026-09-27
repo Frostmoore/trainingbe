@@ -75,7 +75,7 @@ class MemberResource extends Resource
          * 💡 **La regola per esteso sta in `ChiPossoSeguire`**, e non più qui:
          * il 24/09 il committente ha chiesto *«sei sicuro che l'import da pdf
          * funzioni qui?»* e la risposta era no —
-         * `PlanImportResource::iscritti()` aveva **una seconda copia** di questa
+         * `PlanImportResource::iscritti()` — ⛔ **tolto il 27/09/2026** — aveva una seconda copia di questa
          * stessa regola, quella vecchia, e a una trainer con due allievi ne
          * offriva uno. ⛔ Una regola che serve in due posti va scritta in
          * nessuno dei due.

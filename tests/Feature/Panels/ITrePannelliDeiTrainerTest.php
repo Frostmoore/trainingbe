@@ -541,68 +541,54 @@ final class ITrePannelliDeiTrainerTest extends TestCase
         });
     }
 
-    // ───────────────── 7. «e l'import da PDF funziona qui?» ───────────────
+    // ──────── 7. «e l'import da PDF funziona qui?» — RIBALTATA il 27/09 ────────
 
     /**
-     * 📄 **Il menù dell'import offriva metà degli allievi.**
+     * 🔄 **QUI C'ERA `limport_offre_gli_stessi_allievi_dell_elenco`, ed è stato
+     * TOLTO il 27/09/2026.**
      *
-     * 📌 Il committente, guardando il pannello di una trainer indipendente:
-     * *«a questo punto mi sorge il dubbio: sei sicuro che l'import da pdf
-     * funzioni qui?»*. ⛔ **Aveva ragione a dubitare.**
+     * ══ ⛔ COSA PROVAVA, E PERCHE' NON DOVEVA ESISTERE ═════════════════════
      *
-     * `PlanImportResource::iscritti()` cercava *«chi ha il ruolo member in
-     * questo tenant»* — la strada di una palestra. 🚨 Su una trainer con due
-     * allievi ne offriva **uno**: quello nato nel suo spazio. L'altro, che
-     * abita altrove, spariva **in silenzio**.
+     * Provava che il menù dell'import offrisse **gli stessi allievi** dell'elenco
+     * degli iscritti — cioè che si potesse **scegliere a chi assegnare** una
+     * scheda importata, dal pannello.
      *
-     * ⚠️ Su una schermata che assegna un programma di allenamento, il nome
-     * mancante è **la persona che non lo riceve** — e il menù si apre lo
-     * stesso, con dentro un nome, quindi non c'è niente che lo segnali.
+     * 🚨 **Era un test corretto di una cosa vietata.** Il 24/09 aveva trovato un
+     * difetto vero (il menù ne offriva metà), e correggere quel difetto era
+     * giusto: ⛔ ma nel frattempo, il 27/09, la specifica della privacy ha tolto
+     * di mezzo **l'assegnazione stessa**.
      *
-     * 💡 **Era la seconda copia della stessa regola.** La prima
-     * (`MemberResource`) era stata corretta il 23/09; questa no, perché nessuno
-     * sapeva che ce n'era una seconda. Ora la domanda si fa in un posto solo,
-     * `ChiPossoSeguire`, e **questo test guarda che le due schermate diano la
-     * stessa risposta** — non che una delle due sia giusta.
+     * 📌 Il committente: *«IL TRAINER NON MANDA SCHEDE DAL SERVER»*.
+     *
+     * ── 🚨 E questo test è il motivo per cui il residuo è sopravvissuto ────
+     *
+     * `PlanImportResource::iscritti()` non lo chiamava **nessun codice di
+     * produzione** — ma lo chiamava **questo test**. ⛔ Quindi non risultava
+     * orfano, non dava nessun avviso, e restava lì con il suo commento *«A chi si
+     * può assegnare la scheda importata»* a raccontare un'architettura che non
+     * esiste. 💡 Ci ho creduto anch'io, rileggendolo il 27/09.
+     *
+     * ⚠️ **Un test può tenere in vita la cosa che un altro test vieta.** È la
+     * stessa forma di `ImpersonationTest`, che provava che l'impersonazione
+     * funzionasse mentre la decisione era di toglierla.
+     *
+     * ── ⚖️ Come funziona davvero ───────────────────────────────────────────
+     *
+     * Il trainer scrive i **modelli** nel pannello — esercizi, serie, ripetizioni,
+     * che non parlano di nessuno — e manda la scheda **dalla chat, dall'app**,
+     * dentro una busta cifrata. 🔑 Le chiavi stanno solo sui telefoni: il server
+     * trasporta e **non capisce**.
+     *
+     * 💡 Che nessuna schermata delle schede chieda più un elenco di persone lo
+     * presidia adesso
+     * `NienteNominativoSulServerTest::nessuna_schermata_delle_schede_chiede_un_elenco_di_persone`,
+     * che guarda la **forma** e non i nomi — così regge anche al prossimo residuo,
+     * che si chiamerà diversamente.
+     *
+     * ⚠️ **E la cosa che il test del 24/09 proteggeva non è andata persa**: che
+     * l'elenco degli allievi di un trainer indipendente comprenda anche chi abita
+     * altrove è una regola viva, e la prova `ChiPossoSeguire`.
      */
-    #[Test]
-    public function limport_offre_gli_stessi_allievi_dell_elenco(): void
-    {
-        $altrove = $this->creaPalestra('Altrove', 'altrove');
-        $libero = $this->conPianoDaTrainer($this->unIndipendente());
-
-        $fuori = $this->unAllievoAltrove($libero, $altrove);
-        $dentro = $this->creaUtente($libero->tenant, UserRole::Member, 'in-casa@esempio.test');
-
-        $dentro->assignedTrainers()->attach($libero->getKey(), [
-            'tenant_id' => $libero->tenant_id,
-            'assigned_at' => now(),
-            'assigned_by' => $libero->getKey(),
-        ]);
-
-        $this->actingAs($libero);
-
-        [$inElenco, $nelMenu] = $this->ctx()->runAs($libero->tenant, fn (): array => [
-            MemberResource::getEloquentQuery()->pluck('id')->sort()->values()->all(),
-            array_values(array_map('intval', array_keys(PlanImportResource::iscritti()))),
-        ]);
-
-        sort($nelMenu);
-
-        $this->assertContains(
-            $fuori->getKey(),
-            $nelMenu,
-            '🚨 L\'allievo che abita altrove non si può scegliere nell\'import: '
-            .'e il menù si apre lo stesso, quindi nessuno se ne accorge.',
-        );
-
-        $this->assertSame(
-            $inElenco,
-            $nelMenu,
-            'L\'elenco degli iscritti e il menù dell\'import dicono due cose diverse: '
-            .'una delle due schermate sta mentendo, e non si sa quale.',
-        );
-    }
 
     // ───────────────── 4. il cruscotto ─────────────────
 

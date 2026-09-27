@@ -6,6 +6,7 @@ namespace Tests\Feature\Training;
 
 use App\Models\NutritionPlan;
 use App\Models\WorkoutPlan;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -96,7 +97,7 @@ class NienteNominativoSulServerTest extends TestCase
     #[Test]
     public function nessun_comando_crea_piani_intestati_a_qualcuno(): void
     {
-        $comandi = array_keys(app(\Illuminate\Contracts\Console\Kernel::class)->all());
+        $comandi = array_keys(app(Kernel::class)->all());
 
         foreach (['training:seed-plans', 'scheda:dettata'] as $vietato) {
             self::assertNotContains(
@@ -105,5 +106,95 @@ class NienteNominativoSulServerTest extends TestCase
                 "⛔ Il comando {$vietato} è tornato: creava schede intestate a un iscritto.",
             );
         }
+    }
+
+    /**
+     * 🚨 **E NESSUNA SCHERMATA DELLE SCHEDE CHIEDE UN ELENCO DI PERSONE.**
+     *
+     * ══ ⛔ PERCHE' I TRE TEST QUI SOPRA NON BASTAVANO ══════════════════════
+     *
+     * Il 27/09/2026 è saltato fuori `PlanImportResource::iscritti()`, con il
+     * commento *«A chi si può assegnare la scheda importata»*. ⛔ **Non lo
+     * chiamava più nessuno**, ma c'era — e chi lo leggeva (io) ricostruiva
+     * un'architettura che non esiste: *«il trainer manda le schede dal server»*.
+     *
+     * 📌 Il committente, per l'ennesima volta: *«IL TRAINER NON MANDA SCHEDE DAL
+     * SERVER»*.
+     *
+     * 🚨 **I tre test qui sopra non potevano vederlo**: controllano una **lista
+     * di nomi noti** — `assignTo`, due comandi. ⛔ Un metodo chiamato in un altro
+     * modo passa in mezzo.
+     *
+     * ── 🔑 Perché questo invece lo vede ────────────────────────────────────
+     *
+     * Non guarda i **nomi**, guarda la **forma**: per assegnare una scheda a una
+     * persona serve, prima di tutto, **un elenco di persone da cui sceglierla**.
+     * 💡 In questo pannello quell'elenco lo dà `ChiPossoSeguire`, e su una
+     * schermata di schede non ci deve arrivare.
+     *
+     * ⚖️ È una guardia **sulla forma del reato, non sul nome del colpevole** —
+     * ed è il motivo per cui regge anche al prossimo residuo, che si chiamerà
+     * diversamente.
+     *
+     * ⚠️ **Come funziona davvero**: il trainer scrive i **modelli** nel pannello
+     * — esercizi, serie, ripetizioni, che non parlano di nessuno — e poi manda la
+     * scheda **dalla chat, dall'app**, dentro una busta cifrata. 🔑 Le chiavi
+     * stanno solo sui telefoni: il server trasporta e **non capisce**.
+     */
+    #[Test]
+    public function nessuna_schermata_delle_schede_chiede_un_elenco_di_persone(): void
+    {
+        $cartelle = [
+            app_path('Filament/Gym/Resources/PlanImports'),
+            app_path('Filament/Gym/Resources/WorkoutPlans'),
+            app_path('Filament/Gym/Resources/NutritionPlans'),
+        ];
+
+        $guardati = 0;
+
+        foreach ($cartelle as $cartella) {
+            if (! is_dir($cartella)) {
+                continue;
+            }
+
+            $file = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($cartella)
+            );
+
+            foreach ($file as $f) {
+                if ($f->getExtension() !== 'php') {
+                    continue;
+                }
+
+                $guardati++;
+
+                $codice = (string) file_get_contents($f->getPathname());
+
+                /*
+                 * ⚠️ Si cerca la **chiamata** (`::`), non il nome nudo: nei
+                 * commenti la classe si nomina per spiegare perché NON si usa, e
+                 * un test che vietasse anche quello costringerebbe a cancellare
+                 * la spiegazione — cioè la cosa che serve di più.
+                 */
+                foreach (['ChiPossoSeguire::', 'perIlMenu('] as $vietato) {
+                    self::assertStringNotContainsString(
+                        $vietato,
+                        $codice,
+                        "🚨 {$f->getFilename()} chiede un elenco di persone su una schermata di "
+                        .'schede. ⛔ Da lì si assegna una scheda a qualcuno, e il legame fra una '
+                        .'persona e un programma NON deve restare scritto sul server. '
+                        .'💡 Il trainer manda la scheda dalla chat, cifrata: il server trasporta '
+                        .'e non capisce.',
+                    );
+                }
+            }
+        }
+
+        self::assertGreaterThan(
+            0,
+            $guardati,
+            '⛔ Nessun file guardato: le cartelle sono state rinominate e questo test '
+            .'non protegge più niente.',
+        );
     }
 }

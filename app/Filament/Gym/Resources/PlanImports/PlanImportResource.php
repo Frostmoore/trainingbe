@@ -8,7 +8,6 @@ use App\Enums\ImportStatus;
 use App\Filament\Gym\Resources\PlanImports\Pages\ListPlanImports;
 use App\Filament\Gym\Resources\PlanImports\Pages\ReviewPlanImport;
 use App\Filament\Gym\Resources\WorkoutPlans\Pages\EditWorkoutPlan;
-use App\Filament\Gym\Support\ChiPossoSeguire;
 use App\Jobs\ParseWorkoutPdf;
 use App\Models\WorkoutPlanImport;
 use BackedEnum;
@@ -208,36 +207,29 @@ class PlanImportResource extends Resource
             ->emptyStateDescription('Carica il PDF di una scheda: verra\' letto e ti sara\' proposta una bozza da rivedere.');
     }
 
-    /** @return array<int, string> */
-    /**
-     * A chi si può assegnare la scheda importata.
+    /*
+     * ⛔ **QUI C'ERA `iscritti()`: «A CHI SI PUÒ ASSEGNARE LA SCHEDA IMPORTATA».**
+     * Tolto il 27/09/2026.
      *
-     * ══ 🐛 A UN TRAINER INDIPENDENTE NE OFFRIVA META' — 24/09/2026 ═══════════
+     * 🚨 **Non lo chiamava più nessuno**, ed era un residuo pericoloso: il suo
+     * nome e il suo commento descrivevano una cosa che **non esiste e non deve
+     * esistere** — assegnare una scheda a una persona **dal server**.
      *
-     * 📌 Il committente: *«a questo punto mi sorge il dubbio: sei sicuro che
-     * l'import da pdf funzioni qui?»*, guardando il pannello di una trainer
-     * indipendente. ⛔ **Aveva ragione a dubitare.**
+     * 📌 Il committente, 27/09, leggendomelo dire per l'ennesima volta: *«IL
+     * TRAINER NON MANDA SCHEDE DAL SERVER»*.
      *
-     * Qui si cercava *«chi ha il ruolo `member` in questo tenant»*, che è la
-     * strada di una palestra. 🚨 Gli allievi di un trainer indipendente arrivano
-     * per **due** strade, e solo una li porta nel suo spazio: chi aveva già un
-     * account resta a casa propria, legato da `trainer_member`.
+     * ⚖️ **Come funziona davvero**: il trainer scrive i **modelli** nel pannello
+     * — esercizi, serie, ripetizioni, che non parlano di nessuno — e poi manda la
+     * scheda **dalla chat, dall'app**, dentro una busta cifrata. 🔑 Le chiavi
+     * stanno solo sui telefoni: il server trasporta e **non capisce**. ⛔ Quello che
+     * non deve restare scritto da nessuna parte è il **legame fra una persona e un
+     * programma**. Vedi `WorkoutPlanController::templates()`.
      *
-     * 📏 Misurato su una trainer con **due** allievi: il menù ne offriva
-     * **uno**. ⚠️ E l'altro spariva **in silenzio** — il menù si apre, dentro
-     * c'è un nome, e chi guarda non ha modo di sapere che ne manca uno. 🚨 Su
-     * una schermata che assegna un programma di allenamento, il nome mancante è
-     * **la persona che non lo riceve**.
-     *
-     * 💡 La domanda adesso si fa in un posto solo: `ChiPossoSeguire`. ⛔ Era la
-     * seconda copia della stessa regola, e la prima (`MemberResource`) era già
-     * stata corretta il 23/09 — questa no, perché nessuno sapeva che ce n'era
-     * una seconda.
+     * ⚠️ **Perché questo commento resta al posto del metodo**: un residuo orfano
+     * non fa danno finché nessuno lo legge — ma chi lo legge ricostruisce
+     * un'architettura che non c'è, e ci ho creduto anch'io. 💡 Cancellarlo e
+     * basta avrebbe lasciato il prossimo libero di riscriverlo.
      */
-    public static function iscritti(): array
-    {
-        return ChiPossoSeguire::perIlMenu();
-    }
 
     public static function getPages(): array
     {
