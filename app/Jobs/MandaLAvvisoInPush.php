@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\Notifica;
 use App\Models\Avviso;
 use App\Models\User;
+use App\Services\Notifiche\LeNotifiche;
 use App\Services\Promozioni\ChiLaRiceve;
-use App\Services\Push\PushSender;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -41,7 +42,7 @@ class MandaLAvvisoInPush implements ShouldQueue
 
     public function __construct(public readonly int $avvisoId) {}
 
-    public function handle(ChiLaRiceve $pubblico, PushSender $push): void
+    public function handle(ChiLaRiceve $pubblico, LeNotifiche $notifiche): void
     {
         $avviso = Avviso::query()->find($this->avvisoId);
 
@@ -53,13 +54,12 @@ class MandaLAvvisoInPush implements ShouldQueue
 
         foreach ($pubblico->destinatari($avviso) as $utente) {
             /** @var User $utente */
-            $quante += $push->toUser($utente, $avviso->titolo, $avviso->testo, [
+            $quante += $notifiche->manda(Notifica::Avviso, $utente, $avviso->titolo, $avviso->testo, [
                 /*
                  * 💡 `avviso_id` nel carico: toccando la notifica l'app sa
                  * **quale** modale aprire, invece di chiedere «ce n'è uno?» e
                  * sperare che sia quello.
                  */
-                'tipo' => 'avviso',
                 'avviso_id' => (string) $avviso->getKey(),
             ]);
         }

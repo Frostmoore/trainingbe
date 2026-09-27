@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Services\Promozioni;
 
+use App\Enums\Notifica;
 use App\Mail\PromozionePerTeMail;
 use App\Models\Promozione;
 use App\Models\PromozioneAssegnazione;
 use App\Models\User;
-use App\Services\Push\PushSender;
+use App\Services\Notifiche\LeNotifiche;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
@@ -32,7 +33,7 @@ use Throwable;
 class AvvisaIDestinatari
 {
     public function __construct(
-        private readonly PushSender $push,
+        private readonly LeNotifiche $notifiche,
         private readonly ChiLaRiceve $chiLaRiceve,
         private readonly ChiNonVuoleOfferte $offerte,
     ) {}
@@ -91,11 +92,12 @@ class AvvisaIDestinatari
 
         try {
             if (in_array('app', $canali, true)) {
-                $this->push->toUser(
+                $this->notifiche->manda(
+                    Notifica::Promozione,
                     $utente,
                     $ricevuta ? '🎁 '.$promozione->nome : 'Un\'offerta per te',
                     $ricevuta ? ucfirst($promozione->scrittoBene()) : $promozione->nome.': '.$promozione->scrittoBene(),
-                    ['tipo' => 'promozione', 'codice' => $promozione->codice],
+                    ['codice' => $promozione->codice],
                 );
             }
 

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Listeners;
 
+use App\Enums\Notifica;
 use App\Events\MessageSent;
-use App\Services\Push\PushSender;
+use App\Services\Notifiche\LeNotifiche;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Throwable;
@@ -36,7 +37,7 @@ use Throwable;
 class SendMessagePush implements ShouldQueue
 {
     public function __construct(
-        private readonly PushSender $push,
+        private readonly LeNotifiche $notifiche,
         private readonly TenantContext $tenants,
     ) {}
 
@@ -65,11 +66,12 @@ class SendMessagePush implements ShouldQueue
 
             // Il listener gira in coda: nessun contesto di palestra alle spalle.
             $this->tenants->runAs($palestra, function () use ($destinatario, $mittente, $conversazione): void {
-                $this->push->toUser(
+                $this->notifiche->manda(
+                    Notifica::Messaggio,
                     $destinatario,
                     $mittente?->name ?? 'Nuovo messaggio',
                     'Hai un nuovo messaggio.',
-                    ['conversation_id' => $conversazione->id],
+                    ['conversation_id' => (string) $conversazione->id],
                 );
             });
         } catch (Throwable $e) {
