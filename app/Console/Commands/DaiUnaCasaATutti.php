@@ -83,7 +83,18 @@ class DaiUnaCasaATutti extends Command
                  * zero ogni volta, e con mille persone non si finirebbe mai.
                  */
                 DB::transaction(function () use ($crea, $utente, $context): void {
-                    $context->runWithoutTenant(fn () => $crea->perChiEsisteGia($utente));
+                    $casa = $context->runWithoutTenant(fn () => $crea->perChiEsisteGia($utente));
+
+                    /*
+                     * ⚠️ **Chi non aveva NESSUNO spazio ci va ad abitare.**
+                     * ⛔ Per chi invece sta gia' in una palestra il
+                     * `tenant_id` **non si tocca**: la casa gli serve per
+                     * dopo, e spostarlo adesso sarebbe un trasloco -- cioe'
+                     * la cosa che tutto questo lavoro esiste per togliere.
+                     */
+                    if ($utente->tenant_id === null) {
+                        $utente->forceFill(['tenant_id' => $casa->getKey()])->save();
+                    }
                 });
 
                 $fatti++;
@@ -120,7 +131,24 @@ class DaiUnaCasaATutti extends Command
         return $context->runWithoutTenant(
             fn (): array => User::withoutGlobalScopes()
                 ->whereNull('deleted_at')
-                ->whereNotNull('tenant_id')
+                /*
+                 * 🆕 👑 **Anche chi non ha NESSUNO spazio** — 27/09/2026.
+                 *
+                 * ⛔ Qui c'era `whereNotNull('tenant_id')`, e saltava
+                 * esattamente il caso peggiore: il **super admin**, che per
+                 * disegno ha `tenant_id = null`.
+                 *
+                 * 🚨 Scoperto provando l'accesso con Google con l'account
+                 * god: senza uno spazio l'app non lo fa entrare, e il
+                 * messaggio parlava di una palestra sospesa che non esiste.
+                 * 📌 Il committente: *«anche con l'account god devo poter
+                 * entrare nell'app»*.
+                 *
+                 * ⚖️ Amministrare la piattaforma è un **potere**, non un
+                 * motivo per non avere una casa: il flag `is_super_admin`
+                 * resta dov'è, e in più la persona ha il suo spazio come
+                 * tutti.
+                 */
                 ->whereNotExists(
                     fn ($q) => $q->select(DB::raw(1))
                         ->from('tenants')

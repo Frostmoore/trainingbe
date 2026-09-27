@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
  * niente da risolvere.
  *
  * ### Il super admin passa senza contesto, di proposito
- * Ha `tenant_id = null`, quindi il contesto resta vuoto e il global scope non
+ * 🆕 27/09: **anche il super admin ha uno spazio personale**, e nell'app lo usa come chiunque. Il pannello /god resta senza contesto perche' li' questo middleware non c'e', non perche'
  * filtra: vede tutte le palestre. È lo stesso motivo per cui `TenantScope` è
  * permissivo a contesto vuoto — la sicurezza sta nelle policy di `/god`, non qui.
  *

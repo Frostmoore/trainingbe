@@ -25,7 +25,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /**
  * Il pannello della piattaforma — solo per il committente.
  *
- * Gira **senza contesto di palestra**: il super admin ha `tenant_id = null` e
+ * Gira **senza contesto di palestra**: qui NON c'e' il middleware `tenant`, e
  * il global scope non filtra a contesto vuoto, quindi vede tutte le palestre.
  * È il motivo per cui qui NON c'è il middleware `tenant`, che sarebbe
  * controproducente.
