@@ -385,6 +385,9 @@ final class EsciDaUnaPalestra
              * trainer passa di nuovo da qui). ⛔ Riprendere e rimettere in pausa
              * non sarebbe innocuo: senza `trial_end` Stripe riaddebita subito.
              */
+            // 🆕 🏠 F2.4: l'appartenenza si CHIUDE, non si sposta e non si cancella.
+            app(LeAppartenenze::class)->esci($utente, $palestra);
+
             if ($spazioDelTrainer === null) {
                 $this->pausa->riprendi($utente, $palestra, $personale);
             }

@@ -227,6 +227,9 @@ class UnisciAUnaPalestra
 
             $utente->forceFill(['tenant_id' => $palestra->getKey()])->save();
 
+            // 🆕 🏠 F2.3: la tabella nuova si tiene allineata accanto al trasloco.
+            app(LeAppartenenze::class)->entra($utente, $palestra);
+
             $this->rifaiIRuoli($utente, $spazioDelTrainer, $palestra, $ruolo);
 
             $this->slot->segnalaLaSovrapposizione($utente, $palestra);
@@ -365,6 +368,9 @@ class UnisciAUnaPalestra
             $this->pausa->metti($utente, $vecchio, $palestra);
 
             $utente->forceFill(['tenant_id' => $palestra->getKey()])->save();
+
+            // 🆕 🏠 F2.3: la tabella nuova si tiene allineata accanto al trasloco.
+            app(LeAppartenenze::class)->entra($utente, $palestra);
 
             $this->rifaiIRuoli($utente, $vecchio, $palestra, $ruolo);
 
