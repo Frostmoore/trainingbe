@@ -8,7 +8,9 @@ use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Responses\RoleAwareLoginResponse;
+use App\Support\Debug\CasiDiProva;
 use App\Support\Impersonation\Impersonator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -347,3 +349,80 @@ Route::get('/pagamento/ok', fn () => view('sito.pagamento', ['riuscito' => true]
 
 Route::get('/pagamento/annullato', fn () => view('sito.pagamento', ['riuscito' => false]))
     ->name('pagamento.annullato');
+
+/*
+|--------------------------------------------------------------------------
+| 🧪 I 25 CASI DI PROVA — 63.H, 27/09/2026. SOLO IN LOCALE.
+|--------------------------------------------------------------------------
+|
+| 📌 Il committente: *«per assicurarmi che non fai cazzate, ho bisogno di una
+| view di debug in locale con una serie di link di accesso che mi permettano di
+| verificare ogni singolo caso per conto mio. Ogni link si deve aprire su una
+| nuova pagina»*.
+|
+| ══ 🚨 TRE GUARDIE, E NESSUNA E' RIDONDANTE ═══════════════════════════════
+|
+| 1. `app()->environment('local')` — l'ambiente;
+| 2. `config('casi_di_prova.attiva')` — l'interruttore, che segue l'ambiente;
+| 3. `CasiDiProva::__construct()` — **si rifiuta di esistere** fuori da locale.
+|
+| ⛔ Sembrano tre copie della stessa cosa e non lo sono: la prima e la seconda
+| proteggono la **rotta**, la terza protegge la **classe** da qualunque altra
+| strada — un comando, un test, un pezzo di codice scritto fra un anno.
+|
+| ══ ⛔ E QUESTA NON E' L'IMPERSONAZIONE ═══════════════════════════════════
+|
+| 🚨 La voce **64** la vieta, e `divieti.md` del 27/09 dice *«nessun
+| `Auth::login($altro)`, per nessuna ragione»*. ⚠️ **L'unica eccezione scritta è
+| questa**, e la differenza non è il meccanismo: è il **bersaglio**. Qui si entra
+| in account **creati da questa vista**, su un database locale: non c'è nessuna
+| persona vera di cui violare i dati.
+|
+| 🔑 Ed è per questo che l'ingresso pretende che l'indirizzo finisca con
+| `CasiDiProva::DOMINIO`: senza quella riga, un nome nell'URL diventerebbe un modo
+| per entrare in un account qualsiasi.
+|
+*/
+if (CasiDiProva::vistaAttiva()) {
+    Route::prefix('debug/casi')->group(function (): void {
+        Route::get('/', function (CasiDiProva $casi) {
+            return view('debug.casi', [
+                'casi' => $casi->elenco(),
+                'password' => CasiDiProva::PASSWORD,
+                'pronti' => $casi->utente('P1') !== null,
+            ]);
+        })->name('debug.casi');
+
+        Route::post('/ricostruisci', function (CasiDiProva $casi) {
+            $casi->ricostruisci();
+
+            return redirect()->route('debug.casi')->with('fatto', 'I venticinque casi sono pronti.');
+        })->name('debug.casi.ricostruisci');
+
+        Route::get('/entra/{chiave}', function (string $chiave, CasiDiProva $casi) {
+            $utente = $casi->utente($chiave);
+
+            if ($utente === null) {
+                return redirect()->route('debug.casi')
+                    ->with('errore', "Il caso {$chiave} non è ancora stato costruito. Premi «Ricostruisci tutto».");
+            }
+
+            /*
+             * 🚨 **La riga che impedisce a questa vista di diventare una porta.**
+             *
+             * ⛔ Senza, `/debug/casi/entra/<qualcosa>` con un valore inventato
+             * potrebbe raggiungere un account vero — e in locale un database vero
+             * ci finisce spesso, ripristinato da una copia di sicurezza.
+             */
+            if (! str_ends_with((string) $utente->email, '@'.CasiDiProva::DOMINIO)) {
+                abort(403, 'Questa vista entra solo negli account che ha creato lei.');
+            }
+
+            Auth::guard('web')->login($utente);
+
+            session()->put('password_hash_web', $utente->getAuthPassword());
+
+            return redirect()->to('/admin');
+        })->where('chiave', '[A-Za-z0-9]{1,6}')->name('debug.casi.entra');
+    });
+}
