@@ -572,9 +572,30 @@ class User extends Authenticatable implements FilamentUser, HasMedia
              * 💡 Si chiede a `ChiSiVede`, che è la stessa regola che decide chi
              * vede chi: una sola sorgente per «dove allena questa persona».
              */
-            'admin' => ($this->isGymAdmin() || $this->isTrainer() || $this->isFreeTrainer()
-                    || $this->allenaInUnaPalestra())
-                && $this->tenant?->isActive() === true,
+            /*
+             * 🆕 💳 **Chi non ha pagato ENTRA LO STESSO** — 27/09/2026,
+             * decisione del committente.
+             *
+             * 📌 *«se una palestra o un free trainer non hanno pagato, devono
+             * poter accedere a app e pannello. Sull'app non avranno più
+             * l'abbonamento né i vantaggi di essere trainer o palestre, e nel
+             * pannello devono avere qualcosa che gli comunichi che devono
+             * pagare, con un modo per permettere loro di pagare»*.
+             *
+             * ⛔ Qui c'era `&& $this->tenant?->isActive() === true`, e chiudeva
+             * fuori dal pannello proprio chi doveva rientrare a pagare.
+             * 🚨 **Ed è un controsenso anche commerciale**, come l'ha detto
+             * lui: *«sennò non mi possono proprio pagare»*. Chi non riesce a
+             * entrare non rinnova: se ne va.
+             *
+             * ⚖️ Lo stato della palestra non decide più **se** si entra, ma
+             * **cosa funziona**: nell'app cadono i vantaggi (vedi
+             * `EnsureTenantActive`, rimasto solo sulle rotte che la palestra
+             * finanzia), e nel pannello compare l'avviso con il modo di pagare
+             * (`AvvisoDaPagare`).
+             */
+            'admin' => $this->isGymAdmin() || $this->isTrainer() || $this->isFreeTrainer()
+                || $this->allenaInUnaPalestra(),
             default => false,
         };
     }
