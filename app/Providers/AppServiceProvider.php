@@ -10,13 +10,10 @@ use App\Listeners\GliEventiDellePromozioni;
 use App\Services\Ai\AiManager;
 use App\Services\Auth\Social\JwksSocialTokenVerifier;
 use App\Services\Auth\Social\SocialTokenVerifier;
-use App\Support\Impersonation\Impersonator;
 use App\Support\Tenancy\TenantContext;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Support\Assets\Css;
 use Filament\Support\Facades\FilamentAsset;
-use Filament\Support\Facades\FilamentView;
-use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\Routing\ResponseFactory as ResponseFactoryContract;
 use Illuminate\Support\ServiceProvider;
 use Stripe\StripeClient;
@@ -121,7 +118,6 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->registraBannerImpersonazione();
         $this->registraLoStileDelleSchede();
 
         // 🆕 ⚡ P6 di plan_promozioni.md — registrazioni e inviti accettati fanno scattare le promozioni a evento.
@@ -158,37 +154,18 @@ class AppServiceProvider extends ServiceProvider
         ]);
     }
 
-    /**
-     * La barra rossa in cima ai pannelli quando la sessione e' impersonata.
+    /*
+     * ⛔ **QUI C'ERA LA FASCIA ROSSA DELL'IMPERSONAZIONE** — tolta il 27/09/2026,
+     * voce 64.
      *
-     * Registrata qui e non in un singolo pannello perche' deve comparire in
-     * **tutti**: si impersona dal pannello di piattaforma ma si finisce in
-     * quello della palestra, ed e' proprio li' che serve ricordarselo.
+     * 🚨 Serviva a ricordare a chi stava usando l'account di un cliente che non
+     * era nei propri panni. ⛔ Non serve più, perché **non si può più entrare**.
      *
-     * Il render hook e' `PANELS_TOPBAR_BEFORE` e non `BODY_START`: quest'ultimo
-     * finisce anche nelle pagine di login, dove non c'e' nessuna sessione da
-     * segnalare.
+     * ⚠️ Il metodo `registraBannerImpersonazione()` e la sua chiamata sono andati
+     * via insieme: un metodo che nessuno chiama è la trappola già pagata con
+     * `RunnerDebug.entitlements` — un file che c'era e che nessuno leggeva.
+     *
+     * 📌 *«è un data breach costruito apposta per farmi mandare in galera»*.
+     * `divieti.md`, 27/09/2026.
      */
-    private function registraBannerImpersonazione(): void
-    {
-        FilamentView::registerRenderHook(
-            PanelsRenderHook::TOPBAR_BEFORE,
-            function (): string {
-                $impersonator = app(Impersonator::class);
-
-                if (! $impersonator->isImpersonating()) {
-                    return '';
-                }
-
-                $target = auth()->user();
-
-                return view('impersonation.banner', [
-                    'impersonating' => true,
-                    'target' => $target?->name ?? '—',
-                    'tenant' => $target?->tenant?->name,
-                    'original' => $impersonator->originalUser()?->name ?? '—',
-                ])->render();
-            },
-        );
-    }
 }

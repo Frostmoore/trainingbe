@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Privacy;
 
 use App\Enums\UserRole;
-use App\Filament\God\Resources\Users\Pages\ListUsers;
 use App\Models\NutritionPlan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkoutPlan;
-use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\Test;
@@ -157,36 +155,35 @@ final class RifAllievoTest extends TestCase
         }
     }
 
-    // ───────────────── la condizione: l'impersonazione ─────────────────
+    // ───────── la condizione che NON esiste più: l'impersonazione ─────────
 
-    #[Test]
-    public function not_even_when_impersonating(): void
-    {
-        $piano = $this->pianoDiTommaso();
-        $god = $this->creaSuperAdmin();
-
-        filament()->setCurrentPanel('god');
-
-        $this->actingAs($god);
-
-        Livewire::test(ListUsers::class)
-            ->callTableAction('impersona', $this->altroTrainer);
-
-        app(TenantContext::class)->set($this->palestra);
-
-        /*
-         * 🚨 **Vale la stessa regola dei messaggi** (R2/R3): «anche quando c'è
-         * l'impersonazione non si devono poter leggere i messaggi degli altri».
-         *
-         * ⚠️ E qui c'è una cosa che rende il caso più insidioso della chat:
-         * durante un'impersonazione `auth()->user()` **è la persona
-         * impersonata**, quindi il controllo su `created_by` funziona da solo —
-         * ma solo finché nessuno lo sostituisce con «chi ha davvero fatto
-         * l'accesso», che sarebbe la cosa apparentemente più corretta da fare.
-         */
-        $this->getJson("/api/v1/nutrition-plans/{$piano->getKey()}")
-            ->assertStatus(404);
-    }
+    /**
+     * 🔄 **`not_even_when_impersonating` è stato TOLTO il 27/09/2026** — voce 64.
+     *
+     * ══ 📌 COSA PROVAVA, E PERCHE' NON PUO' PIU' PROVARLO ══════════════════
+     *
+     * ⛔ Entrava nei panni di un altro trainer col pulsante «Impersona» di `/god` e
+     * pretendeva che il riferimento all'allievo **restasse invisibile**. 🚨 Quel
+     * pulsante non esiste più: la chiamata `callTableAction('impersona', …)`
+     * moriva con *«Action [impersona] not found on table»*.
+     *
+     * ── ⚖️ E la garanzia? E' diventata STRUTTURALE ─────────────────────────
+     *
+     * 🔑 Il riferimento è protetto da `created_by`: lo vede solo l'autore. ⛔ Con
+     * l'impersonazione tolta **non esiste più nessun modo** per un'altra persona di
+     * presentarsi come l'autore — quindi la condizione che questo test costruiva a
+     * mano non è più raggiungibile da nessuna strada.
+     *
+     * ⚠️ **Che non esista nessuna strada lo prova
+     * `tests/Feature/Panels/NonSiEntraNeiPanniDiNessunoTest.php`**, e lo prova nel
+     * modo giusto: guardando la classe e **tutte** le rotte, non un percorso noto.
+     * 💡 Per questo qui il test è stato **tolto** e non riscritto: riscriverlo
+     * vorrebbe dire provare due volte la stessa cosa, e la seconda volta peggio.
+     *
+     * 🚨 Questo commento resta perché la cosa da non perdere è **il ragionamento**:
+     * se un giorno tornasse una funzione «entra come», questa riga dice che il
+     * riferimento all'allievo va riprovato.
+     */
 
     // ───────────────── e vale identico sulle schede ─────────────────
 

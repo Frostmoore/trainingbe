@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Services\Billing\PianoAttivo;
 use App\Services\Tenancy\ChiSiVede;
 use App\Services\Tenancy\LoSlotDelTrainer;
-use App\Support\Impersonation\Impersonator;
+use App\Support\Sicurezza\SessionePerContoTerzi;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -50,7 +50,7 @@ class CancelloDellaChat
     public function __construct(
         private readonly LimiteDeiTreMessaggi $limite,
         private readonly PianoAttivo $piani,
-        private readonly Impersonator $impersonatore,
+        private readonly SessionePerContoTerzi $perContoTerzi,
         private readonly ChiHoBloccato $blocchi,
     ) {}
 
@@ -70,7 +70,7 @@ class CancelloDellaChat
          * qui sotto direbbero di si' guardando la persona impersonata — che e'
          * indistinguibile da quella vera.
          */
-        if ($this->impersonatore->isImpersonating()) {
+        if ($this->perContoTerzi->inCorso()) {
             return Permesso::no(
                 Permesso::IMPERSONAZIONE,
                 'Durante un accesso come un altro utente non si possono scrivere messaggi.',
@@ -221,7 +221,7 @@ class CancelloDellaChat
      */
     public function puoAprireInformazioni(User $chi, User $destinatario): Permesso
     {
-        if ($this->impersonatore->isImpersonating()) {
+        if ($this->perContoTerzi->inCorso()) {
             return Permesso::no(
                 Permesso::IMPERSONAZIONE,
                 'Durante un accesso come un altro utente non si possono aprire conversazioni.',

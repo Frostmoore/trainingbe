@@ -7,9 +7,7 @@ use App\Http\Controllers\ReimpostaPasswordController;
 use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
-use App\Http\Responses\RoleAwareLoginResponse;
 use App\Support\Debug\CasiDiProva;
-use App\Support\Impersonation\Impersonator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -307,25 +305,18 @@ Route::get('/.well-known/assetlinks.json', function () {
 Route::redirect('/login', '/admin/login')->name('login');
 
 /*
-| L'uscita dall'impersonazione (B2.3).
+| ⛔ QUI C'ERA L'USCITA DALL'IMPERSONAZIONE — tolta il 27/09/2026, voce 64.
 |
-| Sta fuori dai pannelli e non dentro, perche' deve funzionare **da entrambi** e
-| soprattutto dal pannello della palestra, dove l'utente impersonato si trova ma
-| il super admin, tecnicamente, non e' piu' se stesso.
+| 🚨 Non serve più, perché non c'è più nessun modo di **entrare**: il pulsante nel
+| pannello di piattaforma è andato via con lei.
 |
-| Nessun controllo oltre a `auth`: chi non sta impersonando trova un rimando
-| innocuo. Un errore qui sarebbe la cosa peggiore — la via d'uscita deve essere
-| l'ultima a rompersi.
+| ⚠️ Si toglie l'uscita **per ultima nel ragionamento e insieme nel commit**: una
+| via d'uscita senza porta d'ingresso è codice morto, ma una porta d'ingresso senza
+| uscita sarebbe una trappola. ⛔ Vanno via nello stesso momento.
+|
+| 📌 *«è un data breach costruito apposta per farmi mandare in galera»*. La regola
+| sta in `divieti.md` del 27/09/2026 e non si riapre senza una decisione nuova.
 */
-Route::get('/impersonation/stop', function (Impersonator $impersonator) {
-    $original = $impersonator->stop();
-
-    return redirect()->to(
-        $original !== null
-            ? RoleAwareLoginResponse::urlFor($original) ?? '/admin'
-            : '/admin',
-    );
-})->middleware('auth')->name('impersonation.stop');
 
 /*
 |--------------------------------------------------------------------------

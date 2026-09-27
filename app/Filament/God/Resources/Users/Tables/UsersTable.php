@@ -8,14 +8,12 @@ use App\Enums\AuditAction;
 use App\Enums\UserRole;
 use App\Filament\Support\MandaIlReset;
 use App\Filament\Support\VoceDiScheda;
-use App\Http\Responses\RoleAwareLoginResponse;
 use App\Models\Plan;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Billing\Stripe\Cassa;
-use App\Support\Impersonation\Impersonator;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -803,40 +801,28 @@ class UsersTable
                             ->send();
                     }),
 
-                // ───────────────────── impersonazione ─────────────────────
-                //
-                // 🚨 Il controllo sta in `Impersonator::can()`, non qui: qui c'e'
-                // solo la sua conseguenza visiva. Nascondere un pulsante non e'
-                // un permesso — chi arriva all'azione per un'altra strada trova
-                // comunque il controllo vero.
-                Action::make('impersona')
-                    ->button()
-                    ->outlined()
-                    ->label('Impersona')
-                    ->icon('heroicon-m-user-circle')
-                    ->color('danger')
-                    ->visible(fn (User $r): bool => static::puoImpersonare($r))
-                    ->requiresConfirmation()
-                    ->modalHeading(fn (User $r): string => "Entrare nell'account di {$r->name}?")
-                    ->modalDescription(
-                        'Vedrai e potrai modificare i suoi dati come se fossi lui. '
-                        .'L\'accesso viene registrato — chi, quando e su chi — e la traccia resta.'
-                    )
-                    ->modalSubmitActionLabel('Entra')
-                    ->action(function (User $record) {
-                        app(Impersonator::class)->start($record);
-
-                        Notification::make()
-                            ->title('Stai usando l\'account di '.$record->name)
-                            ->body('Esci dalla barra rossa in cima quando hai finito.')
-                            ->warning()
-                            ->persistent()
-                            ->send();
-
-                        return redirect()->to(
-                            RoleAwareLoginResponse::urlFor($record) ?? '/admin',
-                        );
-                    }),
+                /*
+                 * ⛔ **QUI C'ERA IL PULSANTE «IMPERSONA»** — tolto il 27/09/2026, voce 64.
+                 *
+                 * 📌 Il committente: *«NIENTE IMPERSONATOR, l'avevamo tolto»* …
+                 * *«è un data breach costruito apposta per farmi mandare in
+                 * galera»*.
+                 *
+                 * 🚨 E aveva ragione sul punto tecnico: un accesso nei panni di un
+                 * cliente è, nei log applicativi, **indistinguibile** da un accesso
+                 * di quel cliente. ⚠️ La traccia rende l'accesso *ricostruibile*,
+                 * non *lecito* — e davanti al GDPR il titolare del trattamento è
+                 * chi ha la porta.
+                 *
+                 * ⛔ **Non si rimette**, per nessuna ragione: vedi `divieti.md` del
+                 * 27/09/2026. 💡 «Non vedo la mia scheda» si risolve **guardando i
+                 * dati** da qui, non entrando nell'account.
+                 *
+                 * 🔑 La decisione era già stata presa **a voce** settimane prima e
+                 * non era stata scritta: il codice è rimasto in produzione mentre i
+                 * documenti lo descrivevano come una funzione voluta. È il motivo
+                 * per cui adesso sta in `decisioni.md` **e** in `divieti.md`.
+                 */
             ])
             // Nessuna azione di massa: su una tabella che contiene gli utenti di
             // tutti i clienti insieme, una cancellazione multipla e' un incidente
@@ -890,14 +876,6 @@ class UsersTable
         }
 
         return array_values(array_unique($ruoli));
-    }
-
-    private static function puoImpersonare(User $target): bool
-    {
-        $attore = auth()->user();
-
-        return $attore instanceof User
-            && app(Impersonator::class)->can($attore, $target);
     }
 
     /**

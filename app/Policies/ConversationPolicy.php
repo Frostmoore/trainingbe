@@ -7,7 +7,7 @@ namespace App\Policies;
 use App\Models\Conversation;
 use App\Models\User;
 use App\Services\Tenancy\ChiSiVede;
-use App\Support\Impersonation\Impersonator;
+use App\Support\Sicurezza\SessionePerContoTerzi;
 
 /**
  * Chi può leggere una conversazione — B8.
@@ -181,6 +181,6 @@ class ConversationPolicy
      */
     private function staImpersonando(): bool
     {
-        return app(Impersonator::class)->isImpersonating();
+        return app(SessionePerContoTerzi::class)->inCorso();
     }
 }
