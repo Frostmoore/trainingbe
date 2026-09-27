@@ -280,37 +280,15 @@ class RoleScopingTest extends TestCase
 
     // ───────────────────────── assegnazione ─────────────────────────
 
-    /**
-     * 🚨 Assegnare un modello **copia**, non condivide.
+    /*
+     * ⛔ **QUI C'ERA un test su `assignTo()`** — tolto il 27/09/2026 insieme
+     * al metodo, su specifica del committente: *«nessuno deve poter vedere
+     * che un determinato allievo ha una determinata scheda»*.
      *
-     * Se venti persone puntassero alla stessa riga, la prima personalizzazione
-     * le cambierebbe tutte.
+     * 💡 Al suo posto c'è `NienteNominativoSulServerTest`, che non verifica
+     * come si copia una scheda addosso a qualcuno, ma che **non si possa
+     * più fare**.
      */
-    #[Test]
-    public function assigning_a_template_makes_a_copy(): void
-    {
-        $modello = $this->piano(null, 'Modello');
-
-        $modello->exercises()->create([
-            'exercise_id' => $this->esercizio(),
-            'position' => 1, 'sets' => 3, 'reps' => '10',
-        ]);
-
-        $copia = $this->ctx()->runAs($this->alfa,
-            fn () => $modello->assignTo($this->mioIscritto, $this->admin));
-
-        $this->assertNotSame($modello->id, $copia->id);
-        $this->assertSame($this->mioIscritto->id, $copia->member_id);
-        $this->assertSame(PlanStatus::Draft, $copia->status);
-        $this->assertSame(1, $copia->exercises()->count(), 'La copia e\' arrivata senza esercizi.');
-
-        // Il modello non si e' mosso.
-        $this->assertNull($modello->refresh()->member_id);
-
-        // E modificare la copia non tocca il modello.
-        $copia->exercises()->first()->update(['sets' => 5]);
-        $this->assertSame(3, $modello->exercises()->first()->sets);
-    }
 
     // ───────────────────────── chat ─────────────────────────
 

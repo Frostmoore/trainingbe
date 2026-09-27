@@ -189,31 +189,25 @@ class WorkoutPlan extends Model implements HasMedia
      * esiste la distinzione fra modello e scheda assegnata: il modello e' un
      * punto di partenza, non un contratto vincolante.
      */
-    public function assignTo(User $member, ?User $by = null): self
-    {
-        $copia = $this->replicate(['published_at', 'origine_id']);
-        $copia->member_id = $member->getKey();
-        $copia->tenant_id = $member->tenant_id;
-        $copia->created_by = $by?->getKey() ?? $this->created_by;
-        $copia->status = PlanStatus::Draft;
-
-        /*
-         * 🚨 **`origine_id` nuovo, non copiato** — D15.
-         *
-         * L'identita' serve al telefono per riconoscere che una scheda arrivata
-         * e' la **versione nuova** di una che ha gia', e sostituirla. Una copia
-         * assegnata a un'altra persona non e' una versione nuova: e' un'altra
-         * scheda. Copiando l'`origine_id` la seconda persona che la riceve si
-         * vedrebbe sovrascrivere la propria — e l'indice unico lo impedirebbe
-         * comunque, ma con un errore di chiave duplicata che non spiega niente.
-         */
-        $copia->origine_id = (string) Str::ulid();
-        $copia->save();
-
-        $this->copiaIGiorniIn($copia);
-
-        return $copia;
-    }
+    /*
+     * ⛔ **QUI C'ERA `assignTo()`: assegnava una scheda a un allievo** —
+     * tolto il 27/09/2026, su specifica del committente.
+     *
+     * 📌 *«sul server, NULLA DI TUTTO CIÒ È NOMINATIVO … una volta che sono
+     * state inviate, NESSUNO può sapere dove sono andate, e nessuno deve
+     * poter vedere che un determinato allievo ha una determinata scheda»*.
+     *
+     * 🚨 Era **codice morto** — nessuno lo chiamava — ma era la **macchina**
+     * che avrebbe creato il legame nominativo. ⛔ Lasciarla lì voleva dire
+     * che la garanzia reggeva per convenzione: bastava che qualcuno, un
+     * giorno, trovasse il metodo comodo.
+     *
+     * 💡 **La scheda si manda in chat e vive sul telefono** (R2, 22/09). Sul
+     * server restano i **modelli del trainer**, che sono roba sua: l'unico
+     * riferimento ammesso è `rif_allievo`, un promemoria libero che scrive
+     * lui («M.R. spalla dx») e che l'interfaccia chiama **Riferimento**
+     * apposta per non invitare a scriverci un nome.
+     */
 
     // ───────────────────────── query ─────────────────────────
 

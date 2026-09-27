@@ -168,64 +168,15 @@ final class GiorniEAlternativeTest extends TestCase
         $this->assertSame(0, PlanExercise::withoutGlobalScopes()->count());
     }
 
-    #[Test]
-    public function copying_a_plan_re_points_the_alternatives_to_the_copy(): void
-    {
-        $palestra = $this->creaPalestra('Alfa', 'alfa');
-        $trainer = $this->creaUtente($palestra, UserRole::Trainer, 'trainer@alfa.test');
-        $iscritto = $this->creaUtente($palestra, UserRole::Member, 'iscritto@alfa.test');
-
-        $modello = $this->ctx()->runAs($palestra, function () use ($palestra, $trainer): WorkoutPlan {
-            $piano = WorkoutPlan::create([
-                'tenant_id' => $palestra->id,
-                'created_by' => $trainer->getKey(),
-                'name' => 'Modello',
-            ]);
-
-            $giorno = $piano->giornoPredefinito();
-
-            $principale = PlanExercise::create([
-                'workout_plan_id' => $piano->getKey(),
-                'workout_plan_day_id' => $giorno->getKey(),
-                'exercise_id' => $this->esercizio('Squat')->getKey(),
-                'position' => 0,
-            ]);
-
-            PlanExercise::create([
-                'workout_plan_id' => $piano->getKey(),
-                'workout_plan_day_id' => $giorno->getKey(),
-                'alternativa_di_id' => $principale->getKey(),
-                'exercise_id' => $this->esercizio('Pressa')->getKey(),
-                'position' => 0,
-            ]);
-
-            return $piano;
-        });
-
-        $copia = $this->ctx()->runAs($palestra, fn (): WorkoutPlan => $modello->assignTo($iscritto, $trainer));
-
-        $alternativaCopiata = $copia->exercisesConAlternative()
-            ->whereNotNull('alternativa_di_id')->firstOrFail();
-
-        $principaleCopiato = $copia->exercises()->firstOrFail();
-
-        /*
-         * 🚨 **Il difetto che questo test esiste per impedire.**
-         *
-         * Copiando le alternative alla cieca, `alternativa_di_id` resterebbe
-         * agganciato all'esercizio del **modello**. Effetto: modificare il
-         * modello cambierebbe le alternative di tutte le copie — cioe'
-         * esattamente cio' che `assignTo()` esiste per impedire, e per di piu'
-         * in modo invisibile.
-         */
-        $this->assertSame($principaleCopiato->getKey(), $alternativaCopiata->alternativa_di_id);
-        $this->assertNotSame($modello->getKey(), $copia->getKey());
-
-        // ⚠️ E l'identita' e' **nuova**: una copia non e' una versione nuova
-        // dello stesso piano, e' un altro piano (D15).
-        $this->assertNotSame($modello->origine_id, $copia->origine_id);
-        $this->assertNotNull($copia->origine_id);
-    }
+    /*
+     * ⛔ **QUI C'ERA un test su `assignTo()`** — tolto il 27/09/2026 insieme
+     * al metodo, su specifica del committente: *«nessuno deve poter vedere
+     * che un determinato allievo ha una determinata scheda»*.
+     *
+     * 💡 Al suo posto c'è `NienteNominativoSulServerTest`, che non verifica
+     * come si copia una scheda addosso a qualcuno, ma che **non si possa
+     * più fare**.
+     */
 
     // ───────────────────── i piani alimentari ─────────────────────
 

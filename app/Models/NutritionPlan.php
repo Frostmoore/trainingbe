@@ -177,22 +177,25 @@ class NutritionPlan extends Model
     }
 
     /** Copia il modello addosso a un iscritto. Vedi `WorkoutPlan::assignTo()`. */
-    public function assignTo(User $member, ?User $by = null): self
-    {
-        $copia = $this->replicate(['published_at', 'origine_id']);
-        $copia->member_id = $member->getKey();
-        $copia->tenant_id = $member->tenant_id;
-        $copia->created_by = $by?->getKey() ?? $this->created_by;
-        $copia->status = PlanStatus::Draft;
-
-        // 🚨 Identita' nuova, non copiata — D15. Vedi `WorkoutPlan::assignTo()`.
-        $copia->origine_id = (string) Str::ulid();
-        $copia->save();
-
-        $this->copiaIGiorniIn($copia);
-
-        return $copia;
-    }
+    /*
+     * ⛔ **QUI C'ERA `assignTo()`: assegnava una scheda a un allievo** —
+     * tolto il 27/09/2026, su specifica del committente.
+     *
+     * 📌 *«sul server, NULLA DI TUTTO CIÒ È NOMINATIVO … una volta che sono
+     * state inviate, NESSUNO può sapere dove sono andate, e nessuno deve
+     * poter vedere che un determinato allievo ha una determinata scheda»*.
+     *
+     * 🚨 Era **codice morto** — nessuno lo chiamava — ma era la **macchina**
+     * che avrebbe creato il legame nominativo. ⛔ Lasciarla lì voleva dire
+     * che la garanzia reggeva per convenzione: bastava che qualcuno, un
+     * giorno, trovasse il metodo comodo.
+     *
+     * 💡 **La scheda si manda in chat e vive sul telefono** (R2, 22/09). Sul
+     * server restano i **modelli del trainer**, che sono roba sua: l'unico
+     * riferimento ammesso è `rif_allievo`, un promemoria libero che scrive
+     * lui («M.R. spalla dx») e che l'interfaccia chiama **Riferimento**
+     * apposta per non invitare a scriverci un nome.
+     */
 
     /**
      * Il primo giorno del piano, creandolo se non c'e' — G4.
