@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers\Filament;
 
 use App\Filament\Auth\Login;
+use App\Filament\Gym\Pages\CambiaSpazio;
 use App\Filament\Gym\Pages\Cruscotto;
 use App\Filament\Gym\Pages\IlTuoPiano;
 use App\Http\Controllers\DocumentoDellImport;
@@ -98,12 +99,36 @@ class AdminPanelProvider extends PanelProvider
                     return true;
                 }
 
-                return $menu->items([
+                $voci = [
                     NavigationItem::make('Riattiva il servizio')
                         ->icon('heroicon-o-credit-card')
                         ->url(IlTuoPiano::getUrl(panel: 'admin'))
                         ->isActiveWhen(fn (): bool => request()->routeIs(IlTuoPiano::getRouteName())),
-                ]);
+                ];
+
+                /*
+                 * 🚨 **E «Cambia spazio», se ne ha più di uno** — 27/09/2026, caso P9.
+                 *
+                 * ⛔ Trovato dal committente provando la vista di debug: il trainer
+                 * indipendente che non paga il **proprio** spazio ma lavora in una
+                 * palestra **che paga** si ritrovava col solo avviso e **nessun modo
+                 * di raggiungere lo spazio dove lavora**.
+                 *
+                 * ⚠️ Non bastava aprire la pagina nel middleware: **senza una voce di
+                 * menù la pagina esiste e non si trova**. 💡 Sono due metà dello
+                 * stesso difetto, e la seconda è quella che si dimentica.
+                 *
+                 * 🔑 `canAccess()` la mostra solo a chi ha davvero più di uno spazio,
+                 * quindi qui non serve nessuna condizione in più.
+                 */
+                if (CambiaSpazio::canAccess()) {
+                    $voci[] = NavigationItem::make(CambiaSpazio::getNavigationLabel())
+                        ->icon('heroicon-o-arrows-right-left')
+                        ->url(CambiaSpazio::getUrl(panel: 'admin'))
+                        ->isActiveWhen(fn (): bool => request()->routeIs(CambiaSpazio::getRouteName()));
+                }
+
+                return $menu->items($voci);
             })
             ->middleware([
                 EncryptCookies::class,

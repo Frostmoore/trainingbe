@@ -6,11 +6,16 @@ namespace Tests\Feature\Accesso;
 
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Filament\Gym\Pages\CambiaSpazio;
 use App\Filament\Gym\Pages\Cruscotto;
 use App\Filament\Gym\Pages\IlTuoPiano;
 use App\Filament\Gym\Resources\Members\MemberResource;
+use App\Http\Middleware\SpazioDelPannello;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Privacy\LeLiberatorie;
+use App\Services\Tenancy\AllenareInUnaPalestra;
+use App\Services\Tenancy\CreaTenantPersonale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreaAmbiente;
@@ -223,6 +228,99 @@ class SoloLAvvisoSeNonHaiPagatoTest extends TestCase
             $risposta->getStatusCode(),
             '⛔ Il super admin è stato rimandato al cruscotto di una palestra sospesa.',
         );
+    }
+
+    /**
+     * 🚨 **IL CASO P9, TROVATO DAL COMMITTENTE PROVANDO LA VISTA DI DEBUG.**
+     *
+     * ══ ⛔ IL DIFETTO ══════════════════════════════════════════════════════
+     *
+     * 📌 27/09: *«funzionano tutti correttamente tranne uno, il caso p9: il trainer
+     * indipendente che non paga ma che lavora in una palestra che paga. È giusto che
+     * nello spazio suo personale ci sia solo l'avviso, ma ci deve anche essere il
+     * modo di passare allo spazio della palestra»*.
+     *
+     * 🔑 **Il blocco era giusto e il danno era da un'altra parte**: gli impediva di
+     * arrivare a uno spazio **in regola**, dove lavora e dove qualcun altro ha
+     * pagato. ⚠️ È la stessa famiglia della prima regola del progetto, vista da un
+     * lato che non avevo previsto.
+     *
+     * ── 💡 E il difetto aveva DUE metà ─────────────────────────────────────
+     *
+     * 1. la pagina «Cambia spazio» era **sbarrata** dal middleware;
+     * 2. e anche aprendola, **non c'era una voce di menù** per trovarla.
+     *
+     * ⛔ La seconda è quella che si dimentica: una pagina raggiungibile solo
+     * digitando l'indirizzo è una pagina che non esiste. 🚨 Per questo qui si
+     * verificano entrambe.
+     */
+    #[Test]
+    public function chi_non_paga_il_suo_spazio_puo_comunque_passare_alla_palestra(): void
+    {
+        /* 🏋️ Una palestra che paga, dove lui lavora. */
+        $palestra = $this->creaPalestra('Palestra In Regola', 'palestra-in-regola');
+        $this->creaUtente($palestra, UserRole::GymAdmin, 'capo@palestra-in-regola.test');
+
+        /* 🏠 Il suo spazio, che NON paga. */
+        $suo = app(CreaTenantPersonale::class)(
+            'Trainer Moroso',
+            'p9@cappello.test',
+            ['password' => self::FAKE_PASSWORD],
+            UserRole::FreeTrainer,
+        );
+
+        app(AllenareInUnaPalestra::class)->assumi($suo, $palestra);
+
+        $spazioSuo = Tenant::withoutGlobalScopes()->findOrFail($suo->tenant_id);
+
+        $this->ctx()->runAs($spazioSuo, function () use ($suo): void {
+            foreach ([LeLiberatorie::PALESTRA, LeLiberatorie::TRAINER] as $tipo) {
+                if (app(LeLiberatorie::class)->riguarda($suo, $tipo)) {
+                    app(LeLiberatorie::class)->firma($suo, $tipo);
+                }
+            }
+        });
+
+        $spazioSuo->forceFill(['status' => TenantStatus::Suspended])->save();
+
+        /* 1️⃣ Nel suo spazio c'è l'avviso — e la voce per cambiare spazio. */
+        $cruscotto = $this->actingAs($suo->fresh())->get(Cruscotto::getUrl(panel: 'admin'));
+
+        $cruscotto->assertSuccessful()
+            ->assertSee('il servizio è sospeso', escape: false)
+            ->assertSee('Cambia spazio', escape: false);
+
+        /* 2️⃣ E la pagina si apre davvero, non viene rimandata al cruscotto. */
+        $this->actingAs($suo->fresh())
+            ->get(CambiaSpazio::getUrl(panel: 'admin'))
+            ->assertSuccessful();
+
+        /* 3️⃣ E scegliendo la palestra ci si atterra, senza l'avviso: là è tutto pagato. */
+        $nellaPalestra = $this->actingAs($suo->fresh())
+            ->withSession([SpazioDelPannello::CHIAVE => $palestra->getKey()])
+            ->get(Cruscotto::getUrl(panel: 'admin'));
+
+        $nellaPalestra->assertSuccessful()
+            ->assertSee('Palestra In Regola', escape: false)
+            ->assertDontSee('il servizio è sospeso', escape: false);
+    }
+
+    /**
+     * ⚖️ **E chi ha UN SOLO spazio non si vede offrire di cambiarlo.**
+     *
+     * ⛔ Una voce di menù che rimbalza è peggio di nessuna voce: sembra un guasto.
+     * 💡 `CambiaSpazio::canAccess()` la apre solo a chi ha più di uno spazio, e
+     * questo test è quello che lo tiene vero anche dal menù ridotto.
+     */
+    #[Test]
+    public function chi_ha_un_solo_spazio_non_vede_cambia_spazio(): void
+    {
+        $this->sospendi();
+
+        $this->actingAs($this->capo->fresh())
+            ->get(Cruscotto::getUrl(panel: 'admin'))
+            ->assertSuccessful()
+            ->assertDontSee('Cambia spazio', escape: false);
     }
 
     // ───────────────────────── aiuti ─────────────────────────

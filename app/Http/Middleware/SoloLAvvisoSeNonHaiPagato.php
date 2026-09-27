@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Filament\Gym\Pages\CambiaSpazio;
 use App\Filament\Gym\Pages\Cruscotto;
 use App\Filament\Gym\Pages\IlTuoPiano;
 use App\Support\Tenancy\TenantContext;
@@ -81,6 +82,7 @@ class SoloLAvvisoSeNonHaiPagato
      * | il **cruscotto** | è dove sta l'avviso: senza, il rimando girerebbe a vuoto |
      * | **«Il tuo piano»** | è la pagina da cui si paga. ⛔ Bloccarla renderebbe il blocco definitivo |
      * | **uscire** | ⛔ chi non può nemmeno disconnettersi è in trappola |
+     * | **cambiare spazio** | 🚨 chi lavora anche in una palestra **che paga** deve poterci arrivare |
      *
      * ⚠️ **Si confrontano i percorsi, non i nomi delle rotte**: le pagine di
      * Filament hanno nomi generati, e un confronto per nome si rompe in silenzio
@@ -109,6 +111,26 @@ class SoloLAvvisoSeNonHaiPagato
             [
                 Cruscotto::getUrl(panel: 'admin'),
                 IlTuoPiano::getUrl(panel: 'admin'),
+
+                /*
+                 * 🚨 **«Cambia spazio» — e questa riga mancava** (27/09/2026, caso P9).
+                 *
+                 * ⛔ Trovato dal committente provando la vista di debug: il trainer
+                 * indipendente che **non paga il proprio spazio** ma lavora in una
+                 * palestra **che paga** si ritrovava chiuso col solo avviso, e
+                 * **nessun modo di raggiungere lo spazio dove lavora**.
+                 *
+                 * 🔑 Cioè il blocco era giusto e il danno era in un altro posto:
+                 * gli impediva di arrivare a uno spazio **in regola**. ⚠️ È la
+                 * stessa famiglia della prima regola del progetto — *niente deve
+                 * impedire a una persona di lavorare in uno spazio che ha pagato* —
+                 * solo vista da un lato che non avevo previsto.
+                 *
+                 * 💡 Non serve nessuna condizione qui: `CambiaSpazio::canAccess()`
+                 * la apre già **solo a chi ha più di uno spazio**. ⛔ Aggiungere un
+                 * secondo controllo vorrebbe dire due copie della stessa regola.
+                 */
+                CambiaSpazio::getUrl(panel: 'admin'),
             ],
         );
 
