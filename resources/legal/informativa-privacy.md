@@ -1,6 +1,6 @@
 # Informativa privacy
 
-> **Ultimo aggiornamento:** 22 settembre 2026
+> **Ultimo aggiornamento:** 28 settembre 2026
 
 ---
 
@@ -420,6 +420,80 @@ ridistribuiscono solo con la loro licenza.
 immagine** chiede, come succede aprendo una qualsiasi pagina web. Noi non mandiamo loro nient'altro:
 né il tuo nome, né il tuo diario.
 
+### 3.15 🔔 Le notifiche: quali passano da Google e quali no
+
+Le notifiche dell'app sono di **due tipi diversi**, e la differenza conta: uno passa da Google, l'altro
+**non esce dal tuo telefono**.
+
+#### 📡 Le notifiche che arrivano dal server (11)
+
+Sono quelle che riguardano un fatto che **è già sui nostri server**: un messaggio che ti hanno scritto,
+un pagamento, un invito. Per farle arrivare passiamo da **Firebase Cloud Messaging**, il servizio di
+Google che consegna le notifiche ai telefoni Android e iPhone.
+
+⚠️ **Cosa vede Google, esattamente.** Non «una notifica»: queste cose, e solo queste.
+
+| Cosa | Esempio |
+|---|---|
+| L'**identificativo del tuo telefono** per le notifiche (il *token*) | una stringa casuale, che cambia e che noi togliamo quando esci dall'app |
+| Il **titolo** e il **testo** che compariranno a schermo | vedi la tabella qui sotto |
+| Una **parola** che dice di che tipo è, e una che dice dove portare | `incasso_fallito`, `abbonamento` |
+| Un **numero di riferimento**, in tre casi | il numero della conversazione, il codice di un'offerta, il numero di un avviso |
+
+🚨 **Titolo e testo arrivano a Google in chiaro**, perché sono le parole che il telefono deve scrivere
+sullo schermo. Per questo li abbiamo scritti **in modo che non dicano niente di te**:
+
+| Notifica | Titolo e testo che escono | Contiene un dato personale? |
+|---|---|---|
+| Un messaggio in chat | *«[nome di chi scrive]» — «Hai un nuovo messaggio.»* | ⚠️ **Sì: il nome di chi ti ha scritto.** 🚨 **Non** il testo del messaggio, che è cifrato e **non lo conosciamo nemmeno noi** |
+| Un avviso dalla piattaforma | il titolo e il testo dell'avviso | ⚠️ Sì, se chi lo scrive ci mette qualcosa: sono parole decise da noi, non tue |
+| Un'offerta | il nome dell'offerta e la sua descrizione, più il codice | ⛔ No |
+| Non siamo riusciti a incassare | *«Non siamo riusciti a incassare» — «Controlla il metodo di pagamento di [nome della palestra]…»* | ⚠️ Il **nome della palestra**, non il tuo |
+| L'abbonamento sta per scadere | *«Il tuo abbonamento sta per scadere» — «L'abbonamento di [nome della palestra] scade fra N giorni…»* | ⚠️ Il **nome della palestra** |
+| Il servizio è tornato attivo | *«Tutto a posto» — «Il pagamento è andato a buon fine: [nome della palestra] è di nuovo attivo.»* | ⚠️ Il **nome della palestra** |
+| Hai un invito | *«Hai un invito» — «Ti hanno invitato su Training Companion: trovi il link nella posta.»* | ⛔ No. 🚨 E **non** il codice dell'invito: quello è una credenziale, e in una notifica non ci va |
+| Il trainer ha deciso sul posto | *«Il tuo trainer ti segue»* oppure *«Il tuo trainer ha liberato il posto»* | ⛔ No: **non** il nome del trainer |
+| Ti abbiamo risposto | *«Ti abbiamo risposto» — «Abbiamo risposto alla tua richiesta: trovi il messaggio nella posta.»* | ⛔ No |
+| Il documento è pronto | *«Il documento è pronto» — «Abbiamo finito di leggerlo…»* | ⛔ No: **non** cosa c'era scritto nel documento |
+| La stima del pasto è pronta | *«La stima è pronta» — «Apri il diario per vedere il risultato…»* | ⛔ No: **non** cosa hai mangiato, né quante calorie |
+
+💡 **Il criterio è uno**: una notifica si legge sullo schermo bloccato, davanti a chiunque sia nella
+stanza. Quindi dice **che c'è qualcosa**, e quasi mai **cosa** — il contenuto sta dentro l'app, dietro
+l'accesso. ⚠️ Le tre eccezioni sono segnate qui sopra, e sono il nome di chi ti scrive, il nome della
+palestra e il testo di un avviso deciso da noi.
+
+⚖️ **Base giuridica.** Sono comunicazioni **di servizio**, legate al contratto (art. 6(1)(b)), tranne
+quelle delle offerte, che si spengono quando vuoi: app → Profilo → Privacy → **«Non mandarmi offerte»**.
+Il permesso di mostrare notifiche lo dai al telefono, e puoi toglierlo dalle impostazioni di sistema in
+qualunque momento.
+
+#### 📱 I promemoria che se li fa il telefono (4)
+
+Sono i promemoria dell'allenamento, del diario alimentare, del peso e delle misure, e il segnale di
+**fine recupero** fra le serie.
+
+🚨 **Questi non passano da Google, e non passano nemmeno da noi.** Li prepara l'app, sul tuo telefono, e
+restano lì: funzionano anche **senza rete**, e nessun server sa che ti sono arrivati.
+
+⛔ **E non è un dettaglio tecnico: è una conseguenza.** Il server **non sa** quando ti alleni, cosa mangi
+e quanto pesi — quei dati stanno sul telefono (§3.2). Mandarti un promemoria dal server vorrebbe dire
+**dirglielo**, e dirlo anche a Google. Per questo quei quattro promemoria li fa il telefono da sé.
+
+| Promemoria | Quando, se non lo cambi | Cosa serve a deciderlo |
+|---|---|---|
+| 🏋️ Allenamento | ogni giorno alle 18:00 | quando hai finito l'ultimo allenamento — **letto sul telefono** |
+| 🍎 Diario alimentare | ogni giorno alle 21:00 | se hai segnato qualcosa oggi — **letto sul telefono** |
+| ⚖️ Peso e misure | lunedì alle 9:00 | l'ultima pesata — **letta sul telefono** |
+| ⏱️ Fine del recupero | alla fine del riposo che hai impostato | il cronometro dell'allenamento in corso |
+
+⚙️ Li accendi, li spegni e ne cambi l'ora da **app → Profilo → Promemoria**. Le tue scelte restano sul
+telefono e finiscono nella copia di sicurezza, come le altre preferenze.
+
+⚠️ **Una cosa da sapere**, perché non è ovvia: il permesso di mostrare notifiche che il telefono ti
+chiede è **uno solo**, e vale per tutti e due i tipi. Se lo neghi non arrivano né le notifiche dal
+server né i promemoria — compreso il segnale di fine recupero. 💡 Per questo l'app te lo chiede la prima
+volta che avvii un recupero, dove si capisce a cosa serve, e non appena entri.
+
 ---
 
 ## 4. Per quanto tempo
@@ -474,7 +548,7 @@ che non esiste più**: byte casuali accanto a un segnaposto.
 | **La palestra e i trainer che ti seguono** | Nome, email, foto del profilo, se il rapporto è attivo; i messaggi che vi scambiate, cifrati. 🚨 **Non** il diario, **non** gli allenamenti, **non** peso, misure o sonno | UE | Contratto |
 | **Anthropic PBC** | Quello descritto ai §3.5–3.8, e solo con i consensi che servono | 🚨 **USA** | Art. 28 + clausole contrattuali standard (dec. UE 2021/914) |
 | **Stripe** | Email, e il nome della palestra per il piano a consumo. **Mai** i dati della carta da noi: li scrivi da loro | UE / USA | Art. 28 + clausole contrattuali standard |
-| **Firebase / Google** *(notifiche)* | L'identificativo del dispositivo, e il titolo dell'avviso («hai un messaggio», «un'offerta per te») — **mai il testo dei messaggi** | USA | Art. 28 + clausole contrattuali standard |
+| **Firebase / Google** *(notifiche)* | L'identificativo del telefono (*token*), il **titolo e il testo** che compariranno a schermo, e una parola che dice di che tipo è. 🚨 Fra i testi, tre contengono un dato: il **nome di chi ti scrive** in chat, il **nome della palestra** nelle tre notifiche dei pagamenti, e il testo di un **avviso** deciso da noi. ⛔ **Mai** il testo dei messaggi (è cifrato), **mai** cosa hai mangiato, **mai** cosa c'era nel documento importato, **mai** il codice di un invito. 💡 E **nulla** dei quattro promemoria che fa il telefono: quelli non passano da qui. Tutto in §3.15 | USA | Art. 28 + clausole contrattuali standard |
 | **Open Food Facts** *(immagini dei prodotti)* | Solo l'**indirizzo IP** del telefono e l'immagine chiesta, quando l'app scarica la foto di un prodotto — vedi §3.14 | 🇫🇷 UE | Non la mandiamo noi: la chiede il telefono direttamente |
 | **Fornitore dell'hosting** | Tutto ciò che sta sui nostri server | UE | Art. 28 |
 
