@@ -8,6 +8,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * L'abbonamento di un tenant a un piano — F4.1.
@@ -51,6 +52,15 @@ class PlanSubscription extends Model
 
             // 🆕 §9.4 — la prima volta che un rinnovo è stato rifiutato.
             'pagamento_fallito_il' => 'datetime',
+
+            /*
+             * 🆕 ⏳ voce 62 — quando gli si è detto che stava scadendo.
+             *
+             * ⚠️ Serve il cast, non basta la colonna: `booted()` confronta
+             * `ends_at` con `getOriginal()`, e senza cast il confronto fra una
+             * data e una stringa dipenderebbe da come MariaDB l'ha scritta.
+             */
+            'scadenza_avvisata_il' => 'datetime',
         ];
     }
 
@@ -113,5 +123,85 @@ class PlanSubscription extends Model
         }
 
         return $this->ends_at === null || $this->ends_at->isFuture();
+    }
+
+    /**
+     * 🆕 ⏳ **Se la scadenza si allontana, l'avviso si dimentica** — voce 62,
+     * 27/09/2026.
+     *
+     * ══ 📌 COSA FA, E PERCHE' STA QUI ═════════════════════════════════════
+     *
+     * `scadenza_avvisata_il` è la memoria di «gli abbiamo detto che stava
+     * scadendo» (vedi `LAvvisoDellaScadenza`). ⚠️ Quando l'abbonamento viene
+     * **allungato**, quella memoria è vecchia: la scadenza di cui si parlava non
+     * esiste più, e la prossima va annunciata da capo.
+     *
+     * ⛔ Senza questo, la **seconda** scadenza passerebbe in silenzio — un difetto
+     * che si vede una volta al mese e che nessuno collegherebbe a una colonna.
+     *
+     * ══ 🔑 PERCHE' NEL MODELLO E NON NEI CHIAMANTI ════════════════════════
+     *
+     * 🚨 `ends_at` viene allungato da **cinque posti diversi**:
+     * `Cassa::abbonamentoRinnovato()` e `abbonamentoAggiornato()`,
+     * `RinnovaGliAbbonamentiRegalati`, `PianiInVendita`, `LaPausaDellAbbonamento`.
+     * ⛔ Azzerare la colonna in ognuno sarebbe cinque sedi della stessa regola, e
+     * la prima che qualcuno dimentica non dà **nessun errore**: dà solo un avviso
+     * che non parte, mesi dopo.
+     *
+     * 💡 Qui invece la regola è attaccata al **fatto** — «la scadenza si è
+     * spostata in avanti» — e non a chi lo fa. ⚖️ È la stessa ragione per cui il
+     * canale delle notifiche sta nell'enum e non nei chiamanti.
+     *
+     * ══ ⚠️ SOLO IN AVANTI, E IL CASO `null` ═══════════════════════════════
+     *
+     * 🚨 `ends_at = null` significa **«non scade»**, non «scaduto» — e quindi è il
+     * massimo degli allontanamenti: l'avviso va dimenticato. ⛔ Leggerlo come
+     * «scaduto» è il difetto che `scopeAttivi()` documenta qui sopra, e non va
+     * rifatto qui.
+     *
+     * 💡 Se la data si avvicina o resta uguale — una disdetta, una revoca — la
+     * memoria **si tiene**: quella scadenza è la stessa di cui si è già parlato,
+     * o una anticipata, e in nessuno dei due casi si riavvisa.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $abbonamento): void {
+            if (! $abbonamento->isDirty('ends_at')) {
+                return;
+            }
+
+            /*
+             * 🚨 **Niente scorciatoia del tipo «se è già null non fare niente»**
+             * — e ci sono cascato il 27/09, il test `se_la_scadenza_si_allontana`
+             * l'ha preso subito.
+             *
+             * ⛔ Quella guardia guarderebbe `scadenza_avvisata_il` **di questa
+             * istanza**, che può essere **vecchia**: `LAvvisoDellaScadenza` scrive
+             * la colonna su una riga che ha caricato lui, quindi un oggetto preso
+             * prima ha ancora `null` in memoria mentre il database ha una data.
+             * 🚨 Con la scorciatoia si usciva subito e la colonna restava piena.
+             *
+             * 💡 Azzerarla sempre non costa niente — se è già `null`, Eloquent non
+             * la vede nemmeno come modificata — e non dipende da quando è stata
+             * letta la riga.
+             */
+            $prima = $abbonamento->getOriginal('ends_at');
+            $adesso = $abbonamento->ends_at;
+
+            /* 🔑 `null` = non scade più: l'avviso mandato non vale più niente. */
+            if ($adesso === null) {
+                $abbonamento->scadenza_avvisata_il = null;
+
+                return;
+            }
+
+            if ($prima === null) {
+                return;
+            }
+
+            if ($adesso->greaterThan(Carbon::parse($prima))) {
+                $abbonamento->scadenza_avvisata_il = null;
+            }
+        });
     }
 }

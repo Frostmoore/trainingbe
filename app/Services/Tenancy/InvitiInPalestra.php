@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Tenancy;
 
+use App\Enums\Notifica;
 use App\Enums\UserRole;
 use App\Mail\InvitoInPalestraMail;
 use App\Models\InvitoInPalestra;
@@ -13,6 +14,7 @@ use App\Models\ProfiloPubblico;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\ContoDegliIscritti;
+use App\Services\Notifiche\LeNotifiche;
 use App\Services\Tenancy\Exceptions\SeiGiaInUnaPalestraException;
 use App\Support\Tenancy\CosaOttieniInPalestra;
 use App\Support\Tenancy\TenantContext;
@@ -185,6 +187,58 @@ class InvitiInPalestra
              * ⚠️ `forceFill`: non è un campo che si scrive da un modulo.
              */
             $invito->forceFill(['email_inviata_il' => now()])->save();
+
+            /*
+             * 🆕 📲 **E un richiamo sul telefono** — voce 62, 27/09/2026.
+             *
+             * ══ 📌 A COSA SERVE, VISTO CHE LA MAIL E' GIA' PARTITA ═════════
+             *
+             * ⛔ Un invito che finisce nello spam è un cliente che non arriva, e
+             * il DMARC del dominio non c'è ancora (voce 66). 💡 Chi **ha già
+             * l'app** — perché è iscritto altrove, o lo era — riceve un richiamo
+             * che arriva subito e non si perde.
+             *
+             * ══ 🚨 PERCHE' NON PORTA ALL'INVITO, E NON E' PIGRIZIA ═════════
+             *
+             * La schermata dell'invito è `/invito-palestra/{token}`, e vorrebbe
+             * **il token**. ⛔ Due strade per dargliela, e sono chiuse entrambe:
+             *
+             *   1. 🚨 **il token nel carico della push**: è una credenziale
+             *      monouso a scadenza, e il carico passa da Google e resta sul
+             *      telefono. ⛔ Non ci va.
+             *   2. 🚨 **una rotta «i miei inviti»** che l'app interroga da sola:
+             *      sarebbe la strada giusta, ⛔ ma le email **non sono
+             *      verificate** in questa applicazione (`User` non implementa
+             *      `MustVerifyEmail`, e non ci sono rotte di verifica). Chi si
+             *      registra con l'indirizzo di un altro si prenderebbe i suoi
+             *      inviti — e oggi per rubarne uno serve l'accesso alla casella.
+             *      ⚠️ Sarebbe una **scala nuova**, non un fastidio.
+             *
+             * 💡 Quindi la notifica dice «guarda la posta» e porta alla casa. ⚖️ È
+             * meno di quello che si vorrebbe, ed è tutto quello che si può dare
+             * senza aprire un buco. 🔑 Si sblocca con la verifica delle email:
+             * quel giorno si aggiunge la rotta e la destinazione diventa l'invito.
+             *
+             * ══ ⚠️ E IL TESTO NON NOMINA CHI INVITA ════════════════════════
+             *
+             * 🚨 Passa da `aQuestaEmail()`, e a un'email non verificata può
+             * rispondere chi non è il destinatario. ⛔ «La palestra X ti ha
+             * invitato» direbbe a un estraneo dove sta andando quella persona.
+             * 💡 Si dice che c'è un invito, e basta.
+             */
+            try {
+                app(LeNotifiche::class)->aQuestaEmail(
+                    Notifica::Invito,
+                    (string) $invito->email,
+                    'Hai un invito',
+                    'Ti hanno invitato su Training Companion: trovi il link nella posta.',
+                );
+            } catch (Throwable $e) {
+                Log::warning('Invito in palestra: push non partita.', [
+                    'invito' => $invito->getKey(),
+                    'errore' => $e->getMessage(),
+                ]);
+            }
 
             return true;
         } catch (Throwable $e) {

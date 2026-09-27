@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Billing;
 
+use App\Enums\Notifica;
 use App\Enums\PlanKind;
 use App\Enums\TenantStatus;
 use App\Models\AddebitoMensile;
 use App\Models\PlanSubscription;
 use App\Models\Tenant;
+use App\Services\Notifiche\LeNotifiche;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * 🤖 **Chi non paga si sospende da sé, e chi ripaga torna su da sé** — 27/09/2026.
@@ -511,7 +515,52 @@ class LaSospensioneAutomatica
             ])->save();
         });
 
+        $this->diGlieloCheERiattivato($spazio);
+
         return true;
+    }
+
+    /**
+     * 🆕 📲 **«Tutto a posto»** — voce 62, 27/09/2026.
+     *
+     * ══ 📌 PERCHE' UNA RIATTIVAZIONE SI ANNUNCIA ══════════════════════════
+     *
+     * 🚨 Chi ha appena pagato vuole sapere **che è andata**. ⛔ Senza niente,
+     * resta a guardare il pannello chiedendosi se deve rifarlo — ed è il momento
+     * esatto in cui qualcuno paga due volte. 💡 È la metà buona della notifica
+     * di `IncassoFallito`: la stessa persona, la stessa pagina, il lieto fine.
+     *
+     * ══ ⚠️ FUORI DALLA TRANSAZIONE, E DI PROPOSITO ════════════════════════
+     *
+     * ⛔ Una notifica mandata **dentro** la transazione, seguita da un rollback,
+     * annuncerebbe una riattivazione che non è avvenuta. 🚨 E una push non si
+     * ritira: è già sul telefono.
+     *
+     * 💡 Non lancia mai: `riattiva()` è chiamato da un webhook di pagamento e dal
+     * giro notturno. ⛔ In entrambi un'eccezione qui farebbe sembrare fallita una
+     * riattivazione che è **già scritta a terra**, e il chiamante riproverebbe.
+     */
+    private function diGlieloCheERiattivato(Tenant $spazio): void
+    {
+        $chi = $spazio->aChiScrivere();
+
+        if ($chi === null) {
+            return;
+        }
+
+        try {
+            app(LeNotifiche::class)->manda(
+                Notifica::ServizioRiattivato,
+                $chi,
+                'Tutto a posto',
+                "Il pagamento è andato a buon fine: {$spazio->name} è di nuovo attivo.",
+            );
+        } catch (Throwable $e) {
+            Log::warning('Riattivazione: push non partita.', [
+                'tenant' => $spazio->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

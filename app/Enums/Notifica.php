@@ -168,19 +168,145 @@ enum Notifica: string
     public function daFare(): bool
     {
         return in_array($this, [
-            self::IncassoFallito,
-            self::AbbonamentoInScadenza,
-            self::ServizioRiattivato,
-            self::Invito,
-            self::SlotDeciso,
-            self::RispostaARichiesta,
-            self::ImportPronto,
-            self::StimaPronta,
+            /*
+             * 🆕 ✅ **Le otto push sono state fatte il 27/09/2026** — voce 62.
+             *
+             * 📌 Il committente: *«Sì no vabbè implementale tutte subito»*.
+             *
+             * | Notifica | Dove parte |
+             * |---|---|
+             * | `IncassoFallito` | `Cassa::avvisaDelPagamentoFallito()`, accanto alla mail |
+             * | `ServizioRiattivato` | `LaSospensioneAutomatica::diGlieloCheERiattivato()` |
+             * | `AbbonamentoInScadenza` | `LAvvisoDellaScadenza`, giro di `abbonamenti:avvisa-delle-scadenze` |
+             * | `SlotDeciso` | `LoSlotDelTrainer::diGlieloAllAllievo()` |
+             * | `StimaPronta` | `StimaIlCibo::handle()`, dopo `completa()` |
+             * | `ImportPronto` | `TrascriviIlDocumento::handle()`, dopo lo scalo dei gettoni |
+             * | `RispostaARichiesta` | `ViewRichiestaDiContatto::avvisaSulTelefono()` |
+             * | `Invito` | `InvitiDelTrainer::mandaIlLink()` e `InvitiInPalestra::mandaIlLink()` |
+             *
+             * ⚠️ `Invito` è fatta **a metà per scelta**: manda il richiamo ma non
+             * porta alla schermata dell'invito, perché servirebbe il token (una
+             * credenziale, che in una push non ci va) o una rotta «i miei inviti»
+             * (impossibile finché le email non sono verificate). 🔑 Il perché per
+             * esteso è nel commento dentro `mandaIlLink()`.
+             *
+             * 💡 Restano le quattro locali: le programma l'app, e la `FineRecupero`
+             * è già fatta.
+             */
             self::PromemoriaAllenamento,
             self::PromemoriaDiario,
             self::SchedaFinita,
             self::PromemoriaMisure,
         ], true);
+    }
+
+    /**
+     * 🧭 **Dove porta, toccandola.**
+     *
+     * ══ 📌 PERCHE' STA NEL CATALOGO E NON LA PASSA CHI CHIAMA ══════════════
+     *
+     * 📌 Il committente, 27/09/2026: *«ci deve essere un altro parametro nelle
+     * notifiche: dove rimanda. Cioè a che pagina dell'app o a che url»*.
+     *
+     * ⛔ Se la passasse chi manda, tornerebbe a essere sparsa: due notifiche
+     * dello stesso tipo finirebbero su pagine diverse a seconda del punto del
+     * codice da cui partono. 💡 Qui è una proprietà della notifica, come il
+     * canale — e `LeNotifiche::manda()` la mette nel carico da sola.
+     *
+     * ══ 🚨 E' UN NOME, NON UN INDIRIZZO ═══════════════════════════════════
+     *
+     * ⛔ **Non** si restituisce un percorso dell'app. 🚨 Mandare un percorso
+     * vorrebbe dire che chi controlla il server può far aprire all'app
+     * **qualunque** schermata cambiando una stringa in una notifica.
+     *
+     * 🔑 Si manda un **nome** — `abbonamento`, `messaggi`, `casa` — e l'app lo
+     * traduce con un elenco chiuso (`_leDestinazioni` in `notifiche_push.dart`).
+     * ⚠️ Un nome che l'app non conosce non porta da nessuna parte: si apre e
+     * basta. È la stessa regola che c'era già, scritta una volta sola.
+     *
+     * ══ ⚠️ E NON CI VA MAI UNA CREDENZIALE ════════════════════════════════
+     *
+     * 🚨 Alcune schermate vogliono un identificativo per essere utili — l'invito
+     * vuole il suo token, l'importazione vuole il suo id. ⛔ Il token di un
+     * invito **non** si mette in una push: è una credenziale monouso a scadenza,
+     * e il carico di una push passa da Google e resta sul telefono. 💡 Quelle
+     * notifiche portano alla casa, e il dato l'app se lo va a prendere da sola
+     * con la sessione che ha già.
+     *
+     * 💡 `null` per le locali: quelle le programma l'app, che sa già dove sta.
+     */
+    public function destinazione(): ?string
+    {
+        return match ($this) {
+            self::Messaggio => 'messaggi',
+
+            /*
+             * 📣 L'avviso non ha una pagina: è una **modale**, e la mostra
+             * `AvvisoAllApertura` appena l'app torna in primo piano — cioè
+             * esattamente quello che succede toccando la notifica.
+             */
+            self::Avviso => 'casa',
+
+            self::Promozione => 'offerte',
+
+            /*
+             * 💳 Le tre del denaro portano tutte dove si paga. ⚠️ Lato app è
+             * `/acquisti`, **non** il pannello: chi riceve queste notifiche è
+             * sul telefono.
+             */
+            self::IncassoFallito,
+            self::AbbonamentoInScadenza,
+            self::ServizioRiattivato => 'abbonamento',
+
+            /*
+             * ✉️ **Alla casa, e non alla pagina dell'invito** — e non è pigrizia.
+             *
+             * ⛔ `/invito-palestra/{token}` esiste, ma vuole il token, e il token
+             * è una credenziale: vedi sopra. 🚨 E oggi non esiste nessuna rotta
+             * che elenchi **gli inviti ricevuti** (ci sono solo quelli mandati:
+             * `GET trainer/invites` e `GET gym/invites`), quindi la casa non ha
+             * ancora niente da mostrare a chi arriva da qui.
+             */
+            self::Invito => 'casa',
+
+            /*
+             * 🎟️ **Chi la riceve è l'ALLIEVO**, non il trainer: è lui che scopre
+             * se il posto gli è stato tenuto o liberato. ⛔ Quindi non «i miei
+             * utenti», che è la schermata di chi ha deciso.
+             *
+             * 💡 Porta alla chat perché è lì che la decisione si vede: liberando
+             * il posto la conversazione si limita a tre messaggi (Q-A5-2).
+             */
+            self::SlotDeciso => 'messaggi',
+
+            /*
+             * 💬 Chi ha scritto dal sito **può non avere un account**: la
+             * richiesta di contatto ha solo un'email. ⛔ Non c'è nessuna pagina
+             * dell'app che mostri una richiesta, quindi casa.
+             */
+            self::RispostaARichiesta => 'casa',
+
+            /*
+             * 📄 ⚠️ **Debito noto**: la bozza si rivede riga per riga (N20.3), ma
+             * `/schede/importa` e `/diario/importa-piano` **non prendono l'id**
+             * dell'importazione — cominciano un caricamento nuovo. ⛔ Mandare
+             * lì chi ha appena finito di importare lo farebbe ricominciare.
+             * 💡 Finché non c'è una rotta che riapre **quella** bozza, casa.
+             */
+            self::ImportPronto => 'casa',
+
+            self::StimaPronta => 'diario',
+
+            /*
+             * 📱 Le locali non hanno destinazione qui: le programma l'app, e
+             * l'app sa già da dove le ha fatte partire.
+             */
+            self::FineRecupero,
+            self::PromemoriaAllenamento,
+            self::PromemoriaDiario,
+            self::SchedaFinita,
+            self::PromemoriaMisure => null,
+        };
     }
 
     /** Quelle che partono dal server. @return list<self> */

@@ -8,11 +8,13 @@ use App\Models\DeviceToken;
 use App\Services\Push\PushSender;
 use App\Services\Push\TokenDiFirebase;
 use App\Services\Tenancy\CreaTenantPersonale;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CreaAmbiente;
 use Tests\TestCase;
 
 /**
@@ -25,6 +27,7 @@ use Tests\TestCase;
  */
 final class IlTokenDiFirebaseTest extends TestCase
 {
+    use CreaAmbiente;
     use RefreshDatabase;
 
     private string $file;
@@ -109,5 +112,69 @@ final class IlTokenDiFirebaseTest extends TestCase
         Http::assertSent(fn (Request $r): bool => str_contains($r->url(), 'projects/training-prova/messages:send')
             && $r['message']['data'] === ['tipo' => 'promozione', 'codice' => 'AUTUNNO']
             && $r->hasHeader('Authorization', 'Bearer ya29.finto'));
+    }
+
+    /**
+     * 🆕 🚨 **La notifica arriva anche se il telefono è registrato altrove** —
+     * 27/09/2026, voce 62.
+     *
+     * ══ ⛔ IL DIFETTO CHE QUESTO TEST CHIUDE ══════════════════════════════
+     *
+     * `DeviceToken` usa `BelongsToTenant`, e `PushSender::toUser()` interrogava
+     * la tabella **con lo scope attivo**. 🚨 Ma `device_tokens.tenant_id` è quello
+     * che la persona aveva quando ha registrato il telefono, e **nessuno lo
+     * aggiorna** quando cambia palestra.
+     *
+     * ⛔ Quindi una notifica mandata da dentro un contesto — il pannello, una
+     * rotta API, `runAs()` in un job — non trovava più i suoi dispositivi. 🚨 E
+     * non si vedeva: dai webhook e dai comandi (contesto vuoto, `TenantScope`
+     * non filtra) le stesse notifiche partivano benissimo. Lo stesso invio
+     * funzionava o no **a seconda di chi lo faceva partire**.
+     *
+     * ══ 🔎 COME QUESTO TEST LO DIMOSTRA ═══════════════════════════════════
+     *
+     * 1. un telefono registrato con un `tenant_id` **diverso** da quello del
+     *    contesto — cioè la situazione di chi ha cambiato palestra;
+     * 2. il contesto messo su un'altra palestra, come in una richiesta vera;
+     * 3. la notifica **deve** partire comunque.
+     *
+     * ⚠️ Rimettendo lo scope in `toUser()`, `$inviati` torna 0 e questo test
+     * diventa rosso: verificato il 27/09.
+     */
+    #[Test]
+    public function il_telefono_registrato_in_unaltra_palestra_riceve_comunque(): void
+    {
+        config(['push.driver' => 'fcm']);
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'ya29.finto', 'expires_in' => 3600]),
+            'fcm.googleapis.com/*' => Http::response(['name' => 'ok']),
+        ]);
+
+        $utente = app(CreaTenantPersonale::class)('Tizia', 'tizia@esempio.test', ['password' => self::FAKE_PASSWORD])->fresh();
+
+        /*
+         * 🔑 Il telefono risulta registrato in una palestra che **non** è quella
+         * del contesto: è esattamente ciò che resta in tabella quando una persona
+         * si sposta.
+         */
+        DeviceToken::query()->create([
+            'user_id' => $utente->getKey(),
+            'tenant_id' => $utente->tenant_id,
+            'token' => 'tok-di-prima',
+            'platform' => 'android',
+        ]);
+
+        $altrove = $this->creaPalestra('Palestra di adesso', 'adesso');
+
+        $inviati = app(TenantContext::class)->runAs(
+            $altrove,
+            fn (): int => app(PushSender::class)->toUser($utente, 'Tutto a posto', 'Il servizio è attivo', ['tipo' => 'servizio_riattivato']),
+        );
+
+        $this->assertSame(
+            1,
+            $inviati,
+            '🚨 La notifica non è partita: lo scope della palestra sta decidendo a quale telefono si può scrivere.',
+        );
     }
 }

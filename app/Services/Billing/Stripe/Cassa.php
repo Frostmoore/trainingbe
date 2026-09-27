@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Billing\Stripe;
 
 use App\Enums\EventoDiPromozione;
+use App\Enums\Notifica;
 use App\Enums\SuCosaVale;
 use App\Mail\PagamentoFallitoMail;
 use App\Models\AddebitoMensile;
@@ -20,6 +21,7 @@ use App\Services\Billing\LePromozioni;
 use App\Services\Billing\Listino;
 use App\Services\Billing\PortafoglioGettoni;
 use App\Services\Billing\RegistroDeiPagamenti;
+use App\Services\Notifiche\LeNotifiche;
 use App\Services\Promozioni\ConsegnaDeiPremi;
 use App\Services\Promozioni\GliEventi;
 use Illuminate\Support\Carbon;
@@ -1194,6 +1196,42 @@ class Cassa
             Log::warning('Pagamento fallito: nessuno a cui scrivere.', ['tenant' => $spazio->getKey()]);
 
             return;
+        }
+
+        /*
+         * 🆕 📲 **E anche una push** — voce 62, 27/09/2026.
+         *
+         * ══ 🚨 PERCHE' LA MAIL DA SOLA NON BASTA ══════════════════════════
+         *
+         * ⛔ Fino a oggi era **solo una mail**, e le mail finiscono nello spam —
+         * tanto più che il DMARC del dominio non c'è ancora (voce 66). 🚨 È
+         * l'unica notifica del catalogo che, se non arriva, **costa clienti**:
+         * chi non ha pagato rischia di non saperlo per giorni, e intanto
+         * `LaSospensioneAutomatica` gli spegne il servizio.
+         *
+         * ══ ⚠️ DUE `try` SEPARATI, E NON UNO ══════════════════════════════
+         *
+         * 💡 Prima la push e poi la mail, **ognuna nel suo**: se ne parte una
+         * sola, che parta quella che arriva subito. ⛔ Un solo `try` attorno a
+         * entrambe vorrebbe dire che un guasto di Firebase si porta via anche la
+         * mail — cioè che il canale di riserva dipende da quello che sostituisce.
+         *
+         * 🚨 E nessuno dei due può lanciare: siamo dentro un webhook di Stripe,
+         * e un'eccezione qui farebbe rispondere 500 a Stripe, che riproverebbe
+         * il webhook e rifarebbe il lavoro già fatto.
+         */
+        try {
+            app(LeNotifiche::class)->manda(
+                Notifica::IncassoFallito,
+                $chi,
+                'Non siamo riusciti a incassare',
+                "Controlla il metodo di pagamento di {$spazio->name}: {$quale} non è andata a buon fine.",
+            );
+        } catch (Throwable $e) {
+            Log::warning('Pagamento fallito: push non partita.', [
+                'tenant' => $spazio->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
         }
 
         try {

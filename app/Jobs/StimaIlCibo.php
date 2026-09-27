@@ -5,16 +5,19 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Enums\AiFeature;
+use App\Enums\Notifica;
 use App\Models\StimaCibo;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\CancelloDeiGettoni;
 use App\Services\Ai\Data\FoodEstimate;
 use App\Services\Ai\StimaConRitentativo;
+use App\Services\Notifiche\LeNotifiche;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -187,6 +190,41 @@ class StimaIlCibo implements ShouldBeUnique, ShouldQueue
                 'entries' => [],
                 'saved' => false,
             ]);
+
+            /*
+             * 🆕 📲 **E glielo si dice** — voce 62, 27/09/2026.
+             *
+             * ══ 📌 PERCHE' QUESTA NOTIFICA SERVE ══════════════════════════
+             *
+             * ⚠️ La stima gira **in coda**: chi ha scattato la foto ha già chiuso
+             * l'app. ⛔ Senza notifica deve tornare a controllare da solo, e una
+             * stima che nessuno guarda è una chiamata all'AI pagata per niente.
+             *
+             * ══ 🚨 E IL TESTO NON DICE COSA HAI MANGIATO ══════════════════
+             *
+             * ⛔ Il server **sa** cosa c'è nel piatto — l'ha stimato lui — ma la
+             * notifica si legge sullo schermo bloccato, davanti a chiunque.
+             * 🚨 «Pizza, 980 kcal» è un dato sulla salute di una persona letto da
+             * estranei. 💡 Il titolo dice che è pronta; il resto sta dentro l'app,
+             * dietro l'accesso.
+             *
+             * ⚠️ Dentro un `try` e dentro `runAs()`: la stima è **già salvata**, e
+             * un guasto di Firebase non deve far ritentare il job — ritentare
+             * vorrebbe dire una seconda chiamata all'AI, cioè una seconda fattura.
+             */
+            try {
+                app(LeNotifiche::class)->manda(
+                    Notifica::StimaPronta,
+                    $utente,
+                    'La stima è pronta',
+                    'Apri il diario per vedere il risultato e confermarlo.',
+                );
+            } catch (Throwable $e) {
+                Log::warning('Stima del cibo: push non partita.', [
+                    'stima' => $stima->getKey(),
+                    'errore' => $e->getMessage(),
+                ]);
+            }
         });
     }
 

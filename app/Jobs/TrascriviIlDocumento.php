@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\Notifica;
 use App\Models\ImportazioneDaDocumento;
 use App\Services\Ai\AiCallContext;
 use App\Services\Ai\AiManager;
 use App\Services\Ai\CancelloDeiGettoni;
+use App\Services\Notifiche\LeNotifiche;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -167,6 +170,39 @@ class TrascriviIlDocumento implements ShouldQueue
              * chiamata che era coperta — vedi `CancelloDeiGettoni::apri()`.
              */
             $cancello->consuma($utente, $funzione, $importazione->paga_con_gettoni);
+
+            /*
+             * 🆕 📲 **La bozza è pronta da rivedere** — voce 62, 27/09/2026.
+             *
+             * ══ 📌 PERCHE' PROPRIO QUI, IN FONDO ══════════════════════════
+             *
+             * ⚠️ **Dopo** `consuma()`: la notifica dice «è pronta», e lo dice
+             * quando il lavoro è finito per davvero, gettoni compresi. ⛔ Più in
+             * alto avrebbe annunciato una cosa che poteva ancora andare storta.
+             *
+             * ══ 🚨 E IL TESTO NON DICE COSA C'ERA NEL DOCUMENTO ═══════════
+             *
+             * ⛔ Un documento importato è una scheda o un piano alimentare: roba
+             * sulla salute di una persona. 🚨 Su uno schermo bloccato la legge
+             * chiunque sia nella stanza. 💡 Si dice che c'è da rivedere, non cosa.
+             *
+             * ⚠️ E porta a **casa**: `/schede/importa` e `/diario/importa-piano`
+             * non prendono l'id dell'importazione, quindi ci ricomincerebbe un
+             * caricamento nuovo. 💡 È il debito segnato in `Notifica::destinazione()`.
+             */
+            try {
+                app(LeNotifiche::class)->manda(
+                    Notifica::ImportPronto,
+                    $utente,
+                    'Il documento è pronto',
+                    'Abbiamo finito di leggerlo: apri l\'app per rivedere la bozza prima di salvarla.',
+                );
+            } catch (Throwable $e) {
+                Log::warning('Importazione da documento: push non partita.', [
+                    'importazione' => $importazione->getKey(),
+                    'errore' => $e->getMessage(),
+                ]);
+            }
         });
     }
 

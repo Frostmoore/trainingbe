@@ -50,11 +50,23 @@ class MandaLAvvisoInPush implements ShouldQueue
             return;
         }
 
+        /*
+         * 🔄 **Si contano le PERSONE, non i dispositivi** — 27/09/2026.
+         *
+         * ⛔ Prima questa riga sommava il valore di ritorno di `manda()`, cioè
+         * quanti telefoni avevano ricevuto. 🚨 Da quando `manda()` **accoda**
+         * (voce 62), quel numero non esiste ancora nel momento in cui si scrive:
+         * la consegna avviene dopo, in `MandaLaNotifica`.
+         *
+         * 💡 «A quante persone è stato accodato» è comunque la risposta alla
+         * domanda che si fa guardando questo registro — *«l'avviso è partito?»* —
+         * e per «a quanti telefoni è arrivato» c'è il registro del job.
+         */
         $quante = 0;
 
         foreach ($pubblico->destinatari($avviso) as $utente) {
             /** @var User $utente */
-            $quante += $notifiche->manda(Notifica::Avviso, $utente, $avviso->titolo, $avviso->testo, [
+            $notifiche->manda(Notifica::Avviso, $utente, $avviso->titolo, $avviso->testo, [
                 /*
                  * 💡 `avviso_id` nel carico: toccando la notifica l'app sa
                  * **quale** modale aprire, invece di chiedere «ce n'è uno?» e
@@ -62,11 +74,13 @@ class MandaLAvvisoInPush implements ShouldQueue
                  */
                 'avviso_id' => (string) $avviso->getKey(),
             ]);
+
+            $quante++;
         }
 
-        Log::info('Avviso mandato in push', [
+        Log::info('Avviso accodato in push', [
             'avviso' => $avviso->getKey(),
-            'notifiche' => $quante,
+            'persone' => $quante,
         ]);
     }
 }

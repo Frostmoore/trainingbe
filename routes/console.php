@@ -333,3 +333,27 @@ Schedule::command('promozioni:giro --solo=automatiche')
 Schedule::command('abbonamenti:sospendi-i-morosi --scrivi')
     ->dailyAt('4:40')
     ->withoutOverlapping();
+
+/*
+ * ══ ⏳ E CHI STA PER SCADERE LO SA PRIMA — voce 62, 27/09/2026 ════════════
+ *
+ * 🔑 È la notifica che **evita** le altre due del denaro: `IncassoFallito` e
+ * `ServizioRiattivato` arrivano quando il danno è fatto, questa arriva prima.
+ *
+ * ⚠️ **Alle 9:10 e non di notte**, ed è l'unica eccezione al «tutto di notte»
+ * di questo file. ⛔ Le altre righe qui sono lavori pesanti sul database, e
+ * vanno quando il server condiviso è libero. 🚨 Questa **fa suonare un
+ * telefono**: alle 4:40 sveglierebbe la persona che vogliamo aiutare, e la
+ * prima cosa che farebbe sarebbe spegnere le notifiche.
+ *
+ * 💡 Non pesa niente — una query indicizzata e qualche push — quindi non c'è
+ * nessuna ragione tecnica per metterla di notte, e una buona ragione per no.
+ *
+ * ⚖️ **Dopo la sospensione delle 4:40**, comunque: chi è già stato sospeso
+ * stanotte non deve ricevere in mattinata un «sta per scadere» che parla al
+ * passato. `LAvvisoDellaScadenza::avvisa()` salta i sospesi, ed è la stessa
+ * regola detta due volte — qui nell'orario, là nel codice.
+ */
+Schedule::command('abbonamenti:avvisa-delle-scadenze --scrivi')
+    ->dailyAt('9:10')
+    ->withoutOverlapping();

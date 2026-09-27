@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Filament\God\Resources\RichiesteDiContatto\Pages;
 
+use App\Enums\Notifica;
 use App\Enums\StatoDellaRichiesta;
 use App\Filament\God\Resources\RichiesteDiContatto\RichiestaDiContattoResource;
 use App\Mail\RispostaAllaRichiestaMail;
 use App\Models\RichiestaDiContatto;
 use App\Models\RispostaAllaRichiesta;
+use App\Services\Notifiche\LeNotifiche;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -33,6 +35,51 @@ use Throwable;
 class ViewRichiestaDiContatto extends ViewRecord
 {
     protected static string $resource = RichiestaDiContattoResource::class;
+
+    /**
+     * 🆕 📲 **E una push, se chi ha scritto ha l'app** — voce 62, 27/09/2026.
+     *
+     * ══ 🚨 CHI HA SCRITTO DAL SITO PUO' NON AVERE UN ACCOUNT ══════════════
+     *
+     * ⚠️ `RichiestaDiContatto` ha **solo un'email**: chi compila il modulo del
+     * sito non è per forza iscritto. ⛔ Quindi questa notifica è **un in più**, e
+     * la mail resta il canale vero — 💡 che è anche la ragione per cui un
+     * fallimento qui non tocca l'esito mostrato in pannello: quello parla della
+     * mail, che è la cosa che deve arrivare.
+     *
+     * ══ 🔑 LA RICERCA PER EMAIL STA NELLA PORTA ═══════════════════════════
+     *
+     * 💡 `LeNotifiche::aQuestaEmail()` fa il lavoro: trova **tutti** gli account
+     * con quell'indirizzo — `users.email` è unica per palestra, non per
+     * piattaforma — e manda a ognuno. ⛔ Stava scritto qui a mano, poi è servito
+     * anche ai due inviti: tre copie della stessa ricerca, e la prima copiata
+     * male avrebbe avvisato l'account sbagliato senza dare nessun errore.
+     *
+     * ══ ⛔ E IL TESTO NON RIPETE LA RISPOSTA ═══════════════════════════════
+     *
+     * 🚨 La risposta può contenere qualunque cosa — anche dati di un contenzioso.
+     * ⛔ Su uno schermo bloccato la leggerebbe chiunque. 💡 Si dice che c'è una
+     * risposta; il testo sta nella mail, dietro la casella di posta.
+     *
+     * ⚠️ E vale il vincolo di `aQuestaEmail()`: le email **non sono verificate**,
+     * quindi da qui non passa niente di riservato.
+     */
+    private function avvisaSulTelefono(RichiestaDiContatto $richiesta): void
+    {
+        try {
+            app(LeNotifiche::class)->aQuestaEmail(
+                Notifica::RispostaARichiesta,
+                (string) $richiesta->email,
+                'Ti abbiamo risposto',
+                'Abbiamo risposto alla tua richiesta: trovi il messaggio nella posta.',
+            );
+        } catch (Throwable $e) {
+            Log::warning('Risposta a una richiesta: push non partita.', [
+                'richiesta' => $richiesta->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
+    }
 
     public function getTitle(): string|Htmlable
     {
@@ -77,6 +124,8 @@ class ViewRichiestaDiContatto extends ViewRecord
                     }
 
                     $risposta->forceFill(['mandata' => $partita])->save();
+
+                    $this->avvisaSulTelefono($richiesta);
 
                     if ($richiesta->stato === StatoDellaRichiesta::Nuova) {
                         $richiesta->forceFill(['stato' => StatoDellaRichiesta::Presa, 'presa_in_carico_il' => Carbon::now()])->save();

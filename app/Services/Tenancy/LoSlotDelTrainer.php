@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services\Tenancy;
 
+use App\Enums\Notifica;
 use App\Enums\UserRole;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Notifiche\LeNotifiche;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * 🎟️ **Lo slot del trainer quando l'allievo entra in palestra** — AH.1-ter.6
@@ -271,6 +274,48 @@ class LoSlotDelTrainer
      *
      * @return bool `false` se non c'era niente da decidere
      */
+    /**
+     * 🆕 📲 **La decisione la sa l'ALLIEVO, non il trainer** — voce 62, 27/09/2026.
+     *
+     * ══ 🚨 CHI RICEVE, E PERCHE' NON E' CHI DECIDE ════════════════════════
+     *
+     * ⛔ Il trainer ha appena cliccato: lo sa già. 🔑 Quello che non lo sa è
+     * **l'allievo**, e per lui non è un dettaglio — è se ha ancora un trainer.
+     *
+     * 💡 Porta alla **chat**, perché è lì che la decisione si vede: liberando il
+     * posto la conversazione si limita a tre messaggi (Q-A5-2). ⚠️ Non a «i miei
+     * utenti», che è la schermata di chi ha deciso.
+     *
+     * ══ ⛔ IL TESTO NON NOMINA IL TRAINER ══════════════════════════════════
+     *
+     * 🚨 Una notifica si legge sullo schermo bloccato, davanti a chiunque sia
+     * nella stanza. ⛔ «Mario Rossi ti ha lasciato andare» racconta a estranei
+     * un rapporto fra due persone. 💡 «Il tuo trainer» dice la stessa cosa a chi
+     * la deve capire, e niente a chi guarda da sopra la spalla.
+     *
+     * ⚠️ Non lancia mai: la decisione è **già scritta a terra**. ⛔ Far fallire
+     * `decidi()` per una notifica vorrebbe dire che il chiamante riprova, e la
+     * seconda volta troverebbe la riga già decisa e risponderebbe «non è andata».
+     */
+    private function diGlieloAllAllievo(User $allievo, bool $tengoLoSlot): void
+    {
+        try {
+            app(LeNotifiche::class)->manda(
+                Notifica::SlotDeciso,
+                $allievo,
+                $tengoLoSlot ? 'Il tuo trainer ti segue' : 'Il tuo trainer ha liberato il posto',
+                $tengoLoSlot
+                    ? 'Il posto è confermato: continuate come prima.'
+                    : 'Da adesso la chat con lui è limitata. Puoi scegliere un altro trainer quando vuoi.',
+            );
+        } catch (Throwable $e) {
+            Log::warning('Slot deciso: push non partita.', [
+                'allievo' => $allievo->getKey(),
+                'errore' => $e->getMessage(),
+            ]);
+        }
+    }
+
     public function decidi(User $trainer, User $allievo, bool $tengoLoSlot): bool
     {
         return $this->context->runWithoutTenant(function () use ($trainer, $allievo, $tengoLoSlot): bool {
@@ -303,6 +348,8 @@ class LoSlotDelTrainer
                 'allievo' => $allievo->getKey(),
                 'tengo' => $tengoLoSlot,
             ]);
+
+            $this->diGlieloAllAllievo($allievo, $tengoLoSlot);
 
             return true;
         });

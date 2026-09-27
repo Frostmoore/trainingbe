@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Push;
 
 use App\Models\DeviceToken;
+use App\Models\Scopes\TenantScope;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -38,7 +39,41 @@ class PushSender
      */
     public function toUser(User $utente, string $titolo, string $corpo, array $data = []): int
     {
+        /*
+         * 🆕 🚨 **Senza lo scope della palestra, e non è una scorciatoia** —
+         * 27/09/2026, voce 62.
+         *
+         * ══ ⛔ IL DIFETTO CHE C'ERA ════════════════════════════════════════
+         *
+         * `DeviceToken` usa `BelongsToTenant`, quindi questa query filtrava sul
+         * **contesto del chiamante**. 🚨 Ma un telefono non appartiene a una
+         * palestra: appartiene a una persona. E `device_tokens.tenant_id` è
+         * quello che la persona aveva **quando ha registrato il token** — nessuno
+         * lo aggiorna quando cambia palestra.
+         *
+         * ⛔ Conseguenza: chi cambiava palestra smetteva di ricevere le notifiche
+         * mandate da dentro un contesto — e non si vedeva, perché le notifiche
+         * mandate dai job e dai webhook (contesto vuoto, `TenantScope` non
+         * filtra) arrivavano regolarmente. 🚨 Lo stesso invio funzionava o no
+         * **a seconda di chi lo faceva partire**.
+         *
+         * ══ ⚖️ PERCHE' TOGLIERE LO SCOPE E' LA COSA GIUSTA, QUI ═══════════
+         *
+         * 💡 Il filtro utile c'è già ed è più stretto: `user_id`. ⚠️ Si manda a
+         * **questa persona**, non «a questa persona se per caso il suo telefono
+         * risulta iscritto dove sono io adesso» — che non è una regola di
+         * sicurezza, è un incidente.
+         *
+         * 🔑 È la stessa scelta che `AccountEraser` aveva già fatto per
+         * cancellarli: se per **togliere** i token di una persona lo scope va
+         * levato, allora non identifica i suoi token nemmeno per mandarglieli.
+         *
+         * ⚠️ `withoutGlobalScope(TenantScope::class)` e **non**
+         * `withoutGlobalScopes()`: si spegne quello che dà fastidio, non tutti —
+         * così se un domani arrivasse un altro scope, resterebbe in piedi.
+         */
         $dispositivi = DeviceToken::query()
+            ->withoutGlobalScope(TenantScope::class)
             ->where('user_id', $utente->getKey())
             ->get();
 
