@@ -279,6 +279,17 @@ class SocialAuthController extends Controller
             $utente->forceFill([
                 'age_confirmed_at' => now(),
                 'terms_accepted_at' => now(),
+
+                /*
+                 * 🆕 ✅ **L'email e` gia` verificata dal fornitore** — 62.6,
+                 * 28/09/2026.
+                 *
+                 * 🔑 Si arriva qui **solo** con `emailVerified` vero: il ramo
+                 * sopra rifiuta gli altri. ⛔ Chiedere di confermare un
+                 * indirizzo che Apple o Google hanno gia` confermato sarebbe un
+                 * compito senza motivo, per una persona che sta entrando adesso.
+                 */
+                'email_verified_at' => now(),
             ])->save();
 
             SocialIdentity::create([
@@ -362,6 +373,24 @@ class SocialAuthController extends Controller
 
         return $this->context->runAs($tenant, function () use ($utente, $tenant, $request): JsonResponse {
             $utente->forceFill(['last_login_at' => now()])->saveQuietly();
+
+            /*
+             * 🆕 ✅ **L'email risulta verificata, e non serve chiederlo di nuovo**
+             * — voce 62.6, 28/09/2026.
+             *
+             * 🔑 Si arriva qui **solo** con `emailVerified` vero: Apple lo
+             * garantisce sempre, Google lo dichiara nel token. ⛔ Chiedere a
+             * questa persona di confermare un indirizzo che il fornitore ha già
+             * confermato sarebbe un compito senza motivo — e uno di quelli che
+             * fanno pensare che l'app sia rotta.
+             *
+             * ⚠️ `saveQuietly`: non è un gesto della persona, è una conseguenza
+             * dell'accesso. 💡 E non si sovrascrive una data già presente, per lo
+             * stesso motivo per cui la migrazione del 28/09 usa `whereNull`.
+             */
+            if (! $utente->hasVerifiedEmail()) {
+                $utente->forceFill(['email_verified_at' => now()])->saveQuietly();
+            }
 
             return $this->tokenResponse($utente, $tenant, $request);
         });

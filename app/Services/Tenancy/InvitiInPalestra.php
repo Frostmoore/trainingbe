@@ -215,19 +215,20 @@ class InvitiInPalestra
              *
              *   1. 🚨 **il token nel carico della push**: è una credenziale
              *      monouso a scadenza, e il carico passa da Google e resta sul
-             *      telefono. ⛔ Non ci va.
-             *   2. 🚨 **una rotta «i miei inviti»** che l'app interroga da sola:
-             *      sarebbe la strada giusta, ⛔ ma le email **non sono
-             *      verificate** in questa applicazione (`User` non implementa
-             *      `MustVerifyEmail`, e non ci sono rotte di verifica). Chi si
-             *      registra con l'indirizzo di un altro si prenderebbe i suoi
-             *      inviti — e oggi per rubarne uno serve l'accesso alla casella.
-             *      ⚠️ Sarebbe una **scala nuova**, non un fastidio.
+             *      telefono. ⛔ **Non ci va, e non ci andrà mai.**
+             *   2. ✅ **una rotta «i miei inviti»** che l'app interroga da sola:
+             *      era la strada giusta, ed era chiusa perché le email non erano
+             *      verificate — chi si registra con l'indirizzo di un altro si
+             *      sarebbe preso i suoi inviti.
              *
-             * 💡 Quindi la notifica dice «guarda la posta» e porta alla casa. ⚖️ È
-             * meno di quello che si vorrebbe, ed è tutto quello che si può dare
-             * senza aprire un buco. 🔑 Si sblocca con la verifica delle email:
-             * quel giorno si aggiunge la rotta e la destinazione diventa l'invito.
+             * 🆕 **Dal 28/09/2026 la seconda è aperta** (voce 62.6): `User`
+             * implementa `MustVerifyEmail`, e `GET inviti-ricevuti` è protetta da
+             * `verified` — l'unica rotta del progetto che lo è. 🔑 Quindi la
+             * notifica porta **agli inviti**, e il token passa dall'API
+             * autenticata invece che da Google.
+             *
+             * ⚖️ La differenza è questa: «ti do la chiave per strada» contro «ti
+             * dico dove trovarla, e te la do quando mi dimostri chi sei».
              *
              * ══ ⚠️ E IL TESTO NON NOMINA CHI INVITA ════════════════════════
              *
@@ -241,7 +242,7 @@ class InvitiInPalestra
                     Notifica::Invito,
                     (string) $invito->email,
                     'Hai un invito',
-                    'Ti hanno invitato su Training Companion: trovi il link nella posta.',
+                    'Ti hanno invitato su Training Companion: aprilo dall\'app.',
                 );
             } catch (Throwable $e) {
                 Log::warning('Invito in palestra: push non partita.', [

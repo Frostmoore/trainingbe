@@ -277,15 +277,21 @@ enum Notifica: string
             self::ServizioRiattivato => 'abbonamento',
 
             /*
-             * ✉️ **Alla casa, e non alla pagina dell'invito** — e non è pigrizia.
+             * 🆕 ✉️ **Agli inviti ricevuti** — 62.6, 28/09/2026.
              *
-             * ⛔ `/invito-palestra/{token}` esiste, ma vuole il token, e il token
-             * è una credenziale: vedi sopra. 🚨 E oggi non esiste nessuna rotta
-             * che elenchi **gli inviti ricevuti** (ci sono solo quelli mandati:
-             * `GET trainer/invites` e `GET gym/invites`), quindi la casa non ha
-             * ancora niente da mostrare a chi arriva da qui.
+             * ⛔ Fino al 28/09 portava alla **casa**, e non per pigrizia: la
+             * schermata dell'invito vuole il **token**, che è una credenziale e
+             * in una push non ci va; e non esisteva nessuna rotta che elencasse
+             * gli inviti **ricevuti** — c'erano solo quelli mandati.
+             *
+             * ✅ Adesso c'è: `GET inviti-ricevuti`, protetta da `verified`. 🔑 La
+             * notifica porta a una schermata che **se li va a prendere da sola**,
+             * col token che passa dall'API autenticata e non da Google.
+             *
+             * ⚖️ È la differenza fra «ti do la chiave per strada» e «ti dico dove
+             * trovarla, e te la do quando mi dimostri chi sei».
              */
-            self::Invito => 'casa',
+            self::Invito => 'inviti',
 
             /*
              * 🎟️ **Chi la riceve è l'ALLIEVO**, non il trainer: è lui che scopre

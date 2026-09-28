@@ -7,6 +7,7 @@ use App\Http\Controllers\ReimpostaPasswordController;
 use App\Http\Controllers\ScriviciController;
 use App\Http\Controllers\SitoController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\VerificaEmailController;
 use App\Support\Debug\CasiDiProva;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -171,6 +172,25 @@ Route::post('/offerta/{token}', [OffertaController::class, 'attiva'])
 Route::post('/scrivici', [ScriviciController::class, 'invia'])
     ->middleware('throttle:5,10')
     ->name('sito.scrivici.invia');
+
+/*
+ * ══ ✅ LA CONFERMA DELL'INDIRIZZO EMAIL — voce 62.6, 28/09/2026 ════════════
+ *
+ * 🔑 Una **pagina web** e non una rotta dell'app: il link si tocca dalla posta, e
+ * la posta si legge spesso da un altro dispositivo. ⛔ Pretendere l'app installata
+ * proprio lì non funzionerebbe nel caso più comune.
+ *
+ * 🚨 `signed` garantisce che il link l'abbiamo fatto noi e che non è scaduto. ⛔ Non
+ * garantisce che l'indirizzo sia rimasto quello: l'impronta la controlla il
+ * controller, e senza quella un link vecchio verificherebbe un indirizzo nuovo.
+ *
+ * ⚠️ **Sta PRIMA di `/{quale}`**, che è un jolly a un segmento: messa dopo, quella
+ * se la mangerebbe.
+ */
+Route::get('/verifica-email/{id}/{hash}', VerificaEmailController::class)
+    ->whereNumber('id')
+    ->middleware(['signed', 'throttle:6,1'])
+    ->name('verifica.email');
 
 Route::get('/{quale}', [SitoController::class, 'documento'])
     ->whereIn('quale', ['privacy', 'condizioni', 'liberatoria-palestra', 'liberatoria-trainer'])

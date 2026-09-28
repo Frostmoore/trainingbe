@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\V1\ComuneController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FornitoriSocialController;
 use App\Http\Controllers\Api\V1\InvitiDellaPalestraController;
+use App\Http\Controllers\Api\V1\InvitiRicevutiController;
 use App\Http\Controllers\Api\V1\InvitoController;
 use App\Http\Controllers\Api\V1\InvitoInPalestraController;
 use App\Http\Controllers\Api\V1\LiberatoriaController;
@@ -255,6 +256,20 @@ Route::prefix('v1')->group(function (): void {
         // una decisione commerciale che non la riguarda.
         Route::middleware(['auth:sanctum', 'tenant'])->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout']);
+
+            /*
+             * ══ ✅ «MANDAMI LA MAIL DI CONFERMA» — voce 62.6, 28/09/2026 ═══
+             *
+             * ⚠️ **Fuori da `verified`**, ovviamente: la chiede proprio chi non
+             * ha ancora verificato. 🚨 Metterla dentro sarebbe il cancello che
+             * chiude la porta e lascia la chiave dentro.
+             *
+             * 💡 Sotto `throttle`, perché è una rotta che **manda una mail**: una
+             * persona che la preme dieci volte manda dieci mail a sé stessa, e
+             * un programma che la preme mille volte ci fa segnare come spam.
+             */
+            Route::post('email/conferma', [InvitiRicevutiController::class, 'chiediLaConferma'])
+                ->middleware('throttle:3,10');
             Route::get('devices', [AuthController::class, 'devices']);
             Route::delete('devices/{tokenId}', [AuthController::class, 'revokeDevice'])
                 ->whereNumber('tokenId');
@@ -746,6 +761,31 @@ Route::prefix('v1')->group(function (): void {
          * middleware in più su queste cinque rotte sarebbe una seconda sede
          * della stessa regola, e due sedi divergono.
          */
+        /*
+         * ══ ✉️ GLI INVITI CHE HO RICEVUTO — voce 62.6, 28/09/2026 ══════════
+         *
+         * ⛔ Prima esistevano solo `GET trainer/invites` e `GET gym/invites`, che
+         * sono gli inviti **mandati**. 🚨 Chi perdeva la mail non aveva nessuna
+         * strada per accettare — e il DMARC è in `p=none` da ieri, quindi quelle
+         * mail possono finire nello spam.
+         *
+         * ══ 🚨 E' L'UNICA ROTTA CON `verified`, E DEVE RESTARE L'UNICA ═════
+         *
+         * Consegna **i codici degli inviti**, che sono credenziali monouso. ⛔ Senza
+         * verifica, chi si registra con l'indirizzo di un altro si prenderebbe i
+         * suoi inviti; oggi, per rubarne uno, serve l'accesso alla casella.
+         *
+         * ⚖️ La **voce 63** dice *«niente deve impedire a un utente di accedere»*:
+         * qui non si impedisce di accedere, si impedisce di **farsi dare una
+         * credenziale**. 💡 E il 403 porta `code: email_da_verificare`, così l'app
+         * mostra il bottone invece di un vicolo cieco.
+         *
+         * ⚠️ **Senza `tenant.active`**: un invito arriva spesso proprio a chi non
+         * ha ancora una palestra attiva — anzi, è il caso tipico.
+         */
+        Route::get('inviti-ricevuti', [InvitiRicevutiController::class, 'elenco'])
+            ->middleware('verified');
+
         Route::get('trainer/members', [TrainerController::class, 'members'])->middleware('tenant.active');
         /*
          * 🆕 📋 **Gli inviti in sospeso, elencabili** — B1, 24/09/2026.

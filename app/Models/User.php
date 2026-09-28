@@ -14,6 +14,7 @@ use App\Support\Tenancy\TenantContext;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -62,8 +63,30 @@ use Spatie\Permission\Traits\HasRoles;
  * qualcuno che non c'è più. 🚨 Un rapporto in piedi **occupa uno slot** e
  * **tiene aperto un canale di chat**.
  */
+/**
+ * 🆕 ✅ **`MustVerifyEmail` dal 28/09/2026** — voce 62.6.
+ *
+ * ══ 🚨 E NON BLOCCA L'ACCESSO, DI PROPOSITO ═══════════════════════════════
+ *
+ * ⛔ Implementare questa interfaccia **non** mette nessun cancello da sola: dà a
+ * Laravel il modo di chiedere la verifica, e sta a noi decidere **dove**.
+ *
+ * 🔑 La decisione, presa il 28/09 e scritta qui perché non si perda: il
+ * middleware `verified` sta **su una rotta sola** — quella che elenca gli inviti
+ * ricevuti. ⛔ **Non** sul login, **non** sull'app, **non** sui pannelli.
+ *
+ * 🚨 Il motivo è la **voce 63**: *«NIENTE AL MONDO DEVE IMPEDIRE A UN UTENTE DI
+ * ACCEDERE»*. ⚠️ Una verifica dell'email messa sull'accesso è esattamente il
+ * genere di cancello che chiude fuori chi ha cambiato casella, chi non ha
+ * ricevuto la mail, chi l'ha persa nello spam — e il DMARC del dominio è in
+ * `p=none` da ieri.
+ *
+ * 💡 Serve solo dove il danno di sbagliarsi è concreto: la rotta degli inviti
+ * consegna **codici monouso**, e senza verifica chi si registra con l'indirizzo
+ * di un altro si prenderebbe i suoi inviti.
+ */
 #[ObservedBy(ChiEsceDallaPalestraOsservatore::class)]
-class User extends Authenticatable implements FilamentUser, HasMedia
+class User extends Authenticatable implements FilamentUser, HasMedia, MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use BelongsToTenant;
