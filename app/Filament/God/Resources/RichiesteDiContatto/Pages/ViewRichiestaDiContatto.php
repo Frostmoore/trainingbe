@@ -7,6 +7,7 @@ namespace App\Filament\God\Resources\RichiesteDiContatto\Pages;
 use App\Enums\Notifica;
 use App\Enums\StatoDellaRichiesta;
 use App\Filament\God\Resources\RichiesteDiContatto\RichiestaDiContattoResource;
+use App\Jobs\MandaLaMail;
 use App\Mail\RispostaAllaRichiestaMail;
 use App\Models\RichiestaDiContatto;
 use App\Models\RispostaAllaRichiesta;
@@ -115,15 +116,40 @@ class ViewRichiestaDiContatto extends ViewRecord
                         'mandata' => false,
                     ]);
 
+                    /*
+                     * 🔄 **In coda, e `mandata` la scrive il JOB** — 62.7, 28/09/2026.
+                     *
+                     * 📌 Il committente: *«E certo che le accodiamo, tutte»*.
+                     *
+                     * ⛔ Prima la mail partiva qui e `mandata` si scriveva
+                     * subito. 🚨 Accodando, in questo punto **non si sa** se
+                     * partirà: si saprà nel worker. 💡 Quindi la colonna la
+                     * scrive `MandaLaMail` dopo l'invio riuscito, e resta vera.
+                     *
+                     * ⚠️ **Con `MAIL_MAILER=log` la colonna si riempie lo
+                     * stesso**, perché per Laravel l'invio è riuscito: la mail
+                     * è finita nel registro. ⛔ È il limite che il vecchio
+                     * controllo `config('mail.default') !== 'log'` copriva a
+                     * mano — e che adesso si copre **a schermo**, dicendo com'è
+                     * configurata la posta invece di indovinare l'esito.
+                     */
+                    $accodata = false;
+
                     try {
-                        Mail::to($richiesta->email)->send(new RispostaAllaRichiestaMail($risposta));
-                        $partita = config('mail.default') !== 'log';
+                        MandaLaMail::dispatch(
+                            (string) $richiesta->email,
+                            new RispostaAllaRichiestaMail($risposta),
+                            modello: RispostaAllaRichiesta::class,
+                            id: (int) $risposta->getKey(),
+                            segna: ['mandata' => true],
+                        );
+
+                        $accodata = true;
                     } catch (Throwable $e) {
-                        Log::error('Risposta a una richiesta: mail non partita.', ['richiesta' => $richiesta->getKey(), 'errore' => $e->getMessage()]);
-                        $partita = false;
+                        Log::error('Risposta a una richiesta: mail non accodata.', ['richiesta' => $richiesta->getKey(), 'errore' => $e->getMessage()]);
                     }
 
-                    $risposta->forceFill(['mandata' => $partita])->save();
+                    $postaCollegata = config('mail.default') !== 'log';
 
                     $this->avvisaSulTelefono($richiesta);
 
@@ -132,13 +158,31 @@ class ViewRichiestaDiContatto extends ViewRecord
                     }
 
                     /*
-                     * ⚠️ Onesto come ovunque: con `MAIL_MAILER=log` la mail
-                     * finisce nel registro del server e nessuno la riceve.
+                     * ⚠️ **Onesto come ovunque, e adesso deve dirlo meglio.**
+                     *
+                     * 🚨 Da quando la mail è **accodata**, dire «Risposta
+                     * mandata» sarebbe una bugia: è in coda, e partirà fra
+                     * qualche secondo. ⛔ La bugia sarebbe la stessa di prima,
+                     * al contrario — e questa colonna è nata proprio per non
+                     * dire «mandata» quando non lo era.
+                     *
+                     * 💡 Quindi si dice **cosa è successo davvero**: è in coda.
+                     * E se la posta non è collegata (`MAIL_MAILER=log`) lo si
+                     * dice lo stesso, perché quella resta la cosa che fa
+                     * sparire le mail senza errori.
                      */
                     Notification::make()
-                        ->title($partita ? 'Risposta mandata' : '⚠️ La risposta non è partita davvero')
-                        ->body($partita ? null : 'La posta non è ancora collegata: il testo resta salvato qui sotto.')
-                        ->status($partita ? 'success' : 'warning')
+                        ->title(match (true) {
+                            ! $accodata => '⚠️ La risposta non è stata accodata',
+                            ! $postaCollegata => '⚠️ In coda, ma la posta non è collegata',
+                            default => 'Risposta in coda',
+                        })
+                        ->body(match (true) {
+                            ! $accodata => 'Il testo resta salvato qui sotto: riprova.',
+                            ! $postaCollegata => 'Con `MAIL_MAILER=log` la mail finisce nel registro del server e nessuno la riceve.',
+                            default => 'Parte fra qualche secondo. Qui sotto vedrai «mandata» quando è partita davvero.',
+                        })
+                        ->status($accodata && $postaCollegata ? 'success' : 'warning')
                         ->send();
 
                     $this->refreshFormData(['stato', 'presa_in_carico_il']);

@@ -7,6 +7,7 @@ namespace App\Services\Billing\Stripe;
 use App\Enums\EventoDiPromozione;
 use App\Enums\Notifica;
 use App\Enums\SuCosaVale;
+use App\Jobs\MandaLaMail;
 use App\Mail\PagamentoFallitoMail;
 use App\Models\AddebitoMensile;
 use App\Models\AiCreditMovement;
@@ -1234,10 +1235,24 @@ class Cassa
             ]);
         }
 
+        /*
+         * 🆕 📬 **In coda, e questo è IL caso per cui la coda serve** — 62.7,
+         * 28/09/2026.
+         *
+         * 🚨 Siamo **dentro un webhook di Stripe**. Una connessione SMTP lenta
+         * qui non è «la mail arriva tardi»: è Stripe che aspetta, va in timeout
+         * a ~20 s, dichiara il webhook **fallito** e **lo rimanda** — e il
+         * lavoro si rifà su un incasso già registrato.
+         *
+         * 💡 Accodando, la richiesta risponde subito e la mail parte dal worker.
+         * ⚠️ Il `try` resta, ma adesso cattura un guasto dell'**accodamento**,
+         * non dell'invio: se la coda è rotta lo si vede nel registro, e l'invio
+         * vero lo ritenta `MandaLaMail` da solo (tre tentativi).
+         */
         try {
-            Mail::to($chi->email)->send(new PagamentoFallitoMail($spazio, $quale));
+            MandaLaMail::dispatch($chi->email, new PagamentoFallitoMail($spazio, $quale));
         } catch (Throwable $e) {
-            Log::error('Pagamento fallito: avviso non partito.', [
+            Log::error('Pagamento fallito: avviso non accodato.', [
                 'tenant' => $spazio->getKey(),
                 'errore' => $e->getMessage(),
             ]);

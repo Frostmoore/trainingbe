@@ -6,6 +6,7 @@ namespace App\Filament\Gym\Pages;
 
 use App\Enums\AuditAction;
 use App\Enums\TipoDiRichiesta;
+use App\Jobs\MandaLaMail;
 use App\Mail\RichiestaDalPannello;
 use App\Models\Fattura;
 use App\Models\PlanSubscription;
@@ -427,7 +428,7 @@ class IlTuoPiano extends Page
                 ]);
 
                 try {
-                    Mail::to((string) config('services.contatti.email'))->send(new RichiestaDalPannello($richiesta));
+                    MandaLaMail::dispatch((string) config('services.contatti.email'), new RichiestaDalPannello($richiesta));
                 } catch (Throwable $e) {
                     report($e);
                 }

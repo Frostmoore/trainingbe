@@ -7,6 +7,7 @@ namespace App\Filament\God\Resources\Users\Pages;
 use App\Filament\God\Resources\Users\UserResource;
 use App\Filament\God\Resources\Users\Widgets\LaStoriaDellaPersona;
 use App\Filament\Support\MandaIlReset;
+use App\Jobs\MandaLaMail;
 use App\Mail\MessaggioDalPannello;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -83,8 +84,18 @@ class ViewUser extends ViewRecord
                         ->helperText('Gli a capo si vedono. ⚠️ Non è HTML: quello che scrivi arriva come l\'hai scritto.'),
                 ])
                 ->action(function (User $record, array $data): void {
+                    /*
+                     * 🔄 **In coda** — 62.7, 28/09/2026. 📌 *«E certo che le
+                     * accodiamo, tutte»*.
+                     *
+                     * ⚠️ Il `catch` qui sotto adesso cattura un guasto
+                     * dell'**accodamento**, non dell'invio: se il server di
+                     * posta rifiuta, lo scopre il worker e lo scrive nel
+                     * registro. 🔑 Per questo il messaggio a schermo è cambiato
+                     * — vedi sotto.
+                     */
                     try {
-                        Mail::to($record->email)->send(new MessaggioDalPannello(
+                        MandaLaMail::dispatch($record->email, new MessaggioDalPannello(
                             $record,
                             $data['oggetto'],
                             $data['testo'],
@@ -100,7 +111,7 @@ class ViewUser extends ViewRecord
                          * dice cosa fare.
                          */
                         Notification::make()
-                            ->title('La mail non è partita')
+                            ->title('La mail non è stata accodata')
                             ->body($e->getMessage())
                             ->danger()
                             ->persistent()
@@ -115,17 +126,28 @@ class ViewUser extends ViewRecord
                      * niente. 💡 Ma serve saperne l'esistenza il giorno che
                      * qualcuno chiede «chi mi ha scritto questa roba».
                      */
-                    Log::info('Mail dal pannello.', [
+                    Log::info('Mail dal pannello, accodata.', [
                         'a' => $record->getKey(),
                         'da' => auth()->id(),
                         'oggetto' => $data['oggetto'],
                     ]);
 
+                    /*
+                     * 🚨 **Non dice più «mandata», perché non lo è ancora.**
+                     *
+                     * ⛔ Da quando la mail è accodata, «Mail mandata» sarebbe
+                     * una bugia: è in coda, e parte fra qualche secondo. ⚠️ Un
+                     * amministratore che legge «mandata» e poi scopre che non è
+                     * arrivata cerca il problema nel posto sbagliato.
+                     *
+                     * 💡 E l'avvertenza su `MAIL_MAILER=log` resta: è la cosa
+                     * che fa sparire le mail **senza nessun errore**.
+                     */
                     Notification::make()
-                        ->title('Mail mandata a '.$record->name)
+                        ->title('Messaggio in coda per '.$record->name)
                         ->body(config('mail.default') === 'log'
-                            ? '⚠️ La posta non è ancora collegata: il messaggio è finito nel log, non nella sua casella.'
-                            : 'È partita.')
+                            ? '⚠️ La posta non è ancora collegata: il messaggio finirà nel log, non nella sua casella.'
+                            : 'Parte fra qualche secondo.')
                         ->success()
                         ->send();
                 }),

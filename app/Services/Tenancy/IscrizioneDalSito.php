@@ -8,6 +8,7 @@ use App\Enums\PlanKind;
 use App\Enums\TenantKind;
 use App\Enums\TenantStatus;
 use App\Enums\UserRole;
+use App\Jobs\MandaLaMail;
 use App\Mail\BenvenutoMail;
 use App\Models\Plan;
 use App\Models\Tenant;
@@ -144,7 +145,7 @@ final class IscrizioneDalSito
          * esiste. E dentro un `try`, perche' l'iscrizione e' gia' andata bene.
          */
         try {
-            Mail::to($utente->email)->send(new BenvenutoMail(
+            MandaLaMail::dispatch($utente->email, new BenvenutoMail(
                 $utente,
                 $piano->kind === PlanKind::Gym ? BenvenutoMail::PALESTRA : BenvenutoMail::TRAINER,
             ));

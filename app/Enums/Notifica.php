@@ -115,8 +115,28 @@ enum Notifica: string
     /** 🍎 «Non hai segnato la cena». ⛔ Il diario ha lasciato il server il 22/09. */
     case PromemoriaDiario = 'promemoria_diario';
 
-    /** 🏁 Hai finito la scheda, o il ciclo. Il conteggio delle sedute è locale. */
-    case SchedaFinita = 'scheda_finita';
+    /*
+     * ⛔ **`SchedaFinita` NON c'è più, e non è una dimenticanza** — 28/09/2026.
+     *
+     * 📌 Il committente, quando gli ho chiesto cosa volesse dire: *«Che cazzo
+     * significa scheda finita?? Le schede non finiscono. Al massimo finisce
+     * l'allenamento. Non lo so, vedi tu»*.
+     *
+     * 🔑 **È una risposta, non un non-so**: nel prodotto quel fatto **non
+     * esiste**. E infatti non esiste nemmeno nel modello — `SchedaAllenamento`
+     * ha dei giorni e **nessuna durata**, e `SettimanaProgrammata` mappa giorno
+     * → scheda ed è **ricorrente**.
+     *
+     * ⛔ Tenere in catalogo un caso che non si potrà mai implementare è un
+     * elenco che mente: `daFare()` avrebbe detto «da fare» per sempre, e prima
+     * o poi qualcuno ci avrebbe provato.
+     *
+     * ⚠️ **«Allenamento finito» non è il sostituto.** Quando chiudi una seduta
+     * hai il telefono in mano e la schermata davanti: una notifica lì è rumore.
+     *
+     * 💡 Il numero 8840 in `IPromemoria` resta libero, se un giorno una scheda
+     * dovesse avere una fine.
+     */
 
     /** ⚖️ Promemoria di peso e misure: i progressi stanno sul telefono. */
     case PromemoriaMisure = 'promemoria_misure';
@@ -153,7 +173,6 @@ enum Notifica: string
             self::FineRecupero,
             self::PromemoriaAllenamento,
             self::PromemoriaDiario,
-            self::SchedaFinita,
             self::PromemoriaMisure => CanaleDellaNotifica::Locale,
         };
     }
@@ -195,7 +214,6 @@ enum Notifica: string
              */
             self::PromemoriaAllenamento,
             self::PromemoriaDiario,
-            self::SchedaFinita,
             self::PromemoriaMisure,
         ], true);
     }
@@ -304,7 +322,6 @@ enum Notifica: string
             self::FineRecupero,
             self::PromemoriaAllenamento,
             self::PromemoriaDiario,
-            self::SchedaFinita,
             self::PromemoriaMisure => null,
         };
     }

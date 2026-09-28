@@ -474,14 +474,17 @@ class IlCatalogoDelleNotificheTest extends TestCase
      * locale la programma **l'app**, quindi in `app/` non c'è niente da trovare e
      * qualunque controllo qui direbbe sempre «non fatta».
      *
-     * 🔎 Provato il 27/09 togliendo `SchedaFinita` da `daFare()`: questo test
-     * resta **verde**, perché `SchedaFinita` è locale. ⛔ Quindi la guardia sulle
-     * quattro locali **non è qui**: sta in
+     * 🔎 Provato il 27/09 togliendo una locale da `daFare()`: questo test resta
+     * **verde**, perché le locali qui non si guardano. ⛔ Quindi la guardia sulle
+     * locali **non è qui**: sta in
      * `trainingfe/test/catalogo_delle_notifiche_test.dart`, che cerca nel codice
      * dell'app — l'unico posto dove una locale può essere implementata.
      *
      * 💡 Scritto perché la prossima persona non creda che questo test copra
-     * sedici notifiche: ne copre undici.
+     * tutte le notifiche: ne copre **undici su quindici**.
+     *
+     * ⚠️ Erano sedici fino al 28/09: `SchedaFinita` è stata **togliata dal
+     * catalogo**, non implementata — il committente: *«Le schede non finiscono»*.
      *
      * ══ ⚠️ COME CERCA, E PERCHE' COSI' ════════════════════════════════════
      *

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\TipoDiRichiesta;
+use App\Jobs\MandaLaMail;
 use App\Mail\RichiestaDalSitoMail;
 use App\Mail\RichiestaRicevutaMail;
 use App\Models\RichiestaDiContatto;
@@ -125,10 +126,10 @@ class ScriviciController extends Controller
             $nostra = (string) config('services.contatti.email');
 
             if ($nostra !== '') {
-                Mail::to($nostra)->send(new RichiestaDalSitoMail($richiesta));
+                MandaLaMail::dispatch($nostra, new RichiestaDalSitoMail($richiesta));
             }
 
-            Mail::to($richiesta->email)->send(new RichiestaRicevutaMail($richiesta));
+            MandaLaMail::dispatch((string) $richiesta->email, new RichiestaRicevutaMail($richiesta));
         } catch (Throwable $e) {
             Log::error('Richiesta dal sito: mail non partite.', [
                 'richiesta' => $richiesta->getKey(),

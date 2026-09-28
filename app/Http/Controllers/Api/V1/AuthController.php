@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\LoginRequest;
 use App\Http\Requests\Api\V1\RegisterRequest;
 use App\Http\Resources\Api\V1\UserResource;
+use App\Jobs\MandaLaMail;
 use App\Mail\BenvenutoMail;
 use App\Models\Tenant;
 use App\Models\User;
@@ -535,7 +536,7 @@ class AuthController extends Controller
     private function benvenuto(User $utente, string $tipo): void
     {
         try {
-            Mail::to($utente->email)->send(new BenvenutoMail($utente, $tipo));
+            MandaLaMail::dispatch($utente->email, new BenvenutoMail($utente, $tipo));
         } catch (Throwable $e) {
             Log::error('Benvenuto: mail non partita.', [
                 'utente' => $utente->getKey(),

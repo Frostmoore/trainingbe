@@ -60,7 +60,7 @@ fare con quei dati e cosa no — e non possono usarli per altro.
 | **Messaggi cifrati** | Recapito | Art. 6(1)(b) · ⚠️ **illeggibili per noi** |
 | Chiave **pubblica** di cifratura | Recapito dei messaggi | Art. 6(1)(b) |
 | Pacchetto cifrato della chiave d'account | Recupero su un dispositivo nuovo | Art. 6(1)(b) · ⚠️ **illeggibile per noi** |
-| Registro di controllo (accessi, impersonazioni) | Sicurezza | Art. 6(1)(f) |
+| Registro di controllo (accessi, azioni amministrative) | Sicurezza | Art. 6(1)(f) |
 | Conteggi dell'uso dell'intelligenza artificiale | Quota e fatturazione | Art. 6(1)(b) · 💡 **conteggi, non contenuti** |
 | Dichiarazione di maggiore età e consensi, **con data e ora** | Prova ai sensi dell'art. 7(1) | Art. 6(1)(c) |
 | **Il comune che indichi** | Farti trovare palestre e trainer vicino a te | Art. 6(1)(b) · 💡 **facoltativo**, si può togliere |

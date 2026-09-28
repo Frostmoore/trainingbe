@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Promozioni;
 
 use App\Enums\Notifica;
+use App\Jobs\MandaLaMail;
 use App\Mail\PromozionePerTeMail;
 use App\Models\Promozione;
 use App\Models\PromozioneAssegnazione;
@@ -102,7 +103,7 @@ class AvvisaIDestinatari
             }
 
             if (in_array('email', $canali, true) && filled($utente->email)) {
-                Mail::to($utente->email)->send(new PromozionePerTeMail($promozione, $utente, $ricevuta));
+                MandaLaMail::dispatch($utente->email, new PromozionePerTeMail($promozione, $utente, $ricevuta));
             }
         } catch (Throwable $e) {
             Log::warning('Promozioni: avviso non partito.', [

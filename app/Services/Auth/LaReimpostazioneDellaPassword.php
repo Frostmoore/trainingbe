@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Auth;
 
+use App\Jobs\MandaLaMail;
 use App\Mail\LinkPerLaPassword;
 use App\Mail\PasswordCambiataMail;
 use App\Models\ReimpostazionePassword;
@@ -89,7 +90,7 @@ class LaReimpostazioneDellaPassword
          * pannello lo vede a schermo: se il trasporto è rotto, si copia.
          */
         try {
-            Mail::to($persona->email)->send(new LinkPerLaPassword($persona, $link));
+            MandaLaMail::dispatch($persona->email, new LinkPerLaPassword($persona, $link));
         } catch (Throwable $e) {
             Log::error('Reimpostazione password: mail non partita.', [
                 'utente' => $persona->getKey(),
@@ -166,7 +167,7 @@ class LaReimpostazioneDellaPassword
              * giusta. Se la mail non parte resta nel log.
              */
             try {
-                Mail::to($persona->email)->send(new PasswordCambiataMail($persona));
+                MandaLaMail::dispatch($persona->email, new PasswordCambiataMail($persona));
             } catch (Throwable $e) {
                 Log::error('Password cambiata: avviso non partito.', [
                     'utente' => $persona->getKey(),

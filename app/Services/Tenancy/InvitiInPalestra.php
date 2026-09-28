@@ -6,6 +6,7 @@ namespace App\Services\Tenancy;
 
 use App\Enums\Notifica;
 use App\Enums\UserRole;
+use App\Jobs\MandaLaMail;
 use App\Mail\InvitoInPalestraMail;
 use App\Models\InvitoInPalestra;
 use App\Models\Plan;
@@ -171,22 +172,31 @@ class InvitiInPalestra
         }
 
         try {
-            Mail::to($invito->email)->send(new InvitoInPalestraMail($invito));
-
             /*
-             * 🆕 📧 **L'invio si segna in tabella** — B2, 24/09/2026, gemello
-             * esatto di quello che B1 ha fatto per gli inviti dei trainer.
+             * 🔄 **In coda, e la colonna la scrive il JOB** — 62.7, 28/09/2026.
              *
-             * ⛔ Prima il risultato dell'invio viveva solo nel valore di
-             * ritorno, cioè per la durata di una richiesta. 🚨 La schermata
-             * «Inviti in sospeso» dell'app arriva dopo, magari il giorno dopo:
-             * senza una data in tabella dovrebbe scrivere «mandata» sempre —
-             * mentendo quando la mail non è partita — oppure non scriverlo mai,
-             * e chi invita non saprebbe se deve rimandarla.
+             * 📌 Il committente: *«E certo che le accodiamo, tutte»*.
              *
-             * ⚠️ `forceFill`: non è un campo che si scrive da un modulo.
+             * ⛔ Prima qui c'era `Mail::to(...)->send()` e, se riusciva, la riga
+             * sotto scriveva `email_inviata_il`. 🚨 Accodando, in questo punto
+             * **non si sa più** se la mail partirà: si saprà nel worker.
+             *
+             * 🔑 Quindi la data la scrive `MandaLaMail`, **dopo** l'invio
+             * riuscito. 💡 Così la colonna continua a dire *«è partita»* e non
+             * *«l'abbiamo accodata»*, che è un'altra cosa — ed è esattamente la
+             * distinzione per cui questa colonna è nata (B1, 24/09).
+             *
+             * ⚠️ **E il valore di ritorno cambia significato**: adesso dice
+             * «presa in carico», non «partita». Chi vuole sapere se è partita
+             * davvero legge `email_inviata_il`, che è il motivo per cui esiste.
              */
-            $invito->forceFill(['email_inviata_il' => now()])->save();
+            MandaLaMail::dispatch(
+                $invito->email,
+                new InvitoInPalestraMail($invito),
+                modello: InvitoInPalestra::class,
+                id: (int) $invito->getKey(),
+                segna: ['email_inviata_il' => now()],
+            );
 
             /*
              * 🆕 📲 **E un richiamo sul telefono** — voce 62, 27/09/2026.
